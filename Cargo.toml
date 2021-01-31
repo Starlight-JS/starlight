@@ -1,0 +1,27 @@
+[package]
+name = "js"
+version = "0.1.0"
+authors = ["gtash"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wtf-rs = { path = "./wtf-rs" }
+libc = "0.2"
+vec_map = "0.8"
+lasso = "0.4"
+memmap2 = "0.2"
+[workspace]
+members = ["wtf-rs"]
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "memoryapi",
+    "winnt",
+    "sysinfoapi",
+    "minwinbase",
+    "errhandlingapi",
+    "excpt",
+    "minwindef",
+] }
