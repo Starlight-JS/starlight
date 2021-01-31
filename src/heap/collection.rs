@@ -3,9 +3,11 @@ use super::{
     large_object_space::LargeObjectSpace, space_bitmap::SpaceBitmap, trace::Slot, trace::Tracer,
     trace::TracerPtr, util::address::Address, CollectionType,
 };
+use std::collections::VecDeque;
 use vec_map::VecMap;
 
-use std::collections::VecDeque;
+const GC_VERBOSE: bool = true;
+
 pub struct ImmixCollector;
 pub struct Visitor<'a> {
     immix_space: &'a mut ImmixSpace,
@@ -304,7 +306,18 @@ impl Collector {
 }
 
 pub unsafe fn maybe_sweep(space_bitmap: &SpaceBitmap, block: *mut ImmixBlock) {
+    log_if!(
+        GC_VERBOSE,
+        "Will sweep block?={} ({} destructible objects)",
+        (*block).needs_destruction > 0,
+        (*block).needs_destruction
+    );
     if (*block).needs_destruction > 0 {
+        log_if!(
+            GC_VERBOSE,
+            "Sweeping block with {} destructible objects",
+            (*block).needs_destruction
+        );
         space_bitmap.visit_unmarked_range(
             (*block).begin() + 128,
             (*block).begin() + 32 * 1024,

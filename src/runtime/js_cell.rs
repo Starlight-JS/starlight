@@ -1,3 +1,5 @@
+use crate::heap::header::Header;
+
 use super::{ref_ptr::AsRefPtr, ref_ptr::Ref, type_info::*, vm::JSVirtualMachine};
 
 pub fn allocate_cell<T: Type>(
@@ -11,4 +13,15 @@ pub fn allocate_cell<T: Type>(
         memory.to_mut_ptr::<T>().write(value);
     }
     Ref::new(memory.to_mut_ptr())
+}
+
+#[repr(C)]
+pub struct JSCell {
+    pub(crate) header: Header,
+}
+
+impl JSCell {
+    pub fn vm(&self) -> Ref<JSVirtualMachine> {
+        self.header.vm()
+    }
 }

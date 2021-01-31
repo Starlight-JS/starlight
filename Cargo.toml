@@ -11,6 +11,7 @@ wtf-rs = { path = "./wtf-rs" }
 libc = "0.2"
 vec_map = "0.8"
 lasso = "0.4"
+structopt = "0.3"
 memmap2 = "0.2"
 [workspace]
 members = ["wtf-rs"]

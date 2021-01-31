@@ -1,3 +1,5 @@
+use crate::runtime::{ref_ptr::Ref, vm::JSVirtualMachine};
+
 use super::constants::*;
 use super::header::Header;
 use super::util::address::Address;
@@ -21,6 +23,7 @@ pub struct ImmixBlock {
     pub evacuation_candidate: bool,
     /// Set to true if this block has any object allocated that needs destruction.
     pub needs_destruction: u32,
+    pub vm: Ref<JSVirtualMachine>,
 }
 
 impl ImmixBlock {
@@ -39,7 +42,7 @@ impl ImmixBlock {
     ///
     /// NOTE: `at` pointer *must* be aligned to 32KiB and be writable.
     ///
-    pub fn new(at: *mut u8) -> &'static mut Self {
+    pub fn new(at: *mut u8, vm: Ref<JSVirtualMachine>) -> &'static mut Self {
         unsafe {
             let ptr = at as *mut Self;
             debug_assert!(ptr as usize % 32 * 1024 == 0);
@@ -49,6 +52,7 @@ impl ImmixBlock {
                 hole_count: 0,
                 needs_destruction: 0,
                 evacuation_candidate: false,
+                vm,
             });
 
             &mut *ptr

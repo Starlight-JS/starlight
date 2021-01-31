@@ -34,6 +34,10 @@ impl JSSymbol {
         let sym = allocate_cell(vm, size_of::<Self>(), Self::get_type_info(), value);
         sym
     }
+
+    pub fn vm(&self) -> Ref<JSVirtualMachine> {
+        self.header.vm()
+    }
 }
 impl Type for JSSymbol {
     fn get_type_info() -> &'static TypeInfo {
@@ -51,5 +55,14 @@ impl Type for JSSymbol {
             parent: None,
         };
         &SYMBOL_INFO
+    }
+}
+
+impl AsRef<str> for JSSymbol {
+    fn as_ref(&self) -> &str {
+        unsafe {
+            let vm: &'static JSVirtualMachine = &*self.header.fast_vm().pointer;
+            vm.interner.resolve(&self.key)
+        }
     }
 }

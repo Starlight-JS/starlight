@@ -1,5 +1,3 @@
-use core::mem::MaybeUninit;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct StackBounds {
     pub origin: *mut u8,

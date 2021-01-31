@@ -1,3 +1,5 @@
+use crate::runtime::{ref_ptr::Ref, vm::JSVirtualMachine};
+
 use super::{
     block::*, block_allocator::*, constants::*, header::Header, space_bitmap::*, util::address::*,
     util::*,
@@ -411,6 +413,7 @@ pub struct ImmixSpace {
     evac_allocator: EvacAllocator,
     /// The current live mark for new objects. See `Spaces.current_live_mark`.
     current_live_mark: bool,
+    vm: Ref<JSVirtualMachine>,
 }
 impl ImmixSpace {
     pub fn filter_fast(&self, addr: Address) -> bool {
@@ -431,9 +434,9 @@ impl ImmixSpace {
 
         None
     }
-    pub fn new(heap_size: usize) -> *mut Self {
+    pub fn new(vm: Ref<JSVirtualMachine>, heap_size: usize) -> *mut Self {
         unsafe {
-            let block = BlockAllocator::new(heap_size);
+            let block = BlockAllocator::new(heap_size, vm);
             let block = {
                 let ptr = libc::malloc(size_of::<BlockAllocator>()).cast::<BlockAllocator>();
                 ptr.write(block);
@@ -443,6 +446,7 @@ impl ImmixSpace {
                 SpaceBitmap::create("immix space bitmap", (*block).mmap.start(), heap_size);
             let mut this = Self {
                 block_allocator: block,
+                vm,
                 bitmap,
                 evac_allocator: EvacAllocator::new(),
                 allocator: NormalAllocator::new(null_mut()),

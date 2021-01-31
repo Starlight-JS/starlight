@@ -1,4 +1,4 @@
-use crate::runtime::type_info::TypeInfo;
+use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JSVirtualMachine};
 
 use super::header::Header;
 use super::util::address::Address;
@@ -22,6 +22,7 @@ pub struct PreciseAllocation {
     pub adjusted_alignment: bool,
     /// Is this even valid allocation?
     pub has_valid_cell: bool,
+    pub vm: Ref<JSVirtualMachine>,
 }
 
 impl PreciseAllocation {
@@ -128,7 +129,7 @@ impl PreciseAllocation {
         true
     }
     /// Try to create precise allocation (no way that it will return null for now).
-    pub fn try_create(size: usize, index_in_space: u32) -> *mut Self {
+    pub fn try_create(vm: Ref<JSVirtualMachine>, size: usize, index_in_space: u32) -> *mut Self {
         let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
         unsafe {
             let mut space = libc::malloc(adjusted_alignment_allocation_size).cast::<u8>();
@@ -141,6 +142,7 @@ impl PreciseAllocation {
             }
             assert!(size != 0);
             space.cast::<Self>().write(Self {
+                vm,
                 //link: LinkedListLink::new(),
                 adjusted_alignment,
                 is_marked: false,
@@ -160,6 +162,15 @@ impl PreciseAllocation {
     /// Destroy this allocation
     pub fn destroy(&mut self) {
         let base = self.base_pointer();
+        let cell = self.cell();
+        unsafe {
+            if self.has_valid_cell {
+                self.has_valid_cell = false;
+                if let Some(fin) = (*cell).type_info().destructor {
+                    fin(Address::from_ptr(cell));
+                }
+            }
+        }
         unsafe {
             libc::free(base.cast());
         }
@@ -177,17 +188,13 @@ pub fn is_aligned_for_precise_allocation(mem: *mut u8) -> bool {
 pub struct LargeObjectSpace {
     pub(crate) allocations: std::vec::Vec<*mut PreciseAllocation>,
     pub(crate) current_live_mark: bool,
-}
-
-impl Default for LargeObjectSpace {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub(crate) vm: Ref<JSVirtualMachine>,
 }
 
 impl LargeObjectSpace {
-    pub fn new() -> Self {
+    pub fn new(vm: Ref<JSVirtualMachine>) -> Self {
         Self {
+            vm,
             current_live_mark: false,
             allocations: std::vec::Vec::with_capacity(8),
         }
@@ -229,7 +236,7 @@ impl LargeObjectSpace {
 
     pub fn alloc(&mut self, size: usize, vtable: &'static TypeInfo) -> Address {
         let ix = self.allocations.len() as u32;
-        let cell = PreciseAllocation::try_create(size, ix);
+        let cell = PreciseAllocation::try_create(self.vm, size, ix);
         unsafe {
             if cell.is_null() {
                 return Address::null();

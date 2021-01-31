@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 #[repr(C)]
 pub struct Ref<T> {
-    pointer: *mut T,
+    pub pointer: *mut T,
 }
 
 impl<T> Ref<T> {
@@ -60,5 +60,17 @@ impl<T> AsRefPtr<T> for &mut T {
 impl<T> AsRefPtr<T> for Ref<T> {
     fn as_ref_ptr(&self) -> Ref<T> {
         *self
+    }
+}
+
+impl<T> AsRefPtr<T> for &Ref<T> {
+    fn as_ref_ptr(&self) -> Ref<T> {
+        **self
+    }
+}
+
+impl<T> AsRefPtr<T> for &mut Ref<T> {
+    fn as_ref_ptr(&self) -> Ref<T> {
+        **self
     }
 }

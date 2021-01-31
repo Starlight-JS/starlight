@@ -3,12 +3,12 @@ use collection::Collector;
 use constants::LARGE_OBJECT;
 use header::*;
 use large_object_space::{LargeObjectSpace, PreciseAllocation};
-use trace::*;
+use std::mem::transmute;
 use util::address::Address;
 use util::*;
 use wtf_rs::stack_bounds::StackBounds;
 
-use crate::runtime::type_info::TypeInfo;
+use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JSVirtualMachine};
 #[macro_use]
 pub mod util;
 pub mod allocator;
@@ -34,6 +34,7 @@ pub struct Heap {
     threshold: usize,
     current_live_mark: bool,
     collector: Collector,
+    pub(crate) vm: Ref<JSVirtualMachine>,
 }
 
 #[inline(never)]
@@ -43,20 +44,31 @@ fn get_stack_pointer() -> usize {
 }
 
 impl Heap {
-    pub(crate) fn new(size: usize, threshold: usize) -> Self {
+    pub(crate) fn new(vm: Ref<JSVirtualMachine>, size: usize, threshold: usize) -> Self {
         Self {
-            los: LargeObjectSpace::new(),
+            los: LargeObjectSpace::new(vm),
             allocated: 0,
             threshold,
-            immix: ImmixSpace::new(size),
+            vm,
+            immix: ImmixSpace::new(vm, size),
             current_live_mark: false,
             collector: Collector::new(),
         }
     }
+
+    pub fn gc(&mut self, evac: bool) {
+        unsafe {
+            self.collect_internal(evac, false);
+        }
+    }
+
     unsafe fn collect_internal(&mut self, evacuation: bool, emergency: bool) {
         let mut precise_roots = Vec::new();
+        for (_, sym) in self.vm.symbols.iter_mut() {
+            precise_roots.push(transmute(sym));
+        }
         let mut roots: Vec<*mut Header> = Vec::new();
-        let mut all_blocks = (*self.immix).get_all_blocks();
+        let all_blocks = (*self.immix).get_all_blocks();
         {
             let bounds = StackBounds::current_thread_stack_bounds();
             self.collect_roots(
@@ -91,7 +103,7 @@ impl Heap {
         self.current_live_mark = !self.current_live_mark;
         (*self.immix).set_current_live_mark(self.current_live_mark);
         self.los.current_live_mark = self.current_live_mark;
-        let prev = self.allocated;
+        //let prev = self.allocated;
         self.allocated = visited;
         if visited >= self.threshold {
             self.threshold = (visited as f64 * 1.75) as usize;
@@ -127,12 +139,12 @@ impl Heap {
                 scan = scan.offset(1);
                 continue;
             }
-            pub fn align_down(addr: usize, align: usize) -> usize {
+            /*pub fn align_down(addr: usize, align: usize) -> usize {
                 /*if !align.is_power_of_two() {
                     panic!("align should be power of two");
                 }*/
                 addr & !(align - 1)
-            }
+            }*/
             //let ptr = align_down(ptr as usize, 16) as *mut u8;
             if let Some(ptr) = (*self.immix).filter(Address::from_ptr(ptr)) {
                 let ptr = ptr.to_mut_ptr::<u8>();
@@ -178,5 +190,13 @@ impl Heap {
         (*raw).mark(self.current_live_mark);
 
         ptr
+    }
+}
+
+impl Drop for Heap {
+    fn drop(&mut self) {
+        unsafe {
+            core::ptr::drop_in_place(self.immix);
+        }
     }
 }

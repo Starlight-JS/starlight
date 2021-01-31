@@ -1,5 +1,9 @@
-use super::util::{address::Address, tagged_pointer::TaggedPointer};
-use crate::runtime::type_info::TypeInfo;
+use super::{
+    block::ImmixBlock,
+    large_object_space::PreciseAllocation,
+    util::{address::Address, tagged_pointer::TaggedPointer},
+};
+use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JSVirtualMachine};
 
 /// # GC object header.
 /// This structure encodes important data for garbage collection:
@@ -72,5 +76,20 @@ impl Header {
     pub(crate) fn set_forwarded(&mut self, addr: Address) {
         self.rtti = TaggedPointer::new(addr.to_mut_ptr());
         self.rtti.set_bit(0);
+    }
+
+    pub fn vm(&self) -> Ref<JSVirtualMachine> {
+        unsafe {
+            if PreciseAllocation::is_precise(self as *const Self as *mut ()) {
+                return (*PreciseAllocation::from_cell(self as *const Self as *mut Self)).vm;
+            }
+            let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
+            (*block).vm
+        }
+    }
+    /// Use this function when you know that object is not allocated in large object space
+    pub unsafe fn fast_vm(&self) -> Ref<JSVirtualMachine> {
+        let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
+        (*block).vm
     }
 }

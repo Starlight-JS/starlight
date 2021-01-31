@@ -1,3 +1,5 @@
+use crate::runtime::{ref_ptr::Ref, vm::JSVirtualMachine};
+
 use super::block::*;
 use super::constants::*;
 use super::util::address::Address;
@@ -150,13 +152,14 @@ pub struct BlockAllocator {
     pub data_bound: *mut u8,
     pub data: *mut u8,
     pub mmap: Mmap,
+    vm: Ref<JSVirtualMachine>,
 }
 
 impl BlockAllocator {
     pub fn total_blocks(&self) -> usize {
         (self.mmap.end() as usize - self.mmap.aligned() as usize) / BLOCK_SIZE
     }
-    pub fn new(size: usize) -> BlockAllocator {
+    pub fn new(size: usize, vm: Ref<JSVirtualMachine>) -> BlockAllocator {
         let map = Mmap::new(size);
 
         let this = Self {
@@ -165,7 +168,7 @@ impl BlockAllocator {
             data: map.aligned(),
             data_bound: map.end(),
             free_blocks: std::vec::Vec::new(),
-
+            vm,
             mmap: map,
         };
         debug_assert!(this.data as usize % BLOCK_SIZE == 0);
@@ -186,7 +189,7 @@ impl BlockAllocator {
             .pop()
             .map(|x| {
                 self.mmap.commit(x as *mut u8, BLOCK_SIZE);
-                ImmixBlock::new(x as *mut u8);
+                ImmixBlock::new(x as *mut u8, self.vm);
                 x
             })
             .or_else(|| self.build_block());
