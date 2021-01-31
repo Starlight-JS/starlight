@@ -8,7 +8,11 @@ use util::address::Address;
 use util::*;
 use wtf_rs::stack_bounds::StackBounds;
 
-use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JSVirtualMachine};
+use crate::runtime::{
+    ref_ptr::Ref,
+    type_info::{Type, TypeInfo},
+    vm::JSVirtualMachine,
+};
 #[macro_use]
 pub mod util;
 pub mod allocator;
@@ -63,6 +67,11 @@ impl Heap {
     }
 
     unsafe fn collect_internal(&mut self, evacuation: bool, emergency: bool) {
+        log_if!(
+            self.vm.options.verbose_gc,
+            "- Initiating GC cycle after {} bytes allocated",
+            self.allocated
+        );
         let mut precise_roots = Vec::new();
         for (_, sym) in self.vm.symbols.iter_mut() {
             precise_roots.push(transmute(sym));
@@ -87,6 +96,7 @@ impl Heap {
             emergency,
         );
         let visited = self.collector.collect(
+            self.vm.options.verbose_gc,
             &(*self.immix).bitmap,
             &collection_type,
             &roots,
@@ -108,6 +118,13 @@ impl Heap {
         if visited >= self.threshold {
             self.threshold = (visited as f64 * 1.75) as usize;
         }
+
+        log_if!(
+            self.vm.options.verbose_gc,
+            "- GC end with {:.3}KiB heap and {:.4}KiB threshold",
+            self.allocated as f32 / 1024.0,
+            self.threshold as f32 / 1024f32
+        )
     }
     unsafe fn collect_roots(
         &mut self,
@@ -165,7 +182,12 @@ impl Heap {
         }
     }
 
-    pub(crate) unsafe fn allocate(&mut self, size: usize, ty_info: &'static TypeInfo) -> Address {
+    pub(crate) unsafe fn allocate<T: Type>(
+        &mut self,
+        value: T,
+        size: usize,
+        ty_info: &'static TypeInfo,
+    ) -> Address {
         if self.allocated >= self.threshold {
             self.collect_internal(false, true);
         }
@@ -186,6 +208,7 @@ impl Heap {
         };
         self.allocated += size;
         let raw = ptr.to_mut_ptr::<Header>();
+        raw.cast::<T>().write(value);
         *raw = Header::new(ty_info);
         (*raw).mark(self.current_live_mark);
 

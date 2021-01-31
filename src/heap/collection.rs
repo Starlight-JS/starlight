@@ -174,6 +174,7 @@ impl Collector {
 
     pub fn collect(
         &mut self,
+        log: bool,
         space_bitmap: &SpaceBitmap,
         collection_type: &CollectionType,
         roots: &[*mut Header],
@@ -199,7 +200,7 @@ impl Collector {
             next_live_mark,
         );
         self.mark_histogram.clear();
-        let (recyclable_blocks, free_blocks) = self.sweep_all_blocks(space_bitmap);
+        let (recyclable_blocks, free_blocks) = self.sweep_all_blocks(log, space_bitmap);
         immix_space.set_recyclable_blocks(recyclable_blocks);
 
         // XXX We should not use a constant here, but something that
@@ -220,12 +221,14 @@ impl Collector {
     /// blocks.
     fn sweep_all_blocks(
         &mut self,
+        log: bool,
         space_bitmap: &SpaceBitmap,
     ) -> (Vec<*mut ImmixBlock>, Vec<*mut ImmixBlock>) {
         let mut unavailable_blocks = Vec::new();
         let mut recyclable_blocks = Vec::new();
         let mut free_blocks = Vec::new();
         for block in self.all_blocks.drain(..) {
+            log_if!(log, "-- Sweeping block {:p}", block);
             unsafe {
                 /*if (*block).needs_destruction {
                     space_bitmap.visit_unmarked_range(
@@ -241,13 +244,13 @@ impl Collector {
                         },
                     );
                 }*/
-                maybe_sweep(space_bitmap, block);
+                maybe_sweep(log, space_bitmap, block);
             }
             if unsafe { (*block).is_empty() } {
                 unsafe {
                     (*block).reset();
                 }
-
+                log_if!(log, "-- Push block {:p} into free blocks.", block);
                 free_blocks.push(block);
             } else {
                 unsafe {
@@ -261,12 +264,20 @@ impl Collector {
                 } else {
                     self.mark_histogram.insert(holes, marked_lines);
                 }
-
+                log_if!(
+                    log,
+                    "--- Found {} holes and {} marked lines in block {:p}",
+                    holes,
+                    marked_lines,
+                    block
+                );
                 match holes {
                     0 => {
+                        log_if!(log, "--- Push block {:p} into unavailable blocks", block);
                         unavailable_blocks.push(block);
                     }
                     _ => {
+                        log_if!(log, "--- Push block {:p} into recyclable blocks", block);
                         recyclable_blocks.push(block);
                     }
                 }
@@ -305,17 +316,17 @@ impl Collector {
     }
 }
 
-pub unsafe fn maybe_sweep(space_bitmap: &SpaceBitmap, block: *mut ImmixBlock) {
+pub unsafe fn maybe_sweep(log: bool, space_bitmap: &SpaceBitmap, block: *mut ImmixBlock) {
     log_if!(
-        GC_VERBOSE,
-        "Will sweep block?={} ({} destructible objects)",
+        log,
+        "--- Will sweep block?={} ({} destructible objects)",
         (*block).needs_destruction > 0,
         (*block).needs_destruction
     );
     if (*block).needs_destruction > 0 {
         log_if!(
             GC_VERBOSE,
-            "Sweeping block with {} destructible objects",
+            "--- Sweeping block with {} destructible objects",
             (*block).needs_destruction
         );
         space_bitmap.visit_unmarked_range(

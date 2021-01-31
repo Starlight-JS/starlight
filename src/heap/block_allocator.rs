@@ -152,7 +152,7 @@ pub struct BlockAllocator {
     pub data_bound: *mut u8,
     pub data: *mut u8,
     pub mmap: Mmap,
-    vm: Ref<JSVirtualMachine>,
+    pub vm: Ref<JSVirtualMachine>,
 }
 
 impl BlockAllocator {
@@ -184,6 +184,7 @@ impl BlockAllocator {
         {
             self.lock.lock_nogc();
         }
+        debug_assert_ne!(self.vm.pointer, core::ptr::null_mut());
         let block = self
             .free_blocks
             .pop()
@@ -197,6 +198,7 @@ impl BlockAllocator {
         {
             self.lock.unlock();
         }
+
         block
     }
 
@@ -222,6 +224,7 @@ impl BlockAllocator {
             }
             debug_assert!(old % BLOCK_SIZE == 0, "block is not aligned for block_size");
             self.mmap.commit(old as *mut u8, BLOCK_SIZE);
+            ImmixBlock::new(old as *mut u8, self.vm);
             Some(old as *mut ImmixBlock)
         }
     }

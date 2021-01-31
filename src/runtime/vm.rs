@@ -5,19 +5,26 @@ use lasso::{Capacity, LargeSpur, Rodeo};
 
 use super::{js_symbol::JSSymbol, options::Options, ref_ptr::Ref};
 pub struct JSVirtualMachine {
-    pub(crate) heap: Heap,
+    pub(crate) heap: Ref<Heap>,
     pub(crate) interner: Rodeo<LargeSpur>,
     pub(crate) symbols: HashMap<LargeSpur, Ref<JSSymbol>>,
+    pub(crate) options: Options,
 }
 
 impl JSVirtualMachine {
     pub fn create(options: Options) -> Ref<Self> {
         let mut vm = Ref::new(Box::into_raw(Box::new(Self {
-            heap: Heap::new(Ref::new(0 as *mut _), options.heap_size, options.heap_size),
+            heap: Ref::new(0 as *mut _),
             interner: Rodeo::with_capacity(Capacity::for_strings(16)),
             symbols: HashMap::new(),
+            options,
         })));
-        vm.heap.vm = vm;
+        vm.heap = Ref::new(Box::into_raw(Box::new(Heap::new(
+            vm,
+            vm.options.heap_size,
+            vm.options.threshold,
+        ))));
+
         vm
     }
     pub fn gc(&mut self, evac: bool) {

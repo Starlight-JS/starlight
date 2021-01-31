@@ -17,7 +17,7 @@ fn parse_size_from_osstr(s: &str) -> Result<usize, ParseIntError> {
 }
 use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(name = "js", about = "JS engine in Rust programming language")]
 pub struct Options {
     #[structopt(
@@ -34,4 +34,6 @@ pub struct Options {
         parse(try_from_str=parse_size_from_osstr)
     )]
     pub threshold: usize,
+    #[structopt(long = "gc-verbose", help = "Enable verbose GC logging")]
+    pub verbose_gc: bool,
 }

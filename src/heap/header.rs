@@ -83,6 +83,7 @@ impl Header {
             if PreciseAllocation::is_precise(self as *const Self as *mut ()) {
                 return (*PreciseAllocation::from_cell(self as *const Self as *mut Self)).vm;
             }
+
             let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
             (*block).vm
         }

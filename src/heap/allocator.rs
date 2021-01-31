@@ -453,7 +453,8 @@ impl ImmixSpace {
                 overflow_allocator: OverflowAllocator::new(null_mut()),
                 current_live_mark: false,
             };
-
+            assert!(vm.is_not_null());
+            assert!((*this.block_allocator).vm.is_not_null());
             this.allocator.block_allocator =
                 this.block_allocator as *const BlockAllocator as *mut _;
             this.overflow_allocator.block_allocator =

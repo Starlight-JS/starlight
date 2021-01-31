@@ -8,10 +8,8 @@ pub fn allocate_cell<T: Type>(
     ty_info: &'static TypeInfo,
     value: T,
 ) -> Ref<T> {
-    let memory = unsafe { vm.as_ref_ptr().heap.allocate(size, ty_info) };
-    unsafe {
-        memory.to_mut_ptr::<T>().write(value);
-    }
+    let memory = unsafe { vm.as_ref_ptr().heap.allocate(value, size, ty_info) };
+
     Ref::new(memory.to_mut_ptr())
 }
 
