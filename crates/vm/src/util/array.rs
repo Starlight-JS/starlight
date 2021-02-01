@@ -7,6 +7,15 @@ use crate::{
         vm::JsVirtualMachine,
     },
 };
+fn clp2(number: usize) -> usize {
+    let x = number - 1;
+    let x = x | (x >> 1);
+    let x = x | (x >> 2);
+    let x = x | (x >> 4);
+    let x = x | (x >> 8);
+    let x = x | (x >> 16);
+    x + 1
+}
 use std::{
     mem::size_of,
     ops::{Index, IndexMut},
@@ -20,6 +29,13 @@ pub struct GcArray<T: HeapObject> {
 }
 
 impl<T: HeapObject> GcArray<T> {
+    pub fn begin(&self) -> *mut T {
+        self.data.as_ptr() as *mut _
+    }
+
+    pub fn end(&self) -> *mut T {
+        unsafe { self.begin().add(self.len) }
+    }
     pub fn new(vm: Ref<JsVirtualMachine>, len: usize) -> Handle<Self>
     where
         T: Default,
@@ -60,7 +76,7 @@ impl<T: HeapObject> HeapObject for GcArray<T> {
 }
 
 impl<T: HeapObject> JsCell for GcArray<T> {}
-
+#[repr(C)]
 struct RawVec<T: HeapObject> {
     cap: usize,
     len: usize,
@@ -124,7 +140,7 @@ impl<T: HeapObject> GcVec<T> {
     }
     pub fn reserve(&mut self, vm: Ref<JsVirtualMachine>, n: usize) {
         if n > self.raw.cap {
-            let next = (self.raw.cap as f64 * 1.7f64) as usize;
+            let next = if n < 8 { 8 } else { clp2(n) };
             let mut ptr = RawVec::<T>::new(vm, next);
             unsafe {
                 std::ptr::copy_nonoverlapping(

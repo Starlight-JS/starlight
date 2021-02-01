@@ -1,3 +1,3 @@
-# js
+# starlight
 
 Js engine in Rust

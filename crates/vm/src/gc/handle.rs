@@ -128,3 +128,28 @@ impl<T: HeapObject> HeapObject for Option<T> {
         std::mem::needs_drop::<T>()
     }
 }
+
+macro_rules! impl_prim {
+    ($($t: ty)*) => {$(
+        impl HeapObject for $t {
+            fn needs_destruction(&self) -> bool {
+                std::mem::needs_drop::<$t>()
+            }
+
+            fn visit_children(&mut self, _: &mut dyn Tracer) {}
+        }
+        impl JsCell for $t {}
+    )*
+    };
+}
+
+impl_prim! {
+    bool
+    u8 i8
+    u16 i16
+    u32 i32
+    u64 i64
+    u128 i128
+    f32 f64
+
+}

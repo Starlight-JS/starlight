@@ -1,7 +1,10 @@
-use crate::gc::{handle::Handle, heap_cell::HeapObject};
+use crate::{
+    gc::{handle::Handle, heap_cell::HeapObject},
+    heap::trace::Tracer,
+};
 
-use super::js_cell::JsCell;
 use super::ref_ptr::Ref;
+use super::{js_cell::JsCell, js_string::JsString};
 use wtf_rs::lohi_struct;
 lohi_struct!(
     struct AsBits {
@@ -407,7 +410,11 @@ impl JsValue {
             },
         }
     }
-
+    pub fn new_cell(x: Handle<impl HeapObject>) -> Self {
+        Self {
+            u: EncodedJsValueDescriptor { cell: x.as_dyn() },
+        }
+    }
     pub fn new_int(x: i32) -> Self {
         Self {
             u: EncodedJsValueDescriptor {
@@ -436,6 +443,12 @@ impl JsValue {
     pub fn as_int32(self) -> i32 {
         debug_assert!(self.is_int32());
         unsafe { self.u.as_int64 as i32 }
+    }
+
+    pub fn empty() -> JsValue {
+        Self {
+            u: EncodedJsValueDescriptor { as_int64: 0 },
+        }
     }
 }
 impl PartialEq for JsValue {
@@ -533,6 +546,61 @@ pub mod pure_nan {
 }
 
 impl JsValue {
+    pub fn number(&self) -> f64 {
+        assert!(self.is_number());
+        if self.is_int32() {
+            self.as_int32() as f64
+        } else {
+            self.as_double()
+        }
+    }
+    pub fn same_value_impl(lhs: Self, rhs: Self, zero: bool) -> bool {
+        if lhs.is_int32() {
+            if rhs.is_int32() {
+                return lhs.as_int32() == rhs.as_int32();
+            }
+
+            if zero && rhs.is_number() {
+                return lhs.as_int32() as f64 == rhs.number();
+            }
+            // because +0(int32_t) and -0(double) is not the same value
+            return false;
+        } else if lhs.is_number() {
+            if !rhs.is_number() {
+                return false;
+            }
+            if !zero && rhs.is_int32() {
+                return false;
+            }
+
+            let lhsn = lhs.number();
+            let rhsn = rhs.number();
+            if lhsn == rhsn {
+                return true;
+            }
+            return lhsn.is_nan() && rhsn.is_nan();
+        }
+
+        if !lhs.is_cell() || !rhs.is_cell() {
+            return unsafe { lhs.u.as_int64 == rhs.u.as_int64 };
+        }
+        if (lhs.is_cell() && lhs.as_cell().is::<JsString>())
+            && (rhs.is_cell() && rhs.as_cell().is::<JsString>())
+        {
+            return unsafe {
+                lhs.as_cell().donwcast_unchecked::<JsString>().as_str()
+                    == rhs.as_cell().donwcast_unchecked::<JsString>().as_str()
+            };
+        }
+        return unsafe { lhs.u.as_int64 == rhs.u.as_int64 };
+    }
+    pub fn same_value(lhs: Self, rhs: Self) -> bool {
+        Self::same_value_impl(lhs, rhs, false)
+    }
+
+    pub fn same_value_zero(lhs: Self, rhs: Self) -> bool {
+        Self::same_value_impl(lhs, rhs, true)
+    }
     #[inline]
     pub fn as_any_int(self) -> i64 {
         assert!(self.is_any_int());
@@ -574,3 +642,16 @@ impl JsValue {
         self.as_double() as u32
     }
 }
+
+impl HeapObject for JsValue {
+    fn visit_children(&mut self, tracer: &mut dyn Tracer) {
+        if self.is_cell() && !self.is_empty() {
+            self.as_cell_ref_mut().visit_children(tracer);
+        }
+    }
+    fn needs_destruction(&self) -> bool {
+        false
+    }
+}
+
+impl JsCell for JsValue {}

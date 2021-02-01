@@ -1,7 +1,9 @@
-use crate::gc::handle::Handle;
-
-use super::{accessor::Accessor, attributes::*};
+use super::{accessor::Accessor, attributes::*, context::Context, error::*, js_cell::JsCell};
 use super::{attributes::AttrExternal, js_value::JsValue};
+use crate::{
+    gc::{handle::Handle, heap_cell::HeapObject},
+    heap::trace::Tracer,
+};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Clone, Copy)]
@@ -10,6 +12,7 @@ pub union PropertyLayout {
     accessors: (JsValue, JsValue), // getter,setter
 }
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct PropertyDescriptor {
     pub attrs: AttrExternal,
     pub value: PropertyLayout,
@@ -96,14 +99,29 @@ impl PropertyDescriptor {
             },
         }
     }
+
+    pub fn value(&self) -> JsValue {
+        unsafe { self.value.data }
+    }
+
+    pub fn getter(&self) -> JsValue {
+        unsafe { self.value.accessors.0 }
+    }
+
+    pub fn setter(&self) -> JsValue {
+        unsafe { self.value.accessors.1 }
+    }
 }
 
 pub struct StoredSlot {
-    value: JsValue,
+    pub(crate) value: JsValue,
     attributes: AttrSafe,
 }
 
 impl StoredSlot {
+    pub fn value(&self) -> JsValue {
+        self.value
+    }
     pub fn set_value(&mut self, val: JsValue) {
         self.value = val;
     }
@@ -127,7 +145,7 @@ impl StoredSlot {
         }
     }
 
-    pub fn new(value: JsValue, attributes: AttrSafe) -> Self {
+    pub fn new_raw(value: JsValue, attributes: AttrSafe) -> Self {
         Self { value, attributes }
     }
 }
@@ -242,7 +260,7 @@ impl StoredSlot {
         )
     }
 
-    pub fn get(&self, this_binding: JsValue) -> Result<JsValue, JsValue> {
+    pub fn get(&self, context: &mut Context, this_binding: JsValue) -> Result<JsValue, JsValue> {
         if self.attributes.is_data() {
             return Ok(self.value);
         }
@@ -253,4 +271,203 @@ impl StoredSlot {
         assert!(self.attributes.is_accessor());
         unsafe { self.value.as_cell().donwcast_unchecked() }
     }
+    /// ECMA262 section 8.12.9 [[DefineOwnProperty]] step 5 and after
+    /// this returns [[DefineOwnProperty]] descriptor is accepted or not,
+    /// if you see return value of [[DefineOwnProperty]],
+    /// see bool argument returned
+    ///
+    /// current is currently set PropertyDescriptor, and desc is which we try to set.
+    pub fn is_defined_property_accepted(
+        &self,
+        desc: &PropertyDescriptor,
+        throwable: bool,
+        returned: &mut bool,
+    ) -> Result<bool, Box<Error>> {
+        macro_rules! reject {
+            ($str: expr) => {{
+                *returned = false;
+                if throwable {
+                    return Err(Error::report_str(ErrorCode::Type, $str));
+                }
+                return Ok(false);
+            }};
+        }
+
+        if desc.is_absent() {
+            *returned = true;
+            return Ok(false);
+        }
+        if self.merge_with_no_effect(desc) {
+            *returned = true;
+            return Ok(false);
+        }
+        if !self.attributes().is_configurable() {
+            if desc.is_configurable() {
+                reject!("changing [[Configurable]] of unconfigurable property not allowed");
+            }
+            if !desc.is_enumerable_absent()
+                && self.attributes().is_enumerable() != desc.is_enumerable()
+            {
+                reject!("changing [[Enumerable]] of unconfigurable property not allowed");
+            }
+        }
+        // step 9
+        if desc.is_generic() {
+        } else if self.attributes().is_data() != desc.is_data() {
+            if !self.attributes().is_configurable() {
+                reject!("changing descriptor type of unconfigurable property not allowed");
+            }
+        } else {
+            if self.attributes().is_data() {
+                if !self.attributes().is_configurable() {
+                    if !self.attributes().is_writable() {
+                        if desc.is_writable() {
+                            reject!("changing [[Writable]] of unconfigurable property not allowed");
+                        }
+
+                        if !JsValue::same_value(self.value, desc.value()) {
+                            reject!("changing [[Value]] of readonly property not allowed");
+                        }
+                    }
+                }
+            } else {
+                if !self.attributes().is_configurable() {
+                    let lhs = self.accessor();
+                    let rhs = AccessorDescriptor { parent: *desc };
+
+                    if (!rhs.is_setter_absent() && (lhs.setter() != rhs.set()))
+                        || (!rhs.is_getter_absent() && (lhs.getter() != rhs.get()))
+                    {
+                        reject!(
+                            "changing [[Set]] or [[Get]] of unconfigurable property not allowed"
+                        )
+                    }
+                }
+            }
+        }
+        *returned = true;
+        Ok(true)
+    }
+    /// if desc merged to current and has no effect, return true
+    pub fn merge_with_no_effect(&self, desc: &PropertyDescriptor) -> bool {
+        if !desc.is_configurable_absent()
+            && desc.is_configurable() != self.attributes().is_configurable()
+        {
+            return false;
+        }
+
+        if !desc.is_enumerable_absent() && desc.is_enumerable() != self.attributes().is_enumerable()
+        {
+            return false;
+        }
+
+        if desc.ty() != self.attributes().ty() {
+            return false;
+        }
+
+        if desc.is_data() {
+            let data = DataDescriptor { parent: *desc };
+            if !data.is_writable_absent() && data.is_writable() != self.attributes().is_writable() {
+                return false;
+            }
+
+            if data.is_value_absent() {
+                return true;
+            }
+            return JsValue::same_value(data.value(), self.value);
+        } else if desc.is_accessor() {
+            let ac = self.accessor();
+            return unsafe {
+                desc.value.accessors.0 == ac.getter() && desc.value.accessors.1 == ac.setter()
+            };
+        } else {
+            return true;
+        }
+    }
+
+    pub fn merge(&mut self, context: &mut Context, desc: &PropertyDescriptor) {
+        let mut attr = AttrExternal::new(Some(self.attributes().raw()));
+        if !desc.is_configurable_absent() {
+            attr.set_configurable(desc.is_configurable());
+        }
+        if !desc.is_enumerable_absent() {
+            attr.set_enumerable(desc.is_enumerable())
+        }
+        if desc.is_generic() {
+            self.attributes = AttrSafe::un_safe(attr);
+            return;
+        }
+
+        if desc.is_data() {
+            attr.set_data();
+            let data = DataDescriptor { parent: *desc };
+
+            if !data.is_value_absent() {
+                self.value = data.value();
+            }
+            if !data.is_writable_absent() {
+                attr.set_writable(data.is_writable());
+            }
+            self.attributes = AttrSafe::un_safe(attr);
+        } else {
+            attr.set_accessor();
+            let accs = AccessorDescriptor { parent: *desc };
+
+            let mut ac = if self.attributes().is_accessor() {
+                self.accessor()
+            } else {
+                let ac = Accessor::new(context, JsValue::undefined(), JsValue::undefined());
+                self.value = JsValue::new_cell(ac);
+                ac
+            };
+            if accs.is_getter_absent() {
+                ac.set_getter(accs.get());
+            } else if accs.is_setter_absent() {
+                ac.set_setter(accs.set());
+            } else {
+                ac.set_getter(accs.get());
+                ac.set_setter(accs.set());
+            }
+            self.attributes = AttrSafe::un_safe(attr);
+        }
+    }
+
+    pub fn new(context: &mut Context, desc: &PropertyDescriptor) -> Self {
+        let mut this = Self {
+            value: JsValue::undefined(),
+            attributes: AttrSafe::not_found(),
+        };
+        let mut attributes = AttrExternal::new(None);
+        attributes.set_configurable(desc.is_configurable());
+        attributes.set_enumerable(desc.is_enumerable());
+        if desc.is_data() {
+            let data = DataDescriptor { parent: *desc };
+            if !data.is_value_absent() {
+                this.value = data.value();
+            }
+            attributes.set_writable(data.is_writable());
+            this.attributes = create_data(attributes);
+        } else if desc.is_accessor() {
+            let ac = AccessorDescriptor { parent: *desc };
+            let accessor = Accessor::new(context, ac.get(), ac.set());
+            this.value = JsValue::new_cell(accessor);
+            this.attributes = create_accessor(attributes);
+        } else {
+            this.attributes = create_data(attributes);
+        }
+        this
+    }
 }
+
+impl HeapObject for StoredSlot {
+    fn visit_children(&mut self, tracer: &mut dyn Tracer) {
+        if self.value.is_cell() && !self.value.is_empty() {
+            self.value.as_cell_ref_mut().visit_children(tracer);
+        }
+    }
+    fn needs_destruction(&self) -> bool {
+        false
+    }
+}
+
+impl JsCell for StoredSlot {}

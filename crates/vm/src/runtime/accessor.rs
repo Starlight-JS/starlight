@@ -46,11 +46,10 @@ impl JsCell for Accessor {}
 
 impl HeapObject for Accessor {
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
-        debug_assert!(self.getter.is_cell() && self.setter.is_cell());
-        {
+        if !self.getter.is_empty() {
             self.getter.as_cell_ref_mut().visit_children(tracer);
         }
-        {
+        if !self.setter.is_empty() {
             self.setter.as_cell_ref_mut().visit_children(tracer);
         }
     }

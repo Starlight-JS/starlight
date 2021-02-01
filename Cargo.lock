@@ -117,20 +117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "js-vm"
-version = "0.1.0"
-dependencies = [
- "lasso",
- "libc",
- "memmap2",
- "mopa",
- "structopt",
- "vec_map",
- "winapi",
- "wtf-rs",
-]
-
-[[package]]
 name = "lasso"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -265,6 +251,20 @@ name = "smallvec"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
+
+[[package]]
+name = "starlight-vm"
+version = "0.1.0"
+dependencies = [
+ "lasso",
+ "libc",
+ "memmap2",
+ "mopa",
+ "structopt",
+ "vec_map",
+ "winapi",
+ "wtf-rs",
+]
 
 [[package]]
 name = "strsim"

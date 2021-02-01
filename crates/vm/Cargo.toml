@@ -1,5 +1,5 @@
 [package]
-name = "js-vm"
+name = "starlight-vm"
 version = "0.1.0"
 authors = ["Adel Prokurov <adel.prokurov@gmail.com>"]
 edition = "2018"

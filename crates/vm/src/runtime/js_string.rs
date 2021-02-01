@@ -54,7 +54,9 @@ impl JsString {
 impl HeapObject for JsString {
     fn visit_children(&mut self, _tracer: &mut dyn Tracer) {}
     fn compute_size(&self) -> usize {
-        self.len as usize + size_of::<Self>()
+        let sz = self.len as usize + size_of::<Self>();
+
+        sz
     }
     fn needs_destruction(&self) -> bool {
         false

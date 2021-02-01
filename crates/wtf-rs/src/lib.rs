@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::hint::unreachable_unchecked;
+
 #[macro_export]
 macro_rules! object_offsetof {
     ($type: ty,$($field: ident).*) => {{
@@ -56,5 +58,12 @@ pub(crate) fn thread_self() -> u64 {
     #[cfg(unix)]
     unsafe {
         libc::pthread_self() as u64
+    }
+}
+
+pub fn unwrap_unchecked<T>(option: Option<T>) -> T {
+    match option {
+        Some(value) => value,
+        None => unsafe { core::hint::unreachable_unchecked() },
     }
 }

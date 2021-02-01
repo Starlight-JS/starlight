@@ -21,9 +21,12 @@ use super::{
 ///   http://cs.au.dk/~hosc/local/LaSC-4-3-pp243-281.pdf
 ///
 
-pub struct Map {
+pub struct Structure {
+    id: StructureID,
     transitions: Transitions,
 }
+
+pub type StructureID = u32;
 
 pub struct MapEntry {
     offset: u32,
@@ -46,7 +49,7 @@ impl HeapObject for TransitionKey {
 
 union U {
     table: Option<Handle<Table>>,
-    pair: (TransitionKey, Option<Handle<Map>>),
+    pair: (TransitionKey, Option<Handle<Structure>>),
 }
 pub struct Transitions {
     u: U,
@@ -59,7 +62,7 @@ const MASK_HOLD_SINGLE: u8 = 4;
 const MASK_HOLD_TABLE: u8 = 8;
 const MASK_INDEXED: u8 = 16;
 
-type Table = HashMap<TransitionKey, Option<Handle<Map>>>;
+type Table = HashMap<TransitionKey, Option<Handle<Structure>>>;
 
 impl Transitions {
     pub fn set_indexed(&mut self, indexed: bool) {
@@ -90,7 +93,7 @@ impl Transitions {
         vm: Ref<JsVirtualMachine>,
         name: Symbol,
         attrs: AttrSafe,
-        map: Handle<Map>,
+        map: Handle<Structure>,
     ) {
         let key = TransitionKey {
             name,
@@ -115,7 +118,7 @@ impl Transitions {
         }
     }
 
-    pub fn find(&self, name: Symbol, attrs: AttrSafe) -> Option<Handle<Map>> {
+    pub fn find(&self, name: Symbol, attrs: AttrSafe) -> Option<Handle<Structure>> {
         let key = TransitionKey {
             name,
             attrs: attrs.raw(),
@@ -141,8 +144,8 @@ impl Transitions {
     }
 }
 
-impl JsCell for Map {}
-impl HeapObject for Map {
+impl JsCell for Structure {}
+impl HeapObject for Structure {
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
         unsafe {
             if (self.transitions.flags & MASK_HOLD_SINGLE) != 0 {
@@ -159,5 +162,15 @@ impl HeapObject for Map {
 
     fn needs_destruction(&self) -> bool {
         true
+    }
+}
+
+impl Structure {
+    pub fn id(&self) -> StructureID {
+        self.id
+    }
+
+    pub unsafe fn set_id(&mut self, id: StructureID) {
+        self.id = id;
     }
 }
