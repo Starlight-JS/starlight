@@ -1,11 +1,11 @@
 use std::mem::size_of;
 
-use js::runtime::ref_ptr::Ref;
-use js::{
+use js_vm::{
     gc::bitmap::BitMap,
     runtime::{js_string::JsString, options::Options},
 };
-use js::{heap::block::ImmixBlock, runtime::vm::JsVirtualMachine};
+use js_vm::{heap::block::ImmixBlock, runtime::vm::JsVirtualMachine};
+use js_vm::{runtime::ref_ptr::Ref, util::array::GcVec};
 use structopt::StructOpt;
 #[inline(never)]
 fn foo(vm: Ref<JsVirtualMachine>) {
@@ -18,8 +18,10 @@ fn foo(vm: Ref<JsVirtualMachine>) {
 fn main() {
     let mut vm = JsVirtualMachine::create(Options::from_args());
     let my_str = JsString::new(vm, "Hello,World!");
+    let mut vec = GcVec::new(vm, 1);
+    vec.push(vm, my_str);
     foo(vm);
     vm.gc(false);
 
-    println!("{}", my_str.as_str());
+    println!("{}", vec.pop().unwrap().as_str());
 }

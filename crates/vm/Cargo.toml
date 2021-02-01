@@ -1,0 +1,25 @@
+[package]
+name = "js-vm"
+version = "0.1.0"
+authors = ["Adel Prokurov <adel.prokurov@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+wtf-rs = { path = "../wtf-rs" }
+libc = "0.2"
+vec_map = "0.8"
+lasso = "0.4"
+structopt = "0.3"
+memmap2 = "0.2"
+mopa = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "memoryapi",
+    "winnt",
+    "sysinfoapi",
+    "minwinbase",
+    "errhandlingapi",
+    "excpt",
+    "minwindef",
+] }

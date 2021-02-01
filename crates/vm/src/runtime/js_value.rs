@@ -12,7 +12,7 @@ lohi_struct!(
 
 #[derive(Copy, Clone)]
 #[repr(C, align(8))]
-pub union EncodedValueDescriptor {
+pub union EncodedJsValueDescriptor {
     pub as_int64: i64,
     #[cfg(target_pointer_width = "32")]
     pub as_double: f64,
@@ -20,7 +20,7 @@ pub union EncodedValueDescriptor {
     pub as_bits: AsBits,
 }
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum WhichValueWord {
+pub enum WhichJsValueWord {
     Tag = 0,
     Payload,
 }
@@ -53,12 +53,12 @@ pub enum Tag {
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct Value {
-    pub u: EncodedValueDescriptor,
+pub struct JsValue {
+    pub u: EncodedJsValueDescriptor,
 }
 
 #[cfg(target_pointer_width = "32")]
-impl Value {
+impl JsValue {
     /*
      * On 32-bit platforms we use a NaN-encoded form for immediates.
      *
@@ -71,7 +71,7 @@ impl Value {
      * ranges to encode other values (however there are also other ranges of NaN space that
      * could have been selected).
      *
-     * For Values that do not contain a double value, the high 32 bits contain the tag
+     * For JsValues that do not contain a double value, the high 32 bits contain the tag
      * values listed in the enums below, which all correspond to NaN-space. In the case of
      * cell, integer and bool values the lower 32 bits (the 'payload') contain the pointer
      * integer or boolean value; in the case of all other tags the payload is 0.
@@ -87,7 +87,7 @@ impl Value {
     #[inline]
     pub(crate) fn with_tag_payload(tag: i32, payload: i32) -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_bits: AsBits { tag, payload },
             },
         }
@@ -174,7 +174,7 @@ impl Value {
     pub fn new_double(f: f64) -> Self {
         assert!(!is_impure_nan(f));
         Self {
-            u: EncodedValueDescriptor { as_double: f },
+            u: EncodedJsValueDescriptor { as_double: f },
         }
     }
     #[inline]
@@ -208,7 +208,7 @@ impl Value {
     }
 }
 #[cfg(target_pointer_width = "64")]
-impl Value {
+impl JsValue {
     /*
      * On 64-bit platforms we use a NaN-encoded form for immediates.
      *
@@ -225,7 +225,7 @@ impl Value {
      * hex patterns 0xFFFC and 0xFFFE - we rely on the fact that no valid double-precision
      * numbers will fall in these ranges.
      *
-     * The top 15-bits denote the type of the encoded Value:
+     * The top 15-bits denote the type of the encoded JsValue:
      *
      *     Pointer {  0000:PPPP:PPPP:PPPP
      *              / 0002:****:****:****
@@ -236,7 +236,7 @@ impl Value {
      * The scheme we have implemented encodes double precision values by performing a
      * 64-bit integer addition of the value 2^49 to the number. After this manipulation
      * no encoded double-precision value will begin with the pattern 0x0000 or 0xFFFE.
-     * Values must be decoded by reversing this operation before subsequent floating point
+     * JsValues must be decoded by reversing this operation before subsequent floating point
      * operations may be peformed.
      *
      * 32-bit signed integers are marked with the 16-bit tag 0xFFFE.
@@ -255,8 +255,8 @@ impl Value {
      * - With bit 3 masked out (UndefinedTag), Undefined and Null share the
      *   same value, allowing null & undefined to be quickly detected.
      *
-     * No valid Value will have the bit pattern 0x0, this is used to represent array
-     * holes, and as a C++ 'no value' result (e.g. Value() has an internal value of 0).
+     * No valid JsValue will have the bit pattern 0x0, this is used to represent array
+     * holes, and as a C++ 'no value' result (e.g. JsValue() has an internal value of 0).
      *
      * This representation works because of the following things:
      * - It cannot be confused with a Double or Integer thanks to the top bits
@@ -287,8 +287,8 @@ impl Value {
     /// NOT_CELL_MASK is used to check for all types of immediate values (either number or 'other').
     pub const NOT_CELL_MASK: i64 = (Self::NUMBER_TAG as u64 | Self::OTHER_TAG as u64) as i64;
     /// These special values are never visible to code; Empty is used to represent
-    /// Array holes, and for uninitialized Values. Deleted is used in hash table code.
-    /// These values would map to cell types in the Value encoding, but not valid GC cell
+    /// Array holes, and for uninitialized JsValues. Deleted is used in hash table code.
+    /// These values would map to cell types in the JsValue encoding, but not valid GC cell
     /// pointer should have either of these values (Empty is null, deleted is at an invalid
     /// alignment for a GC cell, and in the zero page).
     pub const VALUE_EMPTY: i64 = 0x0;
@@ -298,7 +298,7 @@ impl Value {
     // 0x0 can never occur naturally because it has a tag of 00, indicating a pointer value, but a payload of 0x0, which is in the (invalid) zero page.
     pub fn default() -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: Self::VALUE_EMPTY,
             },
         }
@@ -316,7 +316,7 @@ impl Value {
         let shifted_val = (value as u64) << 16;
         assert!((shifted_val as i64 & Self::NUMBER_TAG) == 0);
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: shifted_val as i64 | Self::SYM_TAG,
             },
         }
@@ -329,7 +329,7 @@ impl Value {
 
     pub fn undefined() -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: Self::VALUE_UNDEFINED,
             },
         }
@@ -337,21 +337,21 @@ impl Value {
 
     pub fn null() -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: Self::VALUE_NULL,
             },
         }
     }
     pub fn false_() -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: Self::VALUE_FALSE,
             },
         }
     }
     pub fn true_() -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: Self::VALUE_TRUE,
             },
         }
@@ -402,7 +402,7 @@ impl Value {
 
     pub fn new_double(x: f64) -> Self {
         Self {
-            u: EncodedValueDescriptor {
+            u: EncodedJsValueDescriptor {
                 as_int64: x.to_bits() as i64 + Self::DOUBLE_ENCODE_OFFSET,
             },
         }
@@ -410,8 +410,8 @@ impl Value {
 
     pub fn new_int(x: i32) -> Self {
         Self {
-            u: EncodedValueDescriptor {
-                as_int64: Value::NUMBER_TAG | (x as u32 as i64),
+            u: EncodedJsValueDescriptor {
+                as_int64: JsValue::NUMBER_TAG | (x as u32 as i64),
             },
         }
     }
@@ -438,7 +438,7 @@ impl Value {
         unsafe { self.u.as_int64 as i32 }
     }
 }
-impl PartialEq for Value {
+impl PartialEq for JsValue {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         unsafe { self.u.as_int64 == other.u.as_int64 }
@@ -532,7 +532,7 @@ pub mod pure_nan {
     }
 }
 
-impl Value {
+impl JsValue {
     #[inline]
     pub fn as_any_int(self) -> i64 {
         assert!(self.is_any_int());

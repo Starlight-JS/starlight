@@ -1,4 +1,6 @@
+pub mod accessor;
 pub mod attributes;
+pub mod indexed_elements;
 pub mod js_cell;
 pub mod js_string;
 pub mod js_symbol;
@@ -6,6 +8,7 @@ pub mod js_value;
 pub mod map;
 pub mod method_table;
 pub mod options;
+pub mod property_descriptor;
 pub mod ref_ptr;
 pub mod symbol;
 pub mod symbol_table;
