@@ -117,14 +117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "js"
-version = "0.1.0"
-dependencies = [
- "js-vm",
- "structopt",
-]
-
-[[package]]
 name = "js-vm"
 version = "0.1.0"
 dependencies = [

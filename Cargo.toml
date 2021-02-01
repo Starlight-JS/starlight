@@ -1,16 +1,4 @@
-[package]
-name = "js"
-version = "0.1.0"
-authors = ["gtash"]
-edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[dependencies]
-js-vm = { path = "crates/vm" }
-structopt = "0.3"
 [workspace]
 members = ["crates/wtf-rs", "crates/vm"]
-
-[[bin]]
-name = "js-vm"
-path = "crates/vm/src/main.rs"
+default-members = ["crates/vm"]
