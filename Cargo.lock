@@ -123,6 +123,7 @@ dependencies = [
  "lasso",
  "libc",
  "memmap2",
+ "mopa",
  "structopt",
  "vec_map",
  "winapi",
@@ -167,6 +168,12 @@ checksum = "e73be3b7d04a0123e933fea1d50d126cc7196bbc0362c0ce426694f777194eee"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "mopa"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a785740271256c230f57462d3b83e52f998433a7062fc18f96d5999474a9f915"
 
 [[package]]
 name = "once_cell"

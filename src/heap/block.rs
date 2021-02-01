@@ -1,7 +1,9 @@
-use crate::runtime::{ref_ptr::Ref, vm::JSVirtualMachine};
+use crate::{
+    gc::heap_cell::HeapCell,
+    runtime::{ref_ptr::Ref, vm::JsVirtualMachine},
+};
 
 use super::constants::*;
-use super::header::Header;
 use super::util::address::Address;
 use super::util::align_usize;
 // LineMap is used for scanning block for holes
@@ -22,8 +24,8 @@ pub struct ImmixBlock {
     /// when there is not much holes left for allocation.
     pub evacuation_candidate: bool,
     /// Set to true if this block has any object allocated that needs destruction.
-    pub needs_destruction: u32,
-    pub vm: Ref<JSVirtualMachine>,
+    pub needs_destruction: bool,
+    pub vm: Ref<JsVirtualMachine>,
 }
 
 impl ImmixBlock {
@@ -42,7 +44,7 @@ impl ImmixBlock {
     ///
     /// NOTE: `at` pointer *must* be aligned to 32KiB and be writable.
     ///
-    pub fn new(at: *mut u8, vm: Ref<JSVirtualMachine>) -> &'static mut Self {
+    pub fn new(at: *mut u8, vm: Ref<JsVirtualMachine>) -> &'static mut Self {
         unsafe {
             let ptr = at as *mut Self;
             debug_assert!(ptr as usize % 32 * 1024 == 0);
@@ -50,7 +52,7 @@ impl ImmixBlock {
                 line_map: LineMap::new(),
                 allocated: false,
                 hole_count: 0,
-                needs_destruction: 0,
+                needs_destruction: false,
                 evacuation_candidate: false,
                 vm,
             });
@@ -173,11 +175,11 @@ impl ImmixBlock {
         let line_num = Self::object_to_line_num(object);
         let b = self.begin();
 
-        let object_ptr = object.to_mut_ptr::<Header>();
+        let object_ptr = object.to_mut_ptr::<HeapCell>();
         unsafe {
             let obj = &mut *object_ptr;
 
-            let size = obj.size();
+            let size = align_usize(obj.get_dyn().compute_size() + 8, 16);
 
             for line in line_num..(line_num + (size / LINE_SIZE) + 1) {
                 if mark {

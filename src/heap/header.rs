@@ -3,7 +3,7 @@ use super::{
     large_object_space::PreciseAllocation,
     util::{address::Address, tagged_pointer::TaggedPointer},
 };
-use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JSVirtualMachine};
+use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JsVirtualMachine};
 
 /// # GC object header.
 /// This structure encodes important data for garbage collection:
@@ -78,7 +78,7 @@ impl Header {
         self.rtti.set_bit(0);
     }
 
-    pub fn vm(&self) -> Ref<JSVirtualMachine> {
+    pub fn vm(&self) -> Ref<JsVirtualMachine> {
         unsafe {
             if PreciseAllocation::is_precise(self as *const Self as *mut ()) {
                 return (*PreciseAllocation::from_cell(self as *const Self as *mut Self)).vm;
@@ -89,7 +89,7 @@ impl Header {
         }
     }
     /// Use this function when you know that object is not allocated in large object space
-    pub unsafe fn fast_vm(&self) -> Ref<JSVirtualMachine> {
+    pub unsafe fn fast_vm(&self) -> Ref<JsVirtualMachine> {
         let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
         (*block).vm
     }

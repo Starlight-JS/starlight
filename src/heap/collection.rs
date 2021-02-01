@@ -1,7 +1,16 @@
+use crate::gc::heap_cell::HeapCell;
+
 use super::{
-    allocator::ImmixSpace, block::ImmixBlock, constants::*, header::Header,
-    large_object_space::LargeObjectSpace, space_bitmap::SpaceBitmap, trace::Slot, trace::Tracer,
-    trace::TracerPtr, util::address::Address, CollectionType,
+    allocator::ImmixSpace,
+    block::ImmixBlock,
+    constants::*,
+    large_object_space::LargeObjectSpace,
+    space_bitmap::SpaceBitmap,
+    trace::Slot,
+    trace::Tracer,
+    trace::TracerPtr,
+    util::{address::Address, align_usize},
+    CollectionType,
 };
 use std::collections::VecDeque;
 use vec_map::VecMap;
@@ -11,7 +20,7 @@ const GC_VERBOSE: bool = true;
 pub struct ImmixCollector;
 pub struct Visitor<'a> {
     immix_space: &'a mut ImmixSpace,
-    queue: &'a mut VecDeque<*mut Header>,
+    queue: &'a mut VecDeque<*mut HeapCell>,
     defrag: bool,
     next_live_mark: bool,
 }
@@ -21,12 +30,12 @@ impl Tracer for Visitor<'_> {
         unsafe {
             let mut child = &mut *slot.value();
             if child.is_forwarded() {
-                slot.set(child.type_info_ptr());
+                slot.set(child.vtable());
             } else if child.get_mark() != self.next_live_mark {
                 if self.defrag && self.immix_space.filter_fast(Address::from_ptr(child)) {
                     if let Some(new_child) = self.immix_space.maybe_evacuate(child) {
                         slot.set(new_child);
-                        child = &mut *new_child.to_mut_ptr::<Header>();
+                        child = &mut *new_child.to_mut_ptr::<HeapCell>();
                     }
                 }
                 self.queue.push_back(child);
@@ -38,24 +47,24 @@ impl Tracer for Visitor<'_> {
 impl ImmixCollector {
     pub fn collect(
         collection_type: &CollectionType,
-        roots: &[*mut Header],
-        precise_roots: &[*mut *mut Header],
+        roots: &[*mut HeapCell],
+        precise_roots: &[*mut *mut HeapCell],
         immix_space: &mut ImmixSpace,
         next_live_mark: bool,
     ) -> usize {
-        let mut object_queue: VecDeque<*mut Header> = roots.iter().copied().collect();
+        let mut object_queue: VecDeque<*mut HeapCell> = roots.iter().copied().collect();
         for root in precise_roots.iter() {
             unsafe {
                 let root = &mut **root;
                 let mut raw = &mut **root;
                 if immix_space.filter_fast(Address::from_ptr(raw)) {
                     if raw.is_forwarded() {
-                        raw = &mut *(raw.type_info_ptr().to_mut_ptr::<Header>());
+                        raw = &mut *(raw.vtable().to_mut_ptr::<HeapCell>());
                     } else if *collection_type == CollectionType::ImmixEvacCollection {
                         if let Some(new_object) = immix_space.maybe_evacuate(raw) {
-                            *root = new_object.to_mut_ptr::<Header>();
+                            *root = new_object.to_mut_ptr::<HeapCell>();
                             raw.set_forwarded(new_object);
-                            raw = &mut *new_object.to_mut_ptr::<Header>();
+                            raw = &mut *new_object.to_mut_ptr::<HeapCell>();
                         }
                     }
                 }
@@ -75,23 +84,21 @@ impl ImmixCollector {
                         (&mut *block).line_object_mark(object_addr); // Mark block line
                     }
 
-                    visited += (&*object).size();
-                    let visitor_fn = (&*object).type_info().visit_references;
-                    if let Some(visitor_fn) = visitor_fn {
-                        let mut visitor = core::mem::transmute::<_, Visitor<'static>>(Visitor {
-                            immix_space,
-                            next_live_mark,
-                            queue: &mut object_queue,
-                            defrag: *collection_type == CollectionType::ImmixEvacCollection,
-                        });
+                    visited += align_usize((*object).get_dyn().compute_size() + 8, 16);
+                    let mut visitor = Visitor {
+                        immix_space,
+                        next_live_mark,
+                        queue: &mut object_queue,
+                        defrag: *collection_type == CollectionType::ImmixEvacCollection,
+                    };
 
-                        visitor_fn(
-                            Address::from_ptr(object),
-                            TracerPtr {
-                                tracer: core::mem::transmute(&mut visitor as &mut dyn Tracer),
-                            },
-                        );
-                    }
+                    /*visitor_fn(
+                        Address::from_ptr(object),
+                        TracerPtr {
+                            tracer: core::mem::transmute(&mut visitor as &mut dyn Tracer),
+                        },
+                    );*/
+                    (*object).get_dyn().visit_children(&mut visitor);
                 }
             }
         }
@@ -177,8 +184,8 @@ impl Collector {
         log: bool,
         space_bitmap: &SpaceBitmap,
         collection_type: &CollectionType,
-        roots: &[*mut Header],
-        precise_roots: &[*mut *mut Header],
+        roots: &[*mut HeapCell],
+        precise_roots: &[*mut *mut HeapCell],
         immix_space: &mut ImmixSpace,
         large_object_space: &mut LargeObjectSpace,
         next_live_mark: bool,
@@ -235,7 +242,7 @@ impl Collector {
                         (*block).begin() + 128,
                         (*block).begin() + 32 * 1024,
                         |object| {
-                            let header = object as *mut Header;
+                            let header = object as *mut HeapCell;
                             let ty_info = (*header).type_info();
                             if ty_info.needs_destruction {
                                 let destructor = ty_info.destructor.unwrap();
@@ -317,31 +324,15 @@ impl Collector {
 }
 
 pub unsafe fn maybe_sweep(log: bool, space_bitmap: &SpaceBitmap, block: *mut ImmixBlock) {
-    log_if!(
-        log,
-        "--- Will sweep block?={} ({} destructible objects)",
-        (*block).needs_destruction > 0,
-        (*block).needs_destruction
-    );
-    if (*block).needs_destruction > 0 {
-        log_if!(
-            GC_VERBOSE,
-            "--- Sweeping block with {} destructible objects",
-            (*block).needs_destruction
-        );
+    log_if!(log, "--- Will sweep block?={} ", (*block).needs_destruction);
+    if (*block).needs_destruction {
         space_bitmap.visit_unmarked_range(
             (*block).begin() + 128,
             (*block).begin() + 32 * 1024,
             |object| {
-                let header = object as *mut Header;
-                let ty_info = (*header).type_info();
-                if let Some(x) = ty_info.destructor {
-                    (*block).needs_destruction -= 1;
-                    //let destructor = ty_info.destructor;
-                    //match destructor {
-                    /*Some(x) =>*/
-                    x(Address::from_ptr(header));
-                }
+                let header = object as *mut HeapCell;
+                let ty_info = (*header).get_dyn();
+                std::ptr::drop_in_place(ty_info);
             },
         );
     }

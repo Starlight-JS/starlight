@@ -1,18 +1,15 @@
+use crate::gc::heap_cell::{HeapCell, HeapCellU, HeapObject};
 use allocator::ImmixSpace;
 use collection::Collector;
 use constants::LARGE_OBJECT;
-use header::*;
 use large_object_space::{LargeObjectSpace, PreciseAllocation};
-use std::mem::transmute;
+use std::{mem::needs_drop, mem::transmute};
+use tagged_pointer::TaggedPointer;
 use util::address::Address;
 use util::*;
-use wtf_rs::stack_bounds::StackBounds;
+use wtf_rs::{stack_bounds::StackBounds, TraitObject};
 
-use crate::runtime::{
-    ref_ptr::Ref,
-    type_info::{Type, TypeInfo},
-    vm::JSVirtualMachine,
-};
+use crate::runtime::{ref_ptr::Ref, vm::JsVirtualMachine};
 #[macro_use]
 pub mod util;
 pub mod allocator;
@@ -38,7 +35,7 @@ pub struct Heap {
     threshold: usize,
     current_live_mark: bool,
     collector: Collector,
-    pub(crate) vm: Ref<JSVirtualMachine>,
+    pub(crate) vm: Ref<JsVirtualMachine>,
 }
 
 #[inline(never)]
@@ -48,7 +45,7 @@ fn get_stack_pointer() -> usize {
 }
 
 impl Heap {
-    pub(crate) fn new(vm: Ref<JSVirtualMachine>, size: usize, threshold: usize) -> Self {
+    pub(crate) fn new(vm: Ref<JsVirtualMachine>, size: usize, threshold: usize) -> Self {
         Self {
             los: LargeObjectSpace::new(vm),
             allocated: 0,
@@ -73,10 +70,10 @@ impl Heap {
             self.allocated
         );
         let mut precise_roots = Vec::new();
-        for (_, sym) in self.vm.symbols.iter_mut() {
+        /*for (_, sym) in self.vm.symbols.iter_mut() {
             precise_roots.push(transmute(sym));
-        }
-        let mut roots: Vec<*mut Header> = Vec::new();
+        }*/
+        let mut roots: Vec<*mut HeapCell> = Vec::new();
         let all_blocks = (*self.immix).get_all_blocks();
         {
             let bounds = StackBounds::current_thread_stack_bounds();
@@ -130,7 +127,7 @@ impl Heap {
         &mut self,
         from: *mut *mut u8,
         to: *mut *mut u8,
-        into: &mut Vec<*mut Header>,
+        into: &mut Vec<*mut HeapCell>,
     ) {
         let mut scan = align_usize(from as usize, 16) as *mut *mut u8;
         let mut end = align_usize(to as usize, 16) as *mut *mut u8;
@@ -151,8 +148,8 @@ impl Heap {
             if PreciseAllocation::is_precise(ptr.cast())
                 && self.los.contains(Address::from_ptr(ptr))
             {
-                (&mut *ptr.cast::<Header>()).pin();
-                into.push(ptr.cast::<Header>());
+                (&mut *ptr.cast::<HeapCell>()).pin();
+                into.push(ptr.cast::<HeapCell>());
                 scan = scan.offset(1);
                 continue;
             }
@@ -166,7 +163,7 @@ impl Heap {
             if let Some(ptr) = (*self.immix).filter(Address::from_ptr(ptr)) {
                 let ptr = ptr.to_mut_ptr::<u8>();
 
-                (&mut *ptr.cast::<Header>()).pin();
+                (&mut *ptr.cast::<HeapCell>()).pin();
 
                 into.push(ptr.cast());
             }
@@ -174,7 +171,7 @@ impl Heap {
             if let Some(ptr) = (*self.immix).filter(Address::from_ptr(ptr)) {
                 let ptr = ptr.to_mut_ptr::<u8>();
 
-                (&mut *ptr.cast::<Header>()).pin();
+                (&mut *ptr.cast::<HeapCell>()).pin();
 
                 into.push(ptr.cast());
             }
@@ -182,23 +179,20 @@ impl Heap {
         }
     }
 
-    pub(crate) unsafe fn allocate<T: Type>(
-        &mut self,
-        value: T,
-        size: usize,
-        ty_info: &'static TypeInfo,
-    ) -> Address {
+    pub(crate) unsafe fn allocate<T: HeapObject>(&mut self, value: T, size: usize) -> Address {
         if self.allocated >= self.threshold {
             self.collect_internal(false, true);
         }
-        let size = align_usize(size, 16);
+        let info = &value as &dyn HeapObject;
+        let trait_object = transmute::<_, TraitObject>(info);
+        let size = align_usize(size + 8, 16);
         let ptr = if size >= LARGE_OBJECT {
-            self.los.alloc(size, ty_info)
+            self.los.alloc(size)
         } else {
-            let mut addr = (*self.immix).allocate(size, ty_info.needs_destruction);
+            let mut addr = (*self.immix).allocate(size, value.needs_destruction());
             if addr.is_null() {
                 self.collect_internal(true, true);
-                addr = (*self.immix).allocate(size, ty_info.needs_destruction);
+                addr = (*self.immix).allocate(size, value.needs_destruction());
                 if addr.is_null() {
                     panic!("Out of memory");
                 }
@@ -207,9 +201,13 @@ impl Heap {
             Address::from_ptr(addr)
         };
         self.allocated += size;
-        let raw = ptr.to_mut_ptr::<Header>();
-        raw.cast::<T>().write(value);
-        *raw = Header::new(ty_info);
+        let raw = ptr.to_mut_ptr::<HeapCell>();
+        (*raw).data().to_mut_ptr::<T>().write(value);
+        *raw = HeapCell {
+            u: HeapCellU {
+                tagged: TaggedPointer::new(trait_object.vtable.cast()),
+            },
+        };
         (*raw).mark(self.current_live_mark);
 
         ptr

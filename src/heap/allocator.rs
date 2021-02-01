@@ -1,8 +1,10 @@
-use crate::runtime::{ref_ptr::Ref, vm::JSVirtualMachine};
+use crate::{
+    gc::heap_cell::{HeapCell, HeapCellU},
+    runtime::{ref_ptr::Ref, vm::JsVirtualMachine},
+};
 
 use super::{
-    block::*, block_allocator::*, constants::*, header::Header, space_bitmap::*, util::address::*,
-    util::*,
+    block::*, block_allocator::*, constants::*, space_bitmap::*, util::address::*, util::*,
 };
 use core::mem::size_of;
 use core::ptr::null_mut;
@@ -50,7 +52,7 @@ pub trait Allocator {
             .map(|tp| self.allocate_from_block(size, tp))
             .map(|(tp, object)| {
                 self.put_current_block(tp);
-                unsafe { (*(tp.0)).needs_destruction += if needs_destruction { 1 } else { 0 } }
+                unsafe { (*(tp.0)).needs_destruction = needs_destruction }
                 object
             })
             .unwrap_or_else(Address::null)
@@ -413,7 +415,7 @@ pub struct ImmixSpace {
     evac_allocator: EvacAllocator,
     /// The current live mark for new objects. See `Spaces.current_live_mark`.
     current_live_mark: bool,
-    vm: Ref<JSVirtualMachine>,
+    vm: Ref<JsVirtualMachine>,
 }
 impl ImmixSpace {
     pub fn filter_fast(&self, addr: Address) -> bool {
@@ -434,7 +436,7 @@ impl ImmixSpace {
 
         None
     }
-    pub fn new(vm: Ref<JSVirtualMachine>, heap_size: usize) -> *mut Self {
+    pub fn new(vm: Ref<JsVirtualMachine>, heap_size: usize) -> *mut Self {
         unsafe {
             let block = BlockAllocator::new(heap_size, vm);
             let block = {
@@ -503,7 +505,7 @@ impl ImmixSpace {
             .collect();
     }
     #[inline]
-    pub fn allocate(&mut self, size: usize, needs_destruction: bool) -> *mut Header {
+    pub fn allocate(&mut self, size: usize, needs_destruction: bool) -> *mut HeapCell {
         let ptr = if size < MEDIUM_OBJECT {
             self.allocator.allocate(size, needs_destruction)
         } else {
@@ -511,7 +513,7 @@ impl ImmixSpace {
         };
         {
             if ptr.is_non_null() {
-                let ptr = ptr.to_mut_ptr::<Header>();
+                let ptr = ptr.to_mut_ptr::<HeapCell>();
 
                 self.set_gc_object(Address::from_ptr(ptr));
             }
@@ -531,17 +533,17 @@ impl ImmixSpace {
     ///
     /// This might segfault program if `addr` is not pointing to immix space and wasn't allocated in block.
     ///
-    pub unsafe fn maybe_evacuate(&mut self, addr: *mut Header) -> Option<Address> {
+    pub unsafe fn maybe_evacuate(&mut self, addr: *mut HeapCell) -> Option<Address> {
         let block_info = ImmixBlock::get_block_ptr(Address::from_ptr(addr));
         let is_pinned = (*addr).is_pinned();
         let is_candidate = (*block_info).evacuation_candidate;
         if is_pinned || !is_candidate {
             return None;
         }
-        let size = (&*addr).size();
+        let size = align_usize((&*addr).get_dyn().compute_size() + 8, 16);
         let new_object = self.evac_allocator.allocate(
             align_usize(size, 16),
-            (&*addr).type_info().needs_destruction,
+            (&*addr).get_dyn().needs_destruction(),
         );
         if new_object.is_non_null() {
             core::ptr::copy_nonoverlapping(addr as *const u8, new_object.to_mut_ptr::<u8>(), size);

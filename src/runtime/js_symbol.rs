@@ -1,68 +1,70 @@
-use super::{
-    js_cell::allocate_cell,
-    method_table::MethodTable,
-    ref_ptr::*,
-    type_info::{Type, TypeInfo},
-    vm::JSVirtualMachine,
-};
-use crate::heap::{header::Header, util::address};
-use address::Address;
-use lasso::LargeSpur;
 use std::mem::size_of;
-#[repr(C)]
-pub struct JSSymbol {
-    pub(crate) header: Header,
-    pub(crate) key: lasso::LargeSpur,
+
+use crate::{
+    gc::{handle::Handle, heap_cell::HeapObject},
+    heap::trace::Tracer,
+};
+
+use super::{
+    js_cell::{allocate_cell, JsCell},
+    ref_ptr::*,
+    symbol::Symbol,
+    vm::JsVirtualMachine,
+};
+
+pub struct JsSymbol {
+    sym: Symbol,
 }
 
-impl JSSymbol {
-    pub fn new(vm: &mut JSVirtualMachine, key: impl AsRef<str>) -> Ref<JSSymbol> {
-        let key = vm.interner.get_or_intern(key.as_ref());
-        let value = Self {
-            header: Header::empty(),
-            key,
-        };
-        let sym = allocate_cell(vm, size_of::<Self>(), Self::get_type_info(), value);
-        sym
+impl JsSymbol {
+    pub fn new(vm: Ref<JsVirtualMachine>, sym: Symbol) -> Handle<Self> {
+        let proto = Self { sym };
+        allocate_cell(vm, size_of::<Self>(), proto)
     }
 
-    pub fn from_interned_key(vm: &mut JSVirtualMachine, key: LargeSpur) -> Ref<JSSymbol> {
-        let value = Self {
-            header: Header::empty(),
-            key,
-        };
-        let sym = allocate_cell(vm, size_of::<Self>(), Self::get_type_info(), value);
-        sym
-    }
-
-    pub fn vm(&self) -> Ref<JSVirtualMachine> {
-        self.header.vm()
-    }
-}
-impl Type for JSSymbol {
-    fn get_type_info() -> &'static TypeInfo {
-        static SYMBOL_INFO: TypeInfo = TypeInfo {
-            visit_references: None,
-            heap_size: {
-                extern "C" fn size(_: Address) -> usize {
-                    size_of::<JSSymbol>()
-                }
-                size
-            },
-            needs_destruction: false,
-            destructor: None,
-            method_table: MethodTable {},
-            parent: None,
-        };
-        &SYMBOL_INFO
+    pub fn sym(&self) -> Symbol {
+        self.sym
     }
 }
 
-impl AsRef<str> for JSSymbol {
-    fn as_ref(&self) -> &str {
-        unsafe {
-            let vm: &'static JSVirtualMachine = &*self.header.fast_vm().pointer;
-            vm.interner.resolve(&self.key)
-        }
+impl JsCell for JsSymbol {}
+
+impl HeapObject for JsSymbol {
+    fn visit_children(&mut self, _tracer: &mut dyn Tracer) {}
+    fn needs_destruction(&self) -> bool {
+        false
+    }
+}
+
+pub trait JSSymbolBuild<T> {
+    fn make(vm: Ref<JsVirtualMachine>, key: T) -> Handle<JsSymbol>;
+}
+
+impl JSSymbolBuild<i32> for JsSymbol {
+    fn make(mut vm: Ref<JsVirtualMachine>, key: i32) -> Handle<JsSymbol> {
+        JsSymbol::new(vm, vm.intern_i32(key))
+    }
+}
+impl JSSymbolBuild<i64> for JsSymbol {
+    fn make(mut vm: Ref<JsVirtualMachine>, key: i64) -> Handle<JsSymbol> {
+        JsSymbol::new(vm, vm.intern_i64(key))
+    }
+}
+
+impl JSSymbolBuild<u32> for JsSymbol {
+    fn make(mut vm: Ref<JsVirtualMachine>, key: u32) -> Handle<JsSymbol> {
+        JsSymbol::new(vm, vm.intern_u32(key))
+    }
+}
+
+impl JSSymbolBuild<f64> for JsSymbol {
+    fn make(mut vm: Ref<JsVirtualMachine>, key: f64) -> Handle<JsSymbol> {
+        JsSymbol::new(vm, vm.intern_f64(key))
+    }
+}
+
+impl JSSymbolBuild<&str> for JsSymbol {
+    fn make(mut vm: Ref<JsVirtualMachine>, key: &str) -> Handle<JsSymbol> {
+        JsSymbol::new(vm, vm.intern(key))
     }
 }

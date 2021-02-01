@@ -1,86 +1,63 @@
-use crate::heap::{header::Header, util::address::Address};
+use crate::{
+    gc::{handle::Handle, heap_cell::HeapObject},
+    heap::trace::Tracer,
+};
 use std::mem::size_of;
 
 use super::{
-    js_cell::allocate_cell,
-    method_table::MethodTable,
-    ref_ptr::{AsRefPtr, Ref},
-    type_info::{Type, TypeInfo},
-    vm::JSVirtualMachine,
+    js_cell::{allocate_cell, JsCell},
+    ref_ptr::Ref,
+    vm::JsVirtualMachine,
 };
 
 #[repr(C)]
-pub struct JSString {
-    pub(crate) header: Header,
-    pub(crate) length: u32,
-    pub(crate) data: [u8; 0],
+pub struct JsString {
+    len: u32,
+    data: [u8; 0],
 }
 
-impl JSString {
-    pub fn as_bytes(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.data.as_ptr(), self.length as _) }
-    }
-
-    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
-        unsafe { std::slice::from_raw_parts_mut(self.data.as_mut_ptr(), self.length as _) }
-    }
-    pub fn as_str(&self) -> &str {
-        unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
-    }
-
-    pub fn as_str_mut(&mut self) -> &mut str {
-        unsafe { std::str::from_utf8_unchecked_mut(self.as_bytes_mut()) }
-    }
-
-    pub fn length(&self) -> u32 {
-        self.length
-    }
-
-    pub fn new(vm: impl AsRefPtr<JSVirtualMachine>, value: impl AsRef<str>) -> Ref<Self> {
-        let str = value.as_ref();
-        let value = Self {
-            header: Header::empty(),
-            length: str.len() as _,
+impl JsString {
+    pub fn new(vm: Ref<JsVirtualMachine>, as_str: impl AsRef<str>) -> Handle<Self> {
+        let str = as_str.as_ref();
+        let proto = Self {
+            len: str.len() as _,
             data: [],
         };
+        let mut cell = allocate_cell(vm, str.len() + size_of::<Self>(), proto);
 
-        let mut string = allocate_cell(
-            vm.as_ref_ptr(),
-            str.len() + size_of::<Self>(),
-            Self::get_type_info(),
-            value,
-        );
-        string.length = str.len() as _;
         unsafe {
+            cell.len = str.len() as _;
             std::ptr::copy_nonoverlapping(
                 str.as_bytes().as_ptr(),
-                string.data.as_mut_ptr(),
+                cell.data.as_mut_ptr(),
                 str.len(),
             );
         }
-        string
+
+        cell
     }
 
-    pub fn vm(&self) -> Ref<JSVirtualMachine> {
-        self.header.vm()
+    pub fn as_str(&self) -> &str {
+        unsafe {
+            std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                self.data.as_ptr(),
+                self.len as _,
+            ))
+        }
+    }
+
+    pub fn len(&self) -> u32 {
+        self.len
     }
 }
 
-impl Type for JSString {
-    fn get_type_info() -> &'static TypeInfo {
-        static STR_INFO: TypeInfo = TypeInfo {
-            visit_references: None,
-            needs_destruction: false,
-            destructor: None,
-            heap_size: {
-                extern "C" fn sz(this: Address) -> usize {
-                    Ref::new(this.to_ptr::<JSString>()).length as usize + size_of::<JSString>()
-                }
-                sz
-            },
-            parent: None,
-            method_table: MethodTable {},
-        };
-        &STR_INFO
+impl HeapObject for JsString {
+    fn visit_children(&mut self, _tracer: &mut dyn Tracer) {}
+    fn compute_size(&self) -> usize {
+        self.len as usize + size_of::<Self>()
+    }
+    fn needs_destruction(&self) -> bool {
+        false
     }
 }
+impl JsCell for JsString {}

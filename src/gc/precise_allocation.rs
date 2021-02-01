@@ -1,8 +1,8 @@
-use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JsVirtualMachine};
-
-use super::header::Header;
-use super::util::address::Address;
-use core::sync::atomic::AtomicBool;
+use super::heap_cell::*;
+use crate::heap::util::address::Address;
+use std::alloc::{alloc, dealloc, Layout};
+use std::sync::atomic::{AtomicBool, Ordering};
+//intrusive_adapter!(pub PreciseAllocationNode = UnsafeRef<PreciseAllocation> : PreciseAllocation {link: LinkedListLink});
 /// Precise allocation used for large objects (>= LARGE_CUTOFF).
 /// Wafflelink uses GlobalAlloc that already knows what to do for large allocations. The GC shouldn't
 /// have to think about such things. That's where PreciseAllocation comes in. We will allocate large
@@ -22,7 +22,6 @@ pub struct PreciseAllocation {
     pub adjusted_alignment: bool,
     /// Is this even valid allocation?
     pub has_valid_cell: bool,
-    pub vm: Ref<JsVirtualMachine>,
 }
 
 impl PreciseAllocation {
@@ -39,7 +38,7 @@ impl PreciseAllocation {
         (raw_ptr as usize & Self::HALF_ALIGNMENT) != 0
     }
     /// Create PreciseAllocation from pointer
-    pub fn from_cell(ptr: *mut Header) -> *mut Self {
+    pub fn from_cell(ptr: *mut HeapCell) -> *mut Self {
         unsafe {
             ptr.cast::<u8>()
                 .offset(-(Self::header_size() as isize))
@@ -50,7 +49,7 @@ impl PreciseAllocation {
     #[inline]
     pub fn base_pointer(&self) -> *mut () {
         if self.adjusted_alignment {
-            ((self as *const Self as isize) - (Self::HALF_ALIGNMENT as isize)) as *mut ()
+            return ((self as *const Self as isize) - (Self::HALF_ALIGNMENT as isize)) as *mut ();
         } else {
             self as *const Self as *mut ()
         }
@@ -62,20 +61,29 @@ impl PreciseAllocation {
     }
     /// Return `is_marked`
     pub fn is_marked(&self) -> bool {
-        self.is_marked
+        self.mark_atomic().load(Ordering::Relaxed)
     }
     /// Test and set marked. Will return true
     /// if it is already marked.
-    pub fn test_and_set_marked(&mut self) -> bool {
+    pub fn test_and_set_marked(&self) -> bool {
         if self.is_marked() {
             return true;
         }
+        self.mark_atomic()
+            .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed)
+            .is_ok()
+    }
+    /// Test and set marked without synchronization.
+    pub fn test_and_set_marked_unsync(&mut self) -> bool {
+        if self.is_marked {
+            return true;
+        }
+
         self.is_marked = true;
         false
     }
-
     /// Return cell address, it is always aligned to `Self::HALF_ALIGNMENT`.
-    pub fn cell(&self) -> *mut Header {
+    pub fn cell(&self) -> *mut HeapCell {
         let addr = Address::from_ptr(self).offset(Self::header_size());
         addr.to_mut_ptr()
     }
@@ -115,34 +123,32 @@ impl PreciseAllocation {
         !self.is_marked() //&& !self.is_newly_allocated
     }
     /// Derop cell if this allocation is not marked.
-    pub fn sweep(&mut self) -> bool {
+    pub fn sweep(&mut self) {
         if self.has_valid_cell && !self.is_live() {
-            self.has_valid_cell = false;
-            let cell = self.cell();
             unsafe {
-                if let Some(fin) = (*cell).type_info().destructor {
-                    fin(Address::from_ptr(cell));
-                }
+                let cell = self.cell();
+                std::ptr::drop_in_place((&mut *cell).get_dyn());
             }
-            return false;
+            self.has_valid_cell = false;
         }
-        true
     }
     /// Try to create precise allocation (no way that it will return null for now).
-    pub fn try_create(vm: Ref<JsVirtualMachine>, size: usize, index_in_space: u32) -> *mut Self {
+    pub fn try_create(size: usize, index_in_space: u32) -> *mut Self {
         let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
         unsafe {
-            let mut space = libc::malloc(adjusted_alignment_allocation_size).cast::<u8>();
+            let mut space = alloc(
+                Layout::from_size_align(adjusted_alignment_allocation_size, Self::HALF_ALIGNMENT)
+                    .unwrap(),
+            );
             //let mut space = libc::malloc(adjusted_alignment_allocation_size);
             let mut adjusted_alignment = false;
             if !is_aligned_for_precise_allocation(space) {
-                space = space.add(Self::HALF_ALIGNMENT);
+                space = space.offset(Self::HALF_ALIGNMENT as _);
                 adjusted_alignment = true;
                 assert!(is_aligned_for_precise_allocation(space));
             }
             assert!(size != 0);
             space.cast::<Self>().write(Self {
-                vm,
                 //link: LinkedListLink::new(),
                 adjusted_alignment,
                 is_marked: false,
@@ -161,18 +167,17 @@ impl PreciseAllocation {
     }
     /// Destroy this allocation
     pub fn destroy(&mut self) {
+        let adjusted_alignment_allocation_size =
+            Self::header_size() + self.cell_size + Self::HALF_ALIGNMENT;
         let base = self.base_pointer();
-        let cell = self.cell();
         unsafe {
-            if self.has_valid_cell {
-                self.has_valid_cell = false;
-                if let Some(fin) = (*cell).type_info().destructor {
-                    fin(Address::from_ptr(cell));
-                }
-            }
-        }
-        unsafe {
-            libc::free(base.cast());
+            let cell = self.cell();
+            core::ptr::drop_in_place((&mut *cell).get_dyn());
+            dealloc(
+                base.cast(),
+                Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)
+                    .unwrap(),
+            );
         }
     }
 }
@@ -180,85 +185,4 @@ impl PreciseAllocation {
 pub fn is_aligned_for_precise_allocation(mem: *mut u8) -> bool {
     let allocable_ptr = mem as usize;
     (allocable_ptr & (PreciseAllocation::ALIGNMENT - 1)) == 0
-}
-
-/// This space contains objects which are larger than the size limits of other spaces.
-/// Each object gets its own malloc'd region of memory.
-/// Large objects are never moved by the garbage collector.
-pub struct LargeObjectSpace {
-    pub(crate) allocations: std::vec::Vec<*mut PreciseAllocation>,
-    pub(crate) current_live_mark: bool,
-    pub(crate) vm: Ref<JsVirtualMachine>,
-}
-
-impl LargeObjectSpace {
-    pub fn new(vm: Ref<JsVirtualMachine>) -> Self {
-        Self {
-            vm,
-            current_live_mark: false,
-            allocations: std::vec::Vec::with_capacity(8),
-        }
-    }
-    pub fn sweep(&mut self) -> usize {
-        let mut sweeped = 0;
-        self.allocations.retain(|ptr| unsafe {
-            let p = &mut **ptr;
-            let retain = p.sweep();
-            if !retain {
-                p.destroy();
-                sweeped += p.cell_size;
-            }
-            retain
-        });
-        self.allocations.sort_unstable();
-        sweeped
-    }
-    #[allow(clippy::collapsible_if)]
-    pub fn contains(&self, p: Address) -> bool {
-        if self.allocations.is_empty() {
-            return false;
-        }
-        unsafe {
-            if (&*self.allocations[0]).above_lower_bound(p.to_mut_ptr())
-                && (&**self.allocations.last().unwrap()).below_upper_bound(p.to_mut_ptr())
-            {
-                if self
-                    .allocations
-                    .binary_search(&PreciseAllocation::from_cell(p.to_mut_ptr()))
-                    .is_ok()
-                {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    pub fn alloc(&mut self, size: usize) -> Address {
-        let ix = self.allocations.len() as u32;
-        let cell = PreciseAllocation::try_create(self.vm, size, ix);
-        unsafe {
-            if cell.is_null() {
-                return Address::null();
-            }
-            self.allocations.push(cell);
-            if (cell as usize) < self.allocations[self.allocations.len() - 1] as usize
-                || (cell as usize) < self.allocations[0] as usize
-            {
-                self.allocations.sort_unstable();
-            }
-
-            Address::from_ptr(cell)
-        }
-    }
-}
-
-impl Drop for LargeObjectSpace {
-    fn drop(&mut self) {
-        while let Some(alloc) = self.allocations.pop() {
-            unsafe {
-                (&mut *alloc).destroy();
-            }
-        }
-    }
 }

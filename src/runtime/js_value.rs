@@ -1,4 +1,6 @@
-use super::js_cell::JSCell;
+use crate::gc::{handle::Handle, heap_cell::HeapObject};
+
+use super::js_cell::JsCell;
 use super::ref_ptr::Ref;
 use wtf_rs::lohi_struct;
 lohi_struct!(
@@ -14,7 +16,7 @@ pub union EncodedValueDescriptor {
     pub as_int64: i64,
     #[cfg(target_pointer_width = "32")]
     pub as_double: f64,
-    pub cell: Ref<JSCell>,
+    pub cell: Handle<dyn HeapObject>,
     pub as_bits: AsBits,
 }
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -354,13 +356,13 @@ impl Value {
             },
         }
     }
-    pub fn as_cell(self) -> Ref<JSCell> {
+    pub fn as_cell(self) -> Handle<dyn HeapObject> {
         unsafe { self.u.cell }
     }
-    pub fn as_cell_ref(&self) -> &Ref<JSCell> {
+    pub fn as_cell_ref(&self) -> &Handle<dyn HeapObject> {
         unsafe { &self.u.cell }
     }
-    pub fn as_cell_ref_mut(&mut self) -> &mut Ref<JSCell> {
+    pub fn as_cell_ref_mut(&mut self) -> &mut Handle<dyn HeapObject> {
         unsafe { &mut self.u.cell }
     }
     pub fn is_number(self) -> bool {

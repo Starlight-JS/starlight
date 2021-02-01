@@ -1,22 +1,22 @@
-use std::{collections::HashMap, intrinsics::drop_in_place};
+use std::intrinsics::drop_in_place;
 
+use super::symbol::Symbol;
+use super::{options::Options, ref_ptr::Ref, symbol_table::SymbolTable};
 use crate::heap::Heap;
-use lasso::{Capacity, LargeSpur, Rodeo};
 
-use super::{js_symbol::JSSymbol, options::Options, ref_ptr::Ref};
-pub struct JSVirtualMachine {
+pub struct JsVirtualMachine {
     pub(crate) heap: Ref<Heap>,
-    pub(crate) interner: Rodeo<LargeSpur>,
-    pub(crate) symbols: HashMap<LargeSpur, Ref<JSSymbol>>,
+    pub(crate) sym_table: SymbolTable,
+
     pub(crate) options: Options,
 }
 
-impl JSVirtualMachine {
+impl JsVirtualMachine {
     pub fn create(options: Options) -> Ref<Self> {
         let mut vm = Ref::new(Box::into_raw(Box::new(Self {
             heap: Ref::new(0 as *mut _),
-            interner: Rodeo::with_capacity(Capacity::for_strings(16)),
-            symbols: HashMap::new(),
+            sym_table: SymbolTable::new(),
+
             options,
         })));
         vm.heap = Ref::new(Box::into_raw(Box::new(Heap::new(
@@ -36,13 +36,35 @@ impl JSVirtualMachine {
         }
     }
 
-    pub fn symbol_for(&mut self, key: impl AsRef<str>) -> Ref<JSSymbol> {
-        let key = self.interner.get_or_intern(key.as_ref());
-        if let Some(symbol) = self.symbols.get(&key) {
-            return *symbol;
+    pub fn intern(&mut self, key: impl AsRef<str>) -> Symbol {
+        self.sym_table.intern(key)
+    }
+
+    pub fn intern_i32(&mut self, key: i32) -> Symbol {
+        let converted = key as u32;
+        if converted as i32 == key {
+            return Symbol::Indexed(converted);
         }
-        let symbol = JSSymbol::from_interned_key(self, key);
-        self.symbols.insert(key, symbol);
-        symbol
+        self.intern(key.to_string())
+    }
+
+    pub fn intern_i64(&mut self, key: i64) -> Symbol {
+        let converted = key as u32;
+        if converted as i64 == key {
+            return Symbol::Indexed(converted);
+        }
+        self.intern(key.to_string())
+    }
+
+    pub fn intern_u32(&mut self, key: u32) -> Symbol {
+        Symbol::Indexed(key)
+    }
+
+    pub fn intern_f64(&mut self, key: f64) -> Symbol {
+        let converted = key as u32;
+        if converted as f64 == key {
+            return Symbol::Indexed(converted);
+        }
+        self.intern(key.to_string())
     }
 }

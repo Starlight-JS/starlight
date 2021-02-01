@@ -11,4 +11,6 @@ macro_rules! log_if {
 }
 #[macro_use]
 pub mod heap;
+pub mod gc;
 pub mod runtime;
+pub mod util;

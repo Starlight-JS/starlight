@@ -18,7 +18,7 @@ fn parse_size_from_osstr(s: &str) -> Result<usize, ParseIntError> {
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "js", about = "JS engine in Rust programming language")]
+#[structopt(name = "js", about = "Js engine in Rust programming language")]
 pub struct Options {
     #[structopt(
         long = "heap-size",

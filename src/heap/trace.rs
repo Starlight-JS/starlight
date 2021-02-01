@@ -1,27 +1,38 @@
-use super::{header::Header, util::address};
+use crate::gc::{
+    handle::Handle,
+    heap_cell::{HeapCell, HeapObject},
+};
+
+use super::util::address;
 use address::Address;
 
 pub struct Slot {
     pub(crate) addr: Address,
 }
 
+impl<T: HeapObject + ?Sized> Into<Slot> for &mut Handle<T> {
+    fn into(self) -> Slot {
+        Slot::new(self)
+    }
+}
+
 impl Slot {
     pub fn new<T>(hdr_ptr: &mut T) -> Self {
         Self {
-            addr: Address::from_ptr(hdr_ptr as *mut T as *mut *mut Header),
+            addr: Address::from_ptr(hdr_ptr as *mut T as *mut *mut HeapCell),
         }
     }
 
     pub(crate) fn set(&self, to: Address) {
         unsafe {
             self.addr
-                .to_mut_ptr::<*mut Header>()
-                .write(to.to_mut_ptr::<Header>());
+                .to_mut_ptr::<*mut HeapCell>()
+                .write(to.to_mut_ptr::<HeapCell>());
         }
     }
 
-    pub(crate) fn value(&self) -> *mut Header {
-        unsafe { *self.addr.to_mut_ptr::<*mut Header>() }
+    pub(crate) fn value(&self) -> *mut HeapCell {
+        unsafe { *self.addr.to_mut_ptr::<*mut HeapCell>() }
     }
 }
 

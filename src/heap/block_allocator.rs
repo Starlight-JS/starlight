@@ -1,4 +1,4 @@
-use crate::runtime::{ref_ptr::Ref, vm::JSVirtualMachine};
+use crate::runtime::{ref_ptr::Ref, vm::JsVirtualMachine};
 
 use super::block::*;
 use super::constants::*;
@@ -152,14 +152,14 @@ pub struct BlockAllocator {
     pub data_bound: *mut u8,
     pub data: *mut u8,
     pub mmap: Mmap,
-    pub vm: Ref<JSVirtualMachine>,
+    pub vm: Ref<JsVirtualMachine>,
 }
 
 impl BlockAllocator {
     pub fn total_blocks(&self) -> usize {
         (self.mmap.end() as usize - self.mmap.aligned() as usize) / BLOCK_SIZE
     }
-    pub fn new(size: usize, vm: Ref<JSVirtualMachine>) -> BlockAllocator {
+    pub fn new(size: usize, vm: Ref<JsVirtualMachine>) -> BlockAllocator {
         let map = Mmap::new(size);
 
         let this = Self {
