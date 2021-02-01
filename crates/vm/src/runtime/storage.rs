@@ -8,7 +8,7 @@ use crate::{
 use super::{ref_ptr::AsRefPtr, vm::JsVirtualMachine};
 
 pub struct FixedStorage<T: HeapObject + Copy> {
-    data: Handle<GcArray<T>>,
+    pub(crate) data: Handle<GcArray<T>>,
 }
 fn clp2(number: usize) -> usize {
     let x = number - 1;

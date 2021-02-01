@@ -15,8 +15,8 @@ pub type SparseArrayMap = HashMap<u32, StoredSlot>;
 pub type DenseArrayVector = GcVec<JsValue>;
 
 pub struct IndexedElements {
-    map: Option<Handle<SparseArrayMap>>,
-    vector: DenseArrayVector,
+    pub(crate) map: Option<Handle<SparseArrayMap>>,
+    pub(crate) vector: DenseArrayVector,
     length: u32,
     flags: u32,
 }

@@ -5,7 +5,7 @@ use crate::{
 
 use super::heap_cell::{HeapCell, HeapObject};
 use std::{
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
     marker::PhantomData,
     mem::transmute,
     ops::{Deref, DerefMut},
@@ -17,7 +17,14 @@ pub struct Handle<T: HeapObject + ?Sized> {
     pub(crate) cell: NonNull<HeapCell>,
     pub(crate) marker: PhantomData<T>,
 }
-
+impl<T: HeapObject + Sized> Handle<T> {
+    pub unsafe fn from_raw(ptr: *const T) -> Self {
+        Self {
+            cell: NonNull::new_unchecked(ptr.cast::<u8>().sub(8).cast::<HeapCell>() as *mut _),
+            marker: Default::default(),
+        }
+    }
+}
 impl<T: HeapObject + ?Sized> Copy for Handle<T> {}
 impl<T: HeapObject + ?Sized> Clone for Handle<T> {
     fn clone(&self) -> Self {
