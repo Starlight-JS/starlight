@@ -103,7 +103,7 @@ pub fn keep_on_stack_noop(value: usize) {
 macro_rules! keep_on_stack {
     ($($value : expr),*) => {{
         $(
-            keep_on_stack_noop($value as *const _ as usize);
+            $crate::keep_on_stack_noop($value as *const _ as usize);
         )*
     }};
 }

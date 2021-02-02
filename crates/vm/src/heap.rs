@@ -44,6 +44,7 @@ pub mod collection;
 pub mod constants;
 pub mod header;
 pub mod large_object_space;
+pub mod snapshot;
 pub mod space_bitmap;
 pub mod trace;
 
@@ -57,7 +58,11 @@ pub enum CollectionType {
 pub struct Heap {
     pub(crate) los: LargeObjectSpace,
     pub(crate) immix: *mut ImmixSpace,
-    allocated: usize,
+    /// The total allocated bytes on the heap.
+    pub(crate) allocated: usize,
+    /// The maximum number of bytes which will trigger a GC collection.
+    /// If collection does not lower the allocated size below the threshold then the threshold
+    /// will be raised.
     threshold: usize,
     pub(crate) current_live_mark: bool,
     collector: Collector,

@@ -13,6 +13,7 @@ use crate::{
         heap_cell::{HeapCell, HeapCellU},
     },
     heap::{
+        snapshot::HeapSnapshot,
         trace::{Slot, Tracer},
         util::address::Address,
         Heap,
@@ -83,6 +84,30 @@ impl JsVirtualMachine {
         self.intern(key.to_string())
     }
 
+    /// Get the total size of all of the objects allocated on the VM heap.
+    pub fn allocated_heap_memory(&self) -> usize {
+        self.heap.allocated
+    }
+
+    /// Record a heap snapshot at the current point in execution representing
+    /// how much memory is allocated on the heap and each object on it.
+    ///
+    /// This is a relatively expensive operation as it must trace every individual object
+    /// on the heap which is expensive. Therefore you should minimize frequent calls to this method.
+    /// To know just the total amount of memory allocated on the heap you can use [`allocated_heap_memory`](Self::allocated_heap_memory).
+    pub fn record_heap_snapshot(&mut self) -> HeapSnapshot {
+        let mut objects = Vec::with_capacity(10);
+        unsafe {
+            self.get_all_live_objects(|cell| objects.push((*cell).get_dyn().compute_size()));
+        }
+        HeapSnapshot {
+            object_count: objects.len(),
+            total_size: self.heap.allocated,
+            objects,
+        }
+    }
+
+    /// Trace all of the objects on the heap and run a callback on every cell.
     pub unsafe fn get_all_live_objects(&mut self, mut callback: impl FnMut(*mut HeapCell)) {
         let mut precise_roots: Vec<*mut HeapCell> = Vec::new();
         for (_, sym) in self.symbols.iter_mut() {
