@@ -29,11 +29,11 @@ pub enum CollectionType {
 }
 
 pub struct Heap {
-    los: LargeObjectSpace,
-    immix: *mut ImmixSpace,
+    pub(crate) los: LargeObjectSpace,
+    pub(crate) immix: *mut ImmixSpace,
     allocated: usize,
     threshold: usize,
-    current_live_mark: bool,
+    pub(crate) current_live_mark: bool,
     collector: Collector,
     pub(crate) vm: Ref<JsVirtualMachine>,
 }
@@ -70,9 +70,9 @@ impl Heap {
             self.allocated
         );
         let mut precise_roots = Vec::new();
-        /*for (_, sym) in self.vm.symbols.iter_mut() {
+        for (_, sym) in self.vm.symbols.iter_mut() {
             precise_roots.push(transmute(sym));
-        }*/
+        }
         let mut roots: Vec<*mut HeapCell> = Vec::new();
         let all_blocks = (*self.immix).get_all_blocks();
         {
@@ -123,7 +123,7 @@ impl Heap {
             self.threshold as f32 / 1024f32
         )
     }
-    unsafe fn collect_roots(
+    pub(crate) unsafe fn collect_roots(
         &mut self,
         from: *mut *mut u8,
         to: *mut *mut u8,

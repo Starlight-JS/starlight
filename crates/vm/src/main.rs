@@ -26,4 +26,10 @@ fn main() {
 
     println!("{}", vec.pop().unwrap().as_str());
     println!("{}", vec.pop().unwrap().as_str());
+
+    unsafe {
+        vm.get_all_live_objects(|pointer| {
+            println!("{:p}", pointer);
+        })
+    }
 }

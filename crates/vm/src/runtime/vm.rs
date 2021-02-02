@@ -1,13 +1,28 @@
-use std::intrinsics::drop_in_place;
+use std::{
+    collections::{HashMap, VecDeque},
+    intrinsics::drop_in_place,
+};
 
-use super::symbol::Symbol;
+use wtf_rs::stack_bounds::StackBounds;
+
+use super::{js_symbol::JsSymbol, symbol::Symbol};
 use super::{options::Options, ref_ptr::Ref, symbol_table::SymbolTable};
-use crate::heap::Heap;
+use crate::{
+    gc::{
+        handle::Handle,
+        heap_cell::{HeapCell, HeapCellU},
+    },
+    heap::{
+        trace::{Slot, Tracer},
+        util::address::Address,
+        Heap,
+    },
+};
 
 pub struct JsVirtualMachine {
     pub(crate) heap: Ref<Heap>,
     pub(crate) sym_table: SymbolTable,
-
+    pub(crate) symbols: HashMap<Symbol, Handle<JsSymbol>>,
     pub(crate) options: Options,
 }
 
@@ -16,7 +31,7 @@ impl JsVirtualMachine {
         let mut vm = Ref::new(Box::into_raw(Box::new(Self {
             heap: Ref::new(0 as *mut _),
             sym_table: SymbolTable::new(),
-
+            symbols: HashMap::new(),
             options,
         })));
         vm.heap = Ref::new(Box::into_raw(Box::new(Heap::new(
@@ -66,5 +81,67 @@ impl JsVirtualMachine {
             return Symbol::Indexed(converted);
         }
         self.intern(key.to_string())
+    }
+
+    pub unsafe fn get_all_live_objects(&mut self, mut callback: impl FnMut(*mut HeapCell)) {
+        let mut precise_roots: Vec<*mut HeapCell> = Vec::new();
+        for (_, sym) in self.symbols.iter_mut() {
+            precise_roots.push(sym.cell.as_ptr());
+        }
+
+        {
+            #[inline(never)]
+            fn get_stack_pointer() -> usize {
+                let x = 0x400usize;
+                &x as *const usize as usize
+            }
+
+            let bounds = StackBounds::current_thread_stack_bounds();
+            self.heap.collect_roots(
+                bounds.origin as *mut *mut u8,
+                get_stack_pointer() as *mut *mut u8,
+                &mut precise_roots,
+            );
+        }
+
+        struct Visitor<'a> {
+            mark: bool,
+            queue: &'a mut VecDeque<*mut HeapCell>,
+        }
+
+        impl<'a> Tracer for Visitor<'a> {
+            fn trace(&mut self, slot: Slot) {
+                unsafe {
+                    let child: &mut HeapCell = &mut *slot.value();
+                    if child.get_mark() != self.mark {
+                        self.queue.push_back(child);
+                    }
+                }
+            }
+        }
+
+        let mut queue = VecDeque::new();
+        let mark = !self.heap.current_live_mark;
+        {
+            for root in precise_roots {
+                queue.push_back(root);
+            }
+            while let Some(object) = queue.pop_front() {
+                {
+                    //let object_addr = Address::from_ptr(object);
+                    if !(&mut *object).mark(mark) {
+                        let mut visitor = Visitor {
+                            queue: &mut queue,
+                            mark,
+                        };
+                        callback(object);
+                        (*object).get_dyn().visit_children(&mut visitor);
+                    }
+                }
+            }
+        }
+        self.heap.current_live_mark = mark;
+        self.heap.los.current_live_mark = mark;
+        (*self.heap.immix).set_current_live_mark(mark);
     }
 }

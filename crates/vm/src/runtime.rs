@@ -1,10 +1,12 @@
 pub mod accessor;
+pub mod arguments;
 pub mod attributes;
 pub mod context;
 pub mod error;
 pub mod indexed_elements;
 pub mod js_cell;
 pub mod js_error;
+pub mod js_function;
 pub mod js_object;
 pub mod js_string;
 pub mod js_symbol;
