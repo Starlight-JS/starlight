@@ -94,7 +94,7 @@ impl JsVirtualMachine {
     ///
     /// This is a relatively expensive operation as it must trace every individual object
     /// on the heap which is expensive. Therefore you should minimize frequent calls to this method.
-    /// To know just the total amount of memory allocated on the heap you can use [`allocated_heap_memory`].
+    /// To know just the total amount of memory allocated on the heap you can use [`allocated_heap_memory`](Self::allocated_heap_memory).
     pub fn record_heap_snapshot(&mut self) -> HeapSnapshot {
         let mut objects = Vec::with_capacity(10);
         unsafe {
