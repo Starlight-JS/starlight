@@ -1,7 +1,11 @@
+#[macro_use]
+pub mod method_table;
+#[macro_use]
+pub mod class;
 pub mod accessor;
 pub mod arguments;
 pub mod attributes;
-pub mod class;
+
 pub mod context;
 pub mod error;
 pub mod indexed_elements;
@@ -12,7 +16,7 @@ pub mod js_object;
 pub mod js_string;
 pub mod js_symbol;
 pub mod js_value;
-pub mod method_table;
+
 pub mod options;
 pub mod property_descriptor;
 pub mod ref_ptr;
