@@ -25,6 +25,8 @@ impl HeapSnapshot {
 
 #[cfg(test)]
 mod tests {
+    use wtf_rs::keep_on_stack;
+
     use crate::runtime::vm::JsVirtualMachine;
     use crate::runtime::{js_string::JsString, options::Options};
     use crate::util::array::GcVec;
@@ -32,8 +34,9 @@ mod tests {
     #[test]
     fn heap_snapshot() {
         let mut vm = JsVirtualMachine::create(Options::default());
-        let _ = JsString::new(vm, "Hello,World!");
-        let _ = GcVec::<i32>::new(vm, 1);
+        let a = JsString::new(vm, "Hello,World!");
+        let b = GcVec::<i32>::new(vm, 1);
+        keep_on_stack!(&a, &b);
         let snapshot = vm.record_heap_snapshot();
         assert_eq!(snapshot.object_count, 2);
         assert_ne!(snapshot.total_size, 0);
