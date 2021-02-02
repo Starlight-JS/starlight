@@ -37,3 +37,13 @@ pub struct Options {
     #[structopt(long = "gc-verbose", help = "Enable verbose GC logging")]
     pub verbose_gc: bool,
 }
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            heap_size: 512 * 1024,
+            threshold: 100 * 1024,
+            verbose_gc: false,
+        }
+    }
+}
