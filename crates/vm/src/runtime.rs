@@ -1,6 +1,7 @@
 pub mod accessor;
 pub mod arguments;
 pub mod attributes;
+pub mod class;
 pub mod context;
 pub mod error;
 pub mod indexed_elements;

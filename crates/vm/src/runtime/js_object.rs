@@ -1,14 +1,13 @@
-use std::mem::size_of;
-
-use crate::{
-    gc::{handle::Handle, heap_cell::HeapObject},
-    heap::trace::Tracer,
-};
-
 use super::{
     indexed_elements::IndexedElements, js_cell::JsCell, js_function::JsFunction, js_value::JsValue,
     storage::FixedStorage, structure::Structure,
 };
+use super::{ref_ptr::Ref, vm::JsVirtualMachine};
+use crate::{
+    gc::{handle::Handle, heap_cell::HeapObject},
+    heap::trace::Tracer,
+};
+use std::mem::size_of;
 
 pub type ObjectSlots = FixedStorage<JsValue>;
 
@@ -108,4 +107,12 @@ impl HeapObject for JsObject {
     }
 }
 
-impl JsCell for JsObject {}
+impl JsCell for JsObject {
+    fn get_structure(&self, _vm: Ref<JsVirtualMachine>) -> Handle<Structure> {
+        self.structure
+    }
+
+    fn set_structure(&mut self, _vm: Ref<JsVirtualMachine>, s: Handle<Structure>) {
+        self.structure = s;
+    }
+}

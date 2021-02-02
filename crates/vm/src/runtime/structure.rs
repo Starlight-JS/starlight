@@ -38,8 +38,21 @@ pub type StructureID = u32;
 
 #[derive(Copy, Clone)]
 pub struct MapEntry {
-    offset: u32,
-    attrs: AttrSafe,
+    pub offset: u32,
+    pub attrs: AttrSafe,
+}
+
+impl MapEntry {
+    pub fn not_found() -> Self {
+        Self {
+            offset: u32::MAX,
+            attrs: AttrSafe::not_found(),
+        }
+    }
+
+    pub fn is_not_found(&self) -> bool {
+        self.attrs.is_not_found()
+    }
 }
 
 impl JsCell for MapEntry {}
@@ -532,6 +545,28 @@ impl Structure {
         map
     }
 
+    pub fn get_own_property_names(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        include: bool,
+        mut collector: impl FnMut(Symbol, u32),
+    ) {
+        if self.allocate_table_if_needed(vm) {
+            for entry in self.table.as_ref().unwrap().iter() {
+                if entry.0.is_private() {
+                    continue;
+                }
+
+                if entry.0.is_public() {
+                    continue;
+                }
+                if include || entry.1.attrs.is_enumerable() {
+                    collector(*entry.0, entry.1.offset);
+                }
+            }
+        }
+    }
+
     pub fn add_property_transition(
         &mut self,
         vm: impl AsRefPtr<JsVirtualMachine>,
@@ -563,7 +598,79 @@ impl Structure {
             return map;
         }
 
-        todo!()
+        // existing transition check
+        if let Some(map) = self.transitions.find(name, attributes) {
+            *offset = map.added.1.offset;
+            return map;
+        }
+        if self.transit_count > 32 {
+            // stop transition
+            let mut map = Self::new_unique(vm, unsafe { Handle::from_raw(self) });
+            // go to above unique path
+            return map.add_property_transition(vm, name, attributes, offset);
+        }
+        let mut map = Self::new(vm, unsafe { Handle::from_raw(self) });
+        if !map.deleted.empty() {
+            let slot = map.deleted.pop();
+            map.added = (
+                name,
+                MapEntry {
+                    offset: slot,
+                    attrs: attributes,
+                },
+            );
+            map.calculated_size = self.get_slots_size() as _;
+        } else {
+            map.added = (
+                name,
+                MapEntry {
+                    offset: self.get_slots_size() as _,
+                    attrs: attributes,
+                },
+            );
+            map.calculated_size = self.get_slots_size() as u32 + 1;
+        }
+        map.transit_count += 1;
+        self.transitions.insert(vm, name, attributes, map);
+        *offset = map.added.1.offset;
+
+        map
+    }
+
+    pub fn get(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, name: Symbol) -> MapEntry {
+        if !self.has_table() {
+            if self.previous.is_none() {
+                return MapEntry::not_found();
+            }
+            if self.is_adding_map() {
+                if self.added.0 == name {
+                    return self.added.1;
+                }
+            }
+            self.allocate_table(vm);
+        }
+        let it = self.table.as_ref().unwrap().get(&name);
+        it.copied().unwrap_or(MapEntry::not_found())
+    }
+
+    pub fn storage_capacity(&self) -> usize {
+        let sz = self.get_slots_size();
+        if sz == 0 {
+            0
+        } else if sz < 8 {
+            8
+        } else {
+            fn clp2(number: usize) -> usize {
+                let x = number - 1;
+                let x = x | (x >> 1);
+                let x = x | (x >> 2);
+                let x = x | (x >> 4);
+                let x = x | (x >> 8);
+                let x = x | (x >> 16);
+                x + 1
+            }
+            clp2(sz)
+        }
     }
 }
 

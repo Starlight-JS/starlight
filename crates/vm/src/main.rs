@@ -11,8 +11,17 @@ fn foo(vm: Ref<JsVirtualMachine>) {
     ));
     _larger_string = None;
 }
+fn clp2(number: usize) -> usize {
+    let x = number - 1;
+    let x = x | (x >> 1);
+    let x = x | (x >> 2);
+    let x = x | (x >> 4);
+    let x = x | (x >> 8);
+    let x = x | (x >> 16);
+    x + 1
+}
 fn main() {
-    let mut vm = JsVirtualMachine::create(Options::from_args());
+    /*let mut vm = JsVirtualMachine::create(Options::from_args());
     let my_str = JsString::new(vm, "Hello,World!");
     let mut vec = GcVec::new(vm, 1);
     vec.push(vm, my_str);
@@ -22,5 +31,6 @@ fn main() {
 
     println!("{}", vec.pop().unwrap().as_str());
     println!("{:p}", my_str.cell);
-    println!("{}", vec.pop().unwrap().as_str());
+    println!("{}", vec.pop().unwrap().as_str());*/
+    println!("{}", clp2(18));
 }
