@@ -8,7 +8,7 @@
 
 #![no_std]
 
-use core::ptr::write_volatile;
+use core::{cmp::Ordering, ptr::write_volatile};
 
 /// Get offset of field in type. This works for multiple fields e.g `x.y.z`.
 #[macro_export]
@@ -84,6 +84,7 @@ static mut SINK: usize = 0;
 pub fn keep_on_stack_noop(value: usize) {
     unsafe {
         write_volatile(&mut SINK, value);
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     }
 }
 
