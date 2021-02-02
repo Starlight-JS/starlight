@@ -1,13 +1,20 @@
-use crate::{gc::heap_cell::HeapObject, heap::trace::Tracer};
+use std::mem::size_of;
+
+use crate::{
+    gc::{handle::Handle, heap_cell::HeapObject},
+    heap::trace::Tracer,
+};
 
 use super::{
-    indexed_elements::IndexedElements, js_cell::JsCell, js_value::JsValue, storage::FixedStorage,
+    indexed_elements::IndexedElements, js_cell::JsCell, js_function::JsFunction, js_value::JsValue,
+    storage::FixedStorage, structure::Structure,
 };
 
 pub type ObjectSlots = FixedStorage<JsValue>;
 
 #[repr(C)]
 pub struct JsObject {
+    structure: Handle<Structure>,
     slots: ObjectSlots,
     elements: IndexedElements,
     flags: u32,
@@ -17,7 +24,23 @@ pub struct JsObject {
     tag: ObjectTag,
     data: ObjectData,
 }
+impl JsObject {
+    pub fn is_function(&self) -> bool {
+        self.tag == ObjectTag::Function
+    }
+
+    pub fn get_function(&self) -> &JsFunction {
+        assert!(self.is_function());
+        unsafe { &self.data.function }
+    }
+
+    pub fn get_function_mut(&mut self) -> &mut JsFunction {
+        assert!(self.is_function());
+        unsafe { &mut self.data.function }
+    }
+}
 #[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ObjectTag {
     Ordinary,
     Array,
@@ -55,11 +78,17 @@ pub enum ObjectTag {
 
     Proxy,
 }
-
+pub fn object_size_for_tag(tag: ObjectTag) -> usize {
+    let size = size_of::<JsObject>() - size_of::<ObjectData>();
+    match tag {
+        ObjectTag::Function => size_of::<JsFunction>() + size,
+        _ => size,
+    }
+}
 #[repr(C)]
 union ObjectData {
     ordinary: (),
-    error: (),
+    function: JsFunction,
 }
 
 pub const OBJ_FLAG_TUPLE: u32 = 0x4;

@@ -8,16 +8,23 @@ use super::{
     space_bitmap::SpaceBitmap,
     trace::Slot,
     trace::Tracer,
-    trace::TracerPtr,
     util::{address::Address, align_usize},
     CollectionType,
 };
 use std::collections::VecDeque;
 use vec_map::VecMap;
 
-const GC_VERBOSE: bool = true;
-
+/// Type that is used to do Immix GC cycle. See [ImmixCollector::collect] for details on GC algorithm.
 pub struct ImmixCollector;
+
+/// Tracer type that is used to scan all heap object child pointers.
+///
+/// ## Visitor algorithm
+/// - Obtain `child` pointer from `Slot`.
+/// - If child is forwarded update `Slot` reference with forwarding address.
+/// - If child is not forwarded check if child is marked by `next_live_mark`, if it is false:
+///     - Do a fast check if child is in immix space and try to evacuate it setting its forwarding address.
+///     - Push child to object queue.
 pub struct Visitor<'a> {
     immix_space: &'a mut ImmixSpace,
     queue: &'a mut VecDeque<*mut HeapCell>,
@@ -45,6 +52,15 @@ impl Tracer for Visitor<'_> {
 }
 
 impl ImmixCollector {
+    /// This function marks all reachable from `roots` and `precise_roots` objects.
+    ///
+    /// All marked objects go to `object_queue` which holds "grey" objects aka unscanned objects.
+    ///
+    /// ## Algorithm
+    /// - Mark and maybe evacuate all pointers from `precise_roots`.
+    /// - Mark all conservatively scanned pointers from `roots`.
+    /// - Pop object from `object_queue` and visit its children (see [Visitor](Visitor)), repeat until queue is empty.
+    /// - Finish.
     pub fn collect(
         collection_type: &CollectionType,
         roots: &[*mut HeapCell],
@@ -107,6 +123,7 @@ impl ImmixCollector {
     }
 }
 
+/// Implements general GC cycle logic like choosing whether to evacuate heap or no.
 pub struct Collector {
     all_blocks: Vec<*mut ImmixBlock>,
     mark_histogram: VecMap<usize>,
@@ -237,20 +254,6 @@ impl Collector {
         for block in self.all_blocks.drain(..) {
             log_if!(log, "-- Sweeping block {:p}", block);
             unsafe {
-                /*if (*block).needs_destruction {
-                    space_bitmap.visit_unmarked_range(
-                        (*block).begin() + 128,
-                        (*block).begin() + 32 * 1024,
-                        |object| {
-                            let header = object as *mut HeapCell;
-                            let ty_info = (*header).type_info();
-                            if ty_info.needs_destruction {
-                                let destructor = ty_info.destructor.unwrap();
-                                destructor(Address::from_ptr(header));
-                            }
-                        },
-                    );
-                }*/
                 maybe_sweep(log, space_bitmap, block);
             }
             if unsafe { (*block).is_empty() } {
@@ -323,6 +326,8 @@ impl Collector {
     }
 }
 
+/// Maybe sweeps immix block. This function does not do anything if block does not have any
+/// destructible objects allocated inside.
 pub unsafe fn maybe_sweep(log: bool, space_bitmap: &SpaceBitmap, block: *mut ImmixBlock) {
     log_if!(log, "--- Will sweep block?={} ", (*block).needs_destruction);
     if (*block).needs_destruction {

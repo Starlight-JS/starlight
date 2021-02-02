@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::marked_block::Handle;
 
 pub struct BlockDirectory {

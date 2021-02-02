@@ -1,12 +1,8 @@
-use std::mem::size_of;
-
-use starlight_vm::{
-    gc::bitmap::BitMap,
-    runtime::{js_string::JsString, options::Options},
-};
-use starlight_vm::{heap::block::ImmixBlock, runtime::vm::JsVirtualMachine};
+use starlight_vm::runtime::vm::JsVirtualMachine;
+use starlight_vm::runtime::{js_string::JsString, options::Options};
 use starlight_vm::{runtime::ref_ptr::Ref, util::array::GcVec};
 use structopt::StructOpt;
+
 #[inline(never)]
 fn foo(vm: Ref<JsVirtualMachine>) {
     let mut  _larger_string = Some(JsString::new(
@@ -25,11 +21,6 @@ fn main() {
     vm.gc(false);
 
     println!("{}", vec.pop().unwrap().as_str());
+    println!("{:p}", my_str.cell);
     println!("{}", vec.pop().unwrap().as_str());
-
-    unsafe {
-        vm.get_all_live_objects(|pointer| {
-            println!("{:p}", pointer);
-        })
-    }
 }

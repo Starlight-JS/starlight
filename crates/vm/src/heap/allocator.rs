@@ -1,5 +1,5 @@
 use crate::{
-    gc::heap_cell::{HeapCell, HeapCellU},
+    gc::heap_cell::HeapCell,
     runtime::{ref_ptr::Ref, vm::JsVirtualMachine},
 };
 
@@ -415,20 +415,28 @@ pub struct ImmixSpace {
     evac_allocator: EvacAllocator,
     /// The current live mark for new objects. See `Spaces.current_live_mark`.
     current_live_mark: bool,
+    #[allow(dead_code)]
     vm: Ref<JsVirtualMachine>,
 }
 impl ImmixSpace {
+    /// Check if `addr` is allocated in immix space in fast way. This does not do any bitmap or alignment
+    /// checks so do not "belive" on this function return value that much.
     pub fn filter_fast(&self, addr: Address) -> bool {
         if unsafe { !(*self.block_allocator).is_in_space(addr) } {
             return false;
         }
         true
     }
+    /// Check if `addr` is allocated in immix space. This does check bitmap and pointer alignment and it return
+    /// true if `addr` is for sure was allocated in the immix space.
     pub fn filter(&self, addr: Address) -> Option<Address> {
         let addr = addr;
         if addr.to_usize() % 16 != 0 {
+            // if pointer is not aligned to 16 bytes (each immix space object must be aligned to 16 bytes)
+            // it is not immix space pointer.
             return None;
         }
+        // first check if pointer is in bounds of immix space and only then check its bit in bitmap.
         if unsafe { (*self.block_allocator).is_in_space(addr) } && self.bitmap.test(addr.to_usize())
         {
             return Some(addr);
@@ -504,11 +512,25 @@ impl ImmixSpace {
             .chain(evac_blocks.drain(..))
             .collect();
     }
+    /// Allocates `size` bytes of memory in immix space.
+    ///
+    /// - If size < 128
+    ///     - memory is bump allocated into block line
+    /// - If size >= 128
+    ///     - memory is bump allocated into "overflow" block and it
+    ///       could span multiple block lines.
+    ///
+    /// If `needs_destruction` is set to true then on next GC cycle block where memory
+    /// was allocated will be scanned for any destructible objects and `drop_in_place` on
+    /// each of destructible objects will be invoked.
+    ///
     #[inline]
     pub fn allocate(&mut self, size: usize, needs_destruction: bool) -> *mut HeapCell {
         let ptr = if size < MEDIUM_OBJECT {
+            // everything is good, object fits into single line
             self.allocator.allocate(size, needs_destruction)
         } else {
+            // woops! Object too big and it spans multiple lines.
             self.overflow_allocator.allocate(size, needs_destruction)
         };
         {
@@ -521,9 +543,11 @@ impl ImmixSpace {
 
         ptr.to_mut_ptr()
     }
+    /// Set bit corresponding to `object` in space bitmap.
     pub fn set_gc_object(&mut self, object: Address) {
         self.bitmap.set(object.to_usize())
     }
+    /// Clear bit corresponding to `object` in space bitmap.
     pub fn unset_gc_object(&mut self, object: Address) {
         self.bitmap.clear(object.to_usize());
     }

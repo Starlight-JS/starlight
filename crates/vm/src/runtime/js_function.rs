@@ -4,14 +4,27 @@ use crate::{
     util::array::GcVec,
 };
 
-use super::{js_cell::JsCell, js_object::JsObject, js_value::JsValue};
+use super::{
+    arguments::Arguments, js_cell::JsCell, js_object::JsObject, js_value::JsValue,
+    structure::Structure,
+};
 
-pub struct JsFunction {}
-
+#[derive(Clone, Copy)]
+pub struct JsFunction {
+    strict: bool,
+    construct_struct: Option<Handle<Structure>>,
+}
+#[derive(Clone, Copy)]
+pub enum FuncType {
+    Bound(JsBoundFunction),
+    Native(JsNativeFunction),
+    User(JsVMFunction),
+}
+#[derive(Clone, Copy)]
 pub struct JsBoundFunction {
     target: Handle<JsObject>,
     this_binding: JsValue,
-    arguments: GcVec<JsValue>,
+    arguments: Handle<GcVec<JsValue>>,
 }
 
 impl JsCell for JsBoundFunction {}
@@ -41,3 +54,11 @@ impl JsBoundFunction {
         &self.arguments
     }
 }
+
+pub type JsAPI = fn(arguments: &Arguments) -> Result<JsValue, JsValue>;
+#[derive(Clone, Copy)]
+pub struct JsNativeFunction {
+    func: JsAPI,
+}
+#[derive(Clone, Copy)]
+pub struct JsVMFunction {}

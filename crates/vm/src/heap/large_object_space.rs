@@ -1,6 +1,8 @@
-use crate::runtime::{ref_ptr::Ref, type_info::TypeInfo, vm::JsVirtualMachine};
+use crate::{
+    gc::heap_cell::HeapCell,
+    runtime::{ref_ptr::Ref, vm::JsVirtualMachine},
+};
 
-use super::header::Header;
 use super::util::address::Address;
 use core::sync::atomic::AtomicBool;
 /// Precise allocation used for large objects (>= LARGE_CUTOFF).
@@ -39,7 +41,7 @@ impl PreciseAllocation {
         (raw_ptr as usize & Self::HALF_ALIGNMENT) != 0
     }
     /// Create PreciseAllocation from pointer
-    pub fn from_cell(ptr: *mut Header) -> *mut Self {
+    pub fn from_cell(ptr: *mut HeapCell) -> *mut Self {
         unsafe {
             ptr.cast::<u8>()
                 .offset(-(Self::header_size() as isize))
@@ -75,7 +77,7 @@ impl PreciseAllocation {
     }
 
     /// Return cell address, it is always aligned to `Self::HALF_ALIGNMENT`.
-    pub fn cell(&self) -> *mut Header {
+    pub fn cell(&self) -> *mut HeapCell {
         let addr = Address::from_ptr(self).offset(Self::header_size());
         addr.to_mut_ptr()
     }
@@ -118,11 +120,9 @@ impl PreciseAllocation {
     pub fn sweep(&mut self) -> bool {
         if self.has_valid_cell && !self.is_live() {
             self.has_valid_cell = false;
-            let cell = self.cell();
+
             unsafe {
-                if let Some(fin) = (*cell).type_info().destructor {
-                    fin(Address::from_ptr(cell));
-                }
+                std::ptr::drop_in_place((*self.cell()).get_dyn());
             }
             return false;
         }
@@ -133,7 +133,7 @@ impl PreciseAllocation {
         let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
         unsafe {
             let mut space = libc::malloc(adjusted_alignment_allocation_size).cast::<u8>();
-            //let mut space = libc::malloc(adjusted_alignment_allocation_size);
+
             let mut adjusted_alignment = false;
             if !is_aligned_for_precise_allocation(space) {
                 space = space.add(Self::HALF_ALIGNMENT);
@@ -162,13 +162,11 @@ impl PreciseAllocation {
     /// Destroy this allocation
     pub fn destroy(&mut self) {
         let base = self.base_pointer();
-        let cell = self.cell();
+
         unsafe {
             if self.has_valid_cell {
                 self.has_valid_cell = false;
-                if let Some(fin) = (*cell).type_info().destructor {
-                    fin(Address::from_ptr(cell));
-                }
+                std::ptr::drop_in_place((*self.cell()).get_dyn());
             }
         }
         unsafe {
@@ -237,7 +235,7 @@ impl LargeObjectSpace {
     pub fn alloc(&mut self, size: usize) -> Address {
         let ix = self.allocations.len() as u32;
         let cell = PreciseAllocation::try_create(self.vm, size, ix);
-        unsafe {
+        {
             if cell.is_null() {
                 return Address::null();
             }

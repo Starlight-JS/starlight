@@ -204,7 +204,7 @@ impl Structure {
         self.id = id;
     }
 }
-
+#[derive(Clone, Copy)]
 pub struct DeletedEntryHolder {
     entry: Option<Handle<DeletedEntry>>,
     size: u32,
@@ -257,9 +257,9 @@ impl HeapObject for DeletedEntry {
 impl JsCell for DeletedEntry {}
 
 impl Structure {
-    pub fn delete(&mut self, context: &mut Context, name: Symbol) {
+    pub fn delete(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, name: Symbol) {
         let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();
-        self.deleted.push(context, it.offset);
+        self.deleted.push(vm, it.offset);
     }
 
     pub fn change_attributes(&mut self, name: Symbol, attributes: AttrSafe) {
@@ -362,6 +362,39 @@ impl Structure {
             self.calculated_size as _
         }
     }
+    fn ctor(
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        previous: Handle<Self>,
+        unique: bool,
+    ) -> Handle<Self> {
+        let mut this = allocate_cell(
+            vm,
+            size_of::<Self>(),
+            Self {
+                prototype: previous.prototype,
+                previous: Some(previous),
+                table: if unique && previous.is_unique() {
+                    previous.table
+                } else {
+                    None
+                },
+                transitions: Transitions::new(!unique, previous.transitions.is_indexed()),
+                deleted: previous.deleted,
+                added: (
+                    DUMMY_SYMBOL,
+                    MapEntry {
+                        offset: u32::MAX,
+                        attrs: AttrSafe::not_found(),
+                    },
+                ),
+                id: 0,
+                calculated_size: 0,
+                transit_count: 0,
+            },
+        );
+        this.calculated_size = this.get_slots_size() as _;
+        this
+    }
 
     fn ctor1(
         vm: impl AsRefPtr<JsVirtualMachine>,
@@ -437,6 +470,100 @@ impl Structure {
         );
         this.calculated_size = this.get_slots_size() as _;
         this
+    }
+
+    pub fn new(vm: impl AsRefPtr<JsVirtualMachine>, previous: Handle<Self>) -> Handle<Self> {
+        Self::ctor(vm, previous, false)
+    }
+
+    pub fn new_unique(vm: impl AsRefPtr<JsVirtualMachine>, previous: Handle<Self>) -> Handle<Self> {
+        Self::ctor(vm, previous, true)
+    }
+    pub fn new_indexed(
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        prototype: Option<Handle<JsObject>>,
+        indexed: bool,
+    ) -> Handle<Self> {
+        Self::ctor1(vm, prototype, false, indexed)
+    }
+    pub fn new_unique_indexed(
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        prototype: Option<Handle<JsObject>>,
+        indexed: bool,
+    ) -> Handle<Self> {
+        Self::ctor1(vm, prototype, !false, indexed)
+    }
+
+    pub fn new_from_point(
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        map: Handle<Structure>,
+    ) -> Handle<Self> {
+        if map.is_unique() {
+            return Self::new_unique(vm, map);
+        }
+        map
+    }
+    pub fn delete_property_transition(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        name: Symbol,
+    ) -> Handle<Self> {
+        let x = vm.as_ref_ptr();
+        let mut map = Self::new_unique(x, unsafe { Handle::from_raw(self) });
+        if !map.has_table() {
+            map.allocate_table(vm);
+        }
+        map.delete(x, name);
+        map
+    }
+
+    pub fn change_attributes_transition(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        name: Symbol,
+        attributes: AttrSafe,
+    ) -> Handle<Self> {
+        let x = vm.as_ref_ptr();
+        let mut map = Self::new_unique(x, unsafe { Handle::from_raw(self) });
+        if !map.has_table() {
+            map.allocate_table(vm);
+        }
+        map.change_attributes(name, attributes);
+        map
+    }
+
+    pub fn add_property_transition(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        name: Symbol,
+        attributes: AttrSafe,
+        offset: &mut u32,
+    ) -> Handle<Self> {
+        let mut entry = MapEntry {
+            offset: 0,
+            attrs: attributes,
+        };
+        let vm = vm.as_ref_ptr();
+        if self.is_unique() {
+            if !self.has_table() {
+                self.allocate_table(vm);
+            }
+
+            let mut map = if self.transitions.is_enabled_unique_transition() {
+                Self::new_unique(vm, unsafe { Handle::from_raw(self) })
+            } else {
+                unsafe { Handle::from_raw(self) }
+            };
+            if !map.deleted.empty() {
+                entry.offset = map.deleted.pop();
+            } else {
+                entry.offset = self.get_slots_size() as _;
+            }
+            unwrap_unchecked(map.table.as_mut()).insert(name, entry);
+            return map;
+        }
+
+        todo!()
     }
 }
 

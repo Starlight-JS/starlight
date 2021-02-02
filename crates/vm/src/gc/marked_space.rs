@@ -1,6 +1,7 @@
+#![allow(dead_code)]
 use std::collections::{HashSet, LinkedList};
 
-use crate::heap::{constants::LARGE_OBJECT, large_object_space::PreciseAllocation, util::round_up};
+use crate::heap::{large_object_space::PreciseAllocation, util::round_up};
 
 use super::{block_directory::*, marked_block::*, marked_block_set::*};
 /// sizeStep is really a synonym for atomSize; it's no accident that they are the same.
@@ -44,7 +45,7 @@ pub struct MarkedSpace {
 
 fn size_classes() -> Vec<usize> {
     let mut result = vec![];
-    let mut add = |res: &mut Vec<usize>, mut sz| {
+    let add = |res: &mut Vec<usize>, mut sz| {
         sz = round_up(sz as _, 16) as usize;
         res.push(sz);
     };

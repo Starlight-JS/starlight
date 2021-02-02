@@ -1,11 +1,11 @@
 use crate::{
     heap::trace::{Slot, Tracer},
-    runtime::js_cell::JsCell,
+    runtime::{js_cell::JsCell, ref_ptr::Ref, vm::JsVirtualMachine},
 };
 
 use super::heap_cell::{HeapCell, HeapObject};
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::HashMap,
     marker::PhantomData,
     mem::transmute,
     ops::{Deref, DerefMut},
@@ -13,9 +13,37 @@ use std::{
 };
 use wtf_rs::TraitObject;
 
+/// A garbage collected pointer to a value.
+///
+/// This is the equivalent of a garbage collected smart-pointer.
+/// The objects can only survive garbage collection if they live in this smart-pointer.
+///
+/// The smart pointer is simply a guarantee to the garbage collector
+/// that this points to a garbage collected object with the correct header,
+/// and not some arbitrary bits that you've decided to heap allocate.
+///
+///
+///
+/// TODO: Implement internal pointers scanning inside GC so we can detect references to data from smart-pointer.
 pub struct Handle<T: HeapObject + ?Sized> {
-    pub(crate) cell: NonNull<HeapCell>,
+    pub cell: NonNull<HeapCell>,
     pub(crate) marker: PhantomData<T>,
+}
+
+impl<T: HeapObject + ?Sized> Handle<T> {
+    /// Obtains VM reference from heap allocated object.
+    pub fn vm(&self) -> Ref<JsVirtualMachine> {
+        unsafe { (*self.cell.as_ptr()).vm() }
+    }
+    /// Obtain VM reference from heap allocated object in fast way if object
+    /// is allocated in Immix space and known to be < 8KB in size.
+    ///
+    /// # Safety
+    /// This function is unsafe to call since it makes no checks that object
+    /// is allocated inside large object space or immix space.
+    pub unsafe fn vm_fast(&self) -> Ref<JsVirtualMachine> {
+        (*self.cell.as_ptr()).fast_vm()
+    }
 }
 impl<T: HeapObject + Sized> Handle<T> {
     pub unsafe fn from_raw(ptr: *const T) -> Self {
@@ -37,12 +65,15 @@ impl<T: HeapObject + ?Sized> Clone for Handle<T> {
 }
 
 impl Handle<dyn HeapObject> {
+    /// Returns the handle value, blindly assuming it to be of type `U`.
+    /// If you are not *absolutely certain* of `U`, you *must not* call this.
     pub unsafe fn donwcast_unchecked<U: ?Sized + HeapObject>(self) -> Handle<U> {
         Handle {
             cell: self.cell,
             marker: PhantomData,
         }
     }
+    /// Returns true if the handle type is the same as `U`
     pub fn is<U: Sized + HeapObject>(self) -> bool {
         unsafe {
             let fat_ptr: *mut dyn HeapObject = null_mut::<U>() as *mut dyn HeapObject;
@@ -50,6 +81,8 @@ impl Handle<dyn HeapObject> {
             trait_object == (*self.cell.as_ptr()).vtable().to_mut_ptr()
         }
     }
+    /// Returns handle to the value if it is of type `U`, or
+    /// `None` if it isn't.
     pub fn downcast<U: Sized + HeapObject>(self) -> Option<Handle<U>> {
         if self.is::<U>() {
             return Some(unsafe { self.donwcast_unchecked() });
@@ -60,6 +93,7 @@ impl Handle<dyn HeapObject> {
 }
 
 impl<T: ?Sized + HeapObject> Handle<T> {
+    /// Returns dynamic handle from typed handle.
     pub fn as_dyn(self) -> Handle<dyn HeapObject> {
         Handle {
             cell: self.cell,

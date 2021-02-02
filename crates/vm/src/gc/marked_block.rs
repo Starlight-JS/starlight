@@ -1,7 +1,4 @@
-use super::{
-    bitmap::BitMap,
-    heap_cell::{HeapCell, GC_WHITE},
-};
+use super::{bitmap::BitMap, heap_cell::HeapCell};
 use crate::heap::util::address::Address;
 // A marked block is a page-aligned container for heap-allocated objects.
 // Objects are allocated within cells of the marked block. For a given

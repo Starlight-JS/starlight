@@ -1,11 +1,8 @@
 use std::ptr::NonNull;
 
-use crate::{
-    gc::{handle::Handle, heap_cell::HeapObject},
-    heap::header::Header,
-};
+use crate::gc::{handle::Handle, heap_cell::HeapObject};
 
-use super::{ref_ptr::AsRefPtr, ref_ptr::Ref, type_info::*, vm::JsVirtualMachine};
+use super::{ref_ptr::AsRefPtr, ref_ptr::Ref, vm::JsVirtualMachine};
 
 pub fn allocate_cell<T: HeapObject>(
     vm: impl AsRefPtr<JsVirtualMachine>,

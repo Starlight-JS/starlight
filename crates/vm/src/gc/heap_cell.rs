@@ -1,13 +1,16 @@
-use mopa::{mopafy, Any};
-use wtf_rs::TraitObject;
-
+use crate::{
+    heap::{block::ImmixBlock, large_object_space::PreciseAllocation},
+    runtime::ref_ptr::Ref,
+};
 use crate::{
     heap::{
         trace::Tracer,
         util::{address::Address, tagged_pointer::TaggedPointer},
     },
-    runtime::js_cell::JsCell,
+    runtime::{js_cell::JsCell, vm::JsVirtualMachine},
 };
+use mopa::{mopafy, Any};
+use wtf_rs::TraitObject;
 pub trait HeapObject: Any + JsCell {
     fn visit_children(&mut self, tracer: &mut dyn Tracer);
     fn compute_size(&self) -> usize {
@@ -108,5 +111,22 @@ impl HeapCell {
         unsafe {
             self.u.tagged.set_bit(0);
         }
+    }
+
+    pub fn vm(&self) -> Ref<JsVirtualMachine> {
+        if PreciseAllocation::is_precise(self as *const Self as *mut ()) {
+            unsafe { (*PreciseAllocation::from_cell(self as *const Self as *mut _)).vm }
+        } else {
+            unsafe {
+                let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
+                (*block).vm
+            }
+        }
+    }
+
+    /// Use this function when you know that object is not allocated in large object space
+    pub unsafe fn fast_vm(&self) -> Ref<JsVirtualMachine> {
+        let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
+        (*block).vm
     }
 }
