@@ -3,7 +3,6 @@ use std::mem::size_of;
 use super::{
     js_cell::{allocate_cell, JsCell},
     js_value::JsValue,
-    ref_ptr::AsRefPtr,
     vm::JsVirtualMachine,
 };
 use crate::{
@@ -32,11 +31,7 @@ impl Accessor {
     pub fn setter(&self) -> JsValue {
         self.setter
     }
-    pub fn new(
-        vm: impl AsRefPtr<JsVirtualMachine>,
-        getter: JsValue,
-        setter: JsValue,
-    ) -> Handle<Self> {
+    pub fn new(vm: &mut JsVirtualMachine, getter: JsValue, setter: JsValue) -> Handle<Self> {
         let this = Self { getter, setter };
         allocate_cell(vm, size_of::<Self>(), this)
     }

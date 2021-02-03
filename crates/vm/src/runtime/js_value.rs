@@ -3,7 +3,6 @@ use crate::{
     heap::trace::Tracer,
 };
 
-use super::ref_ptr::Ref;
 use super::{js_cell::JsCell, js_string::JsString};
 use wtf_rs::lohi_struct;
 lohi_struct!(
@@ -211,6 +210,7 @@ impl JsValue {
     }
 }
 #[cfg(target_pointer_width = "64")]
+#[allow(clippy::clippy::identity_op)]
 impl JsValue {
     /*
      * On 64-bit platforms we use a NaN-encoded form for immediates.
@@ -592,7 +592,7 @@ impl JsValue {
                     == rhs.as_cell().donwcast_unchecked::<JsString>().as_str()
             };
         }
-        return unsafe { lhs.u.as_int64 == rhs.u.as_int64 };
+        unsafe { lhs.u.as_int64 == rhs.u.as_int64 }
     }
     pub fn same_value(lhs: Self, rhs: Self) -> bool {
         Self::same_value_impl(lhs, rhs, false)
@@ -646,6 +646,7 @@ impl JsValue {
 impl HeapObject for JsValue {
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
         if self.is_cell() && !self.is_empty() {
+            println!("{:p}", self.as_cell().cell);
             self.as_cell_ref_mut().visit_children(tracer);
         }
     }

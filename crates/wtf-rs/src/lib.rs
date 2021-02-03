@@ -8,7 +8,7 @@
 
 #![no_std]
 
-use core::{cmp::Ordering, ptr::write_volatile};
+use core::ptr::write_volatile;
 
 /// Get offset of field in type. This works for multiple fields e.g `x.y.z`.
 #[macro_export]

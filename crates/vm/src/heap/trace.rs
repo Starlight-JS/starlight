@@ -10,9 +10,9 @@ pub struct Slot {
     pub(crate) addr: Address,
 }
 
-impl<T: HeapObject + ?Sized> Into<Slot> for &mut Handle<T> {
-    fn into(self) -> Slot {
-        Slot::new(self)
+impl<T: HeapObject + ?Sized> From<&mut Handle<T>> for Slot {
+    fn from(val: &mut Handle<T>) -> Slot {
+        Slot::new(val)
     }
 }
 

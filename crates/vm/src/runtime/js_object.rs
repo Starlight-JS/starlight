@@ -1,21 +1,19 @@
+use super::vm::JsVirtualMachine;
 use super::{
     attributes::object_data,
     attributes::*,
     class::Class,
-    context::Context,
     indexed_elements::{IndexedElements, MAX_VECTOR_SIZE},
     js_cell::{allocate_cell, JsCell},
     js_function::JsFunction,
     js_value::JsValue,
     method_table::MethodTable,
     property_descriptor::{DataDescriptor, PropertyDescriptor, StoredSlot},
-    ref_ptr::AsRefPtr,
     slot::{PutResultType, Slot},
     storage::FixedStorage,
     structure::Structure,
     symbol::Symbol,
 };
-use super::{ref_ptr::Ref, vm::JsVirtualMachine};
 use crate::{
     define_jsclass,
     gc::{handle::Handle, heap_cell::HeapObject},
@@ -87,20 +85,20 @@ impl JsObject {
 
     pub fn get_non_indexed_property_slot(
         &self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        unsafe { Self::GetNonIndexedPropertySlotMethod(Handle::from_raw(self), ctx, name, slot) }
+        unsafe { Self::GetNonIndexedPropertySlotMethod(Handle::from_raw(self), vm, name, slot) }
     }
     pub fn GetNonIndexedPropertySlotMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
         loop {
-            if obj.get_own_non_indexed_property_slot(ctx, name, slot) {
+            if obj.get_own_non_indexed_property_slot(vm, name, slot) {
                 break true;
             }
             match obj.prototype() {
@@ -111,12 +109,12 @@ impl JsObject {
     }
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
-        obj: Handle<Self>,
-        ctx: Ref<Context>,
+        mut obj: Handle<Self>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        let entry = obj.get_structure(ctx.vm).get(ctx.vm, name);
+        let entry = obj.structure.get(vm, name);
         if !entry.is_not_found() {
             slot.set_1(
                 *obj.direct(entry.offset as _),
@@ -130,11 +128,12 @@ impl JsObject {
 
     pub fn get_own_non_indexed_property_slot(
         &self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        let entry = self.get_structure(ctx.vm).get(ctx.vm, name);
+        let mut structure = self.structure;
+        let entry = structure.get(vm, name);
         if !entry.is_not_found() {
             slot.set_1(
                 *self.direct(entry.offset as _),
@@ -145,16 +144,16 @@ impl JsObject {
         }
         false
     }
-    pub fn can_put(&self, ctx: Ref<Context>, name: Symbol, slot: &mut Slot) -> bool {
+    pub fn can_put(&self, vm: &mut JsVirtualMachine, name: Symbol, slot: &mut Slot) -> bool {
         if let Symbol::Indexed(index) = name {
-            self.can_put_indexed(ctx, index, slot)
+            self.can_put_indexed(vm, index, slot)
         } else {
-            self.can_put_non_indexed(ctx, name, slot)
+            self.can_put_non_indexed(vm, name, slot)
         }
     }
 
-    pub fn can_put_indexed(&self, ctx: Ref<Context>, index: u32, slot: &mut Slot) -> bool {
-        if self.get_indexed_property_slot(ctx, index, slot) {
+    pub fn can_put_indexed(&self, vm: &mut JsVirtualMachine, index: u32, slot: &mut Slot) -> bool {
+        if self.get_indexed_property_slot(vm, index, slot) {
             if slot.attributes().is_accessor() {
                 return slot.accessor().setter().is_cell() && !slot.accessor().setter().is_empty();
             } else {
@@ -164,8 +163,13 @@ impl JsObject {
         self.is_extensible()
     }
 
-    pub fn can_put_non_indexed(&self, ctx: Ref<Context>, name: Symbol, slot: &mut Slot) -> bool {
-        if self.get_non_indexed_property_slot(ctx, name, slot) {
+    pub fn can_put_non_indexed(
+        &self,
+        vm: &mut JsVirtualMachine,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        if self.get_non_indexed_property_slot(vm, name, slot) {
             if slot.attributes().is_accessor() {
                 if slot.attributes().is_accessor() {
                     return slot.accessor().setter().is_cell()
@@ -180,13 +184,13 @@ impl JsObject {
 
     pub fn PutNonIndexedSlotMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        if !obj.can_put(ctx, name, slot) {
+        if !obj.can_put(vm, name, slot) {
             if throwable {
                 todo!();
             }
@@ -196,7 +200,7 @@ impl JsObject {
             if let Some(base) = slot.base() {
                 if Handle::ptr_eq(*base, obj) && slot.attributes().is_data() {
                     obj.define_own_non_indexed_property_slot(
-                        ctx,
+                        vm,
                         name,
                         &*DataDescriptor::new(
                             val,
@@ -214,7 +218,7 @@ impl JsObject {
             }
         }
         obj.define_own_non_indexed_property_slot(
-            ctx,
+            vm,
             name,
             &*DataDescriptor::new(val, W | C | E),
             slot,
@@ -225,7 +229,7 @@ impl JsObject {
 
     pub fn GetOwnIndexedPropertySlotMethod(
         obj: Handle<Self>,
-        ctx: Ref<Context>,
+        _vm: &mut JsVirtualMachine,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
@@ -262,7 +266,7 @@ impl JsObject {
     }
     pub fn define_own_indexed_property_slot(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -270,7 +274,7 @@ impl JsObject {
     ) -> Result<bool, JsValue> {
         (self.class.method_table.DefineOwnIndexedPropertySlot)(
             unsafe { Handle::from_raw(self) },
-            ctx,
+            vm,
             index,
             desc,
             slot,
@@ -279,7 +283,7 @@ impl JsObject {
     }
     pub fn PutIndexedSlotMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
@@ -293,10 +297,11 @@ impl JsObject {
                 || obj.prototype().as_ref().unwrap().has_indexed_property())
         {
             slot.mark_put_result(PutResultType::IndexedOptimized, index);
-            obj.define_own_indexe_value_dense_internal(ctx, index, val, false);
+            obj.define_own_indexe_value_dense_internal(vm, index, val, false);
+
             return Ok(());
         }
-        if !obj.can_put_indexed(ctx, index, slot) {
+        if !obj.can_put_indexed(vm, index, slot) {
             if throwable {
                 todo!()
             }
@@ -306,7 +311,7 @@ impl JsObject {
             if let Some(base) = slot.base() {
                 if Handle::ptr_eq(*base, obj) && slot.attributes().is_data() {
                     obj.define_own_indexed_property_slot(
-                        ctx,
+                        vm,
                         index,
                         &*DataDescriptor::new(
                             val,
@@ -325,7 +330,7 @@ impl JsObject {
         }
 
         obj.define_own_indexed_property_slot(
-            ctx,
+            vm,
             index,
             &*DataDescriptor::new(val, W | E | C),
             slot,
@@ -335,20 +340,20 @@ impl JsObject {
     }
     pub fn get_own_indexed_property_slot(
         &self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        unsafe { Self::GetOwnIndexedPropertySlotMethod(Handle::from_raw(self), ctx, index, slot) }
+        unsafe { Self::GetOwnIndexedPropertySlotMethod(Handle::from_raw(self), vm, index, slot) }
     }
     pub fn GetIndexedPropertySlotMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
         loop {
-            if obj.get_own_indexed_property_slot(ctx, index, slot) {
+            if obj.get_own_indexed_property_slot(vm, index, slot) {
                 return true;
             }
             match obj.prototype() {
@@ -360,11 +365,11 @@ impl JsObject {
 
     pub fn get_indexed_property_slot(
         &self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        unsafe { Self::GetIndexedPropertySlotMethod(Handle::from_raw(self), ctx, index, slot) }
+        unsafe { Self::GetIndexedPropertySlotMethod(Handle::from_raw(self), vm, index, slot) }
     }
 
     pub fn is_extensible(&self) -> bool {
@@ -383,17 +388,22 @@ impl JsObject {
         (self.flags & OBJ_FLAG_CALLABLE) != 0
     }
 
-    pub fn get_own_property_slot(&self, ctx: Ref<Context>, name: Symbol, slot: &mut Slot) -> bool {
+    pub fn get_own_property_slot(
+        &self,
+        vm: &mut JsVirtualMachine,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
         if let Symbol::Indexed(index) = name {
-            self.get_own_indexed_property_slot(ctx, index, slot)
+            self.get_own_indexed_property_slot(vm, index, slot)
         } else {
-            self.get_own_non_indexed_property_slot(ctx, name, slot)
+            self.get_own_non_indexed_property_slot(vm, name, slot)
         }
     }
 
     fn define_own_indexe_value_dense_internal(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         val: JsValue,
         absent: bool,
@@ -406,12 +416,15 @@ impl JsObject {
             }
         } else {
             if !self.structure.is_indexed() {
-                let s = self.structure.change_indexed_transition(ctx.vm);
+                let s = self.structure.change_indexed_transition(vm);
 
-                self.set_structure(ctx.vm, s)
+                self.set_structure(vm, s)
             }
 
-            self.elements.vector.reserve(ctx.vm, index as usize + 1);
+            self.elements
+                .vector
+                .resize(vm, index as usize + 1, JsValue::empty());
+
             if !absent {
                 self.elements.vector[index as usize] = val;
             } else {
@@ -424,7 +437,7 @@ impl JsObject {
     }
     fn define_own_indexed_property_internal(
         &mut self,
-        mut ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         desc: &PropertyDescriptor,
         throwable: bool,
@@ -440,7 +453,7 @@ impl JsObject {
             if desc.is_default() {
                 if index < MAX_VECTOR_SIZE as u32 {
                     self.define_own_indexe_value_dense_internal(
-                        ctx,
+                        vm,
                         index,
                         desc.value(),
                         desc.is_value_absent(),
@@ -460,36 +473,35 @@ impl JsObject {
                 }
 
                 if index < MAX_VECTOR_SIZE as u32 {
-                    self.elements.make_sparse(ctx.vm);
+                    self.elements.make_sparse(vm);
                 }
             }
         }
 
-        let mut sparse = self.elements.ensure_map(ctx.vm);
+        let mut sparse = self.elements.ensure_map(vm);
         match sparse.get_mut(&index) {
             Some(entry) => {
-                entry.merge(&mut *ctx, desc);
                 let mut returned = false;
                 if entry.is_defined_property_accepted(desc, throwable, &mut returned)? {
-                    entry.merge(&mut ctx, desc);
+                    entry.merge(vm.context().unwrap(), desc);
                 }
-                return Ok(returned);
+                Ok(returned)
             }
             None if !self.is_extensible() => {
                 if throwable {
                     todo!()
                 }
-                return Ok(false);
+                Ok(false)
             }
             None => {
                 if !self.structure.is_indexed() {
-                    let s = self.structure.change_indexed_transition(ctx.vm);
+                    let s = self.structure.change_indexed_transition(vm);
                     self.structure = s;
                 }
                 if index >= self.elements.length() {
                     self.elements.set_length(index + 1);
                 }
-                sparse.insert(index, StoredSlot::new(&mut ctx, desc));
+                sparse.insert(index, StoredSlot::new(vm.context().unwrap(), desc));
                 Ok(true)
             }
         }
@@ -497,7 +509,7 @@ impl JsObject {
 
     pub fn define_own_non_indexed_property_slot(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -506,7 +518,7 @@ impl JsObject {
         unsafe {
             Self::DefineOwnNonIndexedPropertySlotMethod(
                 Handle::from_raw(self),
-                ctx,
+                vm,
                 name,
                 desc,
                 slot,
@@ -516,29 +528,29 @@ impl JsObject {
     }
     pub fn define_own_property_slot(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<bool, JsValue> {
         if let Symbol::Indexed(index) = name {
-            self.define_own_indexed_property_internal(ctx, index, desc, throwable)
+            self.define_own_indexed_property_internal(vm, index, desc, throwable)
         } else {
-            self.define_own_non_indexed_property_slot(ctx, name, desc, slot, throwable)
+            self.define_own_non_indexed_property_slot(vm, name, desc, slot, throwable)
         }
     }
     // section 8.12.9 [[DefineOwnProperty]]
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         mut obj: Handle<Self>,
-        mut ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<bool, JsValue> {
         if !slot.is_used() {
-            obj.get_own_property_slot(ctx, name, slot);
+            obj.get_own_property_slot(vm, name, slot);
         }
 
         if !slot.is_not_found() {
@@ -548,34 +560,29 @@ impl JsObject {
                     if slot.is_defined_property_accepted(desc, throwable, &mut returned)? {
                         if slot.has_offset() {
                             let old = slot.attributes();
-                            slot.merge(&mut *ctx, desc);
+                            slot.merge(vm.context().unwrap(), desc);
                             if old != slot.attributes() {
-                                obj.set_structure(
-                                    ctx.vm,
-                                    obj.get_structure(ctx.vm).change_attributes_transition(
-                                        ctx.vm,
-                                        name,
-                                        slot.attributes(),
-                                    ),
+                                let new_struct = obj.structure.change_attributes_transition(
+                                    vm,
+                                    name,
+                                    slot.attributes(),
                                 );
+                                obj.set_structure(vm, new_struct);
                             }
                             *obj.direct_mut(slot.offset() as _) = slot.value();
                             slot.mark_put_result(PutResultType::Replace, slot.offset());
                         } else {
                             let mut offset = 0;
-                            slot.merge(&mut *ctx, desc);
-                            obj.set_structure(
-                                ctx.vm,
-                                obj.get_structure(ctx.vm).add_property_transition(
-                                    ctx.vm,
-                                    name,
-                                    slot.attributes(),
-                                    &mut offset,
-                                ),
+                            slot.merge(vm.context().unwrap(), desc);
+                            let new_struct = obj.get_structure(vm).add_property_transition(
+                                vm,
+                                name,
+                                slot.attributes(),
+                                &mut offset,
                             );
+                            obj.set_structure(vm, new_struct);
                             let s = obj.structure;
-                            obj.slots
-                                .resize(ctx.vm, s.get_slots_size(), JsValue::empty());
+                            obj.slots.resize(vm, s.get_slots_size(), JsValue::empty());
 
                             *obj.direct_mut(offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
@@ -594,14 +601,13 @@ impl JsObject {
         }
 
         let mut offset = 0;
-        let stored = StoredSlot::new(&mut *ctx, desc);
-        let s =
-            obj.structure
-                .add_property_transition(ctx.vm, name, stored.attributes(), &mut offset);
-        obj.set_structure(ctx.vm, s);
+        let stored = StoredSlot::new(vm.context().unwrap(), desc);
+        let s = obj
+            .structure
+            .add_property_transition(vm, name, stored.attributes(), &mut offset);
+        obj.set_structure(vm, s);
         let s = obj.structure;
-        obj.slots
-            .resize(ctx.vm, s.get_slots_size(), JsValue::empty());
+        obj.slots.resize(vm, s.get_slots_size(), JsValue::empty());
         *obj.direct_mut(offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
         Ok(true)
@@ -609,7 +615,7 @@ impl JsObject {
 
     pub fn DefineOwnIndexedPropertySlotMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -622,7 +628,7 @@ impl JsObject {
             //   var str = new String('str');
             //   Object.defineProperty(str, '0', { value: 0 });
             if !slot.is_used() {
-                obj.get_own_indexed_property_slot(ctx, index, slot);
+                obj.get_own_indexed_property_slot(vm, index, slot);
             }
 
             let mut returned = false;
@@ -637,12 +643,12 @@ impl JsObject {
             }
         }
 
-        obj.define_own_indexed_property_internal(ctx, index, desc, throwable)
+        obj.define_own_indexed_property_internal(vm, index, desc, throwable)
     }
 
     pub fn put_non_indexed_slot(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
@@ -651,7 +657,7 @@ impl JsObject {
         unsafe {
             (self.class.method_table.PutNonIndexedSlot)(
                 Handle::from_raw(self),
-                ctx,
+                vm,
                 name,
                 val,
                 slot,
@@ -662,7 +668,7 @@ impl JsObject {
 
     pub fn put_indexed_slot(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
@@ -671,7 +677,7 @@ impl JsObject {
         unsafe {
             (self.class.method_table.PutIndexedSlot)(
                 Handle::from_raw(self),
-                ctx,
+                vm,
                 index,
                 val,
                 slot,
@@ -681,30 +687,35 @@ impl JsObject {
     }
     pub fn put_slot(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
         if let Symbol::Indexed(index) = name {
-            self.put_indexed_slot(ctx, index, val, slot, throwable)
+            self.put_indexed_slot(vm, index, val, slot, throwable)
         } else {
-            self.put_non_indexed_slot(ctx, name, val, slot, throwable)
+            self.put_non_indexed_slot(vm, name, val, slot, throwable)
         }
     }
 
-    pub fn get_property_slot(&self, ctx: Ref<Context>, name: Symbol, slot: &mut Slot) -> bool {
+    pub fn get_property_slot(
+        &self,
+        vm: &mut JsVirtualMachine,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
         if let Symbol::Indexed(index) = name {
-            self.get_indexed_property_slot(ctx, index, slot)
+            self.get_indexed_property_slot(vm, index, slot)
         } else {
-            self.get_non_indexed_property_slot(ctx, name, slot)
+            self.get_non_indexed_property_slot(vm, name, slot)
         }
     }
 
-    pub fn get_property(&self, ctx: Ref<Context>, name: Symbol) -> PropertyDescriptor {
+    pub fn get_property(&self, vm: &mut JsVirtualMachine, name: Symbol) -> PropertyDescriptor {
         let mut slot = Slot::new();
-        if self.get_property_slot(ctx, name, &mut slot) {
+        if self.get_property_slot(vm, name, &mut slot) {
             return slot.to_descriptor();
         }
         PropertyDescriptor::new_val(JsValue::empty(), AttrSafe::not_found())
@@ -712,56 +723,56 @@ impl JsObject {
 
     pub fn put(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         val: JsValue,
         throwable: bool,
     ) -> Result<(), JsValue> {
         let mut slot = Slot::new();
-        self.put_slot(ctx, name, val, &mut slot, throwable)
+        self.put_slot(vm, name, val, &mut slot, throwable)
     }
 
     pub fn define_own_property(
         &mut self,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         desc: &PropertyDescriptor,
         throwable: bool,
     ) -> Result<bool, JsValue> {
         let mut slot = Slot::new();
-        self.define_own_property_slot(ctx, name, desc, &mut slot, throwable)
+        self.define_own_property_slot(vm, name, desc, &mut slot, throwable)
     }
     pub fn GetNonIndexedSlotMethod(
         obj: Handle<Self>,
-        mut ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        if obj.get_non_indexed_property_slot(ctx, name, slot) {
-            return slot.get(&mut *ctx, JsValue::new_cell(obj));
+        if obj.get_non_indexed_property_slot(vm, name, slot) {
+            return slot.get(vm.context().unwrap(), JsValue::new_cell(obj));
         }
         Ok(JsValue::undefined())
     }
     pub fn GetIndexedSlotMethod(
         obj: Handle<Self>,
-        mut ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        if obj.get_indexed_property_slot(ctx, index, slot) {
-            return slot.get(&mut *ctx, JsValue::new_cell(obj));
+        if obj.get_indexed_property_slot(vm, index, slot) {
+            return slot.get(vm.context().unwrap(), JsValue::new_cell(obj));
         }
         Ok(JsValue::undefined())
     }
 
     pub fn DeleteNonIndexedMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
         let mut slot = Slot::new();
-        if !obj.get_own_property_slot(ctx, name, &mut slot) {
+        if !obj.get_own_property_slot(vm, name, &mut slot) {
             return Ok(true);
         }
 
@@ -775,22 +786,22 @@ impl JsObject {
         let offset = if slot.has_offset() {
             slot.offset()
         } else {
-            let entry = obj.structure.get(ctx.vm, name);
+            let entry = obj.structure.get(vm, name);
             if entry.is_not_found() {
                 return Ok(true);
             }
             entry.offset
         };
 
-        let s = obj.structure.delete_property_transition(ctx.vm, name);
+        let s = obj.structure.delete_property_transition(vm, name);
         obj.structure = s;
         *obj.direct_mut(offset as _) = JsValue::empty();
         Ok(true)
     }
-
+    #[allow(clippy::unnecessary_unwrap)]
     fn delete_indexed_internal(
         &mut self,
-        ctx: Ref<Context>,
+        _vm: &mut JsVirtualMachine,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -815,7 +826,7 @@ impl JsObject {
         let mut map = self.elements.map.unwrap();
 
         match map.entry(index) {
-            Entry::Vacant(_) => return Ok(true),
+            Entry::Vacant(_) => Ok(true),
             Entry::Occupied(x) => {
                 if !x.get().attributes().is_configurable() {
                     if throwable {
@@ -833,17 +844,17 @@ impl JsObject {
     }
     pub fn DeleteIndexedMethod(
         mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
         if obj.class.method_table.GetOwnIndexedPropertySlot as usize
             == Self::GetOwnIndexedPropertySlotMethod as usize
         {
-            return obj.delete_indexed_internal(ctx, index, throwable);
+            return obj.delete_indexed_internal(vm, index, throwable);
         }
         let mut slot = Slot::new();
-        if !(obj.class.method_table.GetOwnIndexedPropertySlot)(obj, ctx, index, &mut slot) {
+        if !(obj.class.method_table.GetOwnIndexedPropertySlot)(obj, vm, index, &mut slot) {
             return Ok(true);
         }
 
@@ -854,26 +865,28 @@ impl JsObject {
             return Ok(false);
         }
 
-        obj.delete_indexed_internal(ctx, index, throwable)
+        obj.delete_indexed_internal(vm, index, throwable)
     }
+    #[allow(unused_variables)]
     pub fn GetPropertyNamesMethod(
         obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: JsEnumerationMode,
     ) {
     }
+    #[allow(unused_variables)]
     pub fn GetOwnPropertyNamesMethod(
         obj: Handle<Self>,
-        ctx: Ref<Context>,
+        vm: &mut JsVirtualMachine,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: JsEnumerationMode,
     ) {
     }
-
+    #[allow(unused_variables)]
     pub fn DefaultValueMethod(
-        mut obj: Handle<Self>,
-        ctx: Ref<Context>,
+        obj: Handle<Self>,
+        vm: &mut JsVirtualMachine,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         todo!()
@@ -885,12 +898,11 @@ impl JsObject {
     define_jsclass!(JsObject, Object);
 
     pub fn new(
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         structure: Handle<Structure>,
         class: &'static Class,
         tag: ObjectTag,
     ) -> Handle<Self> {
-        let vm = vm.as_ref_ptr();
         let this = Self {
             structure,
             class,
@@ -965,9 +977,10 @@ pub const OBJ_FLAG_EXTENSIBLE: u32 = 0x1;
 impl HeapObject for JsObject {
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
         self.slots.data.visit_children(tracer);
-        if self.elements.dense() {
-            self.elements.vector.visit_children(tracer);
-        }
+        //if self.elements.dense() {
+        self.elements.vector.visit_children(tracer);
+        //}
+
         self.elements.map.visit_children(tracer);
         self.structure.visit_children(tracer);
     }
@@ -977,11 +990,11 @@ impl HeapObject for JsObject {
 }
 
 impl JsCell for JsObject {
-    fn get_structure(&self, _vm: Ref<JsVirtualMachine>) -> Handle<Structure> {
+    fn get_structure(&self, _vm: &mut JsVirtualMachine) -> Handle<Structure> {
         self.structure
     }
 
-    fn set_structure(&mut self, _vm: Ref<JsVirtualMachine>, s: Handle<Structure>) {
+    fn set_structure(&mut self, _vm: &mut JsVirtualMachine, s: Handle<Structure>) {
         self.structure = s;
     }
 }
@@ -1006,24 +1019,28 @@ mod tests {
     use crate::runtime::options::Options;
 
     use super::*;
-    use structopt::StructOpt;
+
+    use wtf_rs::keep_on_stack;
     #[test]
     fn test_put() {
-        let mut vm = JsVirtualMachine::create(Options::from_args());
-        let ctx = vm.make_context();
-        let my_struct = Structure::new_(vm, &[]);
-        let mut obj = JsObject::new(
-            &mut vm,
-            my_struct,
-            JsObject::get_class(),
-            ObjectTag::Ordinary,
-        );
-
-        let _ = obj.put(ctx, vm.intern("x"), JsValue::new_int(42), false);
-        let val = obj.get_property(ctx, vm.intern("x"));
-        assert!(val.is_data());
-        assert!(val.value().is_int32());
-        assert_eq!(val.value().as_int32(), 42);
-        assert!(!Handle::ptr_eq(my_struct, obj.structure));
+        let mut vm = JsVirtualMachine::create(Options {
+            verbose_gc: true,
+            ..Default::default()
+        });
+        {
+            let _ctx = vm.make_context();
+            let my_struct = Structure::new_(&mut vm, &[]);
+            let mut obj =
+                JsObject::new(&mut vm, my_struct, JsObject::get_class(), ObjectTag::Array);
+            keep_on_stack!(&obj, &my_struct);
+            let _ = obj.put(&mut vm, Symbol::Indexed(4), JsValue::new_int(42), false);
+            vm.gc(false);
+            let val = obj.get_property(&mut vm, Symbol::Indexed(4));
+            assert!(val.is_data());
+            assert!(val.value().is_int32());
+            assert_eq!(val.value().as_int32(), 42);
+            assert!(!Handle::ptr_eq(my_struct, obj.structure));
+            drop(vm);
+        }
     }
 }

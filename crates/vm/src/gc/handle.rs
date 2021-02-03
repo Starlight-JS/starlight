@@ -1,6 +1,6 @@
 use crate::{
     heap::trace::{Slot, Tracer},
-    runtime::{js_cell::JsCell, ref_ptr::Ref, structure::Structure, vm::JsVirtualMachine},
+    runtime::{js_cell::JsCell, structure::Structure, vm::JsVirtualMachine},
 };
 
 use super::heap_cell::{HeapCell, HeapObject};
@@ -35,8 +35,10 @@ impl<T: HeapObject + ?Sized> Handle<T> {
         this.cell == other.cell
     }
     /// Obtains VM reference from heap allocated object.
-    pub fn vm(&self) -> Ref<JsVirtualMachine> {
-        unsafe { (*self.cell.as_ptr()).vm() }
+    ///
+    #[allow(clippy::mut_from_ref, clippy::needless_lifetimes)]
+    pub fn vm<'a>(&'a self) -> &'a mut JsVirtualMachine {
+        unsafe { &mut *(*self.cell.as_ptr()).vm().pointer }
     }
     /// Obtain VM reference from heap allocated object in fast way if object
     /// is allocated in Immix space and known to be < 8KB in size.
@@ -44,11 +46,19 @@ impl<T: HeapObject + ?Sized> Handle<T> {
     /// # Safety
     /// This function is unsafe to call since it makes no checks that object
     /// is allocated inside large object space or immix space.
-    pub unsafe fn vm_fast(&self) -> Ref<JsVirtualMachine> {
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn vm_fast(&self) -> &mut JsVirtualMachine {
         (*self.cell.as_ptr()).fast_vm()
     }
 }
 impl<T: HeapObject + Sized> Handle<T> {
+    /// Get GC handle from raw pointer.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// If `ptr` is not pointer to heap data then dereferencing returned handle might lead to segfault.
+    ///
     pub unsafe fn from_raw(ptr: *const T) -> Self {
         Self {
             cell: NonNull::new_unchecked(ptr.cast::<u8>().sub(8).cast::<HeapCell>() as *mut _),
@@ -70,6 +80,10 @@ impl<T: HeapObject + ?Sized> Clone for Handle<T> {
 impl Handle<dyn HeapObject> {
     /// Returns the handle value, blindly assuming it to be of type `U`.
     /// If you are not *absolutely certain* of `U`, you *must not* call this.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it does not do any checks that `Handle<dyn HeapObject>` is reaully `U`.
     pub unsafe fn donwcast_unchecked<U: ?Sized + HeapObject>(self) -> Handle<U> {
         Handle {
             cell: self.cell,
@@ -88,7 +102,7 @@ impl Handle<dyn HeapObject> {
     /// `None` if it isn't.
     pub fn downcast<U: Sized + HeapObject>(self) -> Option<Handle<U>> {
         if self.is::<U>() {
-            return Some(unsafe { self.donwcast_unchecked() });
+            Some(unsafe { self.donwcast_unchecked() })
         } else {
             None
         }
@@ -133,6 +147,7 @@ impl DerefMut for Handle<dyn HeapObject> {
 
 impl<K: HeapObject, V: HeapObject> HeapObject for HashMap<K, V> {
     #[allow(mutable_transmutes)]
+    #[allow(clippy::transmute_ptr_to_ptr)]
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
         for (key, val) in self.iter_mut() {
             unsafe {
@@ -157,10 +172,10 @@ impl<T: HeapObject> HeapObject for Handle<T> {
 }
 
 impl<T: HeapObject> JsCell for Handle<T> {
-    fn set_structure(&mut self, vm: Ref<JsVirtualMachine>, s: Handle<Structure>) {
+    fn set_structure(&mut self, vm: &mut JsVirtualMachine, s: Handle<Structure>) {
         (**self).set_structure(vm, s);
     }
-    fn get_structure(&self, vm: Ref<JsVirtualMachine>) -> Handle<Structure> {
+    fn get_structure(&self, vm: &mut JsVirtualMachine) -> Handle<Structure> {
         (**self).get_structure(vm)
     }
 }
@@ -170,9 +185,8 @@ impl<K: HeapObject, V: HeapObject> JsCell for HashMap<K, V> {}
 impl<T: HeapObject> JsCell for Option<T> {}
 impl<T: HeapObject> HeapObject for Option<T> {
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
-        match self {
-            Some(ref mut x) => x.visit_children(tracer),
-            _ => (),
+        if let Some(ref mut x) = self {
+            x.visit_children(tracer);
         }
     }
     fn needs_destruction(&self) -> bool {

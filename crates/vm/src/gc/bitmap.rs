@@ -36,7 +36,7 @@ impl BitMap {
         let index = n / BITS_IN_WORD;
         let result = self.bits[index] & mask;
         self.bits[index] |= mask;
-        return result != 0;
+        result != 0
     }
 
     #[inline]
@@ -45,7 +45,7 @@ impl BitMap {
         let index = n / BITS_IN_WORD;
         let result = self.bits[index] & mask;
         self.bits[index] &= !mask;
-        return result != 0;
+        result != 0
     }
 
     pub fn is_zero(&self) -> bool {
@@ -91,14 +91,13 @@ impl BitMap {
                 return false;
             }
             new_value |= mask;
-            match entry.compare_exchange_weak(
+            if let Ok(_) = entry.compare_exchange_weak(
                 old_value,
                 new_value,
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             ) {
-                Ok(_) => return true,
-                Err(_) => {}
+                return true;
             }
         }
     }

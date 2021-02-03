@@ -1,38 +1,37 @@
 use super::{
-    context::Context,
     js_object::{JsEnumerationMode, JsHint, JsObject},
     js_value::JsValue,
     property_descriptor::PropertyDescriptor,
-    ref_ptr::Ref,
     slot::Slot,
     symbol::Symbol,
+    vm::JsVirtualMachine,
 };
 use crate::gc::handle::Handle;
 
 pub type GetNonIndexedSlotType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     name: Symbol,
     slot: &mut Slot,
 ) -> Result<JsValue, JsValue>;
 
 pub type GetIndexedSlotType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     index: u32,
     slot: &mut Slot,
 ) -> Result<JsValue, JsValue>;
 pub type GetNonIndexedPropertySlotType =
-    fn(obj: Handle<JsObject>, ctx: Ref<Context>, name: Symbol, slot: &mut Slot) -> bool;
+    fn(obj: Handle<JsObject>, vm: &mut JsVirtualMachine, name: Symbol, slot: &mut Slot) -> bool;
 pub type GetIndexedPropertySlotType =
-    fn(obj: Handle<JsObject>, ctx: Ref<Context>, index: u32, slot: &mut Slot) -> bool;
+    fn(obj: Handle<JsObject>, vm: &mut JsVirtualMachine, index: u32, slot: &mut Slot) -> bool;
 pub type GetOwnNonIndexedPropertySlotType =
-    fn(obj: Handle<JsObject>, ctx: Ref<Context>, name: Symbol, slot: &mut Slot) -> bool;
+    fn(obj: Handle<JsObject>, vm: &mut JsVirtualMachine, name: Symbol, slot: &mut Slot) -> bool;
 pub type GetOwnIndexedPropertySlotType =
-    fn(obj: Handle<JsObject>, ctx: Ref<Context>, index: u32, slot: &mut Slot) -> bool;
+    fn(obj: Handle<JsObject>, vm: &mut JsVirtualMachine, index: u32, slot: &mut Slot) -> bool;
 pub type PutNonIndexedSlotType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     name: Symbol,
     val: JsValue,
     slot: &mut Slot,
@@ -40,7 +39,7 @@ pub type PutNonIndexedSlotType = fn(
 ) -> Result<(), JsValue>;
 pub type PutIndexedSlotType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     index: u32,
     val: JsValue,
     slot: &mut Slot,
@@ -48,20 +47,20 @@ pub type PutIndexedSlotType = fn(
 ) -> Result<(), JsValue>;
 pub type DeleteNonIndexedType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     name: Symbol,
     throwable: bool,
 ) -> Result<bool, JsValue>;
 pub type DeleteIndexedType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     index: u32,
     throwable: bool,
 ) -> Result<bool, JsValue>;
 
 pub type DefineOwnNonIndexedPropertySlotType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     name: Symbol,
     desc: &PropertyDescriptor,
     slot: &mut Slot,
@@ -69,7 +68,7 @@ pub type DefineOwnNonIndexedPropertySlotType = fn(
 ) -> Result<bool, JsValue>;
 pub type DefineOwnIndexedPropertySlotType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     index: u32,
     desc: &PropertyDescriptor,
     slot: &mut Slot,
@@ -77,19 +76,19 @@ pub type DefineOwnIndexedPropertySlotType = fn(
 ) -> Result<bool, JsValue>;
 pub type GetPropertyNamesType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     collector: &mut dyn FnMut(Symbol, u32),
     mode: JsEnumerationMode,
 );
 pub type GetOwnPropertyNamesType = fn(
     obj: Handle<JsObject>,
-    ctx: Ref<Context>,
+    vm: &mut JsVirtualMachine,
     collector: &mut dyn FnMut(Symbol, u32),
     mode: JsEnumerationMode,
 );
 
 pub type DefaultValueType =
-    fn(obj: Handle<JsObject>, ctx: Ref<Context>, hint: JsHint) -> Result<JsValue, JsValue>;
+    fn(obj: Handle<JsObject>, vm: &mut JsVirtualMachine, hint: JsHint) -> Result<JsValue, JsValue>;
 #[derive(Clone, Copy)]
 #[repr(C)]
 #[allow(non_snake_case)]

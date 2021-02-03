@@ -1,3 +1,4 @@
+#![allow(clippy::transmute_ptr_to_ref)]
 use crate::{
     heap::{block::ImmixBlock, large_object_space::PreciseAllocation},
     runtime::ref_ptr::Ref,
@@ -46,6 +47,7 @@ impl HeapCell {
     pub fn vtable(&self) -> Address {
         unsafe { Address::from_ptr(self.u.tagged.untagged()) }
     }
+    #[allow(clippy::mut_from_ref)]
     pub fn get_dyn(&self) -> &mut dyn HeapObject {
         unsafe {
             std::mem::transmute(TraitObject {
@@ -112,21 +114,31 @@ impl HeapCell {
             self.u.tagged.set_bit(0);
         }
     }
-
-    pub fn vm(&self) -> Ref<JsVirtualMachine> {
+    /// # Safety
+    ///
+    ///
+    /// This is unsafe to call since `HeapCell` reference is not always in `Handle<T>`
+    pub unsafe fn vm(&self) -> Ref<JsVirtualMachine> {
         if PreciseAllocation::is_precise(self as *const Self as *mut ()) {
-            unsafe { (*PreciseAllocation::from_cell(self as *const Self as *mut _)).vm }
+            {
+                (*PreciseAllocation::from_cell(self as *const Self as *mut _)).vm
+            }
         } else {
-            unsafe {
+            {
                 let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
                 (*block).vm
             }
         }
     }
-
+    #[allow(clippy::mut_from_ref)]
     /// Use this function when you know that object is not allocated in large object space
-    pub unsafe fn fast_vm(&self) -> Ref<JsVirtualMachine> {
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe since it does not check object size
+    ///
+    pub unsafe fn fast_vm(&self) -> &mut JsVirtualMachine {
         let block = ImmixBlock::get_block_ptr(Address::from_ptr(self));
-        (*block).vm
+        &mut *(*block).vm.pointer
     }
 }

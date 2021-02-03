@@ -5,6 +5,11 @@ pub struct MarkedBlockSet {
     pub set: HashSet<*mut MarkedBlock>,
     pub filter: TinyBloomFilter,
 }
+impl Default for MarkedBlockSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl MarkedBlockSet {
     pub fn new() -> Self {

@@ -9,6 +9,7 @@ use super::{
     structure::Structure,
 };
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub struct JsFunction {
     strict: bool,
@@ -57,6 +58,7 @@ impl JsBoundFunction {
 
 pub type JsAPI = fn(arguments: &Arguments) -> Result<JsValue, JsValue>;
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub struct JsNativeFunction {
     func: JsAPI,
 }

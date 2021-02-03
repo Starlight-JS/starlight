@@ -49,7 +49,7 @@ impl PreciseAllocation {
     #[inline]
     pub fn base_pointer(&self) -> *mut () {
         if self.adjusted_alignment {
-            return ((self as *const Self as isize) - (Self::HALF_ALIGNMENT as isize)) as *mut ();
+            ((self as *const Self as isize) - (Self::HALF_ALIGNMENT as isize)) as *mut ()
         } else {
             self as *const Self as *mut ()
         }
@@ -127,7 +127,7 @@ impl PreciseAllocation {
         if self.has_valid_cell && !self.is_live() {
             unsafe {
                 let cell = self.cell();
-                std::ptr::drop_in_place((&mut *cell).get_dyn());
+                std::ptr::drop_in_place((&*cell).get_dyn());
             }
             self.has_valid_cell = false;
         }
@@ -143,7 +143,7 @@ impl PreciseAllocation {
             //let mut space = libc::malloc(adjusted_alignment_allocation_size);
             let mut adjusted_alignment = false;
             if !is_aligned_for_precise_allocation(space) {
-                space = space.offset(Self::HALF_ALIGNMENT as _);
+                space = space.add(Self::HALF_ALIGNMENT);
                 adjusted_alignment = true;
                 assert!(is_aligned_for_precise_allocation(space));
             }
@@ -172,7 +172,7 @@ impl PreciseAllocation {
         let base = self.base_pointer();
         unsafe {
             let cell = self.cell();
-            core::ptr::drop_in_place((&mut *cell).get_dyn());
+            core::ptr::drop_in_place((&*cell).get_dyn());
             dealloc(
                 base.cast(),
                 Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)

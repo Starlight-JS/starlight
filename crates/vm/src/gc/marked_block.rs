@@ -55,7 +55,7 @@ impl FreeList {
         }
         unsafe {
             let prev = self.head;
-            self.head = (&*prev).next;
+            self.head = (*prev).next;
             Address::from_ptr(prev)
         }
     }
@@ -63,7 +63,7 @@ impl FreeList {
     pub fn free(&mut self, cell: Address) {
         unsafe {
             let cell = cell.to_mut_ptr::<FreeCell>();
-            (&mut *cell).next = self.head;
+            (*cell).next = self.head;
             self.head = cell;
         }
     }
@@ -85,7 +85,7 @@ pub struct Handle {
 
 impl MarkedBlock {
     pub fn handle(&self) -> &'static mut Handle {
-        unsafe { &mut *self.atoms().offset(END_ATOM as _).cast() }
+        unsafe { &mut *self.atoms().add(END_ATOM).cast() }
     }
     /// Atom offset from pointer
     pub fn atom_number(&self, p: Address) -> u32 {
@@ -94,7 +94,7 @@ impl MarkedBlock {
     }
     /// Atom offset from pointer, might be wrong
     pub fn candidate_atom_number(&self, p: Address) -> usize {
-        return (p.to_usize() - self as *const Self as usize) / ATOM_SIZE;
+        (p.to_usize() - self as *const Self as usize) / ATOM_SIZE
     }
     /// Pointer to atoms
     pub fn atoms(&self) -> *mut Atom {
@@ -136,7 +136,7 @@ impl Handle {
         }*/
         let mut i = 0;
         while i < self.end_atom() {
-            let cell = unsafe { self.atoms().offset(i as _) };
+            let cell = unsafe { self.atoms().add(i) };
             func(Address::from_ptr(cell));
             i += self.atoms_per_cell();
         }
@@ -224,7 +224,7 @@ impl Handle {
     }
     /// Atom number
     pub fn candidate_atom_number(&self, p: Address) -> usize {
-        return (p.to_usize() - self.begin().to_usize()) / ATOM_SIZE;
+        (p.to_usize() - self.begin().to_usize()) / ATOM_SIZE
     }
     /// Atoms pointer
     pub fn atoms(&self) -> *mut Atom {

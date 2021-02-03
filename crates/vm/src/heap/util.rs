@@ -5,10 +5,15 @@ pub mod bitmap_gen;
 #[macro_export]
 macro_rules! as_atomic {
     ($value: expr;$t: ident) => {
-        unsafe { core::mem::transmute::<_, &'_ core::sync::atomic::$t>($value as *const _) }
+        unsafe { &*($value as *const _ as *const core::sync::atomic::$t) }
     };
 }
 
+/// Creates new zeroed value of `T`.
+///
+/// # Safety
+///
+/// Since it returns zeroed value it is almost the same as uninitialized.
 pub unsafe fn zeroed<T>() -> T {
     core::mem::MaybeUninit::<T>::zeroed().assume_init()
 }

@@ -139,9 +139,7 @@ impl Heap {
         );
         // Stage #5: Unpin all pinned objects.
         for root in roots.iter() {
-            {
-                (&mut **root).unpin()
-            };
+            (&mut **root).unpin()
         }
         // Stage #6: Swap live mark so next GC cycle will know how to mark objects.
         self.current_live_mark = !self.current_live_mark;

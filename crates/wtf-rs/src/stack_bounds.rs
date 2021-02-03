@@ -36,7 +36,7 @@ impl StackBounds {
 
     #[cfg(not(target_os = "openbsd"))]
     unsafe fn new_thread_stack_bounds(thread: libc::pthread_t) -> Self {
-        let mut bound = 0 as *mut libc::c_void;
+        let mut bound = core::ptr::null_mut::<libc::c_void>();
         let mut stack_size = 0;
         let mut sattr: libc::pthread_attr_t = core::mem::MaybeUninit::zeroed().assume_init();
         libc::pthread_attr_init(&mut sattr);
@@ -48,7 +48,7 @@ impl StackBounds {
         {
             libc::pthread_getattr_np(thread, &mut sattr);
         }
-        let _rc = libc::pthread_attr_getstack(&mut sattr, &mut bound, &mut stack_size);
+        let _rc = libc::pthread_attr_getstack(&sattr, &mut bound, &mut stack_size);
         libc::pthread_attr_destroy(&mut sattr);
         let origin = bound.add(stack_size);
         Self {

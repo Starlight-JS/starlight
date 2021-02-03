@@ -18,19 +18,20 @@ pub enum Symbol {
 
 impl Symbol {
     pub fn is_private(&self) -> bool {
-        if let Symbol::Key(_, SymbolPublicity::Private) = self {
+        /*if let Symbol::Key(_, SymbolPublicity::Private) = self {
             true
         } else {
             false
-        }
+        }*/
+        matches!(self, Symbol::Key(_, SymbolPublicity::Private))
     }
 
     pub fn is_public(&self) -> bool {
-        if let Symbol::Key(_, SymbolPublicity::Public) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Symbol::Key(_, SymbolPublicity::Public)) /* {
+                                                                    true
+                                                                } else {
+                                                                    false
+                                                                }*/
     }
 }
 

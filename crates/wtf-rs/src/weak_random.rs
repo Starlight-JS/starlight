@@ -20,7 +20,7 @@ impl WeakRandom {
         let y = self.high;
         self.low = y;
         self.high = Self::next_state(x, y);
-        return self.high + self.low;
+        self.high + self.low
     }
 
     pub fn generate(mut seed: u32) -> u64 {
@@ -30,7 +30,7 @@ impl WeakRandom {
         let low = seed as u64;
         let mut high = seed as u64;
         high = Self::next_state(low, high);
-        return low + high;
+        low + high
     }
 
     pub fn low_offset() -> usize {
@@ -94,7 +94,7 @@ impl WeakRandom {
             high: 0,
             seed: 0,
         };
-        this.set_seed(seed.unwrap_or(cryptographically_random_number()));
+        this.set_seed(seed.unwrap_or_else(cryptographically_random_number));
         this
     }
 }

@@ -2,7 +2,7 @@ use std::num::ParseIntError;
 
 fn parse_size_from_osstr(s: &str) -> Result<usize, ParseIntError> {
     let s = s.to_lowercase();
-    let (number, unit) = s.split_at(s.find(|c: char| !c.is_digit(10)).unwrap_or(s.len()));
+    let (number, unit) = s.split_at(s.find(|c: char| !c.is_digit(10)).unwrap_or_else(|| s.len()));
     let multiplier = match unit {
         "kb" => 1024,
         "mb" => 1024 * 1024,
@@ -12,7 +12,7 @@ fn parse_size_from_osstr(s: &str) -> Result<usize, ParseIntError> {
 
     number
         .parse::<usize>()
-        .map_err(|x| x.into())
+        .map_err(|x| x)
         .map(|x| x * multiplier)
 }
 use structopt::StructOpt;

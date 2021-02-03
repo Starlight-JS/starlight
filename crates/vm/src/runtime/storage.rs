@@ -5,7 +5,7 @@ use crate::{
     util::array::GcArray,
 };
 
-use super::{ref_ptr::AsRefPtr, vm::JsVirtualMachine};
+use super::vm::JsVirtualMachine;
 
 pub struct FixedStorage<T: HeapObject + Copy> {
     pub(crate) data: Handle<GcArray<T>>,
@@ -20,7 +20,7 @@ fn clp2(number: usize) -> usize {
     x + 1
 }
 impl<T: HeapObject + Copy + Default> FixedStorage<T> {
-    pub fn reserve(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, n: usize) {
+    pub fn reserve(&mut self, vm: &mut JsVirtualMachine, n: usize) {
         if n > self.capacity() {
             let next = if n == 0 {
                 0
@@ -29,7 +29,7 @@ impl<T: HeapObject + Copy + Default> FixedStorage<T> {
             } else {
                 clp2(n)
             };
-            let ptr = GcArray::<T>::new(vm.as_ref_ptr(), next);
+            let ptr = GcArray::<T>::new(vm, next);
             unsafe {
                 std::ptr::copy_nonoverlapping(self.data.begin(), ptr.begin(), self.data.len());
             }
@@ -37,7 +37,7 @@ impl<T: HeapObject + Copy + Default> FixedStorage<T> {
             self.data = ptr;
         }
     }
-    pub fn resize(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, n: usize, value: T) {
+    pub fn resize(&mut self, vm: &mut JsVirtualMachine, n: usize, value: T) {
         let previous = self.capacity();
         self.reserve(vm, n);
         if previous < self.capacity() {
@@ -55,20 +55,20 @@ impl<T: HeapObject + Copy + Default> FixedStorage<T> {
         self.data.len()
     }
 
-    pub fn new(vm: impl AsRefPtr<JsVirtualMachine>) -> Self {
+    pub fn new(vm: &mut JsVirtualMachine) -> Self {
         Self {
-            data: GcArray::new(vm.as_ref_ptr(), 0),
+            data: GcArray::new(vm, 0),
         }
     }
 
-    pub fn with_capacity(vm: impl AsRefPtr<JsVirtualMachine>, cap: usize) -> Self {
+    pub fn with_capacity(vm: &mut JsVirtualMachine, cap: usize) -> Self {
         Self {
-            data: GcArray::new(vm.as_ref_ptr(), cap),
+            data: GcArray::new(vm, cap),
         }
     }
 
-    pub fn with(vm: impl AsRefPtr<JsVirtualMachine>, cap: usize, value: T) -> Self {
-        let mut this = Self::new(vm.as_ref_ptr());
+    pub fn with(vm: &mut JsVirtualMachine, cap: usize, value: T) -> Self {
+        let mut this = Self::new(vm);
         this.resize(vm, cap, value);
         this
     }

@@ -6,7 +6,6 @@ use std::mem::size_of;
 
 use super::{
     js_cell::{allocate_cell, JsCell},
-    ref_ptr::Ref,
     vm::JsVirtualMachine,
 };
 
@@ -17,7 +16,10 @@ pub struct JsString {
 }
 
 impl JsString {
-    pub fn new(vm: Ref<JsVirtualMachine>, as_str: impl AsRef<str>) -> Handle<Self> {
+    pub fn is_empty(&self) -> bool {
+        self.len != 0
+    }
+    pub fn new(vm: &mut JsVirtualMachine, as_str: impl AsRef<str>) -> Handle<Self> {
         let str = as_str.as_ref();
         let proto = Self {
             len: str.len() as _,
@@ -54,9 +56,7 @@ impl JsString {
 impl HeapObject for JsString {
     fn visit_children(&mut self, _tracer: &mut dyn Tracer) {}
     fn compute_size(&self) -> usize {
-        let sz = self.len as usize + size_of::<Self>();
-
-        sz
+        self.len as usize + size_of::<Self>()
     }
     fn needs_destruction(&self) -> bool {
         false

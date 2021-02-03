@@ -1,4 +1,4 @@
-use super::{accessor::Accessor, attributes::*, context::Context, error::*, js_cell::JsCell};
+use super::{accessor::Accessor, attributes::*, context::Context, js_cell::JsCell};
 use super::{attributes::AttrExternal, js_value::JsValue};
 use crate::{
     gc::{handle::Handle, heap_cell::HeapObject},
@@ -259,8 +259,8 @@ impl StoredSlot {
             self.attributes.raw,
         )
     }
-
-    pub fn get(&self, context: &mut Context, this_binding: JsValue) -> Result<JsValue, JsValue> {
+    #[allow(unused_variables)]
+    pub fn get(&self, context: Handle<Context>, this_binding: JsValue) -> Result<JsValue, JsValue> {
         if self.attributes.is_data() {
             return Ok(self.value);
         }
@@ -375,18 +375,18 @@ impl StoredSlot {
             if data.is_value_absent() {
                 return true;
             }
-            return JsValue::same_value(data.value(), self.value);
+            JsValue::same_value(data.value(), self.value)
         } else if desc.is_accessor() {
             let ac = self.accessor();
-            return unsafe {
+            unsafe {
                 desc.value.accessors.0 == ac.getter() && desc.value.accessors.1 == ac.setter()
-            };
+            }
         } else {
-            return true;
+            true
         }
     }
 
-    pub fn merge(&mut self, context: &mut Context, desc: &PropertyDescriptor) {
+    pub fn merge(&mut self, context: Handle<Context>, desc: &PropertyDescriptor) {
         let mut attr = AttrExternal::new(Some(self.attributes().raw()));
         if !desc.is_configurable_absent() {
             attr.set_configurable(desc.is_configurable());
@@ -417,7 +417,7 @@ impl StoredSlot {
             let mut ac = if self.attributes().is_accessor() {
                 self.accessor()
             } else {
-                let ac = Accessor::new(context, JsValue::undefined(), JsValue::undefined());
+                let ac = Accessor::new(context.vm(), JsValue::undefined(), JsValue::undefined());
                 self.value = JsValue::new_cell(ac);
                 ac
             };
@@ -433,7 +433,7 @@ impl StoredSlot {
         }
     }
 
-    pub fn new(context: &mut Context, desc: &PropertyDescriptor) -> Self {
+    pub fn new(context: Handle<Context>, desc: &PropertyDescriptor) -> Self {
         let mut this = Self {
             value: JsValue::undefined(),
             attributes: AttrSafe::not_found(),
@@ -450,7 +450,7 @@ impl StoredSlot {
             this.attributes = create_data(attributes);
         } else if desc.is_accessor() {
             let ac = AccessorDescriptor { parent: *desc };
-            let accessor = Accessor::new(context, ac.get(), ac.set());
+            let accessor = Accessor::new(context.vm(), ac.get(), ac.set());
             this.value = JsValue::new_cell(accessor);
             this.attributes = create_accessor(attributes);
         } else {

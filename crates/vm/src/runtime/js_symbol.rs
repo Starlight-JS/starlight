@@ -7,7 +7,6 @@ use crate::{
 
 use super::{
     js_cell::{allocate_cell, JsCell},
-    ref_ptr::*,
     symbol::Symbol,
     vm::JsVirtualMachine,
 };
@@ -17,7 +16,7 @@ pub struct JsSymbol {
 }
 
 impl JsSymbol {
-    pub fn new(vm: Ref<JsVirtualMachine>, sym: Symbol) -> Handle<Self> {
+    pub fn new(vm: &mut JsVirtualMachine, sym: Symbol) -> Handle<Self> {
         let proto = Self { sym };
         allocate_cell(vm, size_of::<Self>(), proto)
     }
@@ -37,34 +36,39 @@ impl HeapObject for JsSymbol {
 }
 
 pub trait JSSymbolBuild<T> {
-    fn make(vm: Ref<JsVirtualMachine>, key: T) -> Handle<JsSymbol>;
+    fn make(vm: &mut JsVirtualMachine, key: T) -> Handle<JsSymbol>;
 }
 
 impl JSSymbolBuild<i32> for JsSymbol {
-    fn make(mut vm: Ref<JsVirtualMachine>, key: i32) -> Handle<JsSymbol> {
-        JsSymbol::new(vm, vm.intern_i32(key))
+    fn make(vm: &mut JsVirtualMachine, key: i32) -> Handle<JsSymbol> {
+        let k = vm.intern_i32(key);
+        JsSymbol::new(vm, k)
     }
 }
 impl JSSymbolBuild<i64> for JsSymbol {
-    fn make(mut vm: Ref<JsVirtualMachine>, key: i64) -> Handle<JsSymbol> {
-        JsSymbol::new(vm, vm.intern_i64(key))
+    fn make(vm: &mut JsVirtualMachine, key: i64) -> Handle<JsSymbol> {
+        let k = vm.intern_i64(key);
+        JsSymbol::new(vm, k)
     }
 }
 
 impl JSSymbolBuild<u32> for JsSymbol {
-    fn make(mut vm: Ref<JsVirtualMachine>, key: u32) -> Handle<JsSymbol> {
-        JsSymbol::new(vm, vm.intern_u32(key))
+    fn make(vm: &mut JsVirtualMachine, key: u32) -> Handle<JsSymbol> {
+        let k = vm.intern_u32(key);
+        JsSymbol::new(vm, k)
     }
 }
 
 impl JSSymbolBuild<f64> for JsSymbol {
-    fn make(mut vm: Ref<JsVirtualMachine>, key: f64) -> Handle<JsSymbol> {
-        JsSymbol::new(vm, vm.intern_f64(key))
+    fn make(vm: &mut JsVirtualMachine, key: f64) -> Handle<JsSymbol> {
+        let k = vm.intern_f64(key);
+        JsSymbol::new(vm, k)
     }
 }
 
 impl JSSymbolBuild<&str> for JsSymbol {
-    fn make(mut vm: Ref<JsVirtualMachine>, key: &str) -> Handle<JsSymbol> {
-        JsSymbol::new(vm, vm.intern(key))
+    fn make(vm: &mut JsVirtualMachine, key: &str) -> Handle<JsSymbol> {
+        let k = vm.intern(key);
+        JsSymbol::new(vm, k)
     }
 }

@@ -196,6 +196,7 @@ impl Collector {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn collect(
         &mut self,
         log: bool,
@@ -328,6 +329,10 @@ impl Collector {
 
 /// Maybe sweeps immix block. This function does not do anything if block does not have any
 /// destructible objects allocated inside.
+///
+/// # Safety
+/// Unsafe since has to iterate raw memory.
+///
 pub unsafe fn maybe_sweep(log: bool, space_bitmap: &SpaceBitmap, block: *mut ImmixBlock) {
     log_if!(log, "--- Will sweep block?={} ", (*block).needs_destruction);
     if (*block).needs_destruction {

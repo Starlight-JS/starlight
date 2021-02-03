@@ -12,6 +12,7 @@ struct ARC4Stream {
 }
 
 impl ARC4Stream {
+    #[allow(clippy::clippy::needless_range_loop)]
     fn new() -> Self {
         let mut slice = [0; 256];
         for n in 0..256 {
@@ -61,7 +62,7 @@ impl ARC4RandomNumberGenerator {
         let sj = self.stream.s[self.stream.j as usize];
         self.stream.s[self.stream.i as usize] = sj;
         self.stream.s[self.stream.j as usize] = si;
-        return self.stream.s[(si.wrapping_add(sj) as usize)] & 0xff;
+        self.stream.s[(si.wrapping_add(sj) as usize)]
     }
 
     fn get_word(&mut self) -> u32 {
@@ -72,7 +73,7 @@ impl ARC4RandomNumberGenerator {
         val |= self.get_byte() as u32;
         val
     }
-
+    #[allow(clippy::uninit_assumed_init)]
     fn stir(&mut self) {
         unsafe {
             let mut randomness: [u8; 128] = MaybeUninit::uninit().assume_init();

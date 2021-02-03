@@ -21,6 +21,6 @@ impl BlockDirectory {
     }
 
     pub fn find_empty_block_to_steal(&mut self) -> *mut Handle {
-        self.free_blocks.pop().unwrap_or(0 as *mut _)
+        self.free_blocks.pop().unwrap_or(core::ptr::null_mut())
     }
 }

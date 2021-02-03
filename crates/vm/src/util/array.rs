@@ -3,7 +3,6 @@ use crate::{
     heap::trace::{Slot, Tracer},
     runtime::{
         js_cell::{allocate_cell, JsCell},
-        ref_ptr::Ref,
         vm::JsVirtualMachine,
     },
 };
@@ -33,14 +32,18 @@ impl<T: HeapObject> GcArray<T> {
         self.data.as_ptr() as *mut _
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() != 0
+    }
+
     pub fn end(&self) -> *mut T {
         unsafe { self.begin().add(self.len) }
     }
-    pub fn new(vm: Ref<JsVirtualMachine>, len: usize) -> Handle<Self>
+    pub fn new(vm: &mut JsVirtualMachine, len: usize) -> Handle<Self>
     where
         T: Default,
     {
-        let val = Self { len: len, data: [] };
+        let val = Self { len, data: [] };
         let mut cell = allocate_cell(vm, len * size_of::<T>() + size_of::<GcArray<T>>(), val);
         for i in 0..cell.len() {
             cell[i] = T::default();
@@ -88,15 +91,13 @@ impl<T: HeapObject> RawVec<T> {
         self.len
     }
 
-    pub fn new(vm: Ref<JsVirtualMachine>, len: usize) -> Handle<Self> {
+    pub fn new(vm: &mut JsVirtualMachine, len: usize) -> Handle<Self> {
         let val = Self {
             len: 0,
             cap: len,
             data: [],
         };
-        let cell = allocate_cell(vm, len * size_of::<T>() + size_of::<GcArray<T>>(), val);
-
-        cell
+        allocate_cell(vm, len * size_of::<T>() + size_of::<RawVec<T>>(), val)
     }
 }
 
@@ -107,7 +108,7 @@ impl<T: HeapObject> HeapObject for RawVec<T> {
 
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
         for i in 0..self.len() {
-            tracer.trace(Slot::new(&mut self[i]));
+            self[i].visit_children(tracer);
         }
     }
     fn compute_size(&self) -> usize {
@@ -133,12 +134,15 @@ pub struct GcVec<T: HeapObject> {
 }
 
 impl<T: HeapObject> GcVec<T> {
-    pub fn new(vm: Ref<JsVirtualMachine>, cap: usize) -> Self {
+    pub fn new(vm: &mut JsVirtualMachine, cap: usize) -> Self {
         Self {
             raw: RawVec::new(vm, cap),
         }
     }
-    pub fn reserve(&mut self, vm: Ref<JsVirtualMachine>, n: usize) {
+    pub fn is_empty(&self) -> bool {
+        self.len() != 0
+    }
+    pub fn reserve(&mut self, vm: &mut JsVirtualMachine, n: usize) {
         if n > self.raw.cap {
             let next = if n < 8 { 8 } else { clp2(n) };
             let mut ptr = RawVec::<T>::new(vm, next);
@@ -150,10 +154,23 @@ impl<T: HeapObject> GcVec<T> {
                 );
             }
             ptr.len = self.raw.len;
+
             self.raw = ptr;
         }
     }
-
+    pub fn resize(&mut self, vm: &mut JsVirtualMachine, n: usize, val: T)
+    where
+        T: Clone,
+    {
+        let prev = self.raw.len;
+        self.reserve(vm, n);
+        self.raw.len = n;
+        if prev < n {
+            for i in prev..n {
+                self[i] = val.clone();
+            }
+        }
+    }
     pub fn clear(&mut self) {
         for i in 0..self.len() {
             unsafe {
@@ -163,7 +180,7 @@ impl<T: HeapObject> GcVec<T> {
         }
         self.raw.len = 0;
     }
-    pub fn shrink_to_fit(&mut self, vm: Ref<JsVirtualMachine>) {
+    pub fn shrink_to_fit(&mut self, vm: &mut JsVirtualMachine) {
         unsafe {
             let next = self.raw.len;
             let mut ptr = RawVec::<T>::new(vm, next);
@@ -179,7 +196,7 @@ impl<T: HeapObject> GcVec<T> {
         }
     }
 
-    pub fn insert(&mut self, vm: Ref<JsVirtualMachine>, index: usize, element: T) {
+    pub fn insert(&mut self, vm: &mut JsVirtualMachine, index: usize, element: T) {
         #[cold]
         #[inline(never)]
         fn assert_failed(index: usize, len: usize) -> ! {
@@ -207,7 +224,7 @@ impl<T: HeapObject> GcVec<T> {
     pub fn len(&self) -> usize {
         self.raw.len
     }
-    pub fn push(&mut self, vm: Ref<JsVirtualMachine>, value: T) {
+    pub fn push(&mut self, vm: &mut JsVirtualMachine, value: T) {
         self.reserve(vm, self.len() + 1);
 
         unsafe {
@@ -218,7 +235,7 @@ impl<T: HeapObject> GcVec<T> {
     }
 
     pub fn pop(&mut self) -> Option<T> {
-        if self.len() == 0 {
+        if self.is_empty() {
             None
         } else {
             unsafe {

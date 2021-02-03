@@ -4,7 +4,7 @@ use crate::{gc::handle::Handle, util::array::GcVec};
 
 use super::{
     attributes::object_data, js_cell::allocate_cell, js_value::JsValue,
-    property_descriptor::StoredSlot, ref_ptr::AsRefPtr, vm::JsVirtualMachine,
+    property_descriptor::StoredSlot, vm::JsVirtualMachine,
 };
 
 const FLAG_DENSE: u8 = 1;
@@ -22,7 +22,8 @@ pub struct IndexedElements {
 }
 
 impl IndexedElements {
-    pub fn make_sparse(&mut self, vm: impl AsRefPtr<JsVirtualMachine>) {
+    #[allow(clippy::explicit_counter_loop)]
+    pub fn make_sparse(&mut self, vm: &mut JsVirtualMachine) {
         self.flags &= !(FLAG_DENSE as u32);
         let mut sparse = self.ensure_map(vm);
         let mut index = 0;
@@ -42,7 +43,7 @@ impl IndexedElements {
         self.map = None;
     }
 
-    pub fn ensure_map(&mut self, vm: impl AsRefPtr<JsVirtualMachine>) -> Handle<SparseArrayMap> {
+    pub fn ensure_map(&mut self, vm: &mut JsVirtualMachine) -> Handle<SparseArrayMap> {
         match self.map {
             Some(map) => map,
             None => {
@@ -77,11 +78,11 @@ impl IndexedElements {
         self.flags &= !(FLAG_WRITABLE as u32);
     }
 
-    pub fn new(vm: impl AsRefPtr<JsVirtualMachine>) -> Self {
+    pub fn new(vm: &mut JsVirtualMachine) -> Self {
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,
-            vector: GcVec::new(vm.as_ref_ptr(), 0),
+            vector: GcVec::new(vm, 0),
             map: None,
         }
     }

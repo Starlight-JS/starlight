@@ -7,7 +7,11 @@ use super::symbol::{Symbol, SymbolPublicity};
 pub struct SymbolTable {
     rodeo: Rodeo<Spur>,
 }
-
+impl Default for SymbolTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl SymbolTable {
     pub fn new() -> Self {
         Self {

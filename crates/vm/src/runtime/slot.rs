@@ -140,6 +140,12 @@ impl Slot {
     }
 }
 
+impl Default for Slot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HeapObject for Slot {
     fn visit_children(&mut self, tracer: &mut dyn Tracer) {
         if let Some(ref mut obj) = self.base {

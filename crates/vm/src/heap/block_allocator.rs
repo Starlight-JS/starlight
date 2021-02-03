@@ -101,7 +101,7 @@ mod _unix {
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
             let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
-            unsafe { self.start.offset(offset as isize) as *mut u8 }
+            unsafe { self.start.add(offset) as *mut u8 }
         }
 
         pub fn start(&self) -> *mut u8 {
@@ -180,26 +180,16 @@ impl BlockAllocator {
         if self.free_blocks.is_empty() {
             return self.build_block();
         }
-        #[cfg(feature = "threaded")]
-        {
-            self.lock.lock_nogc();
-        }
+
         debug_assert_ne!(self.vm.pointer, core::ptr::null_mut());
-        let block = self
-            .free_blocks
+        self.free_blocks
             .pop()
             .map(|x| {
                 self.mmap.commit(x as *mut u8, BLOCK_SIZE);
                 ImmixBlock::new(x as *mut u8, self.vm);
                 x
             })
-            .or_else(|| self.build_block());
-        #[cfg(feature = "threaded")]
-        {
-            self.lock.unlock();
-        }
-
-        block
+            .or_else(|| self.build_block())
     }
 
     pub fn is_in_space(&self, object: Address) -> bool {

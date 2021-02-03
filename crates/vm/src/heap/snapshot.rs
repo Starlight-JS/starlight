@@ -34,8 +34,8 @@ mod tests {
     #[test]
     fn heap_snapshot() {
         let mut vm = JsVirtualMachine::create(Options::default());
-        let a = JsString::new(vm, "Hello,World!");
-        let b = GcVec::<i32>::new(vm, 1);
+        let a = JsString::new(&mut vm, "Hello,World!");
+        let b = GcVec::<i32>::new(&mut vm, 1);
         keep_on_stack!(&a, &b);
         let snapshot = vm.record_heap_snapshot();
         assert_eq!(snapshot.object_count, 2);

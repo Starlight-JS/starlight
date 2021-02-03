@@ -1,9 +1,8 @@
 use super::{
     attributes::AttrSafe,
-    context::Context,
     js_cell::{allocate_cell, JsCell},
     js_object::JsObject,
-    ref_ptr::{AsRefPtr, Ref},
+    ref_ptr::Ref,
     symbol::{Symbol, DUMMY_SYMBOL},
     vm::JsVirtualMachine,
 };
@@ -130,7 +129,7 @@ impl Transitions {
 
     pub fn insert(
         &mut self,
-        vm: Ref<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         attrs: AttrSafe,
         map: Handle<Structure>,
@@ -212,7 +211,11 @@ impl Structure {
     pub fn id(&self) -> StructureID {
         self.id
     }
-
+    /// Set structure ID.
+    ///
+    /// # Safety
+    ///
+    /// It is unsafe to change structure id since it may change program behaviour.
     pub unsafe fn set_id(&mut self, id: StructureID) {
         self.id = id;
     }
@@ -224,7 +227,7 @@ pub struct DeletedEntryHolder {
 }
 
 impl DeletedEntryHolder {
-    pub fn push(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, offset: u32) {
+    pub fn push(&mut self, vm: &mut JsVirtualMachine, offset: u32) {
         let entry = allocate_cell(
             vm,
             size_of::<DeletedEntry>(),
@@ -270,7 +273,7 @@ impl HeapObject for DeletedEntry {
 impl JsCell for DeletedEntry {}
 
 impl Structure {
-    pub fn delete(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, name: Symbol) {
+    pub fn delete(&mut self, vm: &mut JsVirtualMachine, name: Symbol) {
         let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();
         self.deleted.push(vm, it.offset);
     }
@@ -292,7 +295,7 @@ impl Structure {
     pub fn has_table(&self) -> bool {
         self.table.is_some()
     }
-    pub fn allocate_table(&mut self, vm: impl AsRefPtr<JsVirtualMachine>) {
+    pub fn allocate_table(&mut self, vm: &mut JsVirtualMachine) {
         let mut stack = Vec::with_capacity(8);
 
         if self.is_adding_map() {
@@ -302,27 +305,20 @@ impl Structure {
         let mut current = self.previous;
         loop {
             match current {
-                Some(mut cur) => {
+                Some(cur) => {
                     if cur.has_table() {
-                        self.table = Some(allocate_cell(
-                            vm.as_ref_ptr(),
-                            size_of::<TargetTable>(),
-                            HashMap::new(),
-                        ));
+                        self.table =
+                            Some(allocate_cell(vm, size_of::<TargetTable>(), HashMap::new()));
                         break;
                     } else {
                         if cur.is_adding_map() {
-                            stack.push(Ref::new(&mut *cur));
+                            stack.push(Ref::new(&*cur));
                         }
                     }
                     current = cur.previous;
                 }
                 None => {
-                    self.table = Some(allocate_cell(
-                        vm.as_ref_ptr(),
-                        size_of::<TargetTable>(),
-                        HashMap::new(),
-                    ));
+                    self.table = Some(allocate_cell(vm, size_of::<TargetTable>(), HashMap::new()));
                     break;
                 }
             }
@@ -335,7 +331,7 @@ impl Structure {
         self.previous = None;
     }
 
-    pub fn allocate_table_if_needed(&mut self, vm: impl AsRefPtr<JsVirtualMachine>) -> bool {
+    pub fn allocate_table_if_needed(&mut self, vm: &mut JsVirtualMachine) -> bool {
         if !self.has_table() {
             if self.previous.is_none() {
                 return false;
@@ -375,11 +371,7 @@ impl Structure {
             self.calculated_size as _
         }
     }
-    fn ctor(
-        vm: impl AsRefPtr<JsVirtualMachine>,
-        previous: Handle<Self>,
-        unique: bool,
-    ) -> Handle<Self> {
+    fn ctor(vm: &mut JsVirtualMachine, previous: Handle<Self>, unique: bool) -> Handle<Self> {
         let mut this = allocate_cell(
             vm,
             size_of::<Self>(),
@@ -410,7 +402,7 @@ impl Structure {
     }
 
     fn ctor1(
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         prototype: Option<Handle<JsObject>>,
         unique: bool,
         indexed: bool,
@@ -440,9 +432,9 @@ impl Structure {
             },
         )
     }
-
+    #[allow(dead_code)]
     fn ctor2(
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         table: Option<Handle<TargetTable>>,
         prototype: Option<Handle<JsObject>>,
         unique: bool,
@@ -454,9 +446,9 @@ impl Structure {
         this
     }
 
-    fn ctor3(vm: impl AsRefPtr<JsVirtualMachine>, it: &[(Symbol, MapEntry)]) -> Handle<Self> {
+    fn ctor3(vm: &mut JsVirtualMachine, it: &[(Symbol, MapEntry)]) -> Handle<Self> {
         let table = it.iter().copied().collect::<TargetTable>();
-        let table = allocate_cell(vm.as_ref_ptr(), size_of::<TargetTable>(), table);
+        let table = allocate_cell(vm, size_of::<TargetTable>(), table);
         let mut this = allocate_cell(
             vm,
             size_of::<Self>(),
@@ -485,36 +477,33 @@ impl Structure {
         this
     }
 
-    pub fn new(vm: impl AsRefPtr<JsVirtualMachine>, previous: Handle<Self>) -> Handle<Self> {
+    pub fn new(vm: &mut JsVirtualMachine, previous: Handle<Self>) -> Handle<Self> {
         Self::ctor(vm, previous, false)
     }
 
-    pub fn new_unique(vm: impl AsRefPtr<JsVirtualMachine>, previous: Handle<Self>) -> Handle<Self> {
+    pub fn new_unique(vm: &mut JsVirtualMachine, previous: Handle<Self>) -> Handle<Self> {
         Self::ctor(vm, previous, true)
     }
-    pub fn new_(vm: impl AsRefPtr<JsVirtualMachine>, it: &[(Symbol, MapEntry)]) -> Handle<Self> {
+    pub fn new_(vm: &mut JsVirtualMachine, it: &[(Symbol, MapEntry)]) -> Handle<Self> {
         Self::ctor3(vm, it)
     }
 
     pub fn new_indexed(
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         prototype: Option<Handle<JsObject>>,
         indexed: bool,
     ) -> Handle<Self> {
         Self::ctor1(vm, prototype, false, indexed)
     }
     pub fn new_unique_indexed(
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         prototype: Option<Handle<JsObject>>,
         indexed: bool,
     ) -> Handle<Self> {
-        Self::ctor1(vm, prototype, !false, indexed)
+        Self::ctor1(vm, prototype, true, indexed)
     }
 
-    pub fn new_from_point(
-        vm: impl AsRefPtr<JsVirtualMachine>,
-        map: Handle<Structure>,
-    ) -> Handle<Self> {
+    pub fn new_from_point(vm: &mut JsVirtualMachine, map: Handle<Structure>) -> Handle<Self> {
         if map.is_unique() {
             return Self::new_unique(vm, map);
         }
@@ -522,22 +511,17 @@ impl Structure {
     }
     pub fn delete_property_transition(
         &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
     ) -> Handle<Self> {
-        let x = vm.as_ref_ptr();
-        let mut map = Self::new_unique(x, unsafe { Handle::from_raw(self) });
+        let mut map = Self::new_unique(vm, unsafe { Handle::from_raw(self) });
         if !map.has_table() {
             map.allocate_table(vm);
         }
-        map.delete(x, name);
+        map.delete(vm, name);
         map
     }
-    pub fn change_indexed_transition(
-        &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
-    ) -> Handle<Self> {
-        let vm = vm.as_ref_ptr();
+    pub fn change_indexed_transition(&mut self, vm: &mut JsVirtualMachine) -> Handle<Self> {
         if self.is_unique() {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Self::new_unique(vm, unsafe { Handle::from_raw(self) })
@@ -553,10 +537,9 @@ impl Structure {
 
     pub fn change_prototype_transition(
         &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         prototype: Option<Handle<JsObject>>,
     ) -> Handle<Self> {
-        let vm = vm.as_ref_ptr();
         if self.is_unique() {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Self::new_unique(vm, unsafe { Handle::from_raw(self) })
@@ -571,20 +554,16 @@ impl Structure {
         }
     }
 
-    pub fn change_extensible_transition(
-        &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
-    ) -> Handle<Self> {
+    pub fn change_extensible_transition(&mut self, vm: &mut JsVirtualMachine) -> Handle<Self> {
         unsafe { Self::new_unique(vm, Handle::from_raw(self)) }
     }
     pub fn change_attributes_transition(
         &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         attributes: AttrSafe,
     ) -> Handle<Self> {
-        let x = vm.as_ref_ptr();
-        let mut map = Self::new_unique(x, unsafe { Handle::from_raw(self) });
+        let mut map = Self::new_unique(vm, unsafe { Handle::from_raw(self) });
         if !map.has_table() {
             map.allocate_table(vm);
         }
@@ -594,7 +573,7 @@ impl Structure {
 
     pub fn get_own_property_names(
         &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         include: bool,
         mut collector: impl FnMut(Symbol, u32),
     ) {
@@ -616,7 +595,7 @@ impl Structure {
 
     pub fn add_property_transition(
         &mut self,
-        vm: impl AsRefPtr<JsVirtualMachine>,
+        vm: &mut JsVirtualMachine,
         name: Symbol,
         attributes: AttrSafe,
         offset: &mut u32,
@@ -625,7 +604,7 @@ impl Structure {
             offset: 0,
             attrs: attributes,
         };
-        let vm = vm.as_ref_ptr();
+
         if self.is_unique() {
             if !self.has_table() {
                 self.allocate_table(vm);
@@ -684,7 +663,7 @@ impl Structure {
         map
     }
 
-    pub fn get(&mut self, vm: impl AsRefPtr<JsVirtualMachine>, name: Symbol) -> MapEntry {
+    pub fn get(&mut self, vm: &mut JsVirtualMachine, name: Symbol) -> MapEntry {
         if !self.has_table() {
             if self.previous.is_none() {
                 return MapEntry::not_found();
@@ -697,7 +676,7 @@ impl Structure {
             self.allocate_table(vm);
         }
         let it = self.table.as_ref().unwrap().get(&name);
-        it.copied().unwrap_or(MapEntry::not_found())
+        it.copied().unwrap_or_else(MapEntry::not_found)
     }
 
     pub fn storage_capacity(&self) -> usize {

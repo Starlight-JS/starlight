@@ -8,14 +8,10 @@ use wtf_rs::stack_bounds::StackBounds;
 use super::{context::Context, js_symbol::JsSymbol, symbol::Symbol};
 use super::{options::Options, ref_ptr::Ref, symbol_table::SymbolTable};
 use crate::{
-    gc::{
-        handle::Handle,
-        heap_cell::{HeapCell, HeapCellU},
-    },
+    gc::{handle::Handle, heap_cell::HeapCell},
     heap::{
         snapshot::HeapSnapshot,
         trace::{Slot, Tracer},
-        util::address::Address,
         Heap,
     },
 };
@@ -25,25 +21,29 @@ pub struct JsVirtualMachine {
     pub(crate) sym_table: SymbolTable,
     pub(crate) symbols: HashMap<Symbol, Handle<JsSymbol>>,
     pub(crate) options: Options,
-    pub(crate) context: Ref<Context>,
+    pub(crate) context: Option<Handle<Context>>,
 }
-
+impl Drop for JsVirtualMachine {
+    fn drop(&mut self) {
+        self.dispose();
+    }
+}
 impl JsVirtualMachine {
-    pub fn make_context(&mut self) -> Ref<Context> {
+    pub fn make_context(&mut self) -> Handle<Context> {
         let ctx = Context::new(self);
-        self.context = ctx;
+        self.context = Some(ctx);
         ctx
     }
-    pub fn context(&self) -> Ref<Context> {
+    pub fn context(&self) -> Option<Handle<Context>> {
         self.context
     }
-    pub fn create(options: Options) -> Ref<Self> {
+    pub fn create(options: Options) -> Box<Self> {
         let mut vm = Ref::new(Box::into_raw(Box::new(Self {
-            heap: Ref::new(0 as *mut _),
+            heap: Ref::new(std::ptr::null_mut()),
             sym_table: SymbolTable::new(),
             symbols: HashMap::new(),
             options,
-            context: Ref::new(0 as *mut _),
+            context: None,
         })));
         vm.heap = Ref::new(Box::into_raw(Box::new(Heap::new(
             vm,
@@ -51,14 +51,14 @@ impl JsVirtualMachine {
             vm.options.threshold,
         ))));
 
-        vm
+        unsafe { Box::from_raw(vm.pointer) }
     }
     pub fn gc(&mut self, evac: bool) {
         self.heap.gc(evac)
     }
-    pub fn dispose(vm: Ref<Self>) {
+    fn dispose(&mut self) {
         unsafe {
-            drop_in_place(vm.pointer);
+            drop_in_place(self.heap.pointer);
         }
     }
 
@@ -118,6 +118,13 @@ impl JsVirtualMachine {
     }
 
     /// Trace all of the objects on the heap and run a callback on every cell.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because if user decides to change any pointer passed to callback
+    /// it could lead to UB or segfaults.
+    ///
     pub unsafe fn get_all_live_objects(&mut self, mut callback: impl FnMut(*mut HeapCell)) {
         let mut precise_roots: Vec<*mut HeapCell> = Vec::new();
         for (_, sym) in self.symbols.iter_mut() {

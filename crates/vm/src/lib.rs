@@ -1,3 +1,14 @@
+#![allow(
+    clippy::single_match,
+    clippy::new_without_default,
+    clippy::collapsible_if,
+    clippy::float_cmp,
+    clippy::eq_op,
+    clippy::unnecessary_wraps,
+    clippy::redundant_pattern_matching,
+    clippy::needless_lifetimes
+)]
+
 /*#![no_std]
 extern crate alloc;
  */
