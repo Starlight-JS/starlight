@@ -655,3 +655,9 @@ impl HeapObject for JsValue {
 }
 
 impl JsCell for JsValue {}
+
+impl Default for JsValue {
+    fn default() -> Self {
+        Self::empty()
+    }
+}

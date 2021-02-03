@@ -282,12 +282,13 @@ impl StoredSlot {
         desc: &PropertyDescriptor,
         throwable: bool,
         returned: &mut bool,
-    ) -> Result<bool, Box<Error>> {
+    ) -> Result<bool, JsValue> {
         macro_rules! reject {
             ($str: expr) => {{
                 *returned = false;
                 if throwable {
-                    return Err(Error::report_str(ErrorCode::Type, $str));
+                    todo!()
+                    //return Err(Error::report_str(ErrorCode::Type, $str));
                 }
                 return Ok(false);
             }};

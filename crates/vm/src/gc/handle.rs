@@ -1,6 +1,6 @@
 use crate::{
     heap::trace::{Slot, Tracer},
-    runtime::{js_cell::JsCell, ref_ptr::Ref, vm::JsVirtualMachine},
+    runtime::{js_cell::JsCell, ref_ptr::Ref, structure::Structure, vm::JsVirtualMachine},
 };
 
 use super::heap_cell::{HeapCell, HeapObject};
@@ -31,6 +31,9 @@ pub struct Handle<T: HeapObject + ?Sized> {
 }
 
 impl<T: HeapObject + ?Sized> Handle<T> {
+    pub fn ptr_eq<U: HeapObject + ?Sized>(this: Self, other: Handle<U>) -> bool {
+        this.cell == other.cell
+    }
     /// Obtains VM reference from heap allocated object.
     pub fn vm(&self) -> Ref<JsVirtualMachine> {
         unsafe { (*self.cell.as_ptr()).vm() }
@@ -153,7 +156,14 @@ impl<T: HeapObject> HeapObject for Handle<T> {
     }
 }
 
-impl<T: HeapObject> JsCell for Handle<T> {}
+impl<T: HeapObject> JsCell for Handle<T> {
+    fn set_structure(&mut self, vm: Ref<JsVirtualMachine>, s: Handle<Structure>) {
+        (**self).set_structure(vm, s);
+    }
+    fn get_structure(&self, vm: Ref<JsVirtualMachine>) -> Handle<Structure> {
+        (**self).get_structure(vm)
+    }
+}
 
 impl<K: HeapObject, V: HeapObject> JsCell for HashMap<K, V> {}
 

@@ -492,6 +492,10 @@ impl Structure {
     pub fn new_unique(vm: impl AsRefPtr<JsVirtualMachine>, previous: Handle<Self>) -> Handle<Self> {
         Self::ctor(vm, previous, true)
     }
+    pub fn new_(vm: impl AsRefPtr<JsVirtualMachine>, it: &[(Symbol, MapEntry)]) -> Handle<Self> {
+        Self::ctor3(vm, it)
+    }
+
     pub fn new_indexed(
         vm: impl AsRefPtr<JsVirtualMachine>,
         prototype: Option<Handle<JsObject>>,
@@ -529,7 +533,50 @@ impl Structure {
         map.delete(x, name);
         map
     }
+    pub fn change_indexed_transition(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+    ) -> Handle<Self> {
+        let vm = vm.as_ref_ptr();
+        if self.is_unique() {
+            let mut map = if self.transitions.is_enabled_unique_transition() {
+                Self::new_unique(vm, unsafe { Handle::from_raw(self) })
+            } else {
+                unsafe { Handle::from_raw(self) }
+            };
+            map.transitions.set_indexed(true);
+            map
+        } else {
+            Self::new_unique(vm, unsafe { Handle::from_raw(self) }).change_indexed_transition(vm)
+        }
+    }
 
+    pub fn change_prototype_transition(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+        prototype: Option<Handle<JsObject>>,
+    ) -> Handle<Self> {
+        let vm = vm.as_ref_ptr();
+        if self.is_unique() {
+            let mut map = if self.transitions.is_enabled_unique_transition() {
+                Self::new_unique(vm, unsafe { Handle::from_raw(self) })
+            } else {
+                unsafe { Handle::from_raw(self) }
+            };
+            map.prototype = prototype;
+            map
+        } else {
+            let mut map = Self::new_unique(vm, unsafe { Handle::from_raw(self) });
+            map.change_prototype_transition(vm, prototype)
+        }
+    }
+
+    pub fn change_extensible_transition(
+        &mut self,
+        vm: impl AsRefPtr<JsVirtualMachine>,
+    ) -> Handle<Self> {
+        unsafe { Self::new_unique(vm, Handle::from_raw(self)) }
+    }
     pub fn change_attributes_transition(
         &mut self,
         vm: impl AsRefPtr<JsVirtualMachine>,

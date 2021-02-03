@@ -121,7 +121,7 @@ macro_rules! js_method_table {
             GetIndexedPropertySlot: $class::GetIndexedPropertySlotMethod,
             GetOwnNonIndexedPropertySlot: $class::GetOwnNonIndexedPropertySlotMethod,
             GetOwnIndexedPropertySlot: $class::GetOwnIndexedPropertySlotMethod,
-            PutNonIndexedSlot: $class::GPutNonIndexedSlotMethod,
+            PutNonIndexedSlot: $class::PutNonIndexedSlotMethod,
             PutIndexedSlot: $class::PutIndexedSlotMethod,
             DeleteNonIndexed: $class::DeleteNonIndexedMethod,
             DeleteIndexed: $class::DeleteIndexedMethod,

@@ -84,8 +84,24 @@ macro_rules! define_jsclass_with_symbol {
         pub fn get_class() -> &'static $crate::runtime::class::Class {
             static CLASS: $crate::runtime::class::Class = $crate::runtime::class::Class {
                 name: stringify!($name),
-                ty: $crate::runtime::class::JsClassType::$sym,
-                method_table: $class::get_method_table(),
+                ty: $crate::runtime::class::JsClassType::$sym as _,
+                method_table: MethodTable {
+                    GetNonIndexedSlot: $class::GetNonIndexedSlotMethod,
+                    GetIndexedSlot: $class::GetIndexedSlotMethod,
+                    GetNonIndexedPropertySlot: $class::GetNonIndexedPropertySlotMethod,
+                    GetIndexedPropertySlot: $class::GetIndexedPropertySlotMethod,
+                    GetOwnNonIndexedPropertySlot: $class::GetOwnNonIndexedPropertySlotMethod,
+                    GetOwnIndexedPropertySlot: $class::GetOwnIndexedPropertySlotMethod,
+                    PutNonIndexedSlot: $class::PutNonIndexedSlotMethod,
+                    PutIndexedSlot: $class::PutIndexedSlotMethod,
+                    DeleteNonIndexed: $class::DeleteNonIndexedMethod,
+                    DeleteIndexed: $class::DeleteIndexedMethod,
+                    DefineOwnNonIndexedPropertySlot: $class::DefineOwnNonIndexedPropertySlotMethod,
+                    DefineOwnIndexedPropertySlot: $class::DefineOwnIndexedPropertySlotMethod,
+                    GetPropertyNames: $class::GetPropertyNamesMethod,
+                    GetOwnPropertyNames: $class::GetOwnPropertyNamesMethod,
+                    DefaultValue: $class::DefaultValueMethod,
+                },
             };
             &CLASS
         }

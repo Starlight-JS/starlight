@@ -1,4 +1,9 @@
-use starlight_vm::runtime::vm::JsVirtualMachine;
+use starlight_vm::runtime::{
+    js_object::{JsObject, ObjectTag},
+    js_value::JsValue,
+    structure::Structure,
+    vm::JsVirtualMachine,
+};
 use starlight_vm::runtime::{js_string::JsString, options::Options};
 use starlight_vm::{runtime::ref_ptr::Ref, util::array::GcVec};
 use structopt::StructOpt;
@@ -21,16 +26,17 @@ fn clp2(number: usize) -> usize {
     x + 1
 }
 fn main() {
-    /*let mut vm = JsVirtualMachine::create(Options::from_args());
-    let my_str = JsString::new(vm, "Hello,World!");
-    let mut vec = GcVec::new(vm, 1);
-    vec.push(vm, my_str);
-    vec.push(vm, JsString::new(vm, "Hi!"));
-    foo(vm);
-    vm.gc(false);
+    let mut vm = JsVirtualMachine::create(Options::from_args());
+    let ctx = vm.make_context();
+    let my_struct = Structure::new_(vm, &[]);
+    let mut obj = JsObject::new(
+        &mut vm,
+        my_struct,
+        JsObject::get_class(),
+        ObjectTag::Ordinary,
+    );
 
-    println!("{}", vec.pop().unwrap().as_str());
-    println!("{:p}", my_str.cell);
-    println!("{}", vec.pop().unwrap().as_str());*/
-    println!("{}", clp2(18));
+    let _ = obj.put(ctx, vm.intern("x"), JsValue::new_int(42), false);
+    let val = obj.get_property(ctx, vm.intern("x"));
+    println!("{}", val.value().as_int32());
 }

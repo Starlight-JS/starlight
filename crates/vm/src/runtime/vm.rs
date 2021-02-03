@@ -5,7 +5,7 @@ use std::{
 
 use wtf_rs::stack_bounds::StackBounds;
 
-use super::{js_symbol::JsSymbol, symbol::Symbol};
+use super::{context::Context, js_symbol::JsSymbol, symbol::Symbol};
 use super::{options::Options, ref_ptr::Ref, symbol_table::SymbolTable};
 use crate::{
     gc::{
@@ -25,15 +25,25 @@ pub struct JsVirtualMachine {
     pub(crate) sym_table: SymbolTable,
     pub(crate) symbols: HashMap<Symbol, Handle<JsSymbol>>,
     pub(crate) options: Options,
+    pub(crate) context: Ref<Context>,
 }
 
 impl JsVirtualMachine {
+    pub fn make_context(&mut self) -> Ref<Context> {
+        let ctx = Context::new(self);
+        self.context = ctx;
+        ctx
+    }
+    pub fn context(&self) -> Ref<Context> {
+        self.context
+    }
     pub fn create(options: Options) -> Ref<Self> {
         let mut vm = Ref::new(Box::into_raw(Box::new(Self {
             heap: Ref::new(0 as *mut _),
             sym_table: SymbolTable::new(),
             symbols: HashMap::new(),
             options,
+            context: Ref::new(0 as *mut _),
         })));
         vm.heap = Ref::new(Box::into_raw(Box::new(Heap::new(
             vm,
