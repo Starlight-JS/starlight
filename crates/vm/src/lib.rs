@@ -4,7 +4,7 @@
     clippy::collapsible_if,
     clippy::float_cmp,
     clippy::eq_op,
-    clippy::unnecessary_wraps,
+    clippy::unnecessary_unwrap,
     clippy::redundant_pattern_matching,
     clippy::needless_lifetimes
 )]
