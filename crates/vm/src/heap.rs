@@ -262,7 +262,7 @@ impl Heap {
 impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
-            core::ptr::drop_in_place(self.immix);
+            let _ = Box::from_raw(self.immix);
         }
     }
 }

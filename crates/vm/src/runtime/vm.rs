@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    intrinsics::drop_in_place,
-};
+use std::collections::{HashMap, VecDeque};
 
 use wtf_rs::stack_bounds::StackBounds;
 
@@ -58,7 +55,7 @@ impl JsVirtualMachine {
     }
     fn dispose(&mut self) {
         unsafe {
-            drop_in_place(self.heap.pointer);
+            let _ = Box::from_raw(self.heap.pointer);
         }
     }
 
