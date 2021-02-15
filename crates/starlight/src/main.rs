@@ -1,22 +1,8 @@
-use std::{
-    fmt::Display,
-    io::{stderr, Write},
-    sync::RwLock,
-};
-
+use starlight::vm::VirtualMachine;
 use starlight::{
-    bytecode::opcodes::Op,
-    frontend::Compiler,
     jsrt::jsrt_init,
-    runtime::{
-        arguments::Arguments,
-        function::JsVMFunction,
-        object::{object_size_with_tag, JsObject},
-        value::JsValue,
-    },
     vm::{Options, VirtualMachineRef},
 };
-use starlight::{bytecode::ByteCodeBuilder, vm::VirtualMachine};
 use structopt::StructOpt;
 
 fn main() {

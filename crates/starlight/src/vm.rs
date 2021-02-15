@@ -1,12 +1,8 @@
 use super::runtime::attributes::*;
-use std::{
-    fmt::Display,
-    io::{stderr, Write},
-    sync::RwLock,
-};
+use std::{fmt::Display, io::Write, sync::RwLock};
 use std::{ops::DerefMut, ptr::null_mut};
 use swc_common::{
-    errors::{ColorConfig, DiagnosticBuilder, Emitter, EmitterWriter, Handler},
+    errors::{DiagnosticBuilder, Emitter, Handler},
     sync::Lrc,
 };
 use swc_common::{FileName, SourceMap};

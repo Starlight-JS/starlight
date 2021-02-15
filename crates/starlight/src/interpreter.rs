@@ -1,6 +1,5 @@
 use crate::{
     bytecode::{opcodes::Op, TypeFeedBack},
-    heap::cell::Cell,
     runtime::{
         arguments::Arguments,
         env::Env,
@@ -618,9 +617,7 @@ impl VirtualMachine {
                 .get_slot(self, Symbol::arguments(), &mut slot)
                 .unwrap_or_else(|_| panic!());
 
-            let result = eval_internal(self, f.code, f.code.code_start, args_.this, nscope);
-
-            result
+            eval_internal(self, f.code, f.code.code_start, args_.this, nscope)
         }
     }
     fn bcode_get_var(

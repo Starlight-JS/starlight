@@ -498,9 +498,7 @@ impl Compiler {
             Lit::Str(x) => {
                 let val = x.value.to_string();
                 let mut vm = self.vm;
-                let ix = self
-                    .builder
-                    .get_val(&mut vm, Val::Str(val.to_string().clone()));
+                let ix = self.builder.get_val(&mut vm, Val::Str(val));
                 self.builder.emit(Op::OP_PUSH_LIT, &[ix], false);
             }
             Lit::Bool(x) => {
