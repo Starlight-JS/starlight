@@ -1,5 +1,12 @@
 use super::{
-    env::Env, method_table::*, object::*, property_descriptor::*, slot::*, symbol::*, value::*,
+    attributes::{create_data, AttrExternal},
+    env::Env,
+    method_table::*,
+    object::*,
+    property_descriptor::*,
+    slot::*,
+    symbol::*,
+    value::*,
 };
 use super::{error::JsTypeError, string::JsString};
 use crate::{heap::cell::*, vm::*};
@@ -89,8 +96,8 @@ impl JsArguments {
         if !JsObject::GetOwnIndexedPropertySlotMethod(obj, vm, index, slot) {
             return false;
         }
-
         let arg = obj.as_arguments();
+
         if arg.mapping.len() > index as usize {
             let mapped = arg.mapping[index as usize];
             if mapped != DUMMY_SYMBOL {
@@ -100,6 +107,7 @@ impl JsArguments {
                     .unwrap_or_else(|_| JsValue::undefined());
                 let attrs = slot.attributes();
                 slot.set(val, attrs);
+                return true;
             }
         }
         true
@@ -184,6 +192,7 @@ impl JsArguments {
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
+        //!();
         JsObject::GetIndexedSlotMethod(obj, vm, index, slot)
     }
     pub fn GetNonIndexedPropertySlotMethod(
@@ -233,22 +242,40 @@ impl JsArguments {
         JsObject::GetIndexedPropertySlotMethod(obj, vm, index, slot)
     }
     pub fn new(vm: &mut VirtualMachine, env: Gc<JsObject>, params: &[Symbol]) -> Gc<JsObject> {
+        let struct_ = vm.global_data().normal_arguments_structure.unwrap();
         let mut obj = JsObject::new(
             vm,
-            env.get_structure().unwrap(),
-            JsObject::get_class(),
+            struct_,
+            JsArguments::get_class(),
             ObjectTag::NormalArguments,
         );
         //let s = Structure::new_unique_indexed(vm, None, true);
-        let mut mapping = Vec::with_capacity(params.len());
-        for (_, param) in params.iter().enumerate() {
-            mapping.push(*param);
-        }
+
         let args = JsArguments {
-            mapping: mapping.into_boxed_slice(),
+            mapping: vec![].into_boxed_slice(),
             env,
         };
         *obj.data::<JsArguments>() = ManuallyDrop::new(args);
+        use super::attributes::*;
+        let mut mapping = Vec::with_capacity(params.len());
+        for (i, param) in params.iter().enumerate() {
+            let mut slot = Slot::new();
+            let _ = obj.define_own_indexed_property_slot(
+                vm,
+                i as _,
+                &*DataDescriptor::new(
+                    JsValue::new(2),
+                    create_data(AttrExternal::new(Some(W | C | E))).raw(),
+                ),
+                &mut slot,
+                false,
+            );
+
+            mapping.push(*param);
+
+            //let _ = obj.put(vm, Symbol::Indexed(i as _), JsValue::undefined(), false);
+        }
+        obj.as_arguments_mut().mapping = mapping.into_boxed_slice();
         obj
     }
 }

@@ -141,6 +141,16 @@ impl IntoSymbol for String {
         vm.interner.lookup(self)
     }
 }
+
+struct OutBuf;
+
+impl std::fmt::Write for OutBuf {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        print!("{}", s);
+        Ok(())
+    }
+}
+
 impl VirtualMachine {
     pub fn eval(&mut self, script: &str) -> Result<JsValue, JsValue> {
         let res = {
@@ -177,9 +187,9 @@ impl VirtualMachine {
             };
 
             let code = ctx.new_local(Compiler::compile_script(VirtualMachineRef(self), &script));
-            let mut buf = String::new();
-            code.display_to(&mut buf).unwrap();
-            println!("{}", buf);
+
+            code.display_to(&mut OutBuf).unwrap();
+
             let envs = Structure::new_indexed(self, Some(self.global_object()), false);
             let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
             let mut fun = ctx.new_local(JsVMFunction::new(self, *code, env));
@@ -298,6 +308,8 @@ impl VirtualMachine {
         let proto = JsObject::new(&mut this, s, JsObject::get_class(), ObjectTag::Ordinary);
         this.global_data.object_prototype = Some(proto);
         this.global_data.function_struct = Some(Structure::new_indexed(&mut this, None, false));
+        this.global_data.normal_arguments_structure =
+            Some(Structure::new_indexed(&mut this, None, false));
         this.global_object = Some(JsGlobal::new(&mut this));
         this.init_error(proto);
 
@@ -598,6 +610,7 @@ use starlight_derive::Trace;
 
 #[derive(Default, Trace)]
 pub struct GlobalData {
+    pub(crate) normal_arguments_structure: Option<Gc<Structure>>,
     pub(crate) empty_object_struct: Option<Gc<Structure>>,
     pub(crate) function_struct: Option<Gc<Structure>>,
     pub(crate) object_prototype: Option<Gc<JsObject>>,

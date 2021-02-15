@@ -192,7 +192,7 @@ impl Compiler {
     pub fn emit(&mut self, expr: &Expr, used: bool) {
         match expr {
             Expr::Call(call) => {
-                for arg in call.args.iter() {
+                for arg in call.args.iter().rev() {
                     if arg.spread.is_some() {
                         todo!("spread");
                     }
@@ -205,7 +205,7 @@ impl Compiler {
                         Expr::Member(member) => {
                             let name = if let Expr::Ident(id) = &*member.prop {
                                 let s: &str = &id.sym;
-                                let name = self.vm.intern(s);
+                                let name = self.intern_str(s);
                                 self.builder.get_sym(name)
                             } else {
                                 unreachable!()
@@ -235,7 +235,7 @@ impl Compiler {
             Expr::New(call) => {
                 let argc = call.args.as_ref().map(|x| x.len() as u32).unwrap_or(0);
                 if let Some(ref args) = call.args {
-                    for arg in args.iter() {
+                    for arg in args.iter().rev() {
                         if arg.spread.is_some() {
                             todo!("spread");
                         }
@@ -256,7 +256,7 @@ impl Compiler {
 
             Expr::Ident(name) => {
                 let s: &str = &name.sym;
-                let name = self.vm.intern(s);
+                let name = self.intern_str(s);
                 let ix = self.builder.get_sym(name);
                 if used {
                     self.builder.emit(Op::OP_GET_VAR, &[ix], true);

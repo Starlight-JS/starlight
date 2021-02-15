@@ -64,9 +64,7 @@ impl ByteCode {
                         writeln!(output, "drop")?;
                     }
                     Op::OP_GET => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "get @{}", name)?;
+                        writeln!(output, "get ",)?;
                     }
                     Op::OP_GET_PROP => {
                         let name = pc.cast::<u32>().read_unaligned();
@@ -76,9 +74,7 @@ impl ByteCode {
                         writeln!(output, "get_prop @{}, fdbk @{}", name, feedback)?;
                     }
                     Op::OP_SET => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "set @{}", name)?;
+                        writeln!(output, "set ",)?;
                     }
                     Op::OP_SET_PROP => {
                         let name = pc.cast::<u32>().read_unaligned();

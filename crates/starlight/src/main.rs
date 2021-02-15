@@ -10,13 +10,13 @@ fn main() {
     jsrt_init(&mut vm);
     let res = vm.eval(
         r#"
-foo()
+function foo(x,y) {
+    arguments[0] = 5
+    return x + y
+} 
 
-{
-    function foo() {
-        print("Hi!")
-    }
-}
+print(foo(4,3))
+
         "#,
     );
     match res {

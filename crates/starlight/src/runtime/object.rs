@@ -314,6 +314,7 @@ impl JsObject {
                 }
             }
         }
+
         false
     }
 
@@ -395,6 +396,7 @@ impl JsObject {
             if obj.get_own_indexed_property_slot(vm, index, slot) {
                 return true;
             }
+
             match obj.prototype() {
                 Some(proto) => obj = proto,
                 None => break false,
@@ -552,6 +554,7 @@ impl JsObject {
         if obj.get_indexed_property_slot(vm, index, slot) {
             return slot.get(vm, JsValue::new(obj));
         }
+
         Ok(JsValue::undefined())
     }
 
@@ -766,11 +769,11 @@ impl JsObject {
     }
 
     pub fn as_arguments(&self) -> &JsArguments {
-        assert_eq!(self.tag, ObjectTag::Function);
+        assert_eq!(self.tag, ObjectTag::NormalArguments);
         unsafe { &*self.data::<JsArguments>() }
     }
     pub fn as_arguments_mut(&mut self) -> &mut JsArguments {
-        assert_eq!(self.tag, ObjectTag::Function);
+        assert_eq!(self.tag, ObjectTag::NormalArguments);
         unsafe { &mut *self.data::<JsArguments>() }
     }
 }
@@ -880,7 +883,7 @@ impl Gc<JsObject> {
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        unsafe { JsObject::GetIndexedPropertySlotMethod(*self, vm, index, slot) }
+        (self.class.method_table.GetIndexedPropertySlot)(*self, vm, index, slot)
     }
 
     pub fn get_own_non_indexed_property_slot(
@@ -1084,7 +1087,8 @@ impl Gc<JsObject> {
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        unsafe { JsObject::GetOwnIndexedPropertySlotMethod(*self, vm, index, slot) }
+        (self.class.method_table.GetOwnIndexedPropertySlot)(*self, vm, index, slot)
+        //unsafe { JsObject::GetOwnIndexedPropertySlotMethod(*self, vm, index, slot) }
     }
     fn define_own_indexe_value_dense_internal(
         &mut self,
