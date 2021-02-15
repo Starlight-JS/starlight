@@ -1,4 +1,11 @@
 
 [workspace]
-members = ["crates/wtf-rs", "crates/vm"]
-default-members = ["crates/vm"]
+members = ["crates/wtf-rs", "crates/starlight", "crates/starlight-derive"]
+default-members = ["crates/starlight"]
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = "z"
+
+[profile.bench]
+debug = true
