@@ -37,6 +37,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
         }
         (*frame).code = pc;
         match op {
+            Op::OP_PLACEHOLDER => unreachable!("Placeholder op emitted by compiler"),
             Op::OP_DROP => {
                 vm.pop();
             }
