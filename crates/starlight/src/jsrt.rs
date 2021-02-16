@@ -1,11 +1,15 @@
+use crate::heap::context::LocalContext;
 use crate::{
     runtime::{arguments::Arguments, function::JsNativeFunction, value::JsValue},
     vm::VirtualMachine,
 };
-
+pub mod array;
 pub mod error;
-
-pub fn print(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn print(
+    vm: &mut VirtualMachine,
+    ctx: &LocalContext<'_>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     for ix in 0..args.size() {
         let val = args[ix];
         let s = val.to_string(vm)?;

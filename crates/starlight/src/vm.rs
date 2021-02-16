@@ -50,9 +50,12 @@ use crate::{
         Allocator,
     },
     interpreter::frame::FrameBase,
-    jsrt::error::{
-        error_constructor, error_to_string, eval_error_constructor, reference_error_constructor,
-        type_error_constructor,
+    jsrt::{
+        array::{array_ctor, array_is_array},
+        error::{
+            error_constructor, error_to_string, eval_error_constructor,
+            reference_error_constructor, type_error_constructor,
+        },
     },
     runtime::{
         arguments::Arguments,
@@ -152,7 +155,7 @@ impl std::fmt::Write for OutBuf {
 }
 
 impl VirtualMachine {
-    pub fn eval(&mut self, script: &str) -> Result<JsValue, JsValue> {
+    pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
         let res = {
             let ctx = self.space().new_local_context();
             let cm: Lrc<SourceMap> = Default::default();
@@ -186,15 +189,16 @@ impl VirtualMachine {
                 }
             };
 
-            let code = ctx.new_local(Compiler::compile_script(VirtualMachineRef(self), &script));
-
+            let mut code =
+                ctx.new_local(Compiler::compile_script(VirtualMachineRef(self), &script));
+            code.strict = code.strict || force_strict;
             code.display_to(&mut OutBuf).unwrap();
 
             let envs = Structure::new_indexed(self, Some(self.global_object()), false);
             let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
             let mut fun = ctx.new_local(JsVMFunction::new(self, *code, env));
             let mut args = ctx.new_local(Arguments::new(self, JsValue::undefined(), 0));
-            fun.as_function_mut().call(self, &mut args)
+            fun.as_function_mut().call(self, &ctx, &mut args)
         };
 
         res
@@ -223,6 +227,39 @@ impl VirtualMachine {
             current = cur.prototype();
         }
         None
+    }
+    pub fn intern_or_known_symbol(&mut self, s: &str) -> Symbol {
+        match s {
+            "length" => Symbol::length(),
+            "prototype" => Symbol::prototype(),
+            "arguments" => Symbol::arguments(),
+            "caller" => Symbol::caller(),
+            "callee" => Symbol::callee(),
+            "toString" => Symbol::toString(),
+            "name" => Symbol::name(),
+            "message" => Symbol::message(),
+            "NaN" => Symbol::NaN(),
+            "Infinity" => Symbol::Infinity(),
+            "null" => Symbol::null(),
+            "constructor" => Symbol::constructor(),
+            "valueOf" => Symbol::valueOf(),
+            "value" => Symbol::value(),
+            "next" => Symbol::next(),
+            "eval" => Symbol::eval(),
+            "done" => Symbol::done(),
+            "configrable" => Symbol::configurable(),
+            "writable" => Symbol::writable(),
+            "enumerable" => Symbol::enumerable(),
+            "lastIndex" => Symbol::lastIndex(),
+            "index" => Symbol::index(),
+            "input" => Symbol::input(),
+            "multiline" => Symbol::multiline(),
+            "global" => Symbol::global(),
+            "compare" => Symbol::compare(),
+            "join" => Symbol::join(),
+            "toPrimitive" => Symbol::toPrimitive(),
+            _ => self.intern(s),
+        }
     }
     pub fn intern(&mut self, val: impl IntoSymbol) -> Symbol {
         val.into_symbol(self)
@@ -302,6 +339,7 @@ impl VirtualMachine {
                 }
             },
         ));
+        this.space().defer_gc();
 
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
         let s = this.global_data().empty_object_struct.unwrap();
@@ -312,7 +350,7 @@ impl VirtualMachine {
             Some(Structure::new_indexed(&mut this, None, false));
         this.global_object = Some(JsGlobal::new(&mut this));
         this.init_error(proto);
-
+        this.space().undefer_gc();
         this
     }
     pub fn global_object(&self) -> Gc<JsObject> {
@@ -350,6 +388,37 @@ impl VirtualMachine {
             self.global_object.unwrap()
         }
     }
+
+    fn init_array(&mut self, obj_proto: Gc<JsObject>) {
+        let structure = Structure::new_indexed(self, None, true);
+        self.global_data.array_structure = Some(structure);
+        let structure = Structure::new_unique_indexed(self, None, false);
+        let mut proto = JsObject::new(self, structure, JsObject::get_class(), ObjectTag::Ordinary);
+
+        let mut constructor = JsNativeFunction::new(self, Symbol::constructor(), array_ctor, 1);
+
+        let name = self.intern("Array");
+        let _ = self
+            .global_object()
+            .put(self, name, JsValue::new(constructor), false);
+
+        let _ = constructor.define_own_property(
+            self,
+            Symbol::prototype(),
+            &*DataDescriptor::new(JsValue::new(proto), NONE),
+            false,
+        );
+        let name = self.intern("isArray");
+        let is_array = JsNativeFunction::new(self, name, array_is_array, 1);
+        let _ = constructor.put(self, name, JsValue::new(is_array), false);
+
+        let _ = proto.define_own_property(
+            self,
+            Symbol::constructor(),
+            &*DataDescriptor::new(JsValue::new(constructor), W | C),
+            false,
+        );
+    }
     fn init_error(&mut self, obj_proto: Gc<JsObject>) {
         self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
@@ -374,10 +443,10 @@ impl VirtualMachine {
             false,
         );
 
-        let n = self.intern("name");
+        let n = Symbol::name();
         let s = JsString::new(self, "Error");
         let e = JsString::new(self, "");
-        let m = self.intern("message");
+        let m = Symbol::message();
         let _ = proto.define_own_property(
             self,
             n,
@@ -402,7 +471,7 @@ impl VirtualMachine {
         let _ = self.global_object().define_own_property(
             self,
             sym,
-            &*DataDescriptor::new(JsValue::new(proto), W | C),
+            &*DataDescriptor::new(JsValue::new(ctor), W | C),
             false,
         );
         self.global_data.error = Some(proto);
@@ -434,10 +503,10 @@ impl VirtualMachine {
                 false,
             );
 
-            let n = self.intern("name");
+            let n = Symbol::name();
             let s = JsString::new(self, "EvalError");
             let e = JsString::new(self, "");
-            let m = self.intern("message");
+            let m = Symbol::message();
             let _ = sub_proto.define_own_property(
                 self,
                 n,
@@ -461,7 +530,7 @@ impl VirtualMachine {
             let _ = self.global_object().define_own_property(
                 self,
                 sym,
-                &*DataDescriptor::new(JsValue::new(sub_proto), W | C),
+                &*DataDescriptor::new(JsValue::new(sub_ctor), W | C),
                 false,
             );
 
@@ -496,10 +565,10 @@ impl VirtualMachine {
                 false,
             );
 
-            let n = self.intern("name");
+            let n = Symbol::name();
             let s = JsString::new(self, "TypeError");
             let e = JsString::new(self, "");
-            let m = self.intern("message");
+            let m = Symbol::message();
             let _ = sub_proto
                 .define_own_property(
                     self,
@@ -527,7 +596,7 @@ impl VirtualMachine {
             let _ = self.global_object().define_own_property(
                 self,
                 sym,
-                &*DataDescriptor::new(JsValue::new(sub_proto), W | C),
+                &*DataDescriptor::new(JsValue::new(sub_ctor), W | C),
                 false,
             );
 
@@ -562,10 +631,10 @@ impl VirtualMachine {
                 false,
             );
 
-            let n = self.intern("name");
+            let n = Symbol::name();
             let s = JsString::new(self, "ReferenceError");
             let e = JsString::new(self, "");
-            let m = self.intern("message");
+            let m = Symbol::message();
             let _ = sub_proto.define_own_property(
                 self,
                 n,
@@ -625,7 +694,9 @@ pub struct GlobalData {
     pub(crate) syntax_error: Option<Gc<JsObject>>,
     pub(crate) internal_error: Option<Gc<JsObject>>,
     pub(crate) eval_error: Option<Gc<JsObject>>,
+    pub(crate) array_prototype: Option<Gc<JsObject>>,
 
+    pub(crate) array_structure: Option<Gc<Structure>>,
     pub(crate) error_structure: Option<Gc<Structure>>,
     pub(crate) range_error_structure: Option<Gc<Structure>>,
     pub(crate) reference_error_structure: Option<Gc<Structure>>,

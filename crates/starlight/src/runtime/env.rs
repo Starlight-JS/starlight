@@ -1,6 +1,6 @@
 use super::{
     attributes::*,
-    error::{JsSyntaxError, JsTypeError},
+    error::{JsReferenceError, JsSyntaxError, JsTypeError},
     property_descriptor::DataDescriptor,
     slot::Slot,
     string::JsString,
@@ -15,7 +15,7 @@ impl Env {
     pub fn is_mutable(&self, vm: &mut VirtualMachine, name: Symbol) -> bool {
         let prop = self.record.get_property(vm, name);
 
-        prop.is_writable() && prop.raw != NONE
+        prop.is_writable()
     }
     pub fn set_variable(
         &mut self,
@@ -67,6 +67,35 @@ impl Env {
     ) -> Result<JsValue, JsValue> {
         self.record.get(vm, name)
     }
+    pub fn get_variable_slot(
+        &mut self,
+        vm: &mut VirtualMachine,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        if self.record.get_own_property_slot(vm, name, slot) {
+            return Ok(slot.value());
+        } else {
+            let mut current = self.record.prototype();
+            while let Some(mut cur) = current {
+                if cur.get_own_property_slot(vm, name, slot) {
+                    return Ok(slot.value());
+                }
+                current = cur.prototype();
+            }
+
+            if !vm.global_object().has_property(vm, name) {
+                let desc = vm.description(name);
+                let msg = JsString::new(vm, format!("Can't find variable '{}'", desc));
+                return Err(JsValue::new(JsReferenceError::new(vm, msg, None)));
+            }
+
+            let prop = vm.global_object().get(vm, name)?;
+            slot.make_uncacheable();
+            slot.make_put_uncacheable();
+            Ok(prop)
+        }
+    }
     pub fn has_own_variable(&mut self, vm: &mut VirtualMachine, name: Symbol) -> bool {
         self.record.has_own_property(vm, name)
     }
@@ -76,7 +105,8 @@ impl Env {
         name: Symbol,
         mutable: bool,
     ) -> Result<(), JsValue> {
-        let desc = DataDescriptor::new(JsValue::undefined(), E | C | if mutable { W } else { 0 });
+        let desc =
+            DataDescriptor::new(JsValue::undefined(), if mutable { W | C | E } else { NONE });
 
         if self.has_own_variable(vm, name) {
             let desc = vm.description(name);

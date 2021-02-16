@@ -43,6 +43,9 @@ impl ByteCode {
     pub fn display_to<T: Write>(&self, output: &mut T) -> std::fmt::Result {
         unsafe {
             writeln!(output, "variables: ")?;
+            if self.var_names.is_empty() {
+                writeln!(output, " <none>")?;
+            }
             for var in self.var_names.iter() {
                 match var {
                     Symbol::Key(s) => {
@@ -51,6 +54,7 @@ impl ByteCode {
                     _ => unreachable!(),
                 }
             }
+            writeln!(output, "is strict?={}", self.strict)?;
             let start = self.code.as_ptr() as *mut u8;
             let mut pc = self.code.as_ptr() as *mut u8;
             while pc <= self.code.last().unwrap() as *const u8 as *mut u8 {
@@ -223,6 +227,33 @@ impl ByteCode {
                     }
                     Op::OP_POP_SCOPE => {
                         writeln!(output, "pop_scope")?;
+                    }
+                    Op::OP_TRY_PUSH_CATCH => {
+                        let off = pc.cast::<i32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(
+                            output,
+                            "try_push_catch {}[->{}]",
+                            off,
+                            (pc as usize - start as usize) as i32 + off
+                        )?;
+                    }
+                    Op::OP_DECL_LET => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let feedback = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "decl_let @{}, fdbk @{}", name, feedback)?;
+                    }
+                    Op::OP_DECL_IMMUTABLE => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let feedback = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "decl_immutable @{}, fdbk @{}", name, feedback)?;
+                    }
+                    Op::OP_THROW => {
+                        writeln!(output, "throw")?;
                     }
                     _ => todo!("{:?}", op),
                 }

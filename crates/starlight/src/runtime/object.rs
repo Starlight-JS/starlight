@@ -268,7 +268,9 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 let ac = slot.accessor();
-                let mut args = Arguments::new(vm, JsValue::new(obj), 1);
+                let ctx = vm.space().new_local_context();
+                let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 1));
+
                 args[0] = val;
                 return ac
                     .setter()
@@ -276,7 +278,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(vm, &mut args)
+                    .call(vm, &ctx, &mut args)
                     .map(|_| ());
             }
         }
@@ -363,7 +365,9 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 let ac = slot.accessor();
-                let mut args = Arguments::new(vm, JsValue::new(obj), 1);
+                let ctx = vm.space().new_local_context();
+                let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 1));
+
                 args[0] = val;
                 return ac
                     .setter()
@@ -371,7 +375,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(vm, &mut args)
+                    .call(vm, &ctx, &mut args)
                     .map(|_| ());
             }
         }
@@ -668,14 +672,43 @@ impl JsObject {
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
+        obj.get_own_property_names(vm, collector, mode);
+        let mut obj = obj.prototype();
+        while let Some(proto) = obj {
+            proto.get_own_property_names(vm, collector, mode);
+            obj = proto.prototype();
+        }
     }
     #[allow(unused_variables)]
     pub fn GetOwnPropertyNamesMethod(
-        obj: Gc<Self>,
+        mut obj: Gc<Self>,
         vm: &mut VirtualMachine,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
+        if obj.elements.dense() {
+            for (index, it) in obj.elements.vector.iter().enumerate() {
+                if !it.is_empty() {
+                    collector(Symbol::Indexed(index as _), u32::MAX);
+                }
+            }
+        }
+
+        if let Some(map) = obj.elements.map {
+            for it in map.iter() {
+                if mode == EnumerationMode::IncludeNotEnumerable
+                    || it.1.attributes().is_enumerable()
+                {
+                    collector(Symbol::Indexed(*it.0), u32::MAX);
+                }
+            }
+        }
+
+        obj.structure.get_own_property_names(
+            vm,
+            mode == EnumerationMode::IncludeNotEnumerable,
+            collector,
+        );
     }
 
     /// 7.1.1 ToPrimitive
@@ -688,7 +721,9 @@ impl JsObject {
         vm: &mut VirtualMachine,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        let mut args = Arguments::new(vm, JsValue::new(obj), 0);
+        let ctx = vm.space().new_local_context();
+        let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 0));
+
         macro_rules! try_ {
             ($sym: expr) => {
                 let try_get = vm.description($sym);
@@ -701,7 +736,7 @@ impl JsObject {
                         .downcast::<JsObject>()
                         .unwrap()
                         .as_function_mut()
-                        .call(vm, &mut args)?;
+                        .call(vm, &ctx, &mut args)?;
                     if res.is_primitive() || res.is_undefined_or_null() {
                         return Ok(res);
                     }
@@ -785,7 +820,15 @@ impl Gc<JsObject> {
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
-        JsObject::GetOwnPropertyNamesMethod(*self, vm, collector, mode)
+        (self.class.method_table.GetOwnPropertyNames)(*self, vm, collector, mode)
+    }
+    pub fn get_property_names(
+        &self,
+        vm: &mut VirtualMachine,
+        collector: &mut dyn FnMut(Symbol, u32),
+        mode: EnumerationMode,
+    ) {
+        (self.class.method_table.GetPropertyNames)(*self, vm, collector, mode)
     }
     pub fn put_non_indexed_slot(
         &mut self,
@@ -809,22 +852,22 @@ impl Gc<JsObject> {
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         let exotic_to_prim = self.get_method(vm, Symbol::toPrimitive());
+        let ctx = vm.space().new_local_context();
 
-        // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GC heap.
-        let obj = unsafe { *self };
+        let obj = *self;
         match exotic_to_prim {
             Ok(val) => {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
                 let mut func = unsafe { val.as_cell().downcast_unchecked::<JsObject>() };
                 let f = func.as_function_mut();
 
-                let mut args = Arguments::new(vm, JsValue::new(obj), 1);
+                let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 1));
                 args[0] = match hint {
                     JsHint::Number | JsHint::None => JsValue::new(JsString::new(vm, "number")),
                     JsHint::String => JsValue::new(JsString::new(vm, "string")),
                 };
 
-                f.call(vm, &mut args)
+                f.call(vm, &ctx, &mut args)
             }
             _ => (self.class.method_table.DefaultValue)(obj, vm, hint),
         }

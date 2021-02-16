@@ -9,13 +9,14 @@ fn main() {
     let mut vm = VirtualMachine::new(Options::from_args());
     jsrt_init(&mut vm);
     let res = vm.eval(
-        r#"
-function foo(x,y) {
-    arguments[0] = 5
-    return x + y
-} 
+        true,
+        r#""use strict";
+let i = 0
+while (i < 10) {
+    print(i)
+    i = i + 1
+}
 
-print(foo(4,3))
 
         "#,
     );

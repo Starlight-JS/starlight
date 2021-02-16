@@ -7,7 +7,10 @@ use super::{object::*, structure::Structure, value::JsValue};
 use super::{property_descriptor::DataDescriptor, slot::*};
 use crate::{
     bytecode::ByteCode,
-    heap::cell::{Gc, Trace, Tracer},
+    heap::{
+        cell::{Gc, Trace, Tracer},
+        context::LocalContext,
+    },
     vm::VirtualMachine,
 };
 pub struct JsFunction {
@@ -56,23 +59,29 @@ impl JsFunction {
     pub fn construct(
         &mut self,
         vm: &mut VirtualMachine,
+        ctx: &LocalContext<'_>,
         args: &mut Arguments,
         structure: Option<Gc<Structure>>,
     ) -> Result<JsValue, JsValue> {
         let structure = structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false));
-        let obj = JsObject::new(vm, structure, JsObject::get_class(), ObjectTag::Ordinary);
-        args.this = JsValue::new(obj);
-        let _ = self.call(vm, args)?;
-        Ok(args.this)
+        let obj = ctx.new_local(JsObject::new(
+            vm,
+            structure,
+            JsObject::get_class(),
+            ObjectTag::Ordinary,
+        ));
+        args.this = JsValue::new(*obj);
+        self.call(vm, ctx, args)
     }
 
     pub fn call(
         &mut self,
         vm: &mut VirtualMachine,
+        ctx: &LocalContext<'_>,
         args: &mut Arguments,
     ) -> Result<JsValue, JsValue> {
         match self.ty {
-            FuncType::Native(ref x) => (x.func)(vm, args),
+            FuncType::Native(ref x) => (x.func)(vm, ctx, args),
             FuncType::User(ref x) => return vm.perform_vm_call(x, JsValue::new(x.scope), args),
         }
     }
@@ -271,7 +280,11 @@ impl JsFunction {
         JsObject::GetIndexedPropertySlotMethod(obj, vm, index, slot)
     }
 }
-pub type JsAPI = fn(vm: &mut VirtualMachine, arguments: &Arguments) -> Result<JsValue, JsValue>;
+pub type JsAPI = fn(
+    vm: &mut VirtualMachine,
+    &LocalContext<'_>,
+    arguments: &Arguments,
+) -> Result<JsValue, JsValue>;
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct JsNativeFunction {

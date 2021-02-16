@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use scope_analyzer::{Scope, VisitFnDecl};
-use swc_ecmascript::ast::*;
+use swc_ecmascript::{ast::*, utils::IsDirective};
 
 use crate::{
     bytecode::opcodes::*,
@@ -20,53 +20,23 @@ pub struct Compiler {
 }
 impl Compiler {
     pub fn intern_str(&mut self, s: &str) -> Symbol {
-        match s {
-            "length" => Symbol::length(),
-            "prototype" => Symbol::prototype(),
-            "arguments" => Symbol::arguments(),
-            "caller" => Symbol::caller(),
-            "callee" => Symbol::callee(),
-            "toString" => Symbol::toString(),
-            _ => {
-                let interned = self.vm.intern(s);
-                interned
-            }
-        }
+        let interned = self.vm.intern_or_known_symbol(s);
+        interned
     }
     pub fn intern(&mut self, id: &Ident) -> Symbol {
         let s: &str = &id.sym;
-        match s {
-            "length" => Symbol::length(),
-            "prototype" => Symbol::prototype(),
-            "arguments" => Symbol::arguments(),
-            "caller" => Symbol::caller(),
-            "callee" => Symbol::callee(),
-            "toString" => Symbol::toString(),
-            _ => {
-                let interned = self.vm.intern(s);
-                interned
-            }
-        }
+        self.vm.intern_or_known_symbol(s)
     }
     pub fn get_ident(&mut self, id: &Ident) -> u32 {
         let s: &str = &id.sym;
-        match s {
-            "length" => self.builder.get_sym(Symbol::length()),
-            "prototype" => self.builder.get_sym(Symbol::prototype()),
-            "arguments" => self.builder.get_sym(Symbol::arguments()),
-            "caller" => self.builder.get_sym(Symbol::caller()),
-            "callee" => self.builder.get_sym(Symbol::callee()),
-            "toString" => self.builder.get_sym(Symbol::toString()),
-            _ => {
-                let interned = self.vm.intern(s);
-                self.builder.get_sym(interned)
-            }
-        }
+
+        let interned = self.vm.intern_or_known_symbol(s);
+        self.builder.get_sym(interned)
     }
 
     pub fn compile_script(mut vm: VirtualMachineRef, p: &Script) -> Gc<ByteCode> {
         let ctx = vm.space().new_local_context();
-        let name = vm.intern("<global>");
+        let name = vm.intern_or_known_symbol("<global>");
         let mut code = ctx.new_local(ByteCode::new(&mut vm, name, &[], false));
         let mut compiler = Compiler {
             builder: ByteCodeBuilder {
@@ -79,16 +49,7 @@ impl Compiler {
         };
 
         let is_strict = match p.body.get(0) {
-            Some(ref body) => match body {
-                Stmt::Expr(ref e) => match &*e.expr {
-                    Expr::Ident(x) => {
-                        let s: &str = &x.sym;
-                        s == "use strict"
-                    }
-                    _ => false,
-                },
-                _ => false,
-            },
+            Some(ref body) => body.is_use_strict(),
             None => false,
         };
         code.strict = is_strict;
@@ -103,16 +64,7 @@ impl Compiler {
                 if body.stmts.is_empty() {
                     false
                 } else {
-                    match body.stmts[0] {
-                        Stmt::Expr(ref e) => match &*e.expr {
-                            Expr::Ident(x) => {
-                                let s: &str = &x.sym;
-                                s == "use strict"
-                            }
-                            _ => false,
-                        },
-                        _ => false,
-                    }
+                    body.stmts[0].is_use_strict()
                 }
             }
             None => false,
@@ -266,7 +218,7 @@ impl Compiler {
             Expr::Member(member) => {
                 let name = if let Expr::Ident(id) = &*member.prop {
                     let s: &str = &id.sym;
-                    let name = self.vm.intern(s);
+                    let name = self.vm.intern_or_known_symbol(s);
                     Some(self.builder.get_sym(name))
                 } else {
                     self.emit(&member.prop, true);
@@ -291,48 +243,16 @@ impl Compiler {
                 }
             }
             Expr::Assign(assign) => match &assign.left {
-                PatOrExpr::Pat(x) => match &**x {
-                    Pat::Ident(id) => {
-                        self.emit(&assign.right, true);
-                        let ix = self.get_ident(id);
-                        self.builder.emit(Op::OP_SET_VAR, &[ix], true);
-                    }
-                    Pat::Expr(e) => match &**e {
-                        Expr::Member(member) => {
-                            self.emit(&assign.right, true);
-                            let name = if let Expr::Ident(id) = &*member.prop {
-                                let s: &str = &id.sym;
-                                let name = self.vm.intern(s);
-                                Some(self.builder.get_sym(name))
-                            } else {
-                                self.emit(&member.prop, true);
-                                None
-                            };
-                            match member.obj {
-                                ExprOrSuper::Expr(ref expr) => {
-                                    self.emit(expr, true);
-                                }
-                                ExprOrSuper::Super(_super) => {
-                                    todo!()
-                                }
-                            }
-
-                            if let Some(ix) = name {
-                                self.builder.emit(Op::OP_SET_PROP, &[ix], true);
-                            } else {
-                                self.builder.emit(Op::OP_SET, &[], false);
-                            }
-                        }
-                        _ => todo!(),
-                    },
-                    _ => todo!(),
-                },
+                PatOrExpr::Pat(x) => {
+                    self.emit(&assign.right, true);
+                    self.generate_pat_store(&**x, false, false);
+                }
                 PatOrExpr::Expr(e) => match &**e {
                     Expr::Member(member) => {
                         self.emit(&assign.right, true);
                         let name = if let Expr::Ident(id) = &*member.prop {
                             let s: &str = &id.sym;
-                            let name = self.vm.intern(s);
+                            let name = self.vm.intern_or_known_symbol(s);
                             Some(self.builder.get_sym(name))
                         } else {
                             self.emit(&member.prop, true);
@@ -357,8 +277,8 @@ impl Compiler {
                 },
             },
             Expr::Bin(binary) => {
-                self.emit(&binary.right, true);
                 self.emit(&binary.left, true);
+                self.emit(&binary.right, true);
                 match binary.op {
                     BinaryOp::Add => {
                         self.builder.emit(Op::OP_ADD, &[], false);
@@ -412,6 +332,14 @@ impl Compiler {
                 }
                 self.builder.emit(Op::OP_RET, &[], false);
             }
+            Stmt::While(while_stmt) => {
+                let head = self.builder.code.code.len();
+                self.emit(&while_stmt.test, true);
+                let jend = self.cjmp(false);
+                self.emit_stmt(&while_stmt.body);
+                self.goto(head);
+                jend(self);
+            }
             Stmt::If(if_stmt) => {
                 self.emit(&if_stmt.test, true);
                 let jelse = self.cjmp(false);
@@ -434,7 +362,7 @@ impl Compiler {
                 }
                 Decl::Fn(fun) => {
                     let s: &str = &fun.ident.sym;
-                    let sym = self.vm.intern(s);
+                    let sym = self.vm.intern_or_known_symbol(s);
                     let ix = *self.fmap.get(&sym).unwrap();
                     self.builder.emit(Op::OP_GET_FUNCTION, &[ix], false);
                     let nix = self.builder.get_sym(sym);
@@ -442,8 +370,125 @@ impl Compiler {
                 }
                 _ => (),
             },
+            Stmt::Throw(throw) => {
+                self.emit(&throw.arg, true);
+                self.builder.emit(Op::OP_THROW, &[], false);
+            }
+            Stmt::Try(try_stmt) => {
+                let try_push = self.try_();
+                if !try_stmt.block.stmts.is_empty() {
+                    self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
+                }
+                for stmt in try_stmt.block.stmts.iter() {
+                    self.emit_stmt(stmt);
+                }
+                if !try_stmt.block.stmts.is_empty() {
+                    self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+                }
+                let mut jfinally = self.jmp();
+                try_push(self);
+                let jcatch_finally = match try_stmt.handler {
+                    Some(ref catch) => {
+                        if !catch.body.stmts.is_empty() {
+                            self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
+                        }
+                        match catch.param {
+                            Some(ref pat) => {
+                                self.generate_pat_store(pat, true, true);
+                            }
+                            None => {
+                                self.builder.emit(Op::OP_DROP, &[], false);
+                            }
+                        }
+                        for stmt in catch.body.stmts.iter() {
+                            self.emit_stmt(stmt);
+                        }
+                        if !catch.body.stmts.is_empty() {
+                            self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+                        }
+                        self.jmp()
+                    }
+                    None => {
+                        self.builder.emit(Op::OP_DROP, &[], false);
+                        self.jmp()
+                    }
+                };
+
+                jfinally(self);
+                jcatch_finally(self);
+                match try_stmt.finalizer {
+                    Some(ref block) => {
+                        if !block.stmts.is_empty() {
+                            self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
+                        }
+                        for stmt in block.stmts.iter() {
+                            self.emit_stmt(stmt);
+                        }
+                        if !block.stmts.is_empty() {
+                            self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+                        }
+                    }
+                    None => {}
+                }
+            }
 
             _ => todo!(),
+        }
+    }
+    pub fn generate_pat_store(&mut self, pat: &Pat, decl: bool, mutable: bool) {
+        match pat {
+            Pat::Ident(id) => {
+                let name = self.get_ident(id);
+                if decl && mutable {
+                    self.builder.emit(Op::OP_DECL_LET, &[name], true);
+                } else if decl && !mutable {
+                    self.builder.emit(Op::OP_DECL_IMMUTABLE, &[name], true);
+                }
+                self.builder.emit(Op::OP_SET_VAR, &[name], true);
+            }
+            Pat::Expr(e) => match &**e {
+                Expr::Member(member) => {
+                    let name = if let Expr::Ident(id) = &*member.prop {
+                        let s: &str = &id.sym;
+                        let name = self.vm.intern_or_known_symbol(s);
+                        Some(self.builder.get_sym(name))
+                    } else {
+                        self.emit(&member.prop, true);
+                        None
+                    };
+                    match member.obj {
+                        ExprOrSuper::Expr(ref expr) => {
+                            self.emit(expr, true);
+                        }
+                        ExprOrSuper::Super(_super) => {
+                            todo!()
+                        }
+                    }
+
+                    if let Some(ix) = name {
+                        self.builder.emit(Op::OP_SET_PROP, &[ix], true);
+                    } else {
+                        self.builder.emit(Op::OP_SET, &[], false);
+                    }
+                }
+                _ => todo!(),
+            },
+            _ => todo!(),
+        }
+    }
+    pub fn try_(&mut self) -> impl FnOnce(&mut Self) {
+        let p = self.builder.code.code.len();
+        self.builder.emit(Op::OP_TRY_PUSH_CATCH, &[0], false);
+
+        move |this: &mut Self| {
+            let to = this.builder.code.code.len() - (p + 5);
+            let ins = Op::OP_TRY_PUSH_CATCH;
+            let bytes = (to as u32).to_le_bytes();
+            this.builder.code.code[p] = ins as u8;
+            this.builder.code.code[p + 1] = bytes[0];
+            this.builder.code.code[p + 2] = bytes[1];
+            this.builder.code.code[p + 3] = bytes[2];
+            this.builder.code.code[p + 4] = bytes[3];
         }
     }
     pub fn cjmp(&mut self, cond: bool) -> impl FnOnce(&mut Self) {
@@ -465,7 +510,11 @@ impl Compiler {
             this.builder.code.code[p + 4] = bytes[3];
         }
     }
-
+    pub fn goto(&mut self, to: usize) {
+        let at = self.builder.code.code.len() as i32 + 5;
+        self.builder
+            .emit(Op::OP_JMP, &[(to as i32 - at) as u32], false);
+    }
     pub fn jmp(&mut self) -> impl FnOnce(&mut Self) {
         let p = self.builder.code.code.len();
         self.builder.emit(Op::OP_JMP, &[0], false);
@@ -517,7 +566,7 @@ impl Compiler {
                 Pat::Ident(name) => match decl.init {
                     Some(ref init) => {
                         let s: &str = &name.sym;
-                        let name = self.vm.intern(s);
+                        let name = self.vm.intern_or_known_symbol(s);
                         let ix = self.builder.get_sym(name);
                         self.emit(init, true);
                         match var.kind {
@@ -525,15 +574,13 @@ impl Compiler {
                             VarDeclKind::Const => {
                                 self.builder.emit(Op::OP_DECL_IMMUTABLE, &[ix], true)
                             }
-                            VarDeclKind::Var => {
-                                //self.builder.code.var_names.push(name);
-                                self.builder.emit(Op::OP_SET_VAR, &[ix], true);
-                            }
+                            VarDeclKind::Var => {}
                         }
+                        self.builder.emit(Op::OP_SET_VAR, &[ix], true);
                     }
                     None => {
                         let s: &str = &name.sym;
-                        let name = self.vm.intern(s);
+                        let name = self.vm.intern_or_known_symbol(s);
                         let ix = self.builder.get_sym(name);
                         self.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false);
                         match var.kind {
@@ -541,11 +588,9 @@ impl Compiler {
                             VarDeclKind::Const => {
                                 self.builder.emit(Op::OP_DECL_IMMUTABLE, &[ix], true)
                             }
-                            VarDeclKind::Var => {
-                                self.builder.emit(Op::OP_SET_VAR, &[ix], true);
-                                self.builder.code.var_names.push(name);
-                            }
+                            VarDeclKind::Var => {}
                         }
+                        self.builder.emit(Op::OP_SET_VAR, &[ix], true);
                     }
                 },
                 _ => todo!(),

@@ -20,7 +20,7 @@ use std::ptr::null_mut;
 use crate::{bytecode::ByteCode, heap::cell::Gc, runtime::value::JsValue, vm::VirtualMachine};
 
 pub mod frame;
-const LOG: bool = true;
+const LOG: bool = false;
 unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<JsValue, JsValue> {
     //let mut pc = (*frame).code;
     if LOG {
@@ -307,6 +307,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let v2 = vm.upop();
                 let v1 = vm.upop();
                 let res = v1.compare(v2, true, vm)? == CMP_TRUE;
+
                 vm.upush(JsValue::new(res));
             }
             Op::OP_LE => {
@@ -406,7 +407,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 pc = pc.add(4);
                 let name = bcode.names[ix as usize];
                 let var = vm.bcode_get_var(name, (*frame).scope.as_object(), nix, bcode)?;
-                assert!(!var.is_empty());
+                assert!(!var.is_undefined());
                 vm.push(var);
             }
             Op::OP_SET_VAR => {
@@ -433,14 +434,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 }
                 .declare_variable(vm, name, true)?;
             }
-            Op::OP_DECL_IMMUTABLE => {
-                let name = pc.cast::<u32>().read_unaligned();
-                let name = bcode.names[name as usize];
-                Env {
-                    record: (*frame).scope.as_object(),
-                }
-                .declare_variable(vm, name, false)?;
-            }
+
             Op::OP_RET => {
                 let val = vm.upop();
                 if LOG {
@@ -452,7 +446,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let offset = pc.cast::<i32>().read_unaligned();
                 pc = pc.add(4);
                 let to = pc.offset(offset as _);
-                (*frame).try_stack.push(to);
+                (*frame).try_stack.push(((*frame).scope.as_object(), to));
             }
             Op::OP_TRY_POP => {
                 (*frame).try_stack.pop();
@@ -502,9 +496,9 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                         Ok(val) => Some(val),
                         _ => None,
                     };
-                    obj.as_function_mut().construct(vm, &mut args, s)?
+                    obj.as_function_mut().construct(vm, &ctx, &mut args, s)?
                 } else {
-                    obj.as_function_mut().call(vm, &mut args)?
+                    obj.as_function_mut().call(vm, &ctx, &mut args)?
                 };
                 if op == Op::OP_NEW {
                     assert!(result.is_object());
@@ -549,7 +543,32 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let val = vm.get_prop(obj, name, fix, bcode.strict, bcode)?;
                 vm.upush(val);
             }
+            Op::OP_DECL_LET => {
+                let ix = pc.cast::<u32>().read_unaligned();
+                pc = pc.add(4);
+                let _fix = pc.cast::<u32>().read_unaligned();
+                pc = pc.add(4);
 
+                // TODO: PolyIC for decl_let
+                let mut env = Env {
+                    record: (*frame).scope.as_object(),
+                };
+                let name = bcode.names[ix as usize];
+                env.declare_variable(vm, name, true)?;
+            }
+            Op::OP_DECL_IMMUTABLE => {
+                let ix = pc.cast::<u32>().read_unaligned();
+                pc = pc.add(4);
+                let _fix = pc.cast::<u32>().read_unaligned();
+                pc = pc.add(4);
+
+                // TODO: PolyIC for decl_const
+                let mut env = Env {
+                    record: (*frame).scope.as_object(),
+                };
+                let name = bcode.names[ix as usize];
+                env.declare_variable(vm, name, false)?;
+            }
             _ => todo!("unimplemented or unknown opcode {:?}", op),
         }
     }
@@ -573,7 +592,9 @@ unsafe fn eval_internal(
             }
             Err(e) => match (*frame).try_stack.pop() {
                 Some(addr) => {
-                    (*frame).code = addr as *mut u8;
+                    (*frame).code = addr.1 as *mut u8;
+                    (*frame).scope = JsValue::new(addr.0);
+
                     vm.upush(e);
                     continue;
                 }
@@ -642,7 +663,7 @@ impl VirtualMachine {
                         Env { record: scope }.get_variable(self, name)
                     } else {
                         let mut slot = Slot::new();
-                        let val = scope.get_slot(self, name, &mut slot)?;
+                        let val = Env { record: scope }.get_variable_slot(self, name, &mut slot)?;
 
                         if slot.is_load_cacheable() {
                             unsafe {
@@ -662,7 +683,7 @@ impl VirtualMachine {
             }
             TypeFeedBack::None => {
                 let mut slot = Slot::new();
-                let val = scope.get_slot(self, name, &mut slot)?;
+                let val = Env { record: scope }.get_variable_slot(self, name, &mut slot)?;
 
                 if slot.is_load_cacheable() {
                     unsafe {
@@ -813,7 +834,8 @@ impl VirtualMachine {
             TypeFeedBack::None => {
                 let mut slot = Slot::new();
                 let val = obj.get_slot(self, name, &mut slot)?;
-                if slot.is_load_cacheable() && slot.base().is_some() {
+
+                if slot.is_load_cacheable() {
                     bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
                         slot.base()
                             .unwrap()

@@ -353,6 +353,12 @@ impl Space {
         }
         self.gc();
     }
+    pub fn defer_gc(&mut self) {
+        self.ndefers += 1;
+    }
+    pub fn undefer_gc(&mut self) {
+        self.ndefers -= 1;
+    }
     #[inline(never)]
     unsafe fn alloc_slow(&mut self, size: usize) -> Address {
         assert!(size > 4080);

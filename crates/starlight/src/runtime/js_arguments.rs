@@ -1,12 +1,5 @@
 use super::{
-    attributes::{create_data, AttrExternal},
-    env::Env,
-    method_table::*,
-    object::*,
-    property_descriptor::*,
-    slot::*,
-    symbol::*,
-    value::*,
+    env::Env, method_table::*, object::*, property_descriptor::*, slot::*, symbol::*, value::*,
 };
 use super::{error::JsTypeError, string::JsString};
 use crate::{heap::cell::*, vm::*};

@@ -1,5 +1,5 @@
-function foo(x) {
-    print(arguments)
+function foo() {
+    print(x)
 }
 
-foo(1, 2, 3, 4)
+foo();
