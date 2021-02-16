@@ -14,7 +14,7 @@ use std::{
 };
 
 use crate::{
-    gc::space::Space,
+    gc::heap::Heap,
     heap::{
         cell::{Cell, Gc, Trace, Tracer},
         Allocator,
@@ -53,7 +53,7 @@ impl<T: Cell> GcArray<T> {
         cell
     }*/
 
-    pub fn new(space: &mut Space, size: usize, init: T) -> Gc<Self>
+    pub fn new(space: &mut Heap, size: usize, init: T) -> Gc<Self>
     where
         T: Clone,
     {

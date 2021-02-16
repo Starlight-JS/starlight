@@ -10,12 +10,14 @@ fn main() {
     jsrt_init(&mut vm);
     let res = vm.eval(
         true,
-        r#""use strict";
-let i = 0
-while (i < 10) {
-    print(i)
-    i = i + 1
+        r#"
+for (var i = 0;i < 100;i = i + 1) {
+    if (i == 50) {
+        break;
+    }
 }
+
+print(i)
 
 
         "#,

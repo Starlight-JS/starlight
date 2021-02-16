@@ -7,11 +7,11 @@ use std::{
 use wtf_rs::list::LinkedList;
 
 use super::cell::Trace;
-use crate::gc::space::Space;
+use crate::gc::heap::Heap;
 pub struct LocalContextInner {
     pub prev: *mut Self,
     pub next: *mut Self,
-    pub space: *mut Space,
+    pub space: *mut Heap,
     pub roots: LinkedList<Option<NonNull<dyn Trace>>>,
 }
 pub struct LocalContext<'a> {
@@ -68,7 +68,7 @@ impl<'a> LocalContext<'a> {
         unsafe { &mut *(&mut *self.inner.as_ptr()).unwrap().as_ptr() }
     }
 
-    pub fn new_local<T: Trace + Sized + 'static>(&'a self, value: T) -> Local<'a, T> {
+    pub fn new_local<T: Trace + Sized + 'static>(&self, value: T) -> Local<'a, T> {
         unsafe {
             let mem = Box::into_raw(Box::new(value)) as *mut dyn Trace;
 
@@ -117,7 +117,7 @@ impl<'a> LocalContext<'a> {
 }
 
 impl PersistentContext {
-    pub fn new_local<T: Trace + Sized + 'static>(&mut self, value: T) -> Local<'static, T> {
+    pub fn new_local<T: Trace + Sized + 'static>(&self, value: T) -> Local<'static, T> {
         unsafe {
             let mem = Box::into_raw(Box::new(value)) as *mut dyn Trace;
 
@@ -149,5 +149,21 @@ impl<'a, T: Trace> DerefMut for Local<'a, T> {
             let cell = self.val.read().unwrap().as_ptr();
             (*cell).downcast_mut_unchecked()
         }
+    }
+}
+
+pub trait Context<'a> {
+    fn create_local<T: Trace>(&self, val: T) -> Local<'a, T>;
+}
+
+impl<'a> Context<'a> for LocalContext<'a> {
+    fn create_local<T: Trace>(&self, val: T) -> Local<'a, T> {
+        self.new_local(val)
+    }
+}
+
+impl Context<'static> for PersistentContext {
+    fn create_local<T: Trace>(&self, val: T) -> Local<'static, T> {
+        self.new_local(val)
     }
 }

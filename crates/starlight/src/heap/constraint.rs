@@ -1,4 +1,4 @@
-use crate::gc::space::Marking;
+use crate::gc::heap::Marking;
 
 pub trait MarkingConstraint {
     fn name(&self) -> &str {

@@ -116,7 +116,7 @@ impl SmallArena {
             .unwrap_or(null_mut())
     }
 
-    pub fn allocate(&mut self, space: &mut Space) -> Address {
+    pub fn allocate(&mut self, space: &mut Heap) -> Address {
         unsafe {
             if self.current.is_null() {
                 return self.allocate_slow(space);
@@ -130,7 +130,7 @@ impl SmallArena {
         }
     }
 
-    unsafe fn allocate_slow(&mut self, space: &mut Space) -> Address {
+    unsafe fn allocate_slow(&mut self, space: &mut Heap) -> Address {
         if !self.current.is_null() {
             self.unavailbe_blocks
                 .push_back(UnsafeRef::from_raw(self.current));
@@ -148,7 +148,7 @@ impl SmallArena {
             self.current = block;
             return Address::from_ptr((*block).allocate());
         }
-        let block = HeapBlock::create_with_cell_size(self.cell_size).as_ptr();
+        let block = HeapBlock::create_with_cell_size(space, self.cell_size).as_ptr();
         self.current = block;
         space.block_set.add(block);
         Address::from_ptr((*block).allocate())
@@ -205,7 +205,7 @@ impl SmallArena {
     }
 }
 
-pub struct Space {
+pub struct Heap {
     arenas: [*mut SmallArena; SIZE_CLASSES.len()],
     block_set: BlockSet,
     constraints: Vec<Box<dyn MarkingConstraint>>,
@@ -218,7 +218,7 @@ pub struct Space {
     allocated: usize,
 }
 
-impl Space {
+impl Heap {
     pub fn new() -> Box<Self> {
         let mut this = Box::new(Self {
             scopes: SegmentedList::new(),
@@ -299,6 +299,7 @@ impl Space {
     }
 
     unsafe fn gc_internal(&mut self, dummy: *const usize) {
+        //return;
         if self.ndefers > 0 {
             return;
         }
@@ -363,7 +364,7 @@ impl Space {
     unsafe fn alloc_slow(&mut self, size: usize) -> Address {
         assert!(size > 4080);
         let ix = self.precise_allocations.len();
-        let precise = PreciseAllocation::try_create(size, ix as _);
+        let precise = PreciseAllocation::try_create(self, size, ix as _);
         self.precise_allocations.push(precise);
         Address::from_ptr((*precise).cell())
     }
@@ -413,7 +414,7 @@ impl Space {
 }
 
 pub struct Marking<'a> {
-    pub gc: &'a mut Space,
+    pub gc: &'a mut Heap,
     pub worklist: VecDeque<*mut Header>,
     pub bytes_visited: usize,
     cons: ConservativeRoots,
@@ -516,7 +517,7 @@ impl<'a> Marking<'a> {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn mark(&mut self, val: *mut Header) {
         unsafe {
-            if Space::test_and_set_marked(val) {
+            if Heap::test_and_set_marked(val) {
                 let obj = val;
                 //println!("{}", obj.get_dyn().get_typename());
                 self.bytes_visited += round_up_to_multiple_of(
@@ -593,7 +594,7 @@ impl<'a> Tracer for Marking<'a> {
     }
 }
 
-impl Drop for Space {
+impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
             while let Some(scope) = self.scopes.pop_front() {
@@ -631,5 +632,61 @@ impl Drop for SmallArena {
                 HeapBlock::destroy(UnsafeRef::into_raw(b));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicU32;
+
+    use crate::heap::cell::{Cell, Trace};
+
+    use super::Heap;
+    struct Foo;
+    static FOO: AtomicU32 = AtomicU32::new(0);
+
+    impl Drop for Foo {
+        fn drop(&mut self) {
+            FOO.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    unsafe impl Trace for Foo {}
+    impl Cell for Foo {}
+
+    #[test]
+    fn test_gc_root() {
+        let mut heap = Heap::new();
+
+        let x = heap.alloc(Foo).root();
+        let y = heap.alloc(Foo);
+        heap.gc();
+        assert_eq!(FOO.load(std::sync::atomic::Ordering::Relaxed), 1);
+        drop(x);
+        drop(y);
+    }
+
+    struct FooLarge([u8; 8192]);
+    static FOO_LARGE: AtomicU32 = AtomicU32::new(0);
+
+    impl Drop for FooLarge {
+        fn drop(&mut self) {
+            FOO_LARGE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    unsafe impl Trace for FooLarge {}
+    impl Cell for FooLarge {}
+
+    #[test]
+    fn test_gc_large_root() {
+        let mut heap = Heap::new();
+
+        let x = heap.alloc(FooLarge([0; 8192])).root();
+        let y = heap.alloc(FooLarge([0; 8192]));
+        heap.gc();
+        assert_eq!(FOO_LARGE.load(std::sync::atomic::Ordering::Relaxed), 1);
+        drop(x);
+        drop(y);
     }
 }

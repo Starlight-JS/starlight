@@ -12,10 +12,14 @@ use crate::{
 
 pub mod ast_parser;
 pub mod scope_analyzer;
-
+pub struct LoopControlInfo {
+    breaks: Vec<Box<dyn FnOnce(&mut Compiler)>>,
+    continue_target: u32,
+}
 pub struct Compiler {
     builder: ByteCodeBuilder,
     vm: VirtualMachineRef,
+    lci: Vec<LoopControlInfo>,
     fmap: HashMap<Symbol, u32>,
 }
 impl Compiler {
@@ -39,6 +43,7 @@ impl Compiler {
         let name = vm.intern_or_known_symbol("<global>");
         let mut code = ctx.new_local(ByteCode::new(&mut vm, name, &[], false));
         let mut compiler = Compiler {
+            lci: Vec::new(),
             builder: ByteCodeBuilder {
                 code: *code,
                 val_map: Default::default(),
@@ -96,6 +101,7 @@ impl Compiler {
                 .collect::<Vec<Symbol>>();
             let mut code = ctx.new_local(ByteCode::new(&mut self.vm, name, &params, false));
             let mut compiler = Compiler {
+                lci: Vec::new(),
                 builder: ByteCodeBuilder {
                     code: *code,
                     val_map: Default::default(),
@@ -312,7 +318,19 @@ impl Compiler {
             _ => todo!(),
         }
     }
+    pub fn push_lci(&mut self, continue_target: u32) {
+        self.lci.push(LoopControlInfo {
+            continue_target,
+            breaks: vec![],
+        })
+    }
 
+    pub fn pop_lci(&mut self) {
+        let mut lci = self.lci.pop().unwrap();
+        while let Some(break_) = lci.breaks.pop() {
+            break_(self);
+        }
+    }
     pub fn emit_stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Expr(expr) => {
@@ -332,13 +350,61 @@ impl Compiler {
                 }
                 self.builder.emit(Op::OP_RET, &[], false);
             }
+            Stmt::Break(_) => {
+                // self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+                let br = self.jmp();
+                self.lci.last_mut().unwrap().breaks.push(Box::new(br));
+            }
+            Stmt::Continue(_) => {
+                self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+                let to = self.lci.last().unwrap().continue_target;
+                self.goto(to as _);
+            }
+            Stmt::For(for_stmt) => {
+                self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
+                match for_stmt.init {
+                    Some(ref init) => match init {
+                        VarDeclOrExpr::Expr(ref e) => {
+                            self.emit(e, false);
+                        }
+                        VarDeclOrExpr::VarDecl(ref decl) => {
+                            self.emit_var_decl(decl);
+                        }
+                    },
+                    None => {}
+                }
+
+                let head = self.builder.code.code.len();
+                self.push_lci(head as _);
+                match for_stmt.test {
+                    Some(ref test) => {
+                        self.emit(&**test, true);
+                    }
+                    None => {
+                        self.builder.emit(Op::OP_PUSH_TRUE, &[], false);
+                    }
+                }
+                let jend = self.cjmp(false);
+                self.emit_stmt(&for_stmt.body);
+                if let Some(fin) = &for_stmt.update {
+                    self.emit(&**fin, false);
+                }
+                self.goto(head as _);
+                self.pop_lci();
+                self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+                jend(self);
+
+                self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+            }
             Stmt::While(while_stmt) => {
                 let head = self.builder.code.code.len();
+                self.push_lci(head as _);
                 self.emit(&while_stmt.test, true);
                 let jend = self.cjmp(false);
                 self.emit_stmt(&while_stmt.body);
                 self.goto(head);
                 jend(self);
+                self.pop_lci();
             }
             Stmt::If(if_stmt) => {
                 self.emit(&if_stmt.test, true);
@@ -370,6 +436,8 @@ impl Compiler {
                 }
                 _ => (),
             },
+
+            Stmt::Empty(_) => {}
             Stmt::Throw(throw) => {
                 self.emit(&throw.arg, true);
                 self.builder.emit(Op::OP_THROW, &[], false);
@@ -493,7 +561,7 @@ impl Compiler {
     }
     pub fn cjmp(&mut self, cond: bool) -> impl FnOnce(&mut Self) {
         let p = self.builder.code.code.len();
-        self.builder.emit(Op::OP_PLACEHOLDER, &[], false);
+        self.builder.emit(Op::OP_PLACEHOLDER, &[0], false);
 
         move |this: &mut Self| {
             let to = this.builder.code.code.len() - (p + 5);
@@ -517,11 +585,12 @@ impl Compiler {
     }
     pub fn jmp(&mut self) -> impl FnOnce(&mut Self) {
         let p = self.builder.code.code.len();
-        self.builder.emit(Op::OP_PLACEHOLDER, &[], false);
+        self.builder.emit(Op::OP_PLACEHOLDER, &[0], false);
 
         move |this: &mut Self| {
             let to = this.builder.code.code.len() - (p + 5);
             let bytes = (to as u32).to_le_bytes();
+            this.builder.code.code[p] = Op::OP_JMP as u8;
             this.builder.code.code[p + 1] = bytes[0];
             this.builder.code.code[p + 2] = bytes[1];
             this.builder.code.code[p + 3] = bytes[2];

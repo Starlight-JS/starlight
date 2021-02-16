@@ -9,20 +9,12 @@ use crate::{
     vm::VirtualMachine,
 };
 
-pub fn array_ctor(
-    vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
-    args: &Arguments,
-) -> Result<JsValue, JsValue> {
+pub fn array_ctor(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     let size = args.size();
     todo!()
 }
 
-pub fn array_is_array(
-    vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
-    args: &Arguments,
-) -> Result<JsValue, JsValue> {
+pub fn array_is_array(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() == 0 {
         return Ok(JsValue::new(false));
     }
@@ -33,10 +25,6 @@ pub fn array_is_array(
     Ok(JsValue::new(val.as_object().tag() == ObjectTag::Array))
 }
 
-pub fn array_to_string(
-    vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
-    args: &Arguments,
-) -> Result<JsValue, JsValue> {
+pub fn array_to_string(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     todo!()
 }

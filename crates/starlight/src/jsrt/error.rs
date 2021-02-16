@@ -12,72 +12,64 @@ use crate::{
     vm::VirtualMachine,
 };
 
-pub fn error_constructor(
-    vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
-    args: &Arguments,
-) -> Result<JsValue, JsValue> {
+pub fn error_constructor(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     let message = args[0].to_string(vm)?;
-    let msg = ctx.new_local(JsString::new(vm, message));
+    let msg = JsString::new(vm, message).root();
     Ok(JsValue::new(JsError::new(vm, *msg, None)))
 }
 
 pub fn eval_error_constructor(
     vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
+
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args[0].to_string(vm)?;
-    let msg = ctx.new_local(JsString::new(vm, message));
+    let msg = JsString::new(vm, message).root();
     Ok(JsValue::new(JsEvalError::new(vm, *msg, None)))
 }
 
 pub fn reference_error_constructor(
     vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
+
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args[0].to_string(vm)?;
-    let msg = ctx.new_local(JsString::new(vm, message));
+    let msg = JsString::new(vm, message).root();
     Ok(JsValue::new(JsReferenceError::new(vm, *msg, None)))
 }
 
 pub fn type_error_constructor(
     vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
+
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args[0].to_string(vm)?;
-    let msg = ctx.new_local(JsString::new(vm, message));
+    let msg = JsString::new(vm, message).root();
     Ok(JsValue::new(JsTypeError::new(vm, *msg, None)))
 }
 
 pub fn syntax_error_constructor(
     vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
+
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args[0].to_string(vm)?;
-    let msg = ctx.new_local(JsString::new(vm, message));
+    let msg = JsString::new(vm, message).root();
     Ok(JsValue::new(JsEvalError::new(vm, *msg, None)))
 }
 
 pub fn range_error_constructor(
     vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
+
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args[0].to_string(vm)?;
-    let msg = ctx.new_local(JsString::new(vm, message));
+    let msg = JsString::new(vm, message).root();
     Ok(JsValue::new(JsRangeError::new(vm, *msg, None)))
 }
 
 /// section 15.11.4.4 Error.prototype.toString()
-pub fn error_to_string(
-    vm: &mut VirtualMachine,
-    ctx: &LocalContext<'_>,
-    args: &Arguments,
-) -> Result<JsValue, JsValue> {
+pub fn error_to_string(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
 
     if obj.is_cell() && obj.as_cell().is::<JsObject>() {

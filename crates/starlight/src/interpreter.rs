@@ -26,7 +26,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
     if LOG {
         println!("enter frame {:p}", frame);
     }
-    let ctx = vm.space().new_local_context();
+    let ctx = vm.space().persistent_context();
     let bcode = (*frame).bcode.unwrap();
     let mut pc = (*frame).code;
     loop {
@@ -308,7 +308,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let v2 = vm.upop();
                 let v1 = vm.upop();
                 let res = v1.compare(v2, true, vm)? == CMP_TRUE;
-
+                //println!("{} < {}", v1.to_string(vm)?, v2.to_string(vm)?);
                 vm.upush(JsValue::new(res));
             }
             Op::OP_LE => {
@@ -580,9 +580,12 @@ unsafe fn eval_internal(
     bcode: Gc<ByteCode>,
     pc: *mut u8,
     this: JsValue,
-    scope: Gc<JsObject>,
+    mut scope: Gc<JsObject>,
 ) -> Result<JsValue, JsValue> {
     let mut frame = vm.init_call_frame_bcode(bcode, JsValue::new(scope), this, pc, false);
+    for val in bcode.var_names.iter() {
+        scope.put(vm, *val, JsValue::undefined(), false)?;
+    }
     (*frame).code = bcode.code_start;
     loop {
         match eval_bcode(vm, frame) {

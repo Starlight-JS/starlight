@@ -11,6 +11,8 @@ use crate::heap::{
 use intrusive_collections::intrusive_adapter;
 use intrusive_collections::LinkedListLink;
 use intrusive_collections::UnsafeRef;
+
+use super::heap::Heap;
 intrusive_adapter!(pub BlockAdapter = UnsafeRef<HeapBlock> : HeapBlock {link: LinkedListLink});
 
 #[repr(C)]
@@ -70,6 +72,7 @@ pub struct HeapBlock {
     cell_size: usize,
     freelist: FreeList,
     free: bool,
+    heap: *mut Heap,
     storage: [*mut Header; 0],
 }
 pub const BLOCK_SIZE: usize = 16 * 1024;
@@ -110,12 +113,13 @@ impl HeapBlock {
     pub unsafe fn change_cell_size(&mut self, size: usize) {
         self.cell_size = size;
     }
-    pub fn create_with_cell_size(cell_size: usize) -> NonNull<Self> {
+    pub fn create_with_cell_size(heap: *mut Heap, cell_size: usize) -> NonNull<Self> {
         unsafe {
             let layout =
                 Layout::from_size_align(BLOCK_SIZE, BLOCK_SIZE).expect("Block alignment is wrong");
             let memory = alloc_zeroed(layout).cast::<Self>();
             memory.write(Self {
+                heap,
                 link: LinkedListLink::new(),
                 cell_size,
                 freelist: FreeList::new(),
@@ -132,6 +136,9 @@ impl HeapBlock {
             (*memory).freelist = freelist;
             NonNull::new_unchecked(memory)
         }
+    }
+    pub fn heap(&self) -> *mut Heap {
+        self.heap
     }
     /// Walks all cells inside this block and constructs new freelist from free cells.
     ///

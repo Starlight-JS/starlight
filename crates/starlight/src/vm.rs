@@ -43,7 +43,7 @@ impl Emitter for MyEmiter {
 }
 use crate::{
     frontend::Compiler,
-    gc::space::Space,
+    gc::heap::Heap,
     heap::{
         cell::{Cell, Gc, Trace, Tracer},
         constraint::SimpleMarkingConstraint,
@@ -96,7 +96,7 @@ pub struct VirtualMachine {
     pub(crate) stack_start: *mut JsValue,
     pub(crate) stack_end: *mut JsValue,
     pub(crate) stack: *mut JsValue,
-    space: Box<Space>,
+    space: Box<Heap>,
     interner: SymbolTable,
     global_data: Box<GlobalData>,
     pub(crate) frame: *mut FrameBase,
@@ -155,6 +155,54 @@ impl std::fmt::Write for OutBuf {
 }
 
 impl VirtualMachine {
+    pub fn compile(
+        &mut self,
+        force_strict: bool,
+        code: &str,
+        name: &str,
+    ) -> Result<Gc<JsObject>, JsValue> {
+        let ctx = self.space().new_local_context();
+        let cm: Lrc<SourceMap> = Default::default();
+        let e = BufferedError::default();
+
+        let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+        // Real usage
+        // let fm = cm
+        //     .load_file(Path::new("test.js"))
+        //     .expect("failed to load test.js");
+        let fm = cm.new_source_file(FileName::Custom("<script>".into()), code.into());
+        let lexer = Lexer::new(
+            // We want to parse ecmascript
+            Syntax::Es(Default::default()),
+            // JscTarget defaults to es5
+            Default::default(),
+            StringInput::from(&*fm),
+            None,
+        );
+
+        let mut parser = Parser::new_from(lexer);
+
+        for e in parser.take_errors() {
+            e.into_diagnostic(&handler).emit();
+        }
+
+        let script = match parser.parse_script() {
+            Ok(script) => script,
+            Err(e) => {
+                todo!("throw error");
+            }
+        };
+
+        let mut code = ctx.new_local(Compiler::compile_script(VirtualMachineRef(self), &script));
+        code.strict = code.strict || force_strict;
+        code.name = self.intern_or_known_symbol(name);
+        code.display_to(&mut OutBuf).unwrap();
+
+        let envs = Structure::new_indexed(self, Some(self.global_object()), false);
+        let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
+        let fun = JsVMFunction::new(self, *code, env);
+        return Ok(fun);
+    }
     pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
         let res = {
             let ctx = self.space().new_local_context();
@@ -301,7 +349,7 @@ impl VirtualMachine {
         &self.global_data
     }
     pub fn new(opts: Options) -> VirtualMachineRef {
-        let space = Space::new();
+        let space = Heap::new();
         let stack = Vec::<JsValue>::with_capacity(16 * 1024);
         let ptr = stack.as_ptr() as *mut JsValue;
         std::mem::forget(stack);
@@ -356,7 +404,7 @@ impl VirtualMachine {
     pub fn global_object(&self) -> Gc<JsObject> {
         unwrap_unchecked(self.global_object)
     }
-    pub fn space(&mut self) -> &mut Space {
+    pub fn space(&mut self) -> &mut Heap {
         &mut self.space
     }
 

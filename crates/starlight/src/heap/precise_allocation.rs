@@ -1,3 +1,5 @@
+use crate::gc::heap::Heap;
+
 use super::{addr::Address, cell::*};
 use std::alloc::{alloc, dealloc, Layout};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,6 +23,7 @@ pub struct PreciseAllocation {
     pub adjusted_alignment: bool,
     /// Is this even valid allocation?
     pub has_valid_cell: bool,
+    pub heap: *mut Heap,
 }
 
 impl PreciseAllocation {
@@ -132,7 +135,7 @@ impl PreciseAllocation {
         }
     }
     /// Try to create precise allocation (no way that it will return null for now).
-    pub fn try_create(size: usize, index_in_space: u32) -> *mut Self {
+    pub fn try_create(heap: *mut Heap, size: usize, index_in_space: u32) -> *mut Self {
         let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
         unsafe {
             let mut space = alloc(
@@ -151,6 +154,7 @@ impl PreciseAllocation {
                 //link: LinkedListLink::new(),
                 adjusted_alignment,
                 is_marked: false,
+                heap,
                 //is_newly_allocated: true,
                 has_valid_cell: true,
                 cell_size: size,

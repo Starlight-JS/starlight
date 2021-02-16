@@ -9,7 +9,7 @@ use crate::{
     bytecode::ByteCode,
     heap::{
         cell::{Gc, Trace, Tracer},
-        context::LocalContext,
+        context::Context,
     },
     vm::VirtualMachine,
 };
@@ -56,15 +56,15 @@ impl JsFunction {
         }
     }
 
-    pub fn construct(
+    pub fn construct<'a>(
         &mut self,
         vm: &mut VirtualMachine,
-        ctx: &LocalContext<'_>,
+        ctx: &'_ impl Context<'a>,
         args: &mut Arguments,
         structure: Option<Gc<Structure>>,
     ) -> Result<JsValue, JsValue> {
         let structure = structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false));
-        let obj = ctx.new_local(JsObject::new(
+        let obj = ctx.create_local(JsObject::new(
             vm,
             structure,
             JsObject::get_class(),
@@ -74,14 +74,14 @@ impl JsFunction {
         self.call(vm, ctx, args)
     }
 
-    pub fn call(
+    pub fn call<'a>(
         &mut self,
         vm: &mut VirtualMachine,
-        ctx: &LocalContext<'_>,
+        ctx: &'_ impl Context<'a>,
         args: &mut Arguments,
     ) -> Result<JsValue, JsValue> {
         match self.ty {
-            FuncType::Native(ref x) => (x.func)(vm, ctx, args),
+            FuncType::Native(ref x) => (x.func)(vm, args),
             FuncType::User(ref x) => return vm.perform_vm_call(x, JsValue::new(x.scope), args),
         }
     }
@@ -280,11 +280,7 @@ impl JsFunction {
         JsObject::GetIndexedPropertySlotMethod(obj, vm, index, slot)
     }
 }
-pub type JsAPI = fn(
-    vm: &mut VirtualMachine,
-    &LocalContext<'_>,
-    arguments: &Arguments,
-) -> Result<JsValue, JsValue>;
+pub type JsAPI = fn(vm: &mut VirtualMachine, arguments: &Arguments) -> Result<JsValue, JsValue>;
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct JsNativeFunction {

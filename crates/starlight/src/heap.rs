@@ -15,7 +15,7 @@ use cell::Header;
 #[cfg(feature = "debug-snapshots")]
 use std::fs::File;
 
-use crate::gc::space::Space;
+use crate::gc::heap::Heap;
 #[cfg(feature = "debug-snapshots")]
 pub fn freeze_cell_into(hdr: *const Header, cell: &dyn Cell, mut file: &mut File) {
     use serde::{Deserialize, Serialize, Serializer};
@@ -38,7 +38,7 @@ pub trait Allocator<T> {
     fn allocate(&mut self, value: T) -> Self::Result;
 }
 
-impl<T: Cell> Allocator<T> for Space {
+impl<T: Cell> Allocator<T> for Heap {
     type Result = Gc<T>;
 
     fn allocate(&mut self, value: T) -> Self::Result {

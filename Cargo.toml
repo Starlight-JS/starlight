@@ -1,6 +1,11 @@
 
 [workspace]
-members = ["crates/wtf-rs", "crates/starlight", "crates/starlight-derive"]
+members = [
+    "crates/wtf-rs",
+    "crates/starlight",
+    "crates/starlight-derive",
+    "crates/benchmarks",
+]
 default-members = ["crates/starlight"]
 [profile.release]
 lto = "fat"
