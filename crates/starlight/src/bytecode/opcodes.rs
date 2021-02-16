@@ -11,6 +11,9 @@ pub enum Op {
     /// `( a -- )`
     OP_DROP = 0,
 
+    /// For internal usage in the bytecode compiler, should never be emitted.
+    OP_PLACEHOLDER,
+
     /// Duplicates a value on top of the stack.
     ///
     /// `( a -- a a)`

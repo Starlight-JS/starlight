@@ -493,7 +493,7 @@ impl Compiler {
     }
     pub fn cjmp(&mut self, cond: bool) -> impl FnOnce(&mut Self) {
         let p = self.builder.code.code.len();
-        self.builder.emit(Op::OP_JMP, &[0], false);
+        self.builder.emit(Op::OP_PLACEHOLDER, &[], false);
 
         move |this: &mut Self| {
             let to = this.builder.code.code.len() - (p + 5);
@@ -517,7 +517,7 @@ impl Compiler {
     }
     pub fn jmp(&mut self) -> impl FnOnce(&mut Self) {
         let p = self.builder.code.code.len();
-        self.builder.emit(Op::OP_JMP, &[0], false);
+        self.builder.emit(Op::OP_PLACEHOLDER, &[], false);
 
         move |this: &mut Self| {
             let to = this.builder.code.code.len() - (p + 5);
