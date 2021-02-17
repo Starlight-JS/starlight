@@ -13,6 +13,7 @@ mopa = "0.2"
 intrusive-collections = "0.9"
 rand = "0.8"
 libc = "0.2"
+memmap2 = "0.2"
 starlight-derive = { path = "../starlight-derive" }
 wtf-rs = { path = "../wtf-rs" }
 serde = { version = "1.0", optional = true }
@@ -35,6 +36,8 @@ debug-snapshots = [
     "serde-reflection",
     "erased-serde",
 ]
+
+valgrind-gc = []
 
 [dev-dependencies]
 criterion = "0.3"

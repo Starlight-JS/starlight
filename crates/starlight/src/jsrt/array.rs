@@ -1,5 +1,4 @@
 use crate::{
-    heap::context::LocalContext,
     runtime::{
         arguments::Arguments,
         array::JsArray,

@@ -2,11 +2,13 @@ use crate::{
     bytecode::{opcodes::Op, TypeFeedBack},
     runtime::{
         arguments::Arguments,
+        attributes::*,
         env::Env,
         error::{JsError, JsTypeError},
         function::JsVMFunction,
         js_arguments::JsArguments,
         object::{JsHint, JsObject, ObjectTag},
+        property_descriptor::DataDescriptor,
         slot::Slot,
         string::JsString,
         structure::Structure,
@@ -26,9 +28,10 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
     if LOG {
         println!("enter frame {:p}", frame);
     }
-    let ctx = vm.space().persistent_context();
+
     let bcode = (*frame).bcode.unwrap();
     let mut pc = (*frame).code;
+
     loop {
         let op = std::mem::transmute::<_, Op>(pc.cast::<u8>().read_unaligned());
         pc = pc.add(1);
@@ -37,9 +40,9 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
         }
         (*frame).code = pc;
         match op {
-            Op::OP_PLACEHOLDER => unreachable!("Placeholder op emitted by compiler"),
+            Op::OP_PLACEHOLDER => std::hint::unreachable_unchecked(),
             Op::OP_DROP => {
-                vm.pop();
+                vm.upop();
             }
             Op::OP_DUP => {
                 let v1 = vm.upop();
@@ -58,12 +61,12 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
             Op::OP_SWAP => {
                 let v1 = vm.upop();
                 let v2 = vm.upop();
-                vm.push(v1);
-                vm.push(v2);
+                vm.upush(v1);
+                vm.upush(v2);
             }
             Op::OP_SWAP_DROP => {
                 let v1 = vm.upop();
-                vm.pop();
+                vm.upop();
                 vm.upush(v1);
             }
             Op::OP_PUSH_UNDEFINED => {
@@ -89,7 +92,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
             Op::OP_PUSH_INT => {
                 let i = pc.cast::<i32>().read_unaligned();
                 pc = pc.add(4);
-                vm.push(JsValue::new(i))
+                vm.upush(JsValue::new(i))
             }
             Op::OP_PUSH_LIT => {
                 let ix = pc.cast::<u32>().read_unaligned();
@@ -107,7 +110,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     vm.upush(JsValue::new(!v1.as_int32()));
                 } else {
                     let n = v1.to_number(vm)?;
-                    vm.push(JsValue::new(!(n as i32)));
+                    vm.upush(JsValue::new(!(n as i32)));
                 }
             }
             Op::OP_NEG => {
@@ -126,9 +129,8 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
             }
 
             Op::OP_ADD => {
-                let mut v2 = vm.pop().unwrap();
-                let mut v1 = vm.pop().unwrap();
-
+                let mut v2 = vm.upop();
+                let mut v1 = vm.upop();
                 if v1.is_cell() || v2.is_cell() {
                     v1 = v1.to_primitive(vm, JsHint::None)?;
                     v2 = v2.to_primitive(vm, JsHint::None)?;
@@ -380,10 +382,11 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                         None
                     },
                     false,
-                );
+                )
+                .root();
                 (*frame).scope = JsValue::new(JsObject::new(
                     vm,
-                    structure,
+                    *structure,
                     JsObject::get_class(),
                     ObjectTag::Ordinary,
                 ));
@@ -409,7 +412,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let name = bcode.names[ix as usize];
                 let var = vm.bcode_get_var(name, (*frame).scope.as_object(), nix, bcode)?;
                 assert!(!var.is_undefined());
-                vm.push(var);
+                vm.upush(var);
             }
             Op::OP_SET_VAR => {
                 let val = vm.upop();
@@ -438,6 +441,9 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
 
             Op::OP_RET => {
                 let val = vm.upop();
+                if (*frame).is_ctor != 0 && val.is_undefined() {
+                    return Ok((*frame).this_obj);
+                }
                 if LOG {
                     println!("leave frame {:p}", frame);
                 }
@@ -459,11 +465,14 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 return Err(v1);
             }
             Op::OP_GET_FUNCTION => {
+                //vm.space().defer_gc();
                 let ix = pc.cast::<u32>().read_unaligned();
                 pc = pc.add(4);
                 let func =
-                    JsVMFunction::new(vm, bcode.codes[ix as usize], (*frame).scope.as_object());
-                vm.upush(JsValue::new(func));
+                    JsVMFunction::new(vm, bcode.codes[ix as usize], (*frame).scope.as_object())
+                        .root();
+                vm.upush(JsValue::new(*func));
+                // vm.space().undefer_gc();
             }
             Op::OP_CALL | Op::OP_NEW => {
                 let mut argc = pc.cast::<u32>().read_unaligned();
@@ -474,8 +483,11 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 if v3.is_empty() {
                     v3 = JsValue::new(vm.global_object());
                 }
-
-                let mut args = ctx.new_local(Arguments::new(vm, v3, argc as _));
+                if !v1.is_callable() {
+                    let msg = JsString::new(vm, "tried to call non function object");
+                    return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
+                }
+                let mut args = Arguments::new(vm, v3, argc as _);
                 let mut i = 0;
                 while argc > 0 {
                     args[i] = vm.upop();
@@ -484,22 +496,23 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     argc -= 1;
                 }
 
-                if !v1.is_callable() {
-                    let msg = JsString::new(vm, "tried to call non function object");
-                    return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
-                }
                 args.ctor_call = is_ctor;
-                let mut obj = v1.as_object();
+                let mut obj = v1.as_object().root();
                 //let f = obj.as_function_mut();
 
                 let result = if is_ctor {
                     let s = match obj.func_construct_map(vm) {
-                        Ok(val) => Some(val),
+                        Ok(val) => Some(val.root()),
                         _ => None,
                     };
-                    obj.as_function_mut().construct(vm, &ctx, &mut args, s)?
+                    assert!(s.is_some());
+                    let us = s.as_ref().map(|x| **x);
+
+                    let res = obj.as_function_mut().construct(vm, &mut args, us);
+                    drop(s);
+                    res?
                 } else {
-                    obj.as_function_mut().call(vm, &ctx, &mut args)?
+                    obj.as_function_mut().call(vm, &mut args)?
                 };
                 if op == Op::OP_NEW {
                     assert!(result.is_object());
@@ -570,7 +583,12 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let name = bcode.names[ix as usize];
                 env.declare_variable(vm, name, false)?;
             }
-            _ => todo!("unimplemented or unknown opcode {:?}", op),
+            _ => {
+                #[cfg(debug_assertions)]
+                todo!("unimplemented or unknown opcode {:?}", op);
+                #[cfg(not(debug_assertions))]
+                std::hint::unreachable_unchecked();
+            }
         }
     }
 }
@@ -581,17 +599,21 @@ unsafe fn eval_internal(
     pc: *mut u8,
     this: JsValue,
     mut scope: Gc<JsObject>,
+    ctor: bool,
 ) -> Result<JsValue, JsValue> {
-    let mut frame = vm.init_call_frame_bcode(bcode, JsValue::new(scope), this, pc, false);
-    for val in bcode.var_names.iter() {
-        scope.put(vm, *val, JsValue::undefined(), false)?;
-    }
+    let mut frame = vm.init_call_frame_bcode(bcode, JsValue::new(scope), this, pc, ctor);
+
     (*frame).code = bcode.code_start;
     loop {
         match eval_bcode(vm, frame) {
             Ok(val) => {
                 let frame = Box::from_raw(frame);
                 vm.frame = frame.prev;
+                if !vm.frame.is_null() {
+                    vm.stack = (*vm.frame).saved_stack;
+                } else {
+                    vm.stack = vm.stack_start;
+                }
                 return Ok(val);
             }
             Err(e) => match (*frame).try_stack.pop() {
@@ -618,13 +640,10 @@ impl VirtualMachine {
     ) -> Result<JsValue, JsValue> {
         unsafe {
             let f = func;
-            let scope = env.as_object();
-            let mut nscope = JsObject::new(
-                self,
-                scope.structure(),
-                JsObject::get_class(),
-                ObjectTag::Ordinary,
-            );
+            let scope = env.as_object().root();
+            let mut structure = Structure::new_indexed(self, Some(env.as_object()), false).root();
+            let mut nscope =
+                JsObject::new(self, *structure, JsObject::get_class(), ObjectTag::Ordinary).root();
             let mut i = 0;
 
             for p in f.code.params.iter() {
@@ -634,15 +653,30 @@ impl VirtualMachine {
 
                 i += 1;
             }
+            for val in func.code.var_names.iter() {
+                nscope.define_own_property(
+                    self,
+                    *val,
+                    &*DataDescriptor::new(JsValue::undefined(), W | C | E),
+                    false,
+                )?;
+            }
 
-            let args = JsArguments::new(self, nscope, &f.code.params);
-            let _ = nscope.put(self, Symbol::arguments(), JsValue::new(args), false);
+            let args = JsArguments::new(self, *nscope, &f.code.params).root();
+            let _ = nscope.put(self, Symbol::arguments(), JsValue::new(*args), false);
             let mut slot = Slot::new();
             let _slot = nscope
                 .get_slot(self, Symbol::arguments(), &mut slot)
                 .unwrap_or_else(|_| panic!());
 
-            eval_internal(self, f.code, f.code.code_start, args_.this, nscope)
+            eval_internal(
+                self,
+                f.code,
+                f.code.code_start,
+                args_.this,
+                *nscope,
+                args_.ctor_call,
+            )
         }
     }
     fn bcode_get_var(
@@ -715,24 +749,25 @@ impl VirtualMachine {
         strict: bool,
         mut bcode: Gc<ByteCode>,
     ) -> Result<(), JsValue> {
+        let scope = &scope;
         match &bcode.feedback[feedback as usize] {
             TypeFeedBack::Generic => {
-                Env { record: scope }.set_variable(self, name, val, strict)?;
+                Env { record: *scope }.set_variable(self, name, val, strict)?;
                 Ok(())
             }
             TypeFeedBack::Structure(structure, offset, count) => {
                 let count = *count;
                 let structure = *structure;
                 let offset = *offset;
-                if let Some(mut hit) = self.try_cache(structure, scope) {
+                if let Some(mut hit) = self.try_cache(structure, *scope) {
                     *hit.direct_mut(offset as _) = val;
                 } else {
                     if count == 64 {
                         bcode.feedback[feedback as usize] = TypeFeedBack::Generic;
-                        Env { record: scope }.set_variable(self, name, val, strict)?;
+                        Env { record: *scope }.set_variable(self, name, val, strict)?;
                     } else {
                         let (base, slot) =
-                            Env { record: scope }.set_variable(self, name, val, strict)?;
+                            Env { record: *scope }.set_variable(self, name, val, strict)?;
                         if slot.is_store_cacheable() {
                             unsafe {
                                 bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
@@ -747,7 +782,7 @@ impl VirtualMachine {
                 Ok(())
             }
             TypeFeedBack::None => {
-                let (base, slot) = Env { record: scope }.set_variable(self, name, val, strict)?;
+                let (base, slot) = Env { record: *scope }.set_variable(self, name, val, strict)?;
                 if slot.is_store_cacheable() {
                     unsafe {
                         bcode.feedback[feedback as usize] =
@@ -767,6 +802,7 @@ impl VirtualMachine {
             bcode: None,
             code: null_mut(),
             is_bcode: 0,
+            saved_stack: null_mut(),
             is_ctor: 0,
             is_thrown: 0,
             stack_size: 0,
@@ -794,6 +830,7 @@ impl VirtualMachine {
             (*frame).code = pc;
             (*frame).is_ctor = is_ctor as _;
             (*frame).is_bcode = 1;
+            (*frame).saved_stack = self.stack;
         }
         frame
     }

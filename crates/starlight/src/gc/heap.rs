@@ -62,17 +62,17 @@ use crate::heap::{
     addr::{round_up_to_multiple_of, Address},
     cell::{object_ty_of, Cell, Gc, Header, Tracer, GC_MARKED, GC_UNMARKED, GC_WHITE},
     constraint::MarkingConstraint,
-    context::{LocalContext, LocalContextInner, PersistentContext},
     precise_allocation::PreciseAllocation,
 };
 pub struct ConservativeRoots {
     pub scan: Vec<(*mut u8, *mut u8)>,
 }
 
-use super::{block::*, block_set::BlockSet};
+use super::{block::*, block_set::BlockSet, handle::HandleTrait};
 
 #[cfg(not(miri))]
 use crate::heap::constraint::SimpleMarkingConstraint;
+use hashbrown::HashSet;
 use intrusive_collections::{LinkedList, UnsafeRef};
 #[cfg(not(miri))]
 use wtf_rs::stack_bounds::StackBounds;
@@ -211,30 +211,26 @@ pub struct Heap {
     constraints: Vec<Box<dyn MarkingConstraint>>,
     sp: usize,
     pub(crate) precise_allocations: Vec<*mut PreciseAllocation>,
-    scopes: SegmentedList<Option<NonNull<LocalContextInner>>>,
-    persistent: *mut LocalContextInner,
     ndefers: u32,
     max_heap_size: usize,
     allocated: usize,
+    pub(super) handles: HashSet<*mut dyn HandleTrait>,
+    stack_bounds: StackBounds,
 }
 
 impl Heap {
     pub fn new() -> Box<Self> {
         let mut this = Box::new(Self {
-            scopes: SegmentedList::new(),
             constraints: vec![],
-            persistent: Box::into_raw(Box::new(LocalContextInner {
-                next: null_mut(),
-                prev: null_mut(),
-                space: null_mut(),
-                roots: Default::default(),
-            })),
+            handles: Default::default(),
+
             ndefers: 0,
-            max_heap_size: 64 * 1024,
+            max_heap_size: 256 * 1024,
             allocated: 0,
             block_set: BlockSet::new(),
             sp: 0,
             precise_allocations: vec![],
+            stack_bounds: StackBounds::current_thread_stack_bounds(),
             arenas: [null_mut(); SIZE_CLASSES.len()],
         });
         this.add_core_constraints();
@@ -262,7 +258,7 @@ impl Heap {
         self.constraints.push(Box::new(x));
     }
     fn add_core_constraints(&mut self) {
-        // we do not want to mark stack when running MIRI.
+        /*// we do not want to mark stack when running MIRI.
         #[cfg(not(miri))]
         self.add_constraint(SimpleMarkingConstraint::new(
             "Conservative Roots",
@@ -270,36 +266,10 @@ impl Heap {
                 let bounds = StackBounds::current_thread_stack_bounds();
                 marking.add_conservative_roots(bounds.origin, marking.gc.sp as _);
             },
-        ));
-    }
-
-    pub fn persistent_context(&self) -> PersistentContext {
-        unsafe {
-            PersistentContext {
-                inner: &mut *self.persistent,
-            }
-        }
-    }
-
-    pub fn new_local_context<'a>(&mut self) -> LocalContext<'a> {
-        let scope = Box::into_raw(Box::new(LocalContextInner {
-            prev: core::ptr::null_mut(),
-            next: core::ptr::null_mut(),
-            space: self as *mut Self,
-            roots: wtf_rs::list::LinkedList::with_capacity(1),
-        }));
-
-        unsafe {
-            self.scopes.push_back(Some(NonNull::new_unchecked(scope)));
-            LocalContext {
-                inner: NonNull::new_unchecked(self.scopes.back_mut().unwrap() as *mut _),
-                marker: Default::default(),
-            }
-        }
+        ));*/
     }
 
     unsafe fn gc_internal(&mut self, dummy: *const usize) {
-        //return;
         if self.ndefers > 0 {
             return;
         }
@@ -388,7 +358,7 @@ impl Heap {
             (*arena).allocate(self)
         }
     }
-    #[inline]
+
     pub fn alloc<T: Cell>(&mut self, value: T) -> Gc<T> {
         unsafe {
             let size = allocation_size(&value);
@@ -405,6 +375,16 @@ impl Heap {
                 sz,
             );*/
             //std::mem::forget(value);
+            #[cfg(feature = "valgrind-gc")]
+            {
+                println!(
+                    "Alloc {:p} ({}): {}",
+                    memory,
+                    std::any::type_name::<T>(),
+                    std::backtrace::Backtrace::capture()
+                );
+            }
+
             Gc {
                 cell: NonNull::new_unchecked(memory),
                 marker: Default::default(),
@@ -461,50 +441,29 @@ impl<'a> Marking<'a> {
                 head = (*head).next;
             }*/
             let this = self as *mut Self;
-            (*this).gc.scopes.retain(|scope| {
-                if scope.is_none() {
-                    false
-                } else {
-                    let p = scope.unwrap().as_ptr();
-                    (*p).roots.retain(|x| {
-                        if let Some(x) = x {
-                            (*x.as_ptr()).trace(self);
-                            true
-                        } else {
-                            false
-                        }
-                    });
-                    true
-                }
-            });
-            let scope = self.gc.persistent;
-            (*scope).roots.retain(|item| match item {
-                Some(ptr) => {
-                    (*ptr.as_ptr()).trace(self);
-
-                    true
-                }
-                None => false,
-            });
-
-            /*while let Some((from, to)) = self.cons.scan.pop() {
-                let mut scan = from as *mut *mut u8;
-                let mut to = to as *mut *mut u8;
-                if scan > to {
-                    swap(&mut to, &mut scan);
-                }
-                while scan < to {
-                    let ptr = *scan;
-                    if ptr.is_null() {
-                        scan = scan.add(1);
-                        continue;
+            for handle in self.gc.handles.iter().copied() {
+                (*handle).trace(&mut *this);
+            }
+            if false {
+                while let Some((from, to)) = self.cons.scan.pop() {
+                    let mut scan = from as *mut *mut u8;
+                    let mut to = to as *mut *mut u8;
+                    if scan > to {
+                        std::mem::swap(&mut to, &mut scan);
                     }
-                    self.find_gc_object_pointer_for_marking(ptr, |this, pointer| {
-                        this.mark(pointer);
-                    });
-                    scan = scan.add(1);
+                    while scan < to {
+                        let ptr = *scan;
+                        if ptr.is_null() {
+                            scan = scan.add(1);
+                            continue;
+                        }
+                        self.find_gc_object_pointer_for_marking(ptr, |this, pointer| {
+                            this.mark(pointer);
+                        });
+                        scan = scan.add(1);
+                    }
                 }
-            }*/
+            }
         }
     }
     fn process_worklist(&mut self) {
@@ -597,11 +556,6 @@ impl<'a> Tracer for Marking<'a> {
 impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
-            while let Some(scope) = self.scopes.pop_front() {
-                if let Some(scope) = scope {
-                    let _ = Box::from_raw(scope.as_ptr());
-                }
-            }
             for arena in self.arenas.iter() {
                 let _ = Box::from_raw(*arena);
             }
@@ -609,7 +563,6 @@ impl Drop for Heap {
                 (**prec).destroy();
             }
             self.constraints.clear();
-            let _ = Box::from_raw(self.persistent);
         }
     }
 }

@@ -7,10 +7,7 @@ use super::{object::*, structure::Structure, value::JsValue};
 use super::{property_descriptor::DataDescriptor, slot::*};
 use crate::{
     bytecode::ByteCode,
-    heap::{
-        cell::{Gc, Trace, Tracer},
-        context::Context,
-    },
+    heap::cell::{Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
 pub struct JsFunction {
@@ -59,25 +56,23 @@ impl JsFunction {
     pub fn construct<'a>(
         &mut self,
         vm: &mut VirtualMachine,
-        ctx: &'_ impl Context<'a>,
+
         args: &mut Arguments,
         structure: Option<Gc<Structure>>,
     ) -> Result<JsValue, JsValue> {
-        let structure = structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false));
-        let obj = ctx.create_local(JsObject::new(
-            vm,
-            structure,
-            JsObject::get_class(),
-            ObjectTag::Ordinary,
-        ));
+        let structure = structure
+            .unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false))
+            .root();
+        let obj = JsObject::new(vm, *structure, JsObject::get_class(), ObjectTag::Ordinary).root();
+        args.ctor_call = true;
         args.this = JsValue::new(*obj);
-        self.call(vm, ctx, args)
+        self.call(vm, args)
     }
 
     pub fn call<'a>(
         &mut self,
         vm: &mut VirtualMachine,
-        ctx: &'_ impl Context<'a>,
+
         args: &mut Arguments,
     ) -> Result<JsValue, JsValue> {
         match self.ty {
@@ -290,7 +285,8 @@ pub struct JsNativeFunction {
 impl JsNativeFunction {
     pub fn new(ctx: &mut VirtualMachine, name: Symbol, f: JsAPI, n: u32) -> Gc<JsObject> {
         let vm = ctx;
-        let mut func = JsFunction::new(vm, FuncType::Native(JsNativeFunction { func: f }), false);
+        let mut func =
+            JsFunction::new(vm, FuncType::Native(JsNativeFunction { func: f }), false).root();
         let l = Symbol::length();
 
         let _ = func.define_own_property(
@@ -304,7 +300,7 @@ impl JsNativeFunction {
         let name = JsValue::new(JsString::new(vm, &k));
         let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
 
-        func
+        *func
     }
     #[allow(clippy::many_single_char_names)]
     pub fn new_with_struct(
@@ -320,7 +316,8 @@ impl JsNativeFunction {
             s,
             FuncType::Native(JsNativeFunction { func: f }),
             false,
-        );
+        )
+        .root();
         let l = Symbol::length();
 
         let _ = func.define_own_property(
@@ -334,7 +331,7 @@ impl JsNativeFunction {
         let name = JsValue::new(JsString::new(vm, &k));
         let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
 
-        func
+        *func
     }
 }
 
@@ -342,7 +339,10 @@ unsafe impl Trace for JsFunction {
     fn trace(&self, tracer: &mut dyn Tracer) {
         self.construct_struct.trace(tracer);
         match self.ty {
-            FuncType::User(ref x) => x.code.trace(tracer),
+            FuncType::User(ref x) => {
+                x.code.trace(tracer);
+                x.scope.trace(tracer);
+            }
             _ => (),
         }
     }
@@ -355,15 +355,16 @@ pub struct JsVMFunction {
 }
 impl JsVMFunction {
     pub fn new(vm: &mut VirtualMachine, code: Gc<ByteCode>, env: Gc<JsObject>) -> Gc<JsObject> {
-        let ctx = vm.space().new_local_context();
-        let envs = ctx.new_local(Structure::new_indexed(vm, Some(env), false));
+        // let ctx = vm.space().new_local_context();
+        let envs = Structure::new_indexed(vm, Some(env), false).root();
+        let scope = JsObject::new(vm, *envs, JsObject::get_class(), ObjectTag::Ordinary).root();
         let f = JsVMFunction {
             code,
-            scope: JsObject::new(vm, *envs, JsObject::get_class(), ObjectTag::Ordinary),
+            scope: *scope,
         };
 
-        let mut this = ctx.new_local(JsFunction::new(vm, FuncType::User(f), false));
-        let mut proto = ctx.new_local(JsObject::new_empty(vm));
+        let mut this = JsFunction::new(vm, FuncType::User(f), false).root();
+        let mut proto = JsObject::new_empty(vm).root();
 
         let _ = proto.define_own_property(
             vm,

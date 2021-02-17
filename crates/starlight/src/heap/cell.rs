@@ -1,10 +1,10 @@
 use crate::{
-    gc::{block::HeapBlock, heap::Heap},
+    gc::{block::HeapBlock, handle::Handle, heap::Heap},
     runtime::{class::Class, structure::Structure},
     vm::VirtualMachine,
 };
 
-use super::{addr::Address, block::Block, context::Local, precise_allocation::PreciseAllocation};
+use super::{addr::Address, block::Block, precise_allocation::PreciseAllocation};
 use core::{mem::size_of, mem::transmute};
 #[cfg(feature = "debug-snapshots")]
 use erased_serde::serialize_trait_object;
@@ -251,10 +251,10 @@ macro_rules! impl_prim {
 impl_prim!(() bool f32 f64 u8 u16 u32 u64 u128 i8 i16 i32 i64 i128);
 impl<T: Cell + ?Sized> Gc<T> {
     /// Create rooted value from `self.` This will create local handle in persistent context of GC heap.
-    pub fn root(self) -> Local<'static, Gc<T>> {
+    pub fn root(self) -> Handle<Gc<T>> {
         unsafe {
             let heap = self.heap();
-            (*heap).persistent_context().new_local(self)
+            Handle::new(&mut *heap, self)
         }
     }
 

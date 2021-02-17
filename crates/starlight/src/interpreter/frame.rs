@@ -13,7 +13,6 @@ pub enum BlockType {
     Switch,
 }
 
-use starlight_derive::Trace;
 #[repr(C)]
 
 pub struct FrameBase {
@@ -24,7 +23,7 @@ pub struct FrameBase {
     pub is_ctor: u8,
 
     pub is_thrown: u8,
-
+    pub saved_stack: *mut JsValue,
     pub stack_size: usize,
     pub scope: JsValue,
 

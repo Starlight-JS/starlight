@@ -43,7 +43,7 @@ impl Emitter for MyEmiter {
 }
 use crate::{
     frontend::Compiler,
-    gc::heap::Heap,
+    gc::{handle::Handle, heap::Heap},
     heap::{
         cell::{Cell, Gc, Trace, Tracer},
         constraint::SimpleMarkingConstraint,
@@ -161,7 +161,6 @@ impl VirtualMachine {
         code: &str,
         name: &str,
     ) -> Result<Gc<JsObject>, JsValue> {
-        let ctx = self.space().new_local_context();
         let cm: Lrc<SourceMap> = Default::default();
         let e = BufferedError::default();
 
@@ -192,8 +191,9 @@ impl VirtualMachine {
                 todo!("throw error");
             }
         };
-
-        let mut code = ctx.new_local(Compiler::compile_script(VirtualMachineRef(self), &script));
+        self.space.defer_gc();
+        let vmref = VirtualMachineRef(self);
+        let mut code = Handle::new(self.space(), Compiler::compile_script(vmref, &script));
         code.strict = code.strict || force_strict;
         code.name = self.intern_or_known_symbol(name);
         code.display_to(&mut OutBuf).unwrap();
@@ -201,11 +201,11 @@ impl VirtualMachine {
         let envs = Structure::new_indexed(self, Some(self.global_object()), false);
         let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
         let fun = JsVMFunction::new(self, *code, env);
+        self.space.undefer_gc();
         return Ok(fun);
     }
     pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
         let res = {
-            let ctx = self.space().new_local_context();
             let cm: Lrc<SourceMap> = Default::default();
             let e = BufferedError::default();
 
@@ -236,17 +236,19 @@ impl VirtualMachine {
                     todo!("throw error");
                 }
             };
+            let vmref = VirtualMachineRef(self);
 
-            let mut code =
-                ctx.new_local(Compiler::compile_script(VirtualMachineRef(self), &script));
+            let mut code = Handle::new(self.space(), Compiler::compile_script(vmref, &script));
             code.strict = code.strict || force_strict;
             code.display_to(&mut OutBuf).unwrap();
 
             let envs = Structure::new_indexed(self, Some(self.global_object()), false);
             let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
-            let mut fun = ctx.new_local(JsVMFunction::new(self, *code, env));
-            let mut args = ctx.new_local(Arguments::new(self, JsValue::undefined(), 0));
-            fun.as_function_mut().call(self, &ctx, &mut args)
+            let fun = JsVMFunction::new(self, *code, env);
+            let mut fun = Handle::new(self.space(), fun);
+            let args = Arguments::new(self, JsValue::undefined(), 0);
+            let mut args = Handle::new(self.space(), args);
+            fun.as_function_mut().call(self, &mut args)
         };
 
         res
@@ -323,12 +325,14 @@ impl VirtualMachine {
             self.stack = self.stack.add(1);
         }
     }
+    #[inline(always)]
     pub fn upop(&mut self) -> JsValue {
         unsafe {
             self.stack = self.stack.sub(1);
             self.stack.read()
         }
     }
+    #[inline(always)]
     pub fn upush(&mut self, val: JsValue) {
         unsafe {
             self.stack.write(val);
@@ -355,6 +359,9 @@ impl VirtualMachine {
         std::mem::forget(stack);
         let stack = ptr;
         let stack_end = unsafe { ptr.add(16 * 1024) };
+        unsafe {
+            std::ptr::write_bytes(stack, 0, 16 * 1024);
+        }
 
         let mut this = VirtualMachineRef(Box::into_raw(Box::new(Self {
             space,
@@ -384,6 +391,14 @@ impl VirtualMachine {
                         (*current).trace(tracer);
                         current = (*current).prev;
                     }
+                    let mut scan = vm.stack_start;
+                    while scan < vm.stack.sub(1) {
+                        let val = scan.read();
+                        if !val.is_empty() {
+                            val.trace(tracer);
+                        }
+                        scan = scan.add(1);
+                    }
                 }
             },
         ));
@@ -398,6 +413,7 @@ impl VirtualMachine {
             Some(Structure::new_indexed(&mut this, None, false));
         this.global_object = Some(JsGlobal::new(&mut this));
         this.init_error(proto);
+        assert!(this.global_data().error_structure.is_some());
         this.space().undefer_gc();
         this
     }
@@ -468,6 +484,7 @@ impl VirtualMachine {
         );
     }
     fn init_error(&mut self, obj_proto: Gc<JsObject>) {
+        self.global_data.error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.reference_error_structure =

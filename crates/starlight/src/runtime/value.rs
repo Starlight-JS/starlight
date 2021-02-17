@@ -384,7 +384,11 @@ impl JsValue {
     }
 
     pub fn as_object(self) -> Gc<JsObject> {
-        assert!(self.is_object());
+        assert!(
+            self.is_object(),
+            "not an object ptr {:p}",
+            self.as_cell().cell
+        );
         unsafe { self.as_cell().downcast_unchecked() }
     }
     pub fn as_symbol(self) -> Gc<JsSymbol> {

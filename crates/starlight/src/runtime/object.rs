@@ -19,6 +19,7 @@ use super::{
 use super::{method_table::MethodTable, value::JsValue};
 use crate::{
     define_jsclass,
+    gc::handle::Handle,
     heap::{
         addr::Address,
         cell::{Cell, Gc, Trace, Tracer},
@@ -268,8 +269,8 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 let ac = slot.accessor();
-                let ctx = vm.space().new_local_context();
-                let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 1));
+                let args = Arguments::new(vm, JsValue::new(obj), 1);
+                let mut args = Handle::new(vm.space(), args);
 
                 args[0] = val;
                 return ac
@@ -278,7 +279,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(vm, &ctx, &mut args)
+                    .call(vm, &mut args)
                     .map(|_| ());
             }
         }
@@ -365,8 +366,8 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 let ac = slot.accessor();
-                let ctx = vm.space().new_local_context();
-                let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 1));
+                let args = Arguments::new(vm, JsValue::new(obj), 1);
+                let mut args = Handle::new(vm.space(), args);
 
                 args[0] = val;
                 return ac
@@ -375,7 +376,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(vm, &ctx, &mut args)
+                    .call(vm, &mut args)
                     .map(|_| ());
             }
         }
@@ -721,8 +722,8 @@ impl JsObject {
         vm: &mut VirtualMachine,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        let ctx = vm.space().new_local_context();
-        let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 0));
+        let args = Arguments::new(vm, JsValue::new(obj), 0);
+        let mut args = Handle::new(vm.space(), args);
 
         macro_rules! try_ {
             ($sym: expr) => {
@@ -736,7 +737,7 @@ impl JsObject {
                         .downcast::<JsObject>()
                         .unwrap()
                         .as_function_mut()
-                        .call(vm, &ctx, &mut args)?;
+                        .call(vm, &mut args)?;
                     if res.is_primitive() || res.is_undefined_or_null() {
                         return Ok(res);
                     }
@@ -852,7 +853,6 @@ impl Gc<JsObject> {
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         let exotic_to_prim = self.get_method(vm, Symbol::toPrimitive());
-        let ctx = vm.space().new_local_context();
 
         let obj = *self;
         match exotic_to_prim {
@@ -860,14 +860,14 @@ impl Gc<JsObject> {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
                 let mut func = unsafe { val.as_cell().downcast_unchecked::<JsObject>() };
                 let f = func.as_function_mut();
-
-                let mut args = ctx.new_local(Arguments::new(vm, JsValue::new(obj), 1));
+                let args = Arguments::new(vm, JsValue::new(obj), 1);
+                let mut args = Handle::new(vm.space(), args);
                 args[0] = match hint {
                     JsHint::Number | JsHint::None => JsValue::new(JsString::new(vm, "number")),
                     JsHint::String => JsValue::new(JsString::new(vm, "string")),
                 };
 
-                f.call(vm, &ctx, &mut args)
+                f.call(vm, &mut args)
             }
             _ => (self.class.method_table.DefaultValue)(obj, vm, hint),
         }
@@ -1338,15 +1338,11 @@ mod tests {
     #[test]
     fn test_put() {
         let mut vm = VirtualMachine::new(Options::default());
-        let ctx = vm.space().new_local_context();
+
         {
             let my_struct = Structure::new_indexed(&mut vm, None, true);
-            let mut obj = ctx.new_local(JsObject::new(
-                &mut vm,
-                my_struct,
-                JsObject::get_class(),
-                ObjectTag::Array,
-            ));
+            let obj = JsObject::new(&mut vm, my_struct, JsObject::get_class(), ObjectTag::Array);
+            let mut obj = Handle::new(vm.space(), obj);
             keep_on_stack!(&obj, &my_struct);
             let key = vm.intern("foo");
             let put = obj.put(&mut vm, key, JsValue::new(42), false);
@@ -1357,7 +1353,7 @@ mod tests {
             assert!(val.value().is_int32());
             assert_eq!(val.value().as_int32(), 42);
         }
-        drop(ctx);
+
         VirtualMachineRef::dispose(vm);
     }
 
@@ -1365,14 +1361,10 @@ mod tests {
     fn test_put_indexed() {
         let mut vm = VirtualMachine::new(Options::default());
         {
-            let ctx = vm.space().new_local_context();
-            let my_struct = ctx.new_local(Structure::new_indexed(&mut vm, None, true));
-            let mut obj = ctx.new_local(JsObject::new(
-                &mut vm,
-                *my_struct,
-                JsArray::get_class(),
-                ObjectTag::Array,
-            ));
+            let struct_ = Structure::new_indexed(&mut vm, None, true);
+            let my_struct = Handle::new(vm.space(), struct_);
+            let obj = JsObject::new(&mut vm, *my_struct, JsArray::get_class(), ObjectTag::Array);
+            let mut obj = Handle::new(vm.space(), obj);
 
             let key = vm.intern("foo");
             let key2 = Symbol::Indexed(0);
@@ -1395,7 +1387,7 @@ mod tests {
 
             drop(obj);
             drop(my_struct);
-            drop(ctx);
+
             VirtualMachineRef::dispose(vm);
         }
     }

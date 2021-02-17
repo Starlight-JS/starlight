@@ -1,5 +1,4 @@
 use crate::{
-    heap::context::LocalContext,
     runtime::{
         arguments::Arguments,
         error::{JsError, JsEvalError, JsRangeError, JsReferenceError, JsTypeError},

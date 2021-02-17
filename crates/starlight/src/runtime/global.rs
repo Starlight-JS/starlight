@@ -261,8 +261,8 @@ mod tests {
     #[test]
     fn test_global_obj() {
         let mut vm = VirtualMachine::new(Options::default());
-        let ctx = vm.space().new_local_context();
-        let mut global = ctx.new_local(JsGlobal::new(&mut vm));
+
+        let mut global = JsGlobal::new(&mut vm).root();
         let attr = create_data(AttrExternal::new(Some(W | E)));
         assert!(attr.is_data() && !attr.is_accessor());
         global
@@ -279,7 +279,6 @@ mod tests {
             }
         }
         drop(global);
-        drop(ctx);
 
         VirtualMachineRef::dispose(vm);
     }

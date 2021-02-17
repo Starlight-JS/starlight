@@ -1,9 +1,3 @@
-use std::{
-    alloc::{alloc_zeroed, dealloc, Layout},
-    mem::size_of,
-    ptr::{null_mut, NonNull},
-};
-
 use crate::heap::{
     addr::Address,
     cell::{Header, GC_UNMARKED},
@@ -11,6 +5,12 @@ use crate::heap::{
 use intrusive_collections::intrusive_adapter;
 use intrusive_collections::LinkedListLink;
 use intrusive_collections::UnsafeRef;
+use memmap2::MmapMut;
+use std::{
+    alloc::{alloc_zeroed, dealloc, Layout},
+    mem::size_of,
+    ptr::{null_mut, NonNull},
+};
 
 use super::heap::Heap;
 intrusive_adapter!(pub BlockAdapter = UnsafeRef<HeapBlock> : HeapBlock {link: LinkedListLink});
@@ -39,12 +39,16 @@ impl FreeList {
         self.head.is_null()
     }
     /// Try to pop from list
-    pub fn allocate(&mut self) -> Address {
+    pub fn allocate(&mut self, _sz: usize) -> Address {
         if self.is_empty() {
             return Address::null();
         }
         unsafe {
             let prev = self.head;
+            #[cfg(feature = "valgrind-gc")]
+            {
+                super::valgrind::malloc_like(prev as usize, _sz);
+            }
             self.head = (*prev).next;
             Address::from_ptr(prev)
         }
@@ -54,6 +58,10 @@ impl FreeList {
         unsafe {
             let cell = cell.to_mut_ptr::<FreeCell>();
             (*cell).next = self.head;
+            #[cfg(feature = "valgrind-gc")]
+            {
+                super::valgrind::freelike(cell as usize);
+            }
             self.head = cell;
         }
     }
@@ -73,6 +81,7 @@ pub struct HeapBlock {
     freelist: FreeList,
     free: bool,
     heap: *mut Heap,
+
     storage: [*mut Header; 0],
 }
 pub const BLOCK_SIZE: usize = 16 * 1024;
@@ -131,6 +140,7 @@ impl HeapBlock {
             (*memory).for_each_cell(|cell| {
                 //(*cell).zap(1);
                 // (*cell).set_tag(GC_DEAD);
+
                 freelist.free(Address::from_ptr(cell));
             });
             (*memory).freelist = freelist;
@@ -159,6 +169,10 @@ impl HeapBlock {
                     core::ptr::drop_in_place((*cell).get_dyn());
                     (*cell).zap(1); // mark cell as freed
                                     //(*cell).set_tag(GC_DEAD);
+                    #[cfg(feature = "valgrind-gc")]
+                    {
+                        println!("Sweep {:p}", cell);
+                    }
                     freelist.free(Address::from_ptr(cell));
                 } else {
                     // cell was marked during GC, just unmark it.
@@ -216,7 +230,9 @@ impl HeapBlock {
         if self.freelist.is_empty() {
             return null_mut();
         }
-        self.freelist.allocate().to_mut_ptr()
+        let p = self.freelist.allocate(self.cell_size as _).to_mut_ptr();
+
+        p
     }
     pub fn from_cell(addr: *mut Header) -> *mut Self {
         (addr as usize & !(BLOCK_SIZE - 1)) as *mut _

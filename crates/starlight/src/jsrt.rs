@@ -1,4 +1,3 @@
-use crate::heap::context::LocalContext;
 use crate::{
     runtime::{arguments::Arguments, function::JsNativeFunction, value::JsValue},
     vm::VirtualMachine,
@@ -17,9 +16,11 @@ pub fn print(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsVal
 }
 
 pub fn jsrt_init(vm: &mut VirtualMachine) {
-    let ctx = vm.space().new_local_context();
-    let mut global = ctx.new_local(vm.global_object());
+    vm.space().defer_gc();
+    let mut global = vm.global_object();
     let name = vm.intern("print");
-    let print = ctx.new_local(JsNativeFunction::new(vm, name, print, 0));
-    assert!(global.put(vm, name, JsValue::new(*print), false).is_ok());
+    let print = JsNativeFunction::new(vm, name, print, 0);
+    assert!(global.put(vm, name, JsValue::new(print), false).is_ok());
+
+    vm.space().undefer_gc();
 }

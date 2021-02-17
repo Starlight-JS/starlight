@@ -5,6 +5,7 @@ use swc_ecmascript::{ast::*, utils::IsDirective};
 use crate::{
     bytecode::opcodes::*,
     bytecode::*,
+    gc::handle::Handle,
     heap::cell::{Gc, Trace, Tracer},
     runtime::symbol::Symbol,
     vm::VirtualMachineRef,
@@ -39,9 +40,9 @@ impl Compiler {
     }
 
     pub fn compile_script(mut vm: VirtualMachineRef, p: &Script) -> Gc<ByteCode> {
-        let ctx = vm.space().new_local_context();
         let name = vm.intern_or_known_symbol("<global>");
-        let mut code = ctx.new_local(ByteCode::new(&mut vm, name, &[], false));
+        let code = ByteCode::new(&mut vm, name, &[], false);
+        let mut code = Handle::new(vm.space(), code);
         let mut compiler = Compiler {
             lci: Vec::new(),
             builder: ByteCodeBuilder {
@@ -86,7 +87,6 @@ impl Compiler {
         self.builder.finish();
     }
     pub fn compile(&mut self, body: &[Stmt]) {
-        let ctx = self.vm.space().new_local_context();
         let mut i = 0;
         VisitFnDecl::visit(body, &mut |decl| {
             let name = self.intern(&decl.ident);
@@ -99,7 +99,8 @@ impl Compiler {
                     _ => todo!(),
                 })
                 .collect::<Vec<Symbol>>();
-            let mut code = ctx.new_local(ByteCode::new(&mut self.vm, name, &params, false));
+            let code = ByteCode::new(&mut self.vm, name, &params, false);
+            let mut code = Handle::new(self.vm.space(), code);
             let mut compiler = Compiler {
                 lci: Vec::new(),
                 builder: ByteCodeBuilder {

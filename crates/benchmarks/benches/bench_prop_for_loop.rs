@@ -13,8 +13,12 @@ use vm::{Options, VirtualMachine};
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 const CODE: &'static str = r#"
-for (let i = 0;i<10000;i = i + 1) {
+function foo() {}
 
+var obj = new foo()
+obj.x = 0
+for (;obj.x < 10000;obj.x = obj.x + 1) {
+    
 }
 
 "#;
@@ -28,14 +32,14 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut boa_ctx = boa::Context::new();
     let args = Arguments::new(&mut vm, JsValue::undefined(), 0);
     let mut args = Handle::new(vm.space(), args);
-    c.bench_function("starlight-for-loop", |b| {
+    c.bench_function("starlight-prop-for-loop", |b| {
         b.iter(|| match func.as_function_mut().call(&mut vm, &mut args) {
             Ok(_) => (),
             Err(_) => unreachable!(),
         });
     });
 
-    c.bench_function("boa-eval-for-loop", |b| {
+    c.bench_function("boa-prop-eval-for-loop", |b| {
         b.iter(|| {
             boa_ctx.eval(CODE).unwrap();
         });

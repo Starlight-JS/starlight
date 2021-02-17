@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_mut, unused_variables)]
+#![cfg_attr(feature = "valgrind-gc", feature(llvm_asm, backtrace))]
 #![allow(
     clippy::transmute_float_to_int,
     clippy::transmute_int_to_float,

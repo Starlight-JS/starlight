@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 
 starlight = { path = "../starlight" }
-mozjs = "0.10"
+
 Boa = "0.11"
 
 [dev-dependencies]
@@ -18,4 +18,8 @@ criterion = "0.3"
 
 [[bench]]
 name = "bench_for_loop"
+harness = false
+
+[[bench]]
+name = "bench_prop_for_loop"
 harness = false

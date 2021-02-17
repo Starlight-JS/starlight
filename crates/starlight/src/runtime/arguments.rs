@@ -1,5 +1,7 @@
 use std::ops::{Index, IndexMut};
 
+use minivec::{mini_vec, MiniVec};
+
 use crate::{
     heap::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,

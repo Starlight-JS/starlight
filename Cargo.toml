@@ -10,7 +10,11 @@ default-members = ["crates/starlight"]
 [profile.release]
 lto = "fat"
 codegen-units = 1
-opt-level = "z"
+opt-level = 3
+debug = true
+panic = "abort"
 
 [profile.bench]
 debug = true
+opt-level = 3
+lto = "off"

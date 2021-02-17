@@ -1,5 +1,3 @@
-function foo() {
-    print(x)
+for (; ;) {
+    print("HI!")
 }
-
-foo();
