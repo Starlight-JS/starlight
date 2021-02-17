@@ -5,7 +5,6 @@ use crate::heap::{
 use intrusive_collections::intrusive_adapter;
 use intrusive_collections::LinkedListLink;
 use intrusive_collections::UnsafeRef;
-use memmap2::MmapMut;
 use std::{
     alloc::{alloc_zeroed, dealloc, Layout},
     mem::size_of,

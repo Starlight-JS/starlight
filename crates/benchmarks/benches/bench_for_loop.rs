@@ -1,12 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use gc::handle::Handle;
-use runtime::{
-    arguments::Arguments,
-    object::{JsObject, ObjectTag},
-    structure::Structure,
-    symbol::Symbol,
-    value::JsValue,
-};
+use runtime::{arguments::Arguments, value::JsValue};
 use starlight::*;
 use vm::{Options, VirtualMachine};
 

@@ -5,14 +5,14 @@ members = [
     "crates/starlight",
     "crates/starlight-derive",
     "crates/benchmarks",
+    "crates/bmalloc-rs",
 ]
 default-members = ["crates/starlight"]
 [profile.release]
+debug = false
 lto = "fat"
 codegen-units = 1
-opt-level = 3
-debug = true
-panic = "abort"
+opt-level = 's'
 
 [profile.bench]
 debug = true

@@ -72,18 +72,11 @@ use crate::{
     symbol_table::SymbolTable,
 };
 use lexer::Lexer;
-use structopt::*;
 
-#[derive(StructOpt)]
-pub struct Options {
-    #[structopt(long, help = "Write barrier inline buffer size.", default_value = "32")]
-    pub write_barrier_buffer_size: usize,
-}
+pub struct Options {}
 impl Default for Options {
     fn default() -> Self {
-        Self {
-            write_barrier_buffer_size: 32,
-        }
+        Self {}
     }
 }
 

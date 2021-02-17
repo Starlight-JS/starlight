@@ -1,5 +1,5 @@
 use starlight::{
-    gc::handle::Handle,
+    gc::{formatted_size, handle::Handle},
     jsrt::jsrt_init,
     vm::{Options, VirtualMachineRef},
 };
@@ -7,7 +7,7 @@ use starlight::{
     runtime::{arguments::Arguments, value::JsValue},
     vm::VirtualMachine,
 };
-use structopt::StructOpt;
+
 const CODE: &'static str = r#"
 function f(i) {}
 for (let i = 0;i<1000;i = i + 1) {
@@ -16,8 +16,15 @@ for (let i = 0;i<1000;i = i + 1) {
 
 "#;
 fn main() {
-    let mut vm = VirtualMachine::new(Options::from_args());
+    let mut vm = VirtualMachine::new(Options::default());
     jsrt_init(&mut vm);
+
+    vm.space().gc();
+    println!(
+        "In use heap after JSRT init {}",
+        formatted_size(vm.space().heap_usage())
+    );
+
     let res = vm.compile(false, CODE, "<Code>");
     match res {
         Ok(val) => {

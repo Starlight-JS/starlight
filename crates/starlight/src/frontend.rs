@@ -11,7 +11,6 @@ use crate::{
     vm::VirtualMachineRef,
 };
 
-pub mod ast_parser;
 pub mod scope_analyzer;
 pub struct LoopControlInfo {
     breaks: Vec<Box<dyn FnOnce(&mut Compiler)>>,

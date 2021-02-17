@@ -70,13 +70,11 @@ pub struct ConservativeRoots {
 
 use super::{block::*, block_set::BlockSet, handle::HandleTrait};
 
-#[cfg(not(miri))]
-use crate::heap::constraint::SimpleMarkingConstraint;
 use hashbrown::HashSet;
 use intrusive_collections::{LinkedList, UnsafeRef};
+use wtf_rs::keep_on_stack;
 #[cfg(not(miri))]
 use wtf_rs::stack_bounds::StackBounds;
-use wtf_rs::{keep_on_stack, list::LinkedList as SegmentedList};
 pub struct SmallArena {
     /// # Free blocks
     ///
@@ -258,13 +256,13 @@ impl Heap {
         self.constraints.push(Box::new(x));
     }
     fn add_core_constraints(&mut self) {
-        /*// we do not want to mark stack when running MIRI.
+        /* // we do not want to mark stack when running MIRI.
         #[cfg(not(miri))]
         self.add_constraint(SimpleMarkingConstraint::new(
             "Conservative Roots",
             |marking| {
-                let bounds = StackBounds::current_thread_stack_bounds();
-                marking.add_conservative_roots(bounds.origin, marking.gc.sp as _);
+                let origin = marking.gc.stack_bounds.origin;
+                marking.add_conservative_roots(origin, marking.gc.sp as _);
             },
         ));*/
     }
@@ -357,6 +355,9 @@ impl Heap {
             let arena = self.arenas[size_class_index_for(size).unwrap()];
             (*arena).allocate(self)
         }
+    }
+    pub fn heap_usage(&self) -> usize {
+        self.allocated
     }
 
     pub fn alloc<T: Cell>(&mut self, value: T) -> Gc<T> {
@@ -496,6 +497,7 @@ impl<'a> Marking<'a> {
     pub fn add_conservative_roots(&mut self, from: *mut u8, to: *mut u8) {
         self.cons.scan.push((from, to));
     }
+
     #[allow(clippy::mutable_key_type)]
     unsafe fn find_gc_object_pointer_for_marking(
         &mut self,
