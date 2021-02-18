@@ -8,7 +8,7 @@ This guide explains the basics of interacting with Starlight's GC as a Starlight
 
 - `JsValue`
 - `Gc<T>`
-
+- `Handle<T>`
 Note that JsValue can contain pointers internallly even though they are not pointer types.
 
 If you use these types directly, or create structs or arrays that contain them, you must follow the rules set out in this guide. If you do not your program will not work correctly - if it works at all.
@@ -17,8 +17,7 @@ If you use these types directly, or create structs or arrays that contain them, 
 
 ### `Gc<T>`,`T:Trace`
 
-All GC thing pointers on the stack (i.e local variables and paramters to functions) must use `Local<T>` type. This is a generic structure where the generic parameter is the type GC can trace (i.e `Gc<T>`), this means you can have any type that implements `Trace` allocated in `Local<T>`. For creating new locals `LocalContext::new_local` or `PersistentContext::new_local` should be used. Both `LocalContext` and `PersistentContext` is available through `vm.space().new_local_context()` and `vm.space().persistent_context()`
-
+All GC thing pointers on the stack (i.e local variables and paramters to functions) must use `Handle<T>` type. This is a generic reference counted structure where the generic parameter is the type GC can trace (i.e `Gc<T>`), this means you can have any type that implements `Trace` allocated in `Handle<T>`. For creating new locals `Gc::root` or `Handle::new` should be used. 
 ## GC things on the heap
 
 ### `Gc<T>`
@@ -35,6 +34,6 @@ For a regular `struct`, tracing must be triggered manually. The usual way is to 
 
 ## Summary
 
-- Use `Local<T>` for local variables and function parameters.
+- Use `Handle<T>` for local variables and function parameters.
 - Use `Gc<T>` for heap data. **Note: `Gc<T>` are not rooted: they must be traced!**
 - Do not use `&T` or `&mut T` on the heap.
