@@ -841,7 +841,7 @@ impl GlobalData {
 impl Drop for VirtualMachine {
     fn drop(&mut self) {
         unsafe {
-            let _ = Vec::from_raw_parts(self.stack_start, 0, 16 * 1024);
+            // let _ = Vec::from_raw_parts(self.stack_start, 0, 16 * 1024);
         }
     }
 }

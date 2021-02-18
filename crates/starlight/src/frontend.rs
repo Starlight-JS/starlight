@@ -336,7 +336,7 @@ impl Compiler {
                     self.builder.emit(Op::OP_DROP, &[], false);
                 }
             }
-            _ => todo!(),
+            _ => todo!("{:?}", expr),
         }
     }
     pub fn push_lci(&mut self, continue_target: u32) {

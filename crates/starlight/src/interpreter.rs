@@ -544,6 +544,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 for i in 0..args_.len() {
                     *args.at_mut(i as _) = args_[i];
                 }
+                (*frame).saved_stack = vm.stack;
 
                 args.ctor_call = is_ctor;
                 let mut obj = v1.as_object().root();
@@ -673,7 +674,16 @@ unsafe fn eval_internal(
                     vm.upush(e);
                     continue;
                 }
-                None => return Err(e),
+                None => {
+                    let frame = Box::from_raw(frame);
+                    vm.frame = frame.prev;
+                    if !vm.frame.is_null() {
+                        vm.stack = (*vm.frame).saved_stack;
+                    } else {
+                        vm.stack = vm.stack_start;
+                    }
+                    return Err(e);
+                }
             },
         }
     }

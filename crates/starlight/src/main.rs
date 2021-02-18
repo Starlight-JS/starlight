@@ -9,8 +9,14 @@ use starlight::{
 };
 
 const CODE: &'static str = r#"
-let arr = [1,2,3]
-print(Array.isArray(arr))
+function bar() {}
+function foo() {
+    print("foo");
+    return 42;
+}
+bar.prototype.foo = foo;
+var obj = new bar()
+print(obj.foo())
 "#;
 fn main() {
     let mut vm = VirtualMachine::new(Options::default());
