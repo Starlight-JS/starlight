@@ -72,3 +72,9 @@ impl<T: Trace> DerefMut for Handle<T> {
         &mut self.inner().value
     }
 }
+impl<T: Trace> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        self.inner().rc += 1;
+        Self { inner: self.inner }
+    }
+}
