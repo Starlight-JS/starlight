@@ -264,6 +264,7 @@ impl ByteCode {
                     Op::OP_DUP => {
                         writeln!(output, "dup")?;
                     }
+                    Op::OP_PUSH_THIS => writeln!(output, "push_this")?,
                     _ => todo!("{:?}", op),
                 }
             }
@@ -331,9 +332,14 @@ pub enum Val {
     Str(String),
 }
 impl ByteCodeBuilder {
-    pub fn finish(&mut self) -> Gc<ByteCode> {
+    pub fn finish(&mut self, vm: &mut VirtualMachine) -> Gc<ByteCode> {
         self.code.code_start = &mut self.code.code[0];
-
+        if vm.options.dump_bytecode {
+            let mut buf = String::new();
+            let name = vm.description(self.code.name);
+            self.code.display_to(&mut buf).unwrap();
+            eprintln!("Code block '{}' at {:p}: \n {}", name, self.code.cell, buf);
+        }
         self.code
     }
     pub fn new(vm: &mut VirtualMachine, name: Symbol, params: &[Symbol], strict: bool) -> Self {

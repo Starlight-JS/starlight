@@ -61,7 +61,7 @@ impl Compiler {
         compiler.compile(&p.body);
         compiler.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false);
         compiler.builder.emit(Op::OP_RET, &[], false);
-        compiler.builder.finish()
+        compiler.builder.finish(&mut compiler.vm)
     }
     pub fn compile_fn(&mut self, fun: &Function) {
         let is_strict = match fun.body {
@@ -83,42 +83,44 @@ impl Compiler {
         }
         self.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false);
         self.builder.emit(Op::OP_RET, &[], false);
-        self.builder.finish();
+        self.builder.finish(&mut self.vm);
     }
     pub fn compile(&mut self, body: &[Stmt]) {
         let mut i = 0;
         VisitFnDecl::visit(body, &mut |decl| {
-            let name = self.intern(&decl.ident);
-            let params = decl
-                .function
-                .params
-                .iter()
-                .map(|x: &Param| match x.pat {
-                    Pat::Ident(ref x) => self.intern(x),
-                    _ => todo!(),
-                })
-                .collect::<Vec<Symbol>>();
-            let code = ByteCode::new(&mut self.vm, name, &params, false);
-            let mut code = Handle::new(self.vm.space(), code);
-            let mut compiler = Compiler {
-                lci: Vec::new(),
-                builder: ByteCodeBuilder {
-                    code: *code,
-                    val_map: Default::default(),
-                    name_map: Default::default(),
-                },
-                fmap: Default::default(),
-                vm: self.vm,
-            };
+            if true {
+                let name = self.intern(&decl.ident);
+                let params = decl
+                    .function
+                    .params
+                    .iter()
+                    .map(|x: &Param| match x.pat {
+                        Pat::Ident(ref x) => self.intern(x),
+                        _ => todo!(),
+                    })
+                    .collect::<Vec<Symbol>>();
+                let code = ByteCode::new(&mut self.vm, name, &params, false);
+                let mut code = Handle::new(self.vm.space(), code);
+                let mut compiler = Compiler {
+                    lci: Vec::new(),
+                    builder: ByteCodeBuilder {
+                        code: *code,
+                        val_map: Default::default(),
+                        name_map: Default::default(),
+                    },
+                    fmap: Default::default(),
+                    vm: self.vm,
+                };
 
-            compiler.compile_fn(&decl.function);
-            let ix = self.builder.code.codes.len();
-            self.builder.code.codes.push(*code);
-            self.fmap.insert(name, ix as _);
-            let nix = self.builder.get_sym(name);
-            self.builder.emit(Op::OP_GET_FUNCTION, &[ix as _], false);
+                compiler.compile_fn(&decl.function);
+                let ix = self.builder.code.codes.len();
+                self.builder.code.codes.push(*code);
+                self.fmap.insert(name, ix as _);
+                let nix = self.builder.get_sym(name);
+                self.builder.emit(Op::OP_GET_FUNCTION, &[ix as _], false);
 
-            self.builder.emit(Op::OP_SET_VAR, &[nix as _], true);
+                self.builder.emit(Op::OP_SET_VAR, &[nix as _], true);
+            }
         });
         let mut scope = Scope::analyze_stmts(body);
 
@@ -149,6 +151,49 @@ impl Compiler {
 
     pub fn emit(&mut self, expr: &Expr, used: bool) {
         match expr {
+            Expr::Fn(fun) => {
+                self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
+                let name = fun
+                    .ident
+                    .as_ref()
+                    .map(|x| self.intern(x))
+                    .unwrap_or_else(|| self.vm.intern("<anonymous>"));
+                let params = fun
+                    .function
+                    .params
+                    .iter()
+                    .map(|x: &Param| match x.pat {
+                        Pat::Ident(ref x) => self.intern(x),
+                        _ => todo!(),
+                    })
+                    .collect::<Vec<Symbol>>();
+                let code = ByteCode::new(&mut self.vm, name, &params, false);
+                let mut code = Handle::new(self.vm.space(), code);
+                let mut compiler = Compiler {
+                    lci: Vec::new(),
+                    builder: ByteCodeBuilder {
+                        code: *code,
+                        val_map: Default::default(),
+                        name_map: Default::default(),
+                    },
+                    fmap: Default::default(),
+                    vm: self.vm,
+                };
+
+                compiler.compile_fn(&fun.function);
+                let ix = self.builder.code.codes.len();
+                self.builder.code.codes.push(*code);
+                let nix = self.builder.get_sym(name);
+                self.builder.emit(Op::OP_GET_FUNCTION, &[ix as _], false);
+                self.builder.emit(Op::OP_DUP, &[], false);
+                self.builder.emit(Op::OP_SET_VAR, &[nix as _], true);
+                self.builder.emit(Op::OP_POP_SCOPE, &[], false);
+            }
+            Expr::This(_) => {
+                if used {
+                    self.builder.emit(Op::OP_PUSH_THIS, &[], false);
+                }
+            }
             Expr::Array(array_lit) => {
                 self.builder.emit(Op::OP_PUSH_EMPTY, &[], false);
                 for expr in array_lit.elems.iter().rev() {
@@ -212,13 +257,14 @@ impl Compiler {
                     .emit(Op::OP_CALL, &[call.args.len() as u32], false);
             }
             Expr::New(call) => {
+                self.builder.emit(Op::OP_PUSH_EMPTY, &[], false);
                 let argc = call.args.as_ref().map(|x| x.len() as u32).unwrap_or(0);
                 if let Some(ref args) = call.args {
                     for arg in args.iter().rev() {
-                        if arg.spread.is_some() {
-                            todo!("spread");
-                        }
                         self.emit(&arg.expr, true);
+                        if arg.spread.is_some() {
+                            self.builder.emit(Op::OP_SPREAD_ARR, &[], false);
+                        }
                     }
                 }
 
@@ -533,7 +579,6 @@ impl Compiler {
                 } else if decl && !mutable {
                     self.builder.emit(Op::OP_DECL_IMMUTABLE, &[name], true);
                 }
-                self.builder.emit(Op::OP_SET_VAR, &[name], true);
             }
             Pat::Expr(e) => match &**e {
                 Expr::Member(member) => {
@@ -664,9 +709,10 @@ impl Compiler {
                             VarDeclKind::Const => {
                                 self.builder.emit(Op::OP_DECL_IMMUTABLE, &[ix], true)
                             }
-                            VarDeclKind::Var => {}
+                            VarDeclKind::Var => {
+                                self.builder.emit(Op::OP_SET_VAR, &[ix], true);
+                            }
                         }
-                        self.builder.emit(Op::OP_SET_VAR, &[ix], true);
                     }
                     None => {
                         let s: &str = &name.sym;

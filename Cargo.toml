@@ -6,8 +6,9 @@ members = [
     "crates/starlight-derive",
     "crates/benchmarks",
     "crates/bmalloc-rs",
+    "test262-runner",
 ]
-default-members = ["crates/starlight"]
+default-members = ["crates/starlight", "test262-runner"]
 [profile.release]
 debug = true
 lto = "fat"

@@ -433,12 +433,13 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 )?;
             }
             Op::OP_DECL_VAR => {
+                let val = vm.upop();
                 let name = pc.cast::<u32>().read_unaligned();
                 let name = bcode.names[name as usize];
                 Env {
                     record: (*frame).scope.as_object(),
                 }
-                .declare_variable(vm, name, true)?;
+                .declare_variable(vm, name, val, true)?;
             }
 
             Op::OP_RET => {
@@ -531,11 +532,13 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
                 }
                 let mut args_ = vec![];
+
                 loop {
                     let val = vm.upop();
                     if val.is_empty() {
                         break;
                     }
+
                     args_.push(val);
                 }
 
@@ -608,6 +611,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 vm.upush(val);
             }
             Op::OP_DECL_LET => {
+                let val = vm.upop();
                 let ix = pc.cast::<u32>().read_unaligned();
                 pc = pc.add(4);
                 let _fix = pc.cast::<u32>().read_unaligned();
@@ -618,9 +622,11 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     record: (*frame).scope.as_object(),
                 };
                 let name = bcode.names[ix as usize];
-                env.declare_variable(vm, name, true)?;
+                env.declare_variable(vm, name, val, true)?;
             }
+
             Op::OP_DECL_IMMUTABLE => {
+                let val = vm.upop();
                 let ix = pc.cast::<u32>().read_unaligned();
                 pc = pc.add(4);
                 let _fix = pc.cast::<u32>().read_unaligned();
@@ -631,7 +637,8 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     record: (*frame).scope.as_object(),
                 };
                 let name = bcode.names[ix as usize];
-                env.declare_variable(vm, name, false)?;
+                env.declare_variable(vm, name, val, false)?;
+                assert!(env.has_own_variable(vm, name));
             }
             _ => {
                 #[cfg(debug_assertions)]
@@ -675,6 +682,12 @@ unsafe fn eval_internal(
                     continue;
                 }
                 None => {
+                    let desc = if let Some(code) = (*frame).bcode {
+                        vm.description(code.name)
+                    } else {
+                        format!("<unknown>")
+                    };
+                    vm.append_stacktrace(&format!("  ->{}", desc));
                     let frame = Box::from_raw(frame);
                     vm.frame = frame.prev;
                     if !vm.frame.is_null() {

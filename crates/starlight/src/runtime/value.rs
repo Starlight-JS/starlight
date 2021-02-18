@@ -282,6 +282,9 @@ impl JsValue {
         } else if self.is_cell() && self.as_cell().is::<JsString>() {
             unsafe {
                 let s = self.as_cell().downcast_unchecked::<JsString>();
+                if let Ok(n) = s.as_str().parse::<i32>() {
+                    return Ok(n as f64);
+                }
                 Ok(s.as_str()
                     .parse::<f64>()
                     .unwrap_or_else(|_| pure_nan::pure_nan()))
@@ -403,6 +406,7 @@ impl JsValue {
         unsafe { self.as_cell().downcast_unchecked() }
     }
     pub fn get_primitive_proto(self, vm: &mut VirtualMachine) -> Gc<JsObject> {
+        assert!(!self.is_empty());
         assert!(self.is_primitive());
         if self.is_string() {
             return vm.global_data().string_prototype.unwrap();

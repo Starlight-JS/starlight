@@ -103,10 +103,10 @@ impl Env {
         &mut self,
         vm: &mut VirtualMachine,
         name: Symbol,
+        val: JsValue,
         mutable: bool,
     ) -> Result<(), JsValue> {
-        let desc =
-            DataDescriptor::new(JsValue::undefined(), if mutable { W | C | E } else { NONE });
+        let desc = DataDescriptor::new(val, if mutable { W | C | E } else { C | E });
 
         if self.has_own_variable(vm, name) {
             let desc = vm.description(name);

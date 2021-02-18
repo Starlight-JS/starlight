@@ -74,15 +74,20 @@ use crate::{
 };
 use lexer::Lexer;
 
-pub struct Options {}
+pub struct Options {
+    pub dump_bytecode: bool,
+}
 impl Default for Options {
     fn default() -> Self {
-        Self {}
+        Self {
+            dump_bytecode: false,
+        }
     }
 }
 
 #[repr(C)]
 pub struct VirtualMachine {
+    pub(crate) options: Options,
     return_value: JsValue,
     thrown_error: JsValue,
     global_object: Option<Gc<JsObject>>,
@@ -92,6 +97,7 @@ pub struct VirtualMachine {
     pub(crate) stack: *mut JsValue,
     space: Box<Heap>,
     interner: SymbolTable,
+    stacktrace: Option<String>,
     global_data: Box<GlobalData>,
     pub(crate) frame: *mut FrameBase,
 }
@@ -149,6 +155,21 @@ impl std::fmt::Write for OutBuf {
 }
 
 impl VirtualMachine {
+    pub fn take_stacktrace(&mut self) -> Option<String> {
+        self.stacktrace.take()
+    }
+
+    pub fn set_stacktrace(&mut self, s: &str) {
+        self.stacktrace = Some(s.to_string());
+    }
+
+    pub fn append_stacktrace(&mut self, s: &str) {
+        if let Some(ref mut trace) = self.stacktrace {
+            trace.push_str(&format!("\n{}", s));
+        } else {
+            self.set_stacktrace(s);
+        }
+    }
     pub fn compile(
         &mut self,
         force_strict: bool,
@@ -190,7 +211,6 @@ impl VirtualMachine {
         let mut code = Handle::new(self.space(), Compiler::compile_script(vmref, &script));
         code.strict = code.strict || force_strict;
         code.name = self.intern_or_known_symbol(name);
-        code.display_to(&mut OutBuf).unwrap();
 
         let envs = Structure::new_indexed(self, Some(self.global_object()), false);
         let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
@@ -324,7 +344,9 @@ impl VirtualMachine {
     pub fn upop(&mut self) -> JsValue {
         unsafe {
             self.stack = self.stack.sub(1);
-            self.stack.read()
+            let val = self.stack.read();
+
+            val
         }
     }
     #[inline(always)]
@@ -360,6 +382,7 @@ impl VirtualMachine {
 
         let mut this = VirtualMachineRef(Box::into_raw(Box::new(Self {
             space,
+            options: opts,
             interner: SymbolTable::new(),
             global_data: Box::new(GlobalData::default()),
             global_object: None,
@@ -368,6 +391,7 @@ impl VirtualMachine {
             stack_start: stack,
             frame: null_mut(),
             stack,
+            stacktrace: None,
             stack_end,
             acc: JsValue::undefined(),
         })));
