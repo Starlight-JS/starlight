@@ -9,9 +9,8 @@ use starlight::{
 };
 
 const CODE: &'static str = r#"
-var obj = new Object()
-
-print(obj)
+let arr = [1,2,3]
+print(Array.isArray(arr))
 "#;
 fn main() {
     let mut vm = VirtualMachine::new(Options::default());
@@ -33,17 +32,15 @@ fn main() {
             let args = Arguments::new(&mut vm, JsValue::undefined(), 0);
             let mut args = Handle::new(vm.space(), args);
 
-            for i in 0..100 {
-                println!("{}", i);
-                vm.space().gc();
-                match fun.as_function_mut().call(&mut vm, &mut args) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        println!(
-                            "{}",
-                            e.to_string(&mut vm).unwrap_or_else(|_| "shit".to_string())
-                        );
-                    }
+            vm.space().gc();
+
+            match fun.as_function_mut().call(&mut vm, &mut args) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!(
+                        "{}",
+                        e.to_string(&mut vm).unwrap_or_else(|_| "shit".to_string())
+                    );
                 }
             }
         }

@@ -7,6 +7,16 @@ use crate::{heap::cell::*, vm::*};
 pub struct JsArray;
 #[allow(non_snake_case)]
 impl JsArray {
+    pub fn new(vm: &mut VirtualMachine, n: u32) -> Gc<JsObject> {
+        let mut arr = JsObject::new(
+            vm,
+            vm.global_data().array_structure.unwrap(),
+            Self::get_class(),
+            ObjectTag::Array,
+        );
+        arr.elements.set_length(n);
+        arr
+    }
     define_jsclass!(JsArray, Array);
     pub fn GetPropertyNamesMethod(
         obj: Gc<JsObject>,

@@ -1,4 +1,4 @@
-use super::{attributes::string_length, slot::*, string::JsStringObject};
+use super::{attributes::string_length, object::ObjectTag, slot::*, string::JsStringObject};
 use crate::{
     heap::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
@@ -355,7 +355,14 @@ impl JsValue {
             }
             todo!()
         } else {
-            assert!(!self.is_empty());
+            assert!(
+                !self.is_cell()
+                    && !self.is_number()
+                    && !self.is_boolean()
+                    && !self.is_undefined_or_null()
+                    && !self.is_int32()
+            );
+            assert!(!self.is_empty() && !self.is_cell());
             unreachable!()
         }
     }
@@ -724,7 +731,9 @@ impl JsValue {
             Ok(Self::number_compare(nx, ny))
         }
     }
-
+    pub fn is_array(self) -> bool {
+        self.is_object() && self.as_object().tag() == ObjectTag::Array
+    }
     pub fn to_object(self, vm: &mut VirtualMachine) -> Result<Gc<JsObject>, JsValue> {
         if self.is_undefined_or_null() {
             let msg = JsString::new(vm, "ToObject to null or undefined").root();

@@ -1,10 +1,5 @@
 use crate::{
-    runtime::{
-        arguments::Arguments,
-        array::JsArray,
-        object::{JsObject, ObjectTag},
-        value::JsValue,
-    },
+    runtime::{arguments::Arguments, object::ObjectTag, value::JsValue},
     vm::VirtualMachine,
 };
 

@@ -448,6 +448,7 @@ impl VirtualMachine {
             &*DataDescriptor::new(JsValue::new(obj_constructor), W | C),
             false,
         );
+        this.init_array(proto);
         assert!(
             this.global_object()
                 .get(&mut this, name)
@@ -501,7 +502,10 @@ impl VirtualMachine {
         self.global_data.array_structure = Some(structure);
         let structure = Structure::new_unique_indexed(self, None, false);
         let mut proto = JsObject::new(self, structure, JsObject::get_class(), ObjectTag::Ordinary);
-
+        self.global_data
+            .array_structure
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
         let mut constructor = JsNativeFunction::new(self, Symbol::constructor(), array_ctor, 1);
 
         let name = self.intern("Array");
@@ -522,6 +526,14 @@ impl VirtualMachine {
         let _ = proto.define_own_property(
             self,
             Symbol::constructor(),
+            &*DataDescriptor::new(JsValue::new(constructor), W | C),
+            false,
+        );
+        self.global_data.array_prototype = Some(proto);
+        let arr = self.intern("Array");
+        let _ = self.global_object().define_own_property(
+            self,
+            arr,
             &*DataDescriptor::new(JsValue::new(constructor), W | C),
             false,
         );

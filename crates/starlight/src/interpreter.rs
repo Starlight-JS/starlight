@@ -3,6 +3,7 @@ use crate::{
     gc::handle::Handle,
     runtime::{
         arguments::Arguments,
+        array::JsArray,
         attributes::*,
         env::Env,
         error::{JsError, JsTypeError},
@@ -412,7 +413,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 pc = pc.add(4);
                 let name = bcode.names[ix as usize];
                 let var = vm.bcode_get_var(name, (*frame).scope.as_object(), nix, bcode)?;
-                assert!(!var.is_undefined());
+                assert!(!var.is_empty());
                 vm.upush(var);
             }
             Op::OP_SET_VAR => {
@@ -475,6 +476,44 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 vm.upush(JsValue::new(*func));
                 // vm.space().undefer_gc();
             }
+            Op::OP_CREATE_ARRN => {
+                let n = pc.cast::<u32>().read();
+                pc = pc.add(4);
+                let mut arr = JsArray::new(vm, n).root();
+                let mut i = 0;
+                loop {
+                    let val = vm.upop();
+                    if val.is_empty() {
+                        break;
+                    }
+                    arr.put(vm, Symbol::Indexed(i), val, false)?;
+                    i += 1;
+                }
+                assert!(arr.tag() == ObjectTag::Array);
+                vm.upush(JsValue::new(*arr));
+            }
+            Op::OP_SPREAD_ARR => {
+                let arr = vm.upop();
+                if !arr.is_array() {
+                    let tag = format!("{}", arr.to_string(vm)?);
+
+                    let msg = JsString::new(
+                        vm,
+                        format!(
+                            "Spread operator applied to non-array object (tag {:?})",
+                            tag
+                        ),
+                    )
+                    .root();
+                    return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
+                }
+                let arr = arr.as_object().root();
+                let len = arr.get(vm, Symbol::length())?.number() as u32;
+                for i in 0..len {
+                    let val = arr.get(vm, Symbol::Indexed(len - i - 1))?;
+                    vm.upush(val);
+                }
+            }
             Op::OP_CALL | Op::OP_NEW => {
                 let mut argc = pc.cast::<u32>().read_unaligned();
                 pc = pc.add(4);
@@ -491,14 +530,19 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     let msg = JsString::new(vm, "tried to call non function object");
                     return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
                 }
-                let args = Arguments::new(vm, *v3, argc as _);
+                let mut args_ = vec![];
+                loop {
+                    let val = vm.upop();
+                    if val.is_empty() {
+                        break;
+                    }
+                    args_.push(val);
+                }
+
+                let args = Arguments::new(vm, *v3, args_.len() as _);
                 let mut args = Handle::new(vm.space(), args);
-                let mut i = 0;
-                while argc > 0 {
-                    *args.at_mut(i) = vm.upop();
-                    debug_assert!(!args.at(i).is_empty());
-                    i += 1;
-                    argc -= 1;
+                for i in 0..args_.len() {
+                    *args.at_mut(i as _) = args_[i];
                 }
 
                 args.ctor_call = is_ctor;

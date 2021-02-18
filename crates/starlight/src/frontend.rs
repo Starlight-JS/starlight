@@ -149,12 +149,33 @@ impl Compiler {
 
     pub fn emit(&mut self, expr: &Expr, used: bool) {
         match expr {
-            Expr::Call(call) => {
-                for arg in call.args.iter().rev() {
-                    if arg.spread.is_some() {
-                        todo!("spread");
+            Expr::Array(array_lit) => {
+                self.builder.emit(Op::OP_PUSH_EMPTY, &[], false);
+                for expr in array_lit.elems.iter().rev() {
+                    match expr {
+                        Some(expr) => {
+                            self.emit(&expr.expr, true);
+                            if expr.spread.is_some() {
+                                self.builder.emit(Op::OP_SPREAD_ARR, &[], false);
+                            }
+                        }
+                        None => self.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false),
                     }
+                }
+                self.builder
+                    .emit(Op::OP_CREATE_ARRN, &[array_lit.elems.len() as u32], false);
+                if !used {
+                    self.builder.emit(Op::OP_DROP, &[], false);
+                }
+            }
+
+            Expr::Call(call) => {
+                self.builder.emit(Op::OP_PUSH_EMPTY, &[], false);
+                for arg in call.args.iter().rev() {
                     self.emit(&arg.expr, true);
+                    if arg.spread.is_some() {
+                        self.builder.emit(Op::OP_SPREAD_ARR, &[], false);
+                    }
                 }
 
                 match call.callee {

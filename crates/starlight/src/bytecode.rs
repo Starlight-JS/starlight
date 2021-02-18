@@ -128,6 +128,12 @@ impl ByteCode {
                         pc = pc.add(4);
                         writeln!(output, "set_var @{}, fdbk @{}", name, feedback)?;
                     }
+                    Op::OP_CREATE_ARRN => {
+                        let argc = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "create_arrn <{}>", argc)?;
+                    }
+                    Op::OP_SPREAD_ARR => writeln!(output, "spread_arr")?,
                     Op::OP_CALL => {
                         let argc = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
@@ -254,6 +260,9 @@ impl ByteCode {
                     }
                     Op::OP_THROW => {
                         writeln!(output, "throw")?;
+                    }
+                    Op::OP_DUP => {
+                        writeln!(output, "dup")?;
                     }
                     _ => todo!("{:?}", op),
                 }

@@ -244,7 +244,8 @@ pub enum Op {
     ///
     /// `( -- [] )`
     OP_CREATE_ARR,
-
+    OP_CREATE_ARRN,
+    OP_SPREAD_ARR,
     /// Yields the next property name.
     /// Used in the for..in construct.
     ///

@@ -7,9 +7,7 @@ use vm::{Options, VirtualMachine};
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 const CODE: &'static str = r#"
-function foo() {}
-
-var obj = new foo()
+var obj = new Object()
 obj.x = 0
 for (;obj.x < 10000;obj.x = obj.x + 1) {
     
