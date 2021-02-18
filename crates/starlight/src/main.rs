@@ -9,19 +9,20 @@ use starlight::{
 };
 
 const CODE: &'static str = r#"
-function f(i) {}
-for (let i = 0;i<1000;i = i + 1) {
-    f(i)
-}
+var obj = new Object()
 
+print(obj)
 "#;
 fn main() {
     let mut vm = VirtualMachine::new(Options::default());
     jsrt_init(&mut vm);
-
-    vm.space().gc();
     println!(
         "In use heap after JSRT init {}",
+        formatted_size(vm.space().heap_usage())
+    );
+    vm.space().gc();
+    println!(
+        "In use heap after JSRT init and GC {}",
         formatted_size(vm.space().heap_usage())
     );
 
@@ -53,5 +54,10 @@ fn main() {
             );
         }
     }
+    vm.space().gc();
+    println!(
+        "In use heap after program {}",
+        formatted_size(vm.space().heap_usage())
+    );
     VirtualMachineRef::dispose(vm);
 }

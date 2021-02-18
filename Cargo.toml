@@ -9,9 +9,9 @@ members = [
 ]
 default-members = ["crates/starlight"]
 [profile.release]
-debug = false
+debug = true
 lto = "fat"
-codegen-units = 1
+codegen-units = 3
 opt-level = 's'
 
 [profile.bench]

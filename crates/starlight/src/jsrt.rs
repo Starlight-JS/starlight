@@ -4,9 +4,10 @@ use crate::{
 };
 pub mod array;
 pub mod error;
+pub mod object;
 pub fn print(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     for ix in 0..args.size() {
-        let val = args[ix];
+        let val = args.at(ix);
         let s = val.to_string(vm)?;
         print!("{}", s);
     }

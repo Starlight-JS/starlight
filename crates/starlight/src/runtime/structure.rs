@@ -3,6 +3,7 @@ use super::{
     object::JsObject,
     symbol::{Symbol, DUMMY_SYMBOL},
 };
+use crate::gc::handle::Handle;
 use crate::{
     heap::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
@@ -403,108 +404,8 @@ impl serde::Serialize for DeletedEntry {
 }
 
 impl Structure {
-    pub fn delete(&mut self, vm: &mut VirtualMachine, name: Symbol) {
-        let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();
-        self.deleted.push(vm, it.offset);
-    }
-
-    pub fn change_attributes(&mut self, name: Symbol, attributes: AttrSafe) {
-        let it = unwrap_unchecked(self.table.as_mut())
-            .get_mut(&name)
-            .unwrap();
-        it.attrs = attributes;
-    }
-
-    pub fn table(&self) -> Option<Gc<TargetTable>> {
-        self.table
-    }
-    pub fn is_adding_map(&self) -> bool {
-        self.added.0 != DUMMY_SYMBOL
-    }
-
-    pub fn has_table(&self) -> bool {
-        self.table.is_some()
-    }
-    pub fn allocate_table(&mut self, vm: &mut VirtualMachine) {
-        let mut stack = Vec::with_capacity(8);
-
-        if self.is_adding_map() {
-            stack.push(self as *mut Self);
-        }
-
-        let mut current = self.previous;
-        loop {
-            match current {
-                Some(cur) => {
-                    if cur.has_table() {
-                        self.table =
-                            Some(vm.space().alloc((**cur.table.as_ref().unwrap()).clone()));
-                        break;
-                    } else {
-                        if cur.is_adding_map() {
-                            stack.push(&*cur as *const Self as *mut Self);
-                        }
-                    }
-                    current = cur.previous;
-                }
-                None => {
-                    self.table = Some(vm.space().alloc(HashMap::new()));
-                    break;
-                }
-            }
-        }
-        assert!(self.table.is_some());
-        let mut table = self.table.unwrap();
-        unsafe {
-            for it in stack {
-                table.insert((*it).added.0, (*it).added.1);
-            }
-        }
-        self.previous = None;
-    }
-
-    pub fn allocate_table_if_needed(&mut self, vm: &mut VirtualMachine) -> bool {
-        if !self.has_table() {
-            if self.previous.is_none() {
-                return false;
-            }
-            self.allocate_table(vm);
-        }
-        true
-    }
-
-    pub fn is_indexed(&self) -> bool {
-        self.transitions.is_indexed()
-    }
-
-    pub fn is_unique(&self) -> bool {
-        !self.transitions.is_enabled()
-    }
-
-    pub fn is_shaped(&self) -> bool {
-        // we can use this map id as shape or not
-        !self.is_unique() || self.transitions.is_enabled()
-    }
-
-    pub fn prototype(&self) -> Option<Gc<JsObject>> {
-        self.prototype
-    }
-
-    pub fn flatten(&mut self) {
-        if self.is_unique() {
-            self.transitions.enable_unique_transition();
-        }
-    }
-
-    pub fn get_slots_size(&self) -> usize {
-        if let Some(table) = self.table {
-            table.len() + self.deleted.size as usize
-        } else {
-            self.calculated_size as _
-        }
-    }
     fn ctor(vm: &mut VirtualMachine, previous: Gc<Self>, unique: bool) -> Gc<Self> {
-        let mut this = vm.space().alloc(Self {
+        let mut this = vm.space().alloc(Structure {
             prototype: previous.prototype,
             previous: Some(previous),
             table: if unique && previous.is_unique() {
@@ -536,7 +437,7 @@ impl Structure {
         unique: bool,
         indexed: bool,
     ) -> Gc<Self> {
-        vm.space().alloc(Self {
+        vm.space().alloc(Structure {
             prototype,
             previous: None,
             table: None,
@@ -574,7 +475,7 @@ impl Structure {
     fn ctor3(vm: &mut VirtualMachine, it: &[(Symbol, MapEntry)]) -> Gc<Self> {
         let table = it.iter().copied().collect::<TargetTable>();
         let table = vm.space().alloc(table);
-        let mut this = vm.space().alloc(Self {
+        let mut this = vm.space().alloc(Structure {
             prototype: None,
             previous: None,
             table: Some(table),
@@ -650,6 +551,109 @@ impl Structure {
             return Self::new_unique(vm, map);
         }
         map
+    }
+}
+
+impl Gc<Structure> {
+    pub fn delete(&mut self, vm: &mut VirtualMachine, name: Symbol) {
+        let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();
+        self.deleted.push(vm, it.offset);
+    }
+
+    pub fn change_attributes(&mut self, name: Symbol, attributes: AttrSafe) {
+        let it = unwrap_unchecked(self.table.as_mut())
+            .get_mut(&name)
+            .unwrap();
+        it.attrs = attributes;
+    }
+
+    pub fn table(&self) -> Option<Gc<TargetTable>> {
+        self.table
+    }
+    pub fn is_adding_map(&self) -> bool {
+        self.added.0 != DUMMY_SYMBOL
+    }
+
+    pub fn has_table(&self) -> bool {
+        self.table.is_some()
+    }
+    pub fn allocate_table(&mut self, vm: &mut VirtualMachine) {
+        let mut stack = Handle::new(vm.space(), Vec::with_capacity(8));
+
+        if self.is_adding_map() {
+            stack.push(*self);
+        }
+
+        let mut current = self.previous;
+        loop {
+            match current {
+                Some(cur) => {
+                    if cur.has_table() {
+                        self.table =
+                            Some(vm.space().alloc((**cur.table.as_ref().unwrap()).clone()));
+                        break;
+                    } else {
+                        if cur.is_adding_map() {
+                            stack.push(cur);
+                        }
+                    }
+                    current = cur.previous;
+                }
+                None => {
+                    self.table = Some(vm.space().alloc(HashMap::new()));
+                    break;
+                }
+            }
+        }
+        assert!(self.table.is_some());
+        let mut table = self.table.unwrap();
+        unsafe {
+            for it in stack.iter() {
+                table.insert((*it).added.0, (*it).added.1);
+            }
+        }
+        self.previous = None;
+    }
+
+    pub fn allocate_table_if_needed(&mut self, vm: &mut VirtualMachine) -> bool {
+        if !self.has_table() {
+            if self.previous.is_none() {
+                return false;
+            }
+            self.allocate_table(vm);
+        }
+        true
+    }
+
+    pub fn is_indexed(&self) -> bool {
+        self.transitions.is_indexed()
+    }
+
+    pub fn is_unique(&self) -> bool {
+        !self.transitions.is_enabled()
+    }
+
+    pub fn is_shaped(&self) -> bool {
+        // we can use this map id as shape or not
+        !self.is_unique() || self.transitions.is_enabled()
+    }
+
+    pub fn prototype(&self) -> Option<Gc<JsObject>> {
+        self.prototype
+    }
+
+    pub fn flatten(&mut self) {
+        if self.is_unique() {
+            self.transitions.enable_unique_transition();
+        }
+    }
+
+    pub fn get_slots_size(&self) -> usize {
+        if let Some(table) = self.table {
+            table.len() + self.deleted.size as usize
+        } else {
+            self.calculated_size as _
+        }
     }
 }
 

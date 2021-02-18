@@ -17,7 +17,7 @@ pub fn array_is_array(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsVal
     if args.size() == 0 {
         return Ok(JsValue::new(false));
     }
-    let val = args[0];
+    let val = args.at(0);
     if !val.is_object() {
         return Ok(JsValue::new(false));
     }

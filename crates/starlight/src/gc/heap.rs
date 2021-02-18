@@ -75,6 +75,8 @@ use intrusive_collections::{LinkedList, UnsafeRef};
 use wtf_rs::keep_on_stack;
 #[cfg(not(miri))]
 use wtf_rs::stack_bounds::StackBounds;
+
+#[cfg(not(feature = "valgrind-gc"))]
 pub struct SmallArena {
     /// # Free blocks
     ///
@@ -95,6 +97,7 @@ pub struct SmallArena {
     cell_size: usize,
 }
 
+#[cfg(not(feature = "valgrind-gc"))]
 impl SmallArena {
     pub fn new(cell_size: usize) -> Self {
         Self {
@@ -202,7 +205,10 @@ impl SmallArena {
         self.recyclable_blocks = recyclable_blocks;
     }
 }
+#[cfg(feature = "valgrind-gc")]
+impl Heap {}
 
+#[cfg(not(feature = "valgrind-gc"))]
 pub struct Heap {
     arenas: [*mut SmallArena; SIZE_CLASSES.len()],
     block_set: BlockSet,
@@ -215,7 +221,7 @@ pub struct Heap {
     pub(super) handles: HashSet<*mut dyn HandleTrait>,
     stack_bounds: StackBounds,
 }
-
+#[cfg(not(feature = "valgrind-gc"))]
 impl Heap {
     pub fn new() -> Box<Self> {
         let mut this = Box::new(Self {
@@ -366,7 +372,7 @@ impl Heap {
             let memory = self.allocate_raw(size).to_mut_ptr::<Header>();
             assert!(!memory.is_null());
 
-            memory.write(Header::new(object_ty_of(&value)));
+            memory.write(Header::new(self, null_mut(), object_ty_of(&value)));
             (*memory).set_tag(GC_WHITE);
             let sz = value.compute_size();
             (*memory).data_start().to_mut_ptr::<T>().write(value);
@@ -445,26 +451,6 @@ impl<'a> Marking<'a> {
             for handle in self.gc.handles.iter().copied() {
                 (*handle).trace(&mut *this);
             }
-            if false {
-                while let Some((from, to)) = self.cons.scan.pop() {
-                    let mut scan = from as *mut *mut u8;
-                    let mut to = to as *mut *mut u8;
-                    if scan > to {
-                        std::mem::swap(&mut to, &mut scan);
-                    }
-                    while scan < to {
-                        let ptr = *scan;
-                        if ptr.is_null() {
-                            scan = scan.add(1);
-                            continue;
-                        }
-                        self.find_gc_object_pointer_for_marking(ptr, |this, pointer| {
-                            this.mark(pointer);
-                        });
-                        scan = scan.add(1);
-                    }
-                }
-            }
         }
     }
     fn process_worklist(&mut self) {
@@ -488,13 +474,14 @@ impl<'a> Marking<'a> {
             }
         }
     }
+
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn visit_value(&mut self, val: *mut Header) {
         unsafe {
             (*val).get_dyn().trace(self);
         }
     }
-    pub fn add_conservative_roots(&mut self, from: *mut u8, to: *mut u8) {
+    /*pub fn add_conservative_roots(&mut self, from: *mut u8, to: *mut u8) {
         self.cons.scan.push((from, to));
     }
 
@@ -546,7 +533,7 @@ impl<'a> Marking<'a> {
         if try_ptr(ptr) {
             return;
         }
-    }
+    }*/
 }
 
 impl<'a> Tracer for Marking<'a> {
@@ -554,6 +541,8 @@ impl<'a> Tracer for Marking<'a> {
         self.mark(hdr);
     }
 }
+
+#[cfg(not(feature = "valgrind-gc"))]
 
 impl Drop for Heap {
     fn drop(&mut self) {
@@ -569,6 +558,7 @@ impl Drop for Heap {
     }
 }
 
+#[cfg(not(feature = "valgrind-gc"))]
 impl Drop for SmallArena {
     fn drop(&mut self) {
         unsafe {
@@ -643,5 +633,153 @@ mod tests {
         assert_eq!(FOO_LARGE.load(std::sync::atomic::Ordering::Relaxed), 1);
         drop(x);
         drop(y);
+    }
+}
+
+#[cfg(feature = "valgrind-gc")]
+pub struct Heap {
+    constraints: Vec<Box<dyn MarkingConstraint>>,
+    ndefers: u32,
+    max_heap_size: usize,
+    allocated: usize,
+    pub(super) handles: HashSet<*mut dyn HandleTrait>,
+    list: *mut Header,
+}
+
+#[cfg(feature = "valgrind-gc")]
+impl Heap {
+    pub fn defer_gc(&mut self) {
+        self.ndefers += 1;
+    }
+    pub fn undefer_gc(&mut self) {
+        self.ndefers -= 1;
+    }
+
+    pub fn heap_usage(&self) -> usize {
+        self.allocated
+    }
+
+    pub fn alloc<T: Cell>(&mut self, value: T) -> Gc<T> {
+        unsafe {
+            if self.allocated > self.max_heap_size {
+                self.gc();
+            }
+
+            let size = allocation_size(&value);
+            self.allocated += size;
+            let memory = libc::malloc(size).cast::<Header>();
+            assert!(!memory.is_null());
+
+            memory.write(Header::new(self, null_mut(), object_ty_of(&value)));
+            (*memory).set_tag(GC_UNMARKED);
+            let sz = value.compute_size();
+            (*memory).data_start().to_mut_ptr::<T>().write(value);
+            /*std::ptr::copy_nonoverlapping(
+                &value as *const T as *const u8,
+                (*memory).data_start().to_mut_ptr::<u8>(),
+                sz,
+            );*/
+            //std::mem::forget(value);
+            (*memory).next = self.list;
+            self.list = memory;
+            Gc {
+                cell: NonNull::new_unchecked(memory),
+                marker: Default::default(),
+            }
+        }
+    }
+
+    pub fn gc(&mut self) {
+        unsafe {
+            if self.ndefers > 0 {
+                return;
+            }
+            //self.sp = dummy as usize;
+
+            let mut task = Marking {
+                gc: self,
+                bytes_visited: 0,
+                worklist: VecDeque::with_capacity(8),
+                cons: ConservativeRoots {
+                    scan: Vec::with_capacity(2),
+                },
+                file: None,
+            };
+
+            task.run();
+
+            let visited = task.bytes_visited;
+            drop(task);
+            let mut prev = null_mut();
+            let mut cur = self.list;
+            self.allocated = 0;
+            while !cur.is_null() {
+                if (*cur).tag() == GC_MARKED {
+                    prev = cur;
+                    cur = (*cur).next;
+                    (*prev).set_tag(GC_UNMARKED);
+                    self.allocated +=
+                        (*prev).get_dyn().compute_size() + core::mem::size_of::<Header>();
+                } else {
+                    let unreached = cur;
+                    cur = (*cur).next;
+                    if !prev.is_null() {
+                        (*prev).next = cur;
+                    } else {
+                        self.list = cur;
+                    }
+                    std::ptr::drop_in_place((*unreached).get_dyn());
+                    libc::free(unreached.cast());
+                }
+            }
+            //self.allocated = visited;
+            if self.allocated >= self.max_heap_size {
+                self.max_heap_size = (self.allocated as f64 * 1.7) as usize;
+            }
+        }
+    }
+
+    pub fn add_constraint(&mut self, x: impl MarkingConstraint + 'static) {
+        self.constraints.push(Box::new(x));
+    }
+
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn test_and_set_marked(cell: *mut Header) -> bool {
+        unsafe {
+            if (*cell).tag() == GC_UNMARKED {
+                (*cell).set_tag(GC_MARKED);
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    pub fn new() -> Box<Self> {
+        let mut this = Box::new(Self {
+            constraints: vec![],
+            handles: Default::default(),
+            ndefers: 0,
+            max_heap_size: 256 * 1024,
+            allocated: 0,
+            list: null_mut(),
+        });
+
+        this
+    }
+}
+
+#[cfg(feature = "valgrind-gc")]
+impl Drop for Heap {
+    fn drop(&mut self) {
+        unsafe {
+            let mut object = self.list;
+            while !object.is_null() {
+                let obj = object;
+                object = (*obj).next;
+                std::ptr::drop_in_place((*obj).get_dyn());
+                libc::free(obj.cast());
+            }
+        }
     }
 }

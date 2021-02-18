@@ -13,6 +13,7 @@ pub mod gc_array;
 pub mod global;
 pub mod indexed_elements;
 pub mod js_arguments;
+pub mod number;
 pub mod object;
 pub mod property_descriptor;
 pub mod ref_ptr;

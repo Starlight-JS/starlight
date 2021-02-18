@@ -2,7 +2,10 @@ use super::addr::Address;
 use super::{bitmap, cell::Header};
 use core::alloc::Layout;
 
-use std::alloc::{alloc, dealloc};
+use std::{
+    alloc::{alloc, dealloc},
+    ptr::null_mut,
+};
 /// Block size must be at least as large as the system page size.
 pub const BLOCK_SIZE: usize = 16 * 1024;
 /// Single atom size
@@ -140,7 +143,8 @@ impl Block {
             let mut count = 0;
             let mut freelist = FreeList::new();
             (&*memory).header().for_each_cell(|cell| {
-                cell.to_mut_ptr::<Header>().write(Header::new(0));
+                cell.to_mut_ptr::<Header>()
+                    .write(Header::new(null_mut(), null_mut(), 0));
                 (*cell.to_mut_ptr::<Header>()).zap(0);
                 count += 1;
                 freelist.free(cell);

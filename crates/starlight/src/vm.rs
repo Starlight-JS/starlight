@@ -1,4 +1,5 @@
 use super::runtime::attributes::*;
+use crate::jsrt::object::*;
 use std::{fmt::Display, io::Write, sync::RwLock};
 use std::{ops::DerefMut, ptr::null_mut};
 use swc_common::{
@@ -298,6 +299,7 @@ impl VirtualMachine {
             "input" => Symbol::input(),
             "multiline" => Symbol::multiline(),
             "global" => Symbol::global(),
+
             "compare" => Symbol::compare(),
             "join" => Symbol::join(),
             "toPrimitive" => Symbol::toPrimitive(),
@@ -398,16 +400,64 @@ impl VirtualMachine {
         this.space().defer_gc();
 
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
-        let s = this.global_data().empty_object_struct.unwrap();
-        let proto = JsObject::new(&mut this, s, JsObject::get_class(), ObjectTag::Ordinary);
+        let s = Structure::new_unique_indexed(&mut this, None, false);
+        let mut proto = JsObject::new(&mut this, s, JsObject::get_class(), ObjectTag::Ordinary);
         this.global_data.object_prototype = Some(proto);
         this.global_data.function_struct = Some(Structure::new_indexed(&mut this, None, false));
         this.global_data.normal_arguments_structure =
             Some(Structure::new_indexed(&mut this, None, false));
         this.global_object = Some(JsGlobal::new(&mut this));
+        this.global_data
+            .empty_object_struct
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        let name = this.intern_or_known_symbol("Object");
+        let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
+        let _ = obj_constructor.define_own_property(
+            &mut this,
+            Symbol::prototype(),
+            &*DataDescriptor::new(JsValue::new(proto), NONE),
+            false,
+        );
+        let _ = proto.define_own_property(
+            &mut this,
+            Symbol::constructor(),
+            &*DataDescriptor::new(JsValue::new(obj_constructor), W | C),
+            false,
+        );
+        let obj_to_string =
+            JsNativeFunction::new(&mut this, Symbol::toString(), object_to_string, 0);
+        let _ = proto.define_own_property(
+            &mut this,
+            Symbol::toString(),
+            &*DataDescriptor::new(JsValue::new(obj_to_string), W | C),
+            false,
+        );
+        let name = this.intern("Object");
+        this.global_data
+            .empty_object_struct
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+        this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
         this.init_error(proto);
         assert!(this.global_data().error_structure.is_some());
+        let _ = this.global_object().define_own_property(
+            &mut this,
+            name,
+            &*DataDescriptor::new(JsValue::new(obj_constructor), W | C),
+            false,
+        );
+        assert!(
+            this.global_object()
+                .get(&mut this, name)
+                .unwrap_or_else(|_| panic!())
+                .as_object()
+                .cell
+                == obj_constructor.cell
+        );
         this.space().undefer_gc();
+        //this.space().gc();
         this
     }
     pub fn global_object(&self) -> Gc<JsObject> {
@@ -445,7 +495,7 @@ impl VirtualMachine {
             self.global_object.unwrap()
         }
     }
-
+    fn init_object(&mut self) {}
     fn init_array(&mut self, obj_proto: Gc<JsObject>) {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
@@ -754,6 +804,8 @@ pub struct GlobalData {
     pub(crate) eval_error: Option<Gc<JsObject>>,
     pub(crate) array_prototype: Option<Gc<JsObject>>,
 
+    pub(crate) string_structure: Option<Gc<Structure>>,
+    pub(crate) number_structure: Option<Gc<Structure>>,
     pub(crate) array_structure: Option<Gc<Structure>>,
     pub(crate) error_structure: Option<Gc<Structure>>,
     pub(crate) range_error_structure: Option<Gc<Structure>>,

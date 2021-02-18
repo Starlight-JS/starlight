@@ -241,7 +241,8 @@ impl JsArguments {
             struct_,
             JsArguments::get_class(),
             ObjectTag::NormalArguments,
-        );
+        )
+        .root();
         //let s = Structure::new_unique_indexed(vm, None, true);
 
         let args = JsArguments {
@@ -269,7 +270,7 @@ impl JsArguments {
             //let _ = obj.put(vm, Symbol::Indexed(i as _), JsValue::undefined(), false);
         }
         obj.as_arguments_mut().mapping = mapping.into_boxed_slice();
-        obj
+        *obj
     }
 }
 

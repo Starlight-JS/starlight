@@ -26,7 +26,7 @@ use crate::{
 pub struct GcArray<T: Cell> {
     /*len: u32,
     data: MaybeUninit<T>,*/
-    data: Box<[T]>,
+    pub(crate) data: Box<[T]>,
 }
 impl<T: Cell> GcArray<T> {
     pub fn begin(&self) -> *mut T {

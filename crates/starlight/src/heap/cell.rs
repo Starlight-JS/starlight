@@ -112,9 +112,13 @@ pub trait Cell: Any + Trace + __CellBase {
 serialize_trait_object!(Cell);
 mopafy!(Cell, core = core);
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Header {
+    #[cfg(feature = "valgrind-gc")]
+    pub next: *mut Header,
+    #[cfg(feature = "valgrind-gc")]
+    pub heap: *mut Heap,
     /// pointer to type vtable
     ty: usize,
     #[cfg(any(feature = "tag-field", target_pointer_width = "32"))]
@@ -124,8 +128,12 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn new(vtable: usize) -> Self {
+    pub fn new(heap: *mut Heap, next: *mut Self, vtable: usize) -> Self {
         let mut this = Self {
+            #[cfg(feature = "valgrind-gc")]
+            next,
+            #[cfg(feature = "valgrind-gc")]
+            heap,
             ty: 0,
             #[cfg(any(feature = "tag-field", target_pointer_width = "32"))]
             tag: 0,
@@ -259,6 +267,11 @@ impl<T: Cell + ?Sized> Gc<T> {
     }
 
     pub fn heap(self) -> *mut Heap {
+        #[cfg(feature = "valgrind-gc")]
+        unsafe {
+            (*self.cell.as_ptr()).heap
+        }
+        #[cfg(not(feature = "valgrind-gc"))]
         if PreciseAllocation::is_precise(self.cell.as_ptr().cast()) {
             unsafe { (*PreciseAllocation::from_cell(self.cell.as_ptr())).heap }
         } else {

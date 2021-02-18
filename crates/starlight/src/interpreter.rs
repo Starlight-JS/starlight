@@ -1,5 +1,6 @@
 use crate::{
     bytecode::{opcodes::Op, TypeFeedBack},
+    gc::handle::Handle,
     runtime::{
         arguments::Arguments,
         attributes::*,
@@ -479,19 +480,23 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 pc = pc.add(4);
                 let is_ctor = op == Op::OP_NEW;
                 let v1 = vm.upop(); // func
+                let v1 = Handle::new(vm.space(), v1);
                 let mut v3 = vm.upop(); // this
+
                 if v3.is_empty() {
                     v3 = JsValue::new(vm.global_object());
                 }
+                let mut v3 = Handle::new(vm.space(), v3);
                 if !v1.is_callable() {
                     let msg = JsString::new(vm, "tried to call non function object");
                     return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
                 }
-                let mut args = Arguments::new(vm, v3, argc as _);
+                let args = Arguments::new(vm, *v3, argc as _);
+                let mut args = Handle::new(vm.space(), args);
                 let mut i = 0;
                 while argc > 0 {
-                    args[i] = vm.upop();
-                    assert!(!args[i].is_empty());
+                    *args.at_mut(i) = vm.upop();
+                    debug_assert!(!args.at(i).is_empty());
                     i += 1;
                     argc -= 1;
                 }
@@ -517,7 +522,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 if op == Op::OP_NEW {
                     assert!(result.is_object());
                 }
-
+                drop(args);
                 vm.upush(result);
             }
             Op::OP_PUSH_EMPTY => {
@@ -648,7 +653,7 @@ impl VirtualMachine {
 
             for p in f.code.params.iter() {
                 let _ = nscope
-                    .put(self, *p, args_[i], false)
+                    .put(self, *p, args_.at(i), false)
                     .unwrap_or_else(|_| panic!());
 
                 i += 1;

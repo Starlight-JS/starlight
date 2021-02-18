@@ -9,10 +9,11 @@ use super::{
     global::JsGlobal,
     indexed_elements::{IndexedElements, MAX_VECTOR_SIZE},
     js_arguments::JsArguments,
+    number::JsNumber,
     property_descriptor::{DataDescriptor, PropertyDescriptor, StoredSlot},
     slot::*,
     storage::FixedStorage,
-    string::JsString,
+    string::*,
     structure::Structure,
     symbol::*,
 };
@@ -49,6 +50,9 @@ pub struct JsObject {
 }
 
 impl JsObject {
+    pub fn class(&self) -> &'static Class {
+        self.class
+    }
     #[allow(clippy::mut_from_ref)]
     pub(crate) fn data<T>(&self) -> &mut ManuallyDrop<T> {
         unsafe {
@@ -156,6 +160,7 @@ unsafe impl Trace for JsObject {
         match self.tag {
             ObjectTag::Global => self.as_global().trace(tracer),
             ObjectTag::Function => self.as_function().trace(tracer),
+            ObjectTag::String => self.as_string().value().trace(tracer),
             ObjectTag::NormalArguments => self.as_arguments().trace(tracer),
             _ => (),
         }
@@ -272,7 +277,7 @@ impl JsObject {
                 let args = Arguments::new(vm, JsValue::new(obj), 1);
                 let mut args = Handle::new(vm.space(), args);
 
-                args[0] = val;
+                *args.at_mut(0) = val;
                 return ac
                     .setter()
                     .as_cell()
@@ -369,7 +374,7 @@ impl JsObject {
                 let args = Arguments::new(vm, JsValue::new(obj), 1);
                 let mut args = Handle::new(vm.space(), args);
 
-                args[0] = val;
+                *args.at_mut(0) = val;
                 return ac
                     .setter()
                     .as_cell()
@@ -434,14 +439,14 @@ impl JsObject {
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        //println!("PUT");
+        let mut obj = obj.root();
         if !slot.is_used() {
             obj.get_own_property_slot(vm, name, slot);
         }
 
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if Gc::ptr_eq(*base, obj) {
+                if Gc::ptr_eq(*base, *obj) {
                     let mut returned = false;
                     if slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
                         if slot.has_offset() {
@@ -812,6 +817,26 @@ impl JsObject {
         assert_eq!(self.tag, ObjectTag::NormalArguments);
         unsafe { &mut *self.data::<JsArguments>() }
     }
+
+    pub fn as_number(&self) -> &JsNumber {
+        assert_eq!(self.tag, ObjectTag::Number);
+        unsafe { &*self.data::<JsNumber>() }
+    }
+
+    pub fn as_number_mut(&mut self) -> &mut JsNumber {
+        assert_eq!(self.tag, ObjectTag::Number);
+        unsafe { &mut *self.data::<JsNumber>() }
+    }
+
+    pub fn as_string(&self) -> &JsStringObject {
+        assert_eq!(self.tag, ObjectTag::String);
+        unsafe { &*self.data::<JsStringObject>() }
+    }
+
+    pub fn as_string_mut(&mut self) -> &mut JsStringObject {
+        assert_eq!(self.tag, ObjectTag::String);
+        unsafe { &mut *self.data::<JsStringObject>() }
+    }
 }
 
 impl Gc<JsObject> {
@@ -862,7 +887,7 @@ impl Gc<JsObject> {
                 let f = func.as_function_mut();
                 let args = Arguments::new(vm, JsValue::new(obj), 1);
                 let mut args = Handle::new(vm.space(), args);
-                args[0] = match hint {
+                *args.at_mut(0) = match hint {
                     JsHint::Number | JsHint::None => JsValue::new(JsString::new(vm, "number")),
                     JsHint::String => JsValue::new(JsString::new(vm, "string")),
                 };
@@ -1036,6 +1061,7 @@ impl Gc<JsObject> {
         throwable: bool,
     ) -> Result<(), JsValue> {
         let mut slot = Slot::new();
+
         self.put_slot(vm, name, val, &mut slot, throwable)
     }
 
@@ -1148,7 +1174,7 @@ impl Gc<JsObject> {
             }
         } else {
             if !self.structure.is_indexed() {
-                let s = self.structure.change_indexed_transition(vm);
+                let s = self.structure.root().change_indexed_transition(vm);
 
                 self.set_structure(vm, s)
             }
@@ -1295,7 +1321,9 @@ pub enum ObjectTag {
     Ordinary,
     Array,
     Set,
+    String,
     Map,
+    Number,
     Error,
     Global,
     Json,

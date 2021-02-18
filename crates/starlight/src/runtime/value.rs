@@ -1,4 +1,4 @@
-use super::{attributes::string_length, slot::*};
+use super::{attributes::string_length, slot::*, string::JsStringObject};
 use crate::{
     heap::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
@@ -723,6 +723,23 @@ impl JsValue {
             let ny = py.to_number(vm)?;
             Ok(Self::number_compare(nx, ny))
         }
+    }
+
+    pub fn to_object(self, vm: &mut VirtualMachine) -> Result<Gc<JsObject>, JsValue> {
+        if self.is_undefined_or_null() {
+            let msg = JsString::new(vm, "ToObject to null or undefined").root();
+            return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
+        }
+        if self.is_object() {
+            return Ok(self.as_object());
+        }
+
+        if self.is_string() {
+            return Ok(JsStringObject::new(vm, self.as_string()));
+        } else if self.is_number() {
+            return Ok(super::number::JsNumber::new(vm, self.number()));
+        }
+        todo!()
     }
 }
 

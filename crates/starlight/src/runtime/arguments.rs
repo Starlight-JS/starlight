@@ -27,18 +27,19 @@ impl Arguments {
             ctor_call: false,
         }
     }
-}
-
-impl Index<usize> for Arguments {
-    type Output = JsValue;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.values[index]
+    pub fn at_mut(&mut self, x: usize) -> &mut JsValue {
+        if x < self.size() {
+            &mut self.values[x]
+        } else {
+            panic!("Out of bounds arguments");
+        }
     }
-}
-
-impl IndexMut<usize> for Arguments {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.values[index]
+    pub fn at(&self, x: usize) -> JsValue {
+        if x < self.size() {
+            self.values[x]
+        } else {
+            JsValue::undefined()
+        }
     }
 }
 
