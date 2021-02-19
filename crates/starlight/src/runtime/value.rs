@@ -665,6 +665,29 @@ impl JsValue {
         }
         self.as_double() as i64
     }
+    pub fn type_of(self) -> &'static str {
+        if self.is_number() {
+            "number"
+        } else if self.is_string() {
+            "string"
+        } else if self.is_symbol() {
+            "Symbol"
+        } else if self.is_object() {
+            if self.is_callable() {
+                "function"
+            } else {
+                "object"
+            }
+        } else if self.is_boolean() {
+            "boolean"
+        } else if self.is_undefined() {
+            "undefined"
+        } else if self.is_null() {
+            "null"
+        } else {
+            "object"
+        }
+    }
     pub fn to_boolean(self) -> bool {
         if self.is_number() {
             if self.is_int32() {
@@ -679,7 +702,7 @@ impl JsValue {
         } else if self.is_boolean() {
             self.as_boolean()
         } else {
-            !self.is_empty()
+            true && !self.is_empty()
         }
     }
     fn number_compare(x: f64, y: f64) -> i32 {

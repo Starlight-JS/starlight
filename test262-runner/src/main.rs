@@ -36,12 +36,23 @@ fn main() {
         for test in harness {
             match test {
                 Ok(ref test) => {
-                    unsafe {
-                        RUNNING = Some(test.path.to_str().unwrap().to_string().clone());
-                    }
                     if test.desc.flags.contains(&Flag::Module) {
+                        skipped += 1;
                         continue;
                     }
+                    if test
+                        .desc
+                        .features
+                        .contains(&"tail-call-optimization".to_string())
+                    {
+                        skipped += 1;
+                        continue;
+                    }
+                    unsafe {
+                        println!("Running: {}", test.path.display());
+                        RUNNING = Some(test.path.to_str().unwrap().to_string().clone());
+                    }
+
                     let mut vm = VirtualMachine::new(Options::default());
 
                     let file = match std::fs::read(&test.path) {
@@ -58,12 +69,15 @@ fn main() {
                     let mut code = String::new();
 
                     for include in test.desc.includes.iter() {
-                        code.push_str(
-                            &String::from_utf8(
-                                std::fs::read(&format!("test262/harness/{}", include)).unwrap(),
-                            )
-                            .unwrap(),
-                        );
+                        match std::fs::read(&format!("test262/harness/{}", include)) {
+                            Ok(contents) => {
+                                code.push_str(&String::from_utf8(contents).unwrap());
+                            }
+                            _ => {
+                                skipped += 1;
+                                continue;
+                            }
+                        }
                     }
                     code.push_str(&file);
 

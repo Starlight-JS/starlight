@@ -14,7 +14,7 @@ use crate::{
 pub mod scope_analyzer;
 pub struct LoopControlInfo {
     breaks: Vec<Box<dyn FnOnce(&mut Compiler)>>,
-    continue_target: u32,
+    continues: Vec<Box<dyn FnOnce(&mut Compiler)>>,
 }
 pub struct Compiler {
     builder: ByteCodeBuilder,
@@ -305,6 +305,9 @@ impl Compiler {
 
                 self.builder
                     .emit(Op::OP_CALL, &[call.args.len() as u32], false);
+                if !used {
+                    self.builder.emit(Op::OP_DROP, &[], false);
+                }
             }
             Expr::New(call) => {
                 self.builder.emit(Op::OP_PUSH_EMPTY, &[], false);
@@ -322,6 +325,9 @@ impl Compiler {
                 self.emit(&*call.callee, true);
 
                 self.builder.emit(Op::OP_NEW, &[argc], false);
+                if !used {
+                    self.builder.emit(Op::OP_DROP, &[], false);
+                }
             }
             Expr::Lit(literal) => {
                 if used {
@@ -363,6 +369,20 @@ impl Compiler {
                 }
                 if !used {
                     self.builder.emit(Op::OP_DROP, &[], false);
+                }
+            }
+            Expr::Unary(unary) => {
+                self.emit(&unary.arg, true);
+                match unary.op {
+                    UnaryOp::Minus => self.builder.emit(Op::OP_NEG, &[], false),
+                    UnaryOp::Plus => self.builder.emit(Op::OP_POS, &[], false),
+                    UnaryOp::Tilde => self.builder.emit(Op::OP_NOT, &[], false),
+                    UnaryOp::Bang => self.builder.emit(Op::OP_LOGICAL_NOT, &[], false),
+                    UnaryOp::TypeOf => self.builder.emit(Op::OP_TYPEOF, &[], false),
+                    _ => todo!("{:?}", unary.op),
+                }
+                if !used {
+                    self.builder.emit(Op::OP_DROP, &[], false)
                 }
             }
 
@@ -428,41 +448,106 @@ impl Compiler {
                     }
                 }
             }
-            Expr::Assign(assign) => match &assign.left {
-                PatOrExpr::Pat(x) => {
-                    self.emit(&assign.right, true);
-                    self.generate_pat_store(&**x, false, false);
-                }
-                PatOrExpr::Expr(e) => match &**e {
-                    Expr::Member(member) => {
-                        self.emit(&assign.right, true);
-                        let name = if let Expr::Ident(id) = &*member.prop {
-                            let s: &str = &id.sym;
-                            let name = self.vm.intern_or_known_symbol(s);
-                            Some(self.builder.get_sym(name))
-                        } else {
-                            self.emit(&member.prop, true);
-                            None
-                        };
-                        match member.obj {
-                            ExprOrSuper::Expr(ref expr) => {
-                                self.emit(expr, true);
+            Expr::Paren(p) => {
+                self.emit(&p.expr, used);
+            }
+            Expr::Assign(assign) => {
+                let x = 0;
+                match assign.op {
+                    AssignOp::Assign => match &assign.left {
+                        PatOrExpr::Pat(x) => {
+                            self.emit(&assign.right, true);
+                            if used {
+                                self.builder.emit(Op::OP_DUP, &[], false);
                             }
-                            ExprOrSuper::Super(_super) => {
-                                todo!()
-                            }
+                            self.generate_pat_store(&**x, false, false);
                         }
+                        PatOrExpr::Expr(e) => match &**e {
+                            Expr::Member(member) => {
+                                self.emit(&assign.right, true);
+                                if used {
+                                    self.builder.emit(Op::OP_DUP, &[], false);
+                                }
+                                let name = if let Expr::Ident(id) = &*member.prop {
+                                    let s: &str = &id.sym;
+                                    let name = self.vm.intern_or_known_symbol(s);
+                                    Some(self.builder.get_sym(name))
+                                } else {
+                                    self.emit(&member.prop, true);
+                                    None
+                                };
+                                match member.obj {
+                                    ExprOrSuper::Expr(ref expr) => {
+                                        self.emit(expr, true);
+                                    }
+                                    ExprOrSuper::Super(_super) => {
+                                        todo!()
+                                    }
+                                }
 
-                        if let Some(ix) = name {
-                            self.builder.emit(Op::OP_SET_PROP, &[ix], true);
-                        } else {
-                            self.builder.emit(Op::OP_SET, &[], false);
+                                if let Some(ix) = name {
+                                    self.builder.emit(Op::OP_SET_PROP, &[ix], true);
+                                } else {
+                                    self.builder.emit(Op::OP_SET, &[], false);
+                                }
+                            }
+                            Expr::Ident(id) => {
+                                self.emit(&assign.right, true);
+                                let sym = self.get_ident(&id);
+                                self.builder.emit(Op::OP_SET_VAR, &[sym], true);
+                            }
+                            e => todo!("{:?}", e,),
+                        },
+                    },
+                    op => {
+                        self.emit_load_from(&assign.left);
+                        if used {
+                            self.builder.emit(Op::OP_DUP, &[], false);
                         }
+                        self.emit(&assign.right, true);
+                        let op = match op {
+                            AssignOp::AddAssign => Op::OP_ADD,
+                            AssignOp::SubAssign => Op::OP_SUB,
+                            AssignOp::MulAssign => Op::OP_MUL,
+                            AssignOp::DivAssign => Op::OP_DIV,
+                            _ => todo!(),
+                        };
+                        self.builder.emit(op, &[], false);
+                        self.emit_store_from(&assign.left);
                     }
-                    _ => todo!(),
-                },
-            },
+                }
+            }
             Expr::Bin(binary) => {
+                match binary.op {
+                    BinaryOp::LogicalOr => {
+                        self.emit(&binary.left, true);
+                        let jtrue = self.cjmp(true);
+                        self.emit(&binary.right, true);
+                        let end = self.jmp();
+                        jtrue(self);
+                        self.builder.emit(Op::OP_PUSH_TRUE, &[], false);
+                        end(self);
+                        if !used {
+                            self.builder.emit(Op::OP_DROP, &[], false);
+                        }
+                        return;
+                    }
+                    BinaryOp::LogicalAnd => {
+                        self.emit(&binary.left, true);
+                        let jfalse = self.cjmp(false);
+                        self.emit(&binary.right, true);
+                        let end = self.jmp();
+                        jfalse(self);
+                        self.builder.emit(Op::OP_PUSH_FALSE, &[], false);
+                        end(self);
+                        if !used {
+                            self.builder.emit(Op::OP_DROP, &[], false);
+                        }
+                        return;
+                    }
+
+                    _ => (),
+                }
                 self.emit(&binary.left, true);
                 self.emit(&binary.right, true);
                 match binary.op {
@@ -488,6 +573,8 @@ impl Compiler {
                     BinaryOp::GtEq => self.builder.emit(Op::OP_GE, &[], false),
                     BinaryOp::Lt => self.builder.emit(Op::OP_LT, &[], false),
                     BinaryOp::LtEq => self.builder.emit(Op::OP_LE, &[], false),
+                    BinaryOp::In => self.builder.emit(Op::OP_IN, &[], false),
+
                     _ => todo!(),
                 }
 
@@ -498,11 +585,102 @@ impl Compiler {
             _ => todo!("{:?}", expr),
         }
     }
+
+    pub fn emit_load_from(&mut self, p: &PatOrExpr) {
+        match p {
+            PatOrExpr::Pat(p) => match &**p {
+                Pat::Ident(id) => {
+                    let ix = self.get_ident(id);
+                    self.builder.emit(Op::OP_GET_VAR, &[ix], true);
+                }
+                _ => todo!("{:?}", p),
+            },
+            PatOrExpr::Expr(expr) => self.emit_load_expr(&**expr),
+        }
+    }
+    pub fn emit_load_expr(&mut self, e: &Expr) {
+        match e {
+            Expr::Ident(id) => {
+                let ix = self.get_ident(id);
+                self.builder.emit(Op::OP_GET_VAR, &[ix], true);
+            }
+            Expr::Member(member) => {
+                let name = if let Expr::Ident(id) = &*member.prop {
+                    let s: &str = &id.sym;
+                    let name = self.vm.intern_or_known_symbol(s);
+                    Some(self.builder.get_sym(name))
+                } else {
+                    self.emit(&member.prop, true);
+                    None
+                };
+                match member.obj {
+                    ExprOrSuper::Expr(ref expr) => {
+                        self.emit(expr, true);
+                    }
+                    ExprOrSuper::Super(_super) => {
+                        todo!()
+                    }
+                }
+
+                if let Some(ix) = name {
+                    self.builder.emit(Op::OP_GET_PROP, &[ix], true);
+                } else {
+                    self.builder.emit(Op::OP_GET, &[], false);
+                }
+            }
+            e => todo!("{:?}", e,),
+        }
+    }
+    pub fn emit_store_from(&mut self, p: &PatOrExpr) {
+        match p {
+            PatOrExpr::Pat(p) => match &**p {
+                Pat::Ident(id) => {
+                    let ix = self.get_ident(id);
+                    self.builder.emit(Op::OP_SET_VAR, &[ix], true);
+                }
+                _ => todo!("{:?}", p),
+            },
+            PatOrExpr::Expr(expr) => self.emit_store_expr(&**expr),
+        }
+    }
+    pub fn emit_store_expr(&mut self, e: &Expr) {
+        match e {
+            Expr::Ident(id) => {
+                let ix = self.get_ident(id);
+                self.builder.emit(Op::OP_SET_VAR, &[ix], true);
+            }
+            Expr::Member(member) => {
+                let name = if let Expr::Ident(id) = &*member.prop {
+                    let s: &str = &id.sym;
+                    let name = self.vm.intern_or_known_symbol(s);
+                    Some(self.builder.get_sym(name))
+                } else {
+                    self.emit(&member.prop, true);
+                    None
+                };
+                match member.obj {
+                    ExprOrSuper::Expr(ref expr) => {
+                        self.emit(expr, true);
+                    }
+                    ExprOrSuper::Super(_super) => {
+                        todo!()
+                    }
+                }
+
+                if let Some(ix) = name {
+                    self.builder.emit(Op::OP_SET_PROP, &[ix], true);
+                } else {
+                    self.builder.emit(Op::OP_SET, &[], false);
+                }
+            }
+            e => todo!("{:?}", e,),
+        }
+    }
     pub fn push_lci(&mut self, continue_target: u32) {
         self.lci.push(LoopControlInfo {
-            continue_target,
+            continues: vec![],
             breaks: vec![],
-        })
+        });
     }
 
     pub fn pop_lci(&mut self) {
@@ -537,8 +715,8 @@ impl Compiler {
             }
             Stmt::Continue(_) => {
                 self.builder.emit(Op::OP_POP_SCOPE, &[], false);
-                let to = self.lci.last().unwrap().continue_target;
-                self.goto(to as _);
+                let j = self.jmp();
+                self.lci.last_mut().unwrap().continues.push(Box::new(j));
             }
             Stmt::For(for_stmt) => {
                 self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
@@ -566,6 +744,9 @@ impl Compiler {
                 }
                 let jend = self.cjmp(false);
                 self.emit_stmt(&for_stmt.body);
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
                 if let Some(fin) = &for_stmt.update {
                     self.emit(&**fin, false);
                 }
@@ -582,6 +763,10 @@ impl Compiler {
                 self.emit(&while_stmt.test, true);
                 let jend = self.cjmp(false);
                 self.emit_stmt(&while_stmt.body);
+
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
                 self.goto(head);
                 jend(self);
                 self.pop_lci();
@@ -747,6 +932,7 @@ impl Compiler {
         self.builder.emit(Op::OP_PLACEHOLDER, &[0], false);
 
         move |this: &mut Self| {
+            //  this.builder.emit(Op::OP_NOP, &[], false);
             let to = this.builder.code.code.len() - (p + 5);
             let ins = if cond {
                 Op::OP_JMP_TRUE
@@ -771,6 +957,7 @@ impl Compiler {
         self.builder.emit(Op::OP_PLACEHOLDER, &[0], false);
 
         move |this: &mut Self| {
+            // this.builder.emit(Op::OP_NOP, &[], false);
             let to = this.builder.code.code.len() - (p + 5);
             let bytes = (to as u32).to_le_bytes();
             this.builder.code.code[p] = Op::OP_JMP as u8;

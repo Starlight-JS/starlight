@@ -211,6 +211,12 @@ impl ByteCode {
                             (pc as usize - start as usize) as i32 + off
                         )?;
                     }
+                    Op::OP_NOP => {
+                        writeln!(output, "nop")?;
+                    }
+                    Op::OP_TYPEOF => {
+                        writeln!(output, "typeof")?;
+                    }
                     Op::OP_JMP_FALSE => {
                         let off = pc.cast::<i32>().read_unaligned();
                         pc = pc.add(4);
@@ -264,6 +270,9 @@ impl ByteCode {
                         let feedback = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
                         writeln!(output, "decl_let @{}, fdbk @{}", name, feedback)?;
+                    }
+                    Op::OP_PLACEHOLDER => {
+                        writeln!(output, "placeholder")?;
                     }
                     Op::OP_DECL_IMMUTABLE => {
                         let name = pc.cast::<u32>().read_unaligned();

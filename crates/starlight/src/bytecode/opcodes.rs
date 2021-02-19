@@ -107,7 +107,8 @@ pub enum Op {
     ///
     /// `( a -- Number(a) )`
     OP_POS,
-
+    OP_TYPEOF,
+    OP_NOP,
     /// Takes 2 values from the top of the stack and performs addition operation:
     /// If any of the two values is not `undefined`, number or boolean, both values
     /// are converted into strings and concatenated.
@@ -146,8 +147,6 @@ pub enum Op {
     OP_GT,    //// ( a b -- a>b )
     OP_GE,    //// ( a b -- a>=b )
     OP_INSTANCEOF,
-
-    OP_TYPEOF,
 
     OP_IN,
 

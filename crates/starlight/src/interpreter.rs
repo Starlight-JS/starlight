@@ -104,7 +104,8 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
             }
             Op::OP_LOGICAL_NOT => {
                 let v1 = vm.upop();
-                vm.upush(JsValue::new(v1.to_boolean()));
+                let v1 = Handle::new(vm.space(), v1);
+                vm.upush(JsValue::new(!v1.to_boolean()));
             }
 
             Op::OP_NOT => {
@@ -125,6 +126,22 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     vm.upush(JsValue::new(-n));
                 }
             }
+            Op::OP_IN => {
+                let val = vm.upop();
+                let val = Handle::new(vm.space(), val);
+                let obj = vm.upop();
+                let sym = val.to_symbol(vm)?;
+
+                let obj = if obj.is_object() {
+                    obj.as_object().root(vm.space())
+                } else {
+                    let msg = JsString::new(vm, "in requires object").root(vm.space());
+                    return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
+                };
+                let res = JsValue::new(obj.has_property(vm, sym));
+                vm.upush(res);
+            }
+            Op::OP_NOP => {}
             Op::OP_POS => {
                 let v1 = vm.upop();
                 let n = v1.to_number(vm)?;
@@ -403,7 +420,22 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let offset = pc.cast::<i32>().read_unaligned();
                 pc = pc.add(4);
                 let val = vm.upop();
+
                 if !val.to_boolean() {
+                    pc = pc.offset(offset as _);
+                }
+            }
+            Op::OP_TYPEOF => {
+                let val = vm.upop().type_of();
+                let s = JsString::new(vm, val);
+                vm.upush(JsValue::new(s));
+            }
+            Op::OP_JMP_TRUE => {
+                let offset = pc.cast::<i32>().read_unaligned();
+                pc = pc.add(4);
+                let val = vm.upop();
+
+                if val.to_boolean() {
                     pc = pc.offset(offset as _);
                 }
             }
@@ -496,7 +528,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
             }
             Op::OP_SPREAD_ARR => {
                 let arr = vm.upop();
-                if !arr.is_array() {
+                if !arr.is_object() || !arr.is_array() {
                     let tag = format!("{}", arr.to_string(vm)?);
 
                     let msg = JsString::new(
