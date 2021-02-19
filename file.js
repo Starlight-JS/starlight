@@ -1,6 +1,5 @@
-let obj = {
-    x: 42,
-    "hello, world!": 3
+function foo(x, y) {
+    arguments[0] = y
+    print(x)
 }
-
-print(obj["hello, world!"])
+foo(4, 6)

@@ -234,7 +234,12 @@ impl JsArguments {
     ) -> bool {
         JsObject::GetIndexedPropertySlotMethod(obj, vm, index, slot)
     }
-    pub fn new(vm: &mut VirtualMachine, env: Gc<JsObject>, params: &[Symbol]) -> Gc<JsObject> {
+    pub fn new(
+        vm: &mut VirtualMachine,
+        env: Gc<JsObject>,
+        params: &[Symbol],
+        len: u32,
+    ) -> Gc<JsObject> {
         let struct_ = vm.global_data().normal_arguments_structure.unwrap();
         let mut obj = JsObject::new(
             vm,
@@ -243,6 +248,7 @@ impl JsArguments {
             ObjectTag::NormalArguments,
         )
         .root(vm.space());
+
         //let s = Structure::new_unique_indexed(vm, None, true);
 
         let args = JsArguments {
@@ -269,6 +275,7 @@ impl JsArguments {
 
             //let _ = obj.put(vm, Symbol::Indexed(i as _), JsValue::undefined(), false);
         }
+        let _ = obj.put(vm, Symbol::length(), JsValue::new(len as i32), false);
         obj.as_arguments_mut().mapping = mapping.into_boxed_slice();
         *obj
     }

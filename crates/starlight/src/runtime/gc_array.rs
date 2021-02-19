@@ -14,7 +14,6 @@ use std::{
 };
 
 use crate::{
-    gc::heap::Heap,
     heap::{
         cell::{Cell, Gc, Trace, Tracer},
         Allocator,
