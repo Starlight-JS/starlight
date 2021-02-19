@@ -21,7 +21,7 @@ use crate::{
     },
     vm::VirtualMachine,
 };
-
+/*
 #[repr(C)]
 pub struct GcArray<T: Cell> {
     /*len: u32,
@@ -66,7 +66,47 @@ impl<T: Cell> GcArray<T> {
         self.data.len() as _
     }
 }
+*/
+#[repr(C)]
+pub struct GcArray<T: Cell> {
+    length: usize,
+    data: [T; 0],
+}
 
+impl<T: Cell> GcArray<T> {
+    pub fn new(vm: &mut VirtualMachine, len: usize, init: T) -> Gc<Self>
+    where
+        T: Clone,
+    {
+        //  println!("alloc");
+        let val = Self {
+            length: len,
+            data: [],
+        };
+        let mut cell = vm.space().alloc(val);
+        for i in 0..cell.len() {
+            unsafe {
+                cell.begin().add(i as usize).write(init.clone());
+            }
+        }
+        cell
+    }
+    pub fn begin(&self) -> *mut T {
+        self.data.as_ptr() as *mut _
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn end(&self) -> *mut T {
+        unsafe { self.begin().add(self.data.len() as _) }
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
+    }
+}
 unsafe impl<T: Cell> Trace for GcArray<T> {
     fn trace(&self, tracer: &mut dyn Tracer) {
         for i in 0..self.len() {
@@ -74,7 +114,6 @@ unsafe impl<T: Cell> Trace for GcArray<T> {
         }
     }
 }
-
 #[cfg(feature = "debug-snapshots")]
 impl<T: Cell> serde::Serialize for GcArray<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -91,8 +130,8 @@ impl<T: Cell> serde::Serialize for GcArray<T> {
 }
 impl<T: Cell> Cell for GcArray<T> {
     fn compute_size(&self) -> usize {
-        /*(self.data.len() as usize * size_of::<T>()) +*/
-        size_of::<Self>()
+        (self.length as usize * size_of::<T>()) + size_of::<Self>()
+        //size_of::<Self>()
     }
 }
 impl<T: Cell> Index<usize> for GcArray<T> {

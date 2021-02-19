@@ -16,7 +16,7 @@ impl Arguments {
         self.values.len()
     }
     pub fn new(vm: &mut VirtualMachine, this: JsValue, size: usize) -> Self {
-        let arr = GcArray::new(vm.space(), size, JsValue::undefined());
+        let arr = GcArray::new(vm, size, JsValue::undefined());
         Self {
             this,
             values: arr,

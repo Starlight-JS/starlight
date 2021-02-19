@@ -229,7 +229,7 @@ impl Heap {
             handles: Default::default(),
             list: null_mut(),
             ndefers: 0,
-            max_heap_size: 256 * 1024,
+            max_heap_size: 64 * 1024,
             allocated: 0,
             alloc: Dlmalloc::new(),
         });
