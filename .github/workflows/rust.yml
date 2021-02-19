@@ -51,7 +51,7 @@ jobs:
           rust-version: nightly
       - uses: Swatinem/rust-cache@v1
       - run: cargo doc --workspace --document-private-items --no-deps
-test:
+  bench:
     name: Test Rust ${{ matrix.rust }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
