@@ -52,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - run: cargo doc --workspace --document-private-items --no-deps
   bench:
-    name: Test Rust ${{ matrix.rust }} on ${{ matrix.os }}
+    name: Bench Starlight ${{ matrix.rust }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     strategy:
