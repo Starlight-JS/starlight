@@ -1,7 +1,6 @@
-function Bar(x) {
-    this.x = x
+let obj = {
+    x: 42,
+    "hello, world!": 3
 }
 
-var bar = new Bar(2)
-
-print("4" - bar.x)
+print(obj["hello, world!"])

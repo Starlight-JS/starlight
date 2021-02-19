@@ -641,6 +641,10 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 env.declare_variable(vm, name, val, false)?;
                 assert!(env.has_own_variable(vm, name));
             }
+            Op::OP_CREATE_OBJ => {
+                let obj = JsObject::new_empty(vm);
+                vm.upush(JsValue::new(obj));
+            }
             _ => {
                 #[cfg(debug_assertions)]
                 todo!("unimplemented or unknown opcode {:?}", op);

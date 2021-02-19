@@ -151,6 +151,56 @@ impl Compiler {
 
     pub fn emit(&mut self, expr: &Expr, used: bool) {
         match expr {
+            Expr::Arrow(fun) => {
+                let is_strict = match &fun.body {
+                    BlockStmtOrExpr::BlockStmt(block) => {
+                        if block.stmts.is_empty() {
+                            false
+                        } else {
+                            block.stmts[0].is_use_strict()
+                        }
+                    }
+                    _ => false,
+                };
+                let name = self.vm.intern_or_known_symbol("<anonymous>");
+                let code = ByteCode::new(&mut self.vm, name, &[], false);
+                let mut code = Handle::new(self.vm.space(), code);
+                let mut compiler = Compiler {
+                    lci: Vec::new(),
+                    builder: ByteCodeBuilder {
+                        code: *code,
+                        val_map: Default::default(),
+                        name_map: Default::default(),
+                    },
+                    fmap: Default::default(),
+                    vm: self.vm,
+                };
+                code.strict = is_strict;
+                for param in fun.params.iter() {
+                    match param {
+                        Pat::Ident(ref ident) => {
+                            code.params.push(compiler.intern(ident));
+                        }
+                        p => todo!("arrow param {:?}", p),
+                    }
+                }
+                match &fun.body {
+                    BlockStmtOrExpr::BlockStmt(block) => {
+                        compiler.compile(&block.stmts);
+                        compiler.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false);
+                        compiler.builder.emit(Op::OP_RET, &[], false);
+                    }
+                    BlockStmtOrExpr::Expr(expr) => {
+                        compiler.emit(expr, true);
+                        compiler.builder.emit(Op::OP_RET, &[], false);
+                    }
+                }
+                let code = compiler.builder.finish(&mut self.vm);
+                let ix = self.builder.code.codes.len();
+                self.builder.code.codes.push(code);
+                let nix = self.builder.get_sym(name);
+                self.builder.emit(Op::OP_GET_FUNCTION, &[ix as _], false);
+            }
             Expr::Fn(fun) => {
                 self.builder.emit(Op::OP_PUSH_SCOPE, &[], false);
                 let name = fun
@@ -313,6 +363,69 @@ impl Compiler {
                 }
                 if !used {
                     self.builder.emit(Op::OP_DROP, &[], false);
+                }
+            }
+
+            Expr::Object(object_lit) => {
+                self.builder.emit(Op::OP_CREATE_OBJ, &[], false);
+                for prop in object_lit.props.iter() {
+                    match prop {
+                        PropOrSpread::Prop(prop) => match &**prop {
+                            Prop::Shorthand(ident) => {
+                                self.builder.emit(Op::OP_DUP, &[], false);
+                                let ix = self.intern(ident);
+                                let sym = self.builder.get_sym(ix);
+                                self.builder.emit(Op::OP_GET_VAR, &[sym], true);
+                                self.builder.emit(Op::OP_SWAP, &[], false);
+                                self.builder.emit(Op::OP_SET_PROP, &[sym], true);
+                            }
+                            Prop::KeyValue(assign) => {
+                                self.builder.emit(Op::OP_DUP, &[], false);
+                                self.emit(&assign.value, true);
+                                match assign.key {
+                                    PropName::Ident(ref id) => {
+                                        let ix = self.intern(id);
+                                        let sym = self.builder.get_sym(ix);
+                                        self.builder.emit(Op::OP_SWAP, &[], false);
+                                        self.builder.emit(Op::OP_SET_PROP, &[sym], true);
+                                    }
+                                    PropName::Str(ref s) => {
+                                        let ix = self
+                                            .builder
+                                            .get_val(&mut self.vm, Val::Str(s.value.to_string()));
+                                        self.builder.emit(Op::OP_SWAP, &[], false);
+                                        self.builder.emit(Op::OP_PUSH_LIT, &[ix], false);
+                                        self.builder.emit(Op::OP_SWAP, &[], false);
+                                        self.builder.emit(Op::OP_SET, &[], false);
+                                    }
+                                    PropName::Num(n) => {
+                                        let val = n.value;
+                                        if val as i32 as f64 == val {
+                                            self.builder.emit(Op::OP_SWAP, &[], false);
+                                            self.builder.emit(
+                                                Op::OP_PUSH_INT,
+                                                &[val as i32 as u32],
+                                                false,
+                                            );
+                                            self.builder.emit(Op::OP_SWAP, &[], false);
+                                            self.builder.emit(Op::OP_SET, &[], false);
+                                        } else {
+                                            let ix = self
+                                                .builder
+                                                .get_val(&mut self.vm, Val::Float(val.to_bits()));
+                                            self.builder.emit(Op::OP_SWAP, &[], false);
+                                            self.builder.emit(Op::OP_PUSH_LIT, &[ix], false);
+                                            self.builder.emit(Op::OP_SWAP, &[], false);
+                                            self.builder.emit(Op::OP_SET, &[], false);
+                                        }
+                                    }
+                                    _ => todo!(),
+                                }
+                            }
+                            p => todo!("{:?}", p),
+                        },
+                        _ => todo!(),
+                    }
                 }
             }
             Expr::Assign(assign) => match &assign.left {

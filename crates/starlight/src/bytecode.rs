@@ -128,10 +128,16 @@ impl ByteCode {
                         pc = pc.add(4);
                         writeln!(output, "set_var @{}, fdbk @{}", name, feedback)?;
                     }
+                    Op::OP_CREATE_OBJ => {
+                        writeln!(output, "create_obj")?;
+                    }
                     Op::OP_CREATE_ARRN => {
                         let argc = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
                         writeln!(output, "create_arrn <{}>", argc)?;
+                    }
+                    Op::OP_SWAP => {
+                        writeln!(output, "swap")?;
                     }
                     Op::OP_SPREAD_ARR => writeln!(output, "spread_arr")?,
                     Op::OP_CALL => {
@@ -230,6 +236,14 @@ impl ByteCode {
                     }
                     Op::OP_PUSH_SCOPE => {
                         writeln!(output, "push_scope")?;
+                    }
+                    Op::OP_SET_GETTER_SETTER => {
+                        writeln!(output, "set_getter_setter")?;
+                    }
+                    Op::OP_SET_GETTER_SETTER_BY_ID => {
+                        let ix = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "set_getter_setter_by_id @{}", ix)?;
                     }
                     Op::OP_POP_SCOPE => {
                         writeln!(output, "pop_scope")?;

@@ -168,6 +168,9 @@ pub enum Op {
     OP_GET_PROP,
     OP_SET_PROP,
 
+    OP_SET_GETTER_SETTER_BY_ID,
+    OP_SET_GETTER_SETTER,
+
     /// Takes 1 value from the stack and a varint argument -- index of the var name
     /// in the literals table. Tries to find the variable in the current scope
     /// chain and assign the value to it. If the variable is not found -- creates
