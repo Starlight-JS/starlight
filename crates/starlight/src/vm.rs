@@ -204,7 +204,7 @@ impl VirtualMachine {
         let script = match parser.parse_script() {
             Ok(script) => script,
             Err(e) => {
-                todo!("throw error");
+                return Err(JsValue::new(JsString::new(self, "parse error")));
             }
         };
         self.space.defer_gc();

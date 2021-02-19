@@ -67,6 +67,7 @@ fn main() {
                         vm.take_stacktrace()
                             .unwrap_or_else(|| "no stacktrace".to_string())
                     );
+                    std::process::exit(1);
                 }
             }
         }
@@ -76,9 +77,12 @@ fn main() {
                 e.to_string(&mut vm)
                     .unwrap_or_else(|_| "cannot get error".to_string())
             );
+            VirtualMachineRef::dispose(vm);
+            std::process::exit(1);
         }
     }
     VirtualMachineRef::dispose(vm);
+    std::process::exit(0);
 }
 
 fn parse_args() -> Result<AppArgs, pico_args::Error> {

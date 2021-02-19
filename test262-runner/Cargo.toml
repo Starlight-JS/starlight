@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 test262-harness = "0.1"
+starlight = { path = "../crates/starlight" }
+rayon = "1.5"
