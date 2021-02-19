@@ -574,7 +574,7 @@ impl Drop for Heap {
                 let obj = object;
                 object = (*obj).next;
                 std::ptr::drop_in_place((*obj).get_dyn());
-                libc::free(obj.cast());
+                self.alloc.free(obj.cast(), 0, 0);
             }
             self.constraints.clear();
         }
