@@ -78,7 +78,7 @@ use wtf_rs::keep_on_stack;
 #[cfg(not(miri))]
 use wtf_rs::stack_bounds::StackBounds;
 
-#[cfg(not(feature = "valgrind-gc"))]
+#[cfg(not(any(target_os = "windows", feature = "valgrind-gc")))]
 pub struct SmallArena {
     /// # Free blocks
     ///
@@ -99,7 +99,7 @@ pub struct SmallArena {
     cell_size: usize,
 }
 
-#[cfg(not(feature = "valgrind-gc"))]
+#[cfg(not(any(target_os = "windows", feature = "valgrind-gc")))]
 impl SmallArena {
     pub fn new(cell_size: usize) -> Self {
         Self {
@@ -210,7 +210,7 @@ impl SmallArena {
 #[cfg(feature = "valgrind-gc")]
 impl Heap {}
 
-#[cfg(not(feature = "valgrind-gc"))]
+#[cfg(not(any(target_os = "windows", feature = "valgrind-gc")))]
 pub struct Heap {
     constraints: Vec<Box<dyn MarkingConstraint>>,
 
@@ -221,7 +221,8 @@ pub struct Heap {
     alloc: dlmalloc::Dlmalloc,
     list: *mut Header,
 }
-#[cfg(not(feature = "valgrind-gc"))]
+
+#[cfg(not(any(target_os = "windows", feature = "valgrind-gc")))]
 impl Heap {
     pub fn new() -> Box<Self> {
         let mut this = Box::new(Self {
@@ -564,23 +565,23 @@ impl<'a> Tracer for Marking<'a> {
     }
 }
 
-#[cfg(not(feature = "valgrind-gc"))]
-
+#[cfg(not(any(target_os = "windows", feature = "valgrind-gc")))]
 impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
-            /*for arena in self.arenas.iter() {
-                let _ = Box::from_raw(*arena);
+            let mut object = self.list;
+            while !object.is_null() {
+                let obj = object;
+                object = (*obj).next;
+                std::ptr::drop_in_place((*obj).get_dyn());
+                libc::free(obj.cast());
             }
-            for prec in self.precise_allocations.iter() {
-                (**prec).destroy();
-            }*/
             self.constraints.clear();
         }
     }
 }
 
-#[cfg(not(feature = "valgrind-gc"))]
+#[cfg(not(any(target_os = "windows", feature = "valgrind-gc")))]
 impl Drop for SmallArena {
     fn drop(&mut self) {
         unsafe {
@@ -658,7 +659,7 @@ mod tests {
     }
 }
 
-#[cfg(feature = "valgrind-gc")]
+#[cfg(any(target_os = "windows", feature = "valgrind-gc"))]
 pub struct Heap {
     constraints: Vec<Box<dyn MarkingConstraint>>,
     ndefers: u32,
@@ -668,7 +669,7 @@ pub struct Heap {
     list: *mut Header,
 }
 
-#[cfg(feature = "valgrind-gc")]
+#[cfg(any(target_os = "windows", feature = "valgrind-gc"))]
 impl Heap {
     pub fn defer_gc(&mut self) {
         self.ndefers += 1;
@@ -791,7 +792,7 @@ impl Heap {
     }
 }
 
-#[cfg(feature = "valgrind-gc")]
+#[cfg(any(target_os = "windows", feature = "valgrind-gc"))]
 impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
