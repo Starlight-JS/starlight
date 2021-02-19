@@ -94,6 +94,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
             Op::OP_PUSH_INT => {
                 let i = pc.cast::<i32>().read_unaligned();
                 pc = pc.add(4);
+
                 vm.upush(JsValue::new(i))
             }
             Op::OP_PUSH_LIT => {
@@ -385,7 +386,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     },
                     false,
                 )
-                .root();
+                .root(vm.space());
                 (*frame).scope = JsValue::new(JsObject::new(
                     vm,
                     *structure,
@@ -473,14 +474,14 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 pc = pc.add(4);
                 let func =
                     JsVMFunction::new(vm, bcode.codes[ix as usize], (*frame).scope.as_object())
-                        .root();
+                        .root(vm.space());
                 vm.upush(JsValue::new(*func));
                 // vm.space().undefer_gc();
             }
             Op::OP_CREATE_ARRN => {
                 let n = pc.cast::<u32>().read();
                 pc = pc.add(4);
-                let mut arr = JsArray::new(vm, n).root();
+                let mut arr = JsArray::new(vm, n).root(vm.space());
                 let mut i = 0;
                 loop {
                     let val = vm.upop();
@@ -505,10 +506,10 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                             tag
                         ),
                     )
-                    .root();
+                    .root(vm.space());
                     return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
                 }
-                let arr = arr.as_object().root();
+                let arr = arr.as_object().root(vm.space());
                 let len = arr.get(vm, Symbol::length())?.number() as u32;
                 for i in 0..len {
                     let val = arr.get(vm, Symbol::Indexed(len - i - 1))?;
@@ -550,12 +551,12 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 (*frame).saved_stack = vm.stack;
 
                 args.ctor_call = is_ctor;
-                let mut obj = v1.as_object().root();
+                let mut obj = v1.as_object().root(vm.space());
                 //let f = obj.as_function_mut();
 
                 let result = if is_ctor {
                     let s = match obj.func_construct_map(vm) {
-                        Ok(val) => Some(val.root()),
+                        Ok(val) => Some(val.root(vm.space())),
                         _ => None,
                     };
                     assert!(s.is_some());
@@ -712,10 +713,12 @@ impl VirtualMachine {
     ) -> Result<JsValue, JsValue> {
         unsafe {
             let f = func;
-            let scope = env.as_object().root();
-            let mut structure = Structure::new_indexed(self, Some(env.as_object()), false).root();
+            let scope = env.as_object().root(self.space());
+            let mut structure =
+                Structure::new_indexed(self, Some(env.as_object()), false).root(self.space());
             let mut nscope =
-                JsObject::new(self, *structure, JsObject::get_class(), ObjectTag::Ordinary).root();
+                JsObject::new(self, *structure, JsObject::get_class(), ObjectTag::Ordinary)
+                    .root(self.space());
             let mut i = 0;
 
             for p in f.code.params.iter() {
@@ -734,7 +737,7 @@ impl VirtualMachine {
                 )?;
             }
 
-            let args = JsArguments::new(self, *nscope, &f.code.params).root();
+            let args = JsArguments::new(self, *nscope, &f.code.params).root(self.space());
             let _ = nscope.put(self, Symbol::arguments(), JsValue::new(*args), false);
             let mut slot = Slot::new();
             let _slot = nscope

@@ -738,9 +738,9 @@ impl JsValue {
     pub fn is_array(self) -> bool {
         self.is_object() && self.as_object().tag() == ObjectTag::Array
     }
-    pub fn to_object(self, vm: &mut VirtualMachine) -> Result<Gc<JsObject>, JsValue> {
+    pub fn to_object(self, mut vm: &mut VirtualMachine) -> Result<Gc<JsObject>, JsValue> {
         if self.is_undefined_or_null() {
-            let msg = JsString::new(vm, "ToObject to null or undefined").root();
+            let msg = JsString::new(vm, "ToObject to null or undefined").root(vm.space());
             return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
         }
         if self.is_object() {

@@ -242,7 +242,7 @@ impl JsArguments {
             JsArguments::get_class(),
             ObjectTag::NormalArguments,
         )
-        .root();
+        .root(vm.space());
         //let s = Structure::new_unique_indexed(vm, None, true);
 
         let args = JsArguments {

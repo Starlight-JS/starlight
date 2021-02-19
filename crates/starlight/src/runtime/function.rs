@@ -62,8 +62,9 @@ impl JsFunction {
     ) -> Result<JsValue, JsValue> {
         let structure = structure
             .unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false))
-            .root();
-        let obj = JsObject::new(vm, *structure, JsObject::get_class(), ObjectTag::Ordinary).root();
+            .root(vm.space());
+        let obj = JsObject::new(vm, *structure, JsObject::get_class(), ObjectTag::Ordinary)
+            .root(vm.space());
         args.ctor_call = true;
         args.this = JsValue::new(*obj);
         self.call(vm, args)
@@ -80,10 +81,10 @@ impl JsFunction {
             FuncType::User(ref x) => return vm.perform_vm_call(x, JsValue::new(x.scope), args),
         }
     }
-    pub fn new(ctx: &mut VirtualMachine, ty: FuncType, _strict: bool) -> Gc<JsObject> {
+    pub fn new(vm: &mut VirtualMachine, ty: FuncType, _strict: bool) -> Gc<JsObject> {
         let mut obj = JsObject::new(
-            ctx,
-            ctx.global_data().get_function_struct(),
+            vm,
+            vm.global_data().get_function_struct(),
             JsFunction::get_class(),
             ObjectTag::Function,
         );
@@ -99,12 +100,12 @@ impl JsFunction {
         obj
     }
     pub fn new_with_struct(
-        ctx: &mut VirtualMachine,
+        vm: &mut VirtualMachine,
         structure: Gc<Structure>,
         ty: FuncType,
         _strict: bool,
     ) -> Gc<JsObject> {
-        let mut obj = JsObject::new(ctx, structure, JsFunction::get_class(), ObjectTag::Function);
+        let mut obj = JsObject::new(vm, structure, JsFunction::get_class(), ObjectTag::Function);
 
         obj.set_callable(true);
         unsafe {
@@ -283,10 +284,10 @@ pub struct JsNativeFunction {
 }
 
 impl JsNativeFunction {
-    pub fn new(ctx: &mut VirtualMachine, name: Symbol, f: JsAPI, n: u32) -> Gc<JsObject> {
-        let vm = ctx;
-        let mut func =
-            JsFunction::new(vm, FuncType::Native(JsNativeFunction { func: f }), false).root();
+    pub fn new(vm: &mut VirtualMachine, name: Symbol, f: JsAPI, n: u32) -> Gc<JsObject> {
+        let vm = vm;
+        let mut func = JsFunction::new(vm, FuncType::Native(JsNativeFunction { func: f }), false)
+            .root(vm.space());
         let l = Symbol::length();
 
         let _ = func.define_own_property(
@@ -304,20 +305,20 @@ impl JsNativeFunction {
     }
     #[allow(clippy::many_single_char_names)]
     pub fn new_with_struct(
-        ctx: &mut VirtualMachine,
+        vm: &mut VirtualMachine,
         s: Gc<Structure>,
         name: Symbol,
         f: JsAPI,
         n: u32,
     ) -> Gc<JsObject> {
-        let vm = ctx;
+        let vm = vm;
         let mut func = JsFunction::new_with_struct(
             vm,
             s,
             FuncType::Native(JsNativeFunction { func: f }),
             false,
         )
-        .root();
+        .root(vm.space());
         let l = Symbol::length();
 
         let _ = func.define_own_property(
@@ -355,16 +356,17 @@ pub struct JsVMFunction {
 }
 impl JsVMFunction {
     pub fn new(vm: &mut VirtualMachine, code: Gc<ByteCode>, env: Gc<JsObject>) -> Gc<JsObject> {
-        // let ctx = vm.space().new_local_context();
-        let envs = Structure::new_indexed(vm, Some(env), false).root();
-        let scope = JsObject::new(vm, *envs, JsObject::get_class(), ObjectTag::Ordinary).root();
+        // let vm = vm.space().new_local_context();
+        let envs = Structure::new_indexed(vm, Some(env), false).root(vm.space());
+        let scope =
+            JsObject::new(vm, *envs, JsObject::get_class(), ObjectTag::Ordinary).root(vm.space());
         let f = JsVMFunction {
             code,
             scope: *scope,
         };
 
-        let mut this = JsFunction::new(vm, FuncType::User(f), false).root();
-        let mut proto = JsObject::new_empty(vm).root();
+        let mut this = JsFunction::new(vm, FuncType::User(f), false).root(vm.space());
+        let mut proto = JsObject::new_empty(vm).root(vm.space());
 
         let _ = proto.define_own_property(
             vm,
@@ -386,14 +388,14 @@ impl JsVMFunction {
 impl JsObject {
     pub fn func_construct_map(
         &mut self,
-        ctx: &mut VirtualMachine,
+        vm: &mut VirtualMachine,
     ) -> Result<Gc<Structure>, JsValue> {
         let obj = // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GC heap.
 unsafe { Gc::from_raw(self) };
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
 
-        let vm = ctx;
+        let vm = vm;
         if let Some(s) = func.construct_struct {
             return Ok(s);
         }

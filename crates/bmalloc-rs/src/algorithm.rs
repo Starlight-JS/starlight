@@ -144,9 +144,9 @@ macro_rules! _memoffset_offset_from {
 /// Calculates the offset of the specified field from the start of the named struct.
 ///
 /// ## Examples
-/// ```
+/// ```ignore,rust
 /// #[macro_use]
-/// extern crate wtf_rs;
+/// extern crate bmal;
 ///
 /// #[repr(C, packed)]
 /// struct Foo {
@@ -175,7 +175,7 @@ macro_rules! object_offsetof {
 /// Calculates the offset of the specified field from the start of the tuple.
 ///
 /// ## Examples
-/// ```
+/// ```ignore,rust
 /// #[macro_use]
 /// extern crate wtf_rs;
 ///

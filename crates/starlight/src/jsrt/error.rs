@@ -13,7 +13,7 @@ use crate::{
 
 pub fn error_constructor(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(vm)?;
-    let msg = JsString::new(vm, message).root();
+    let msg = JsString::new(vm, message).root(vm.space());
     Ok(JsValue::new(JsError::new(vm, *msg, None)))
 }
 
@@ -23,7 +23,7 @@ pub fn eval_error_constructor(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(vm)?;
-    let msg = JsString::new(vm, message).root();
+    let msg = JsString::new(vm, message).root(vm.space());
     Ok(JsValue::new(JsEvalError::new(vm, *msg, None)))
 }
 
@@ -33,7 +33,7 @@ pub fn reference_error_constructor(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(vm)?;
-    let msg = JsString::new(vm, message).root();
+    let msg = JsString::new(vm, message).root(vm.space());
     Ok(JsValue::new(JsReferenceError::new(vm, *msg, None)))
 }
 
@@ -43,7 +43,7 @@ pub fn type_error_constructor(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(vm)?;
-    let msg = JsString::new(vm, message).root();
+    let msg = JsString::new(vm, message).root(vm.space());
     Ok(JsValue::new(JsTypeError::new(vm, *msg, None)))
 }
 
@@ -53,7 +53,7 @@ pub fn syntax_error_constructor(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(vm)?;
-    let msg = JsString::new(vm, message).root();
+    let msg = JsString::new(vm, message).root(vm.space());
     Ok(JsValue::new(JsEvalError::new(vm, *msg, None)))
 }
 
@@ -63,7 +63,7 @@ pub fn range_error_constructor(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(vm)?;
-    let msg = JsString::new(vm, message).root();
+    let msg = JsString::new(vm, message).root(vm.space());
     Ok(JsValue::new(JsRangeError::new(vm, *msg, None)))
 }
 

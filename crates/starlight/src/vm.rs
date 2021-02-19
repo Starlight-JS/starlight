@@ -99,6 +99,7 @@ pub struct VirtualMachine {
     interner: SymbolTable,
     stacktrace: Option<String>,
     global_data: Box<GlobalData>,
+    stack_map: memmap2::MmapMut,
     pub(crate) frame: *mut FrameBase,
 }
 
@@ -343,6 +344,9 @@ impl VirtualMachine {
     #[inline(always)]
     pub fn upop(&mut self) -> JsValue {
         unsafe {
+            if self.stack == self.stack_start {
+                panic!("Stack underflow");
+            }
             self.stack = self.stack.sub(1);
             let val = self.stack.read();
 
@@ -352,6 +356,9 @@ impl VirtualMachine {
     #[inline(always)]
     pub fn upush(&mut self, val: JsValue) {
         unsafe {
+            if self.stack == self.stack_end.add(1) {
+                panic!("Stack overflow");
+            }
             self.stack.write(val);
             self.stack = self.stack.add(1);
         }
@@ -371,26 +378,32 @@ impl VirtualMachine {
     }
     pub fn new(opts: Options) -> VirtualMachineRef {
         let space = Heap::new();
-        let stack = Vec::<JsValue>::with_capacity(16 * 1024);
+        let stack = memmap2::MmapMut::map_anon(8 * 1024 * 8).expect("failed to allocate stack");
         let ptr = stack.as_ptr() as *mut JsValue;
-        std::mem::forget(stack);
-        let stack = ptr;
-        let stack_end = unsafe { ptr.add(16 * 1024) };
+
+        let stack_end = unsafe { ptr.add(8 * 1024) };
         unsafe {
-            std::ptr::write_bytes(stack, 0, 16 * 1024);
+            let mut scan = ptr;
+            while scan < stack_end {
+                scan.write(JsValue::undefined());
+                scan = scan.add(1);
+            }
         }
 
         let mut this = VirtualMachineRef(Box::into_raw(Box::new(Self {
             space,
+            stack: stack.as_ptr() as *mut _,
+            stack_start: stack.as_ptr() as *mut _,
+            stack_map: stack,
             options: opts,
             interner: SymbolTable::new(),
             global_data: Box::new(GlobalData::default()),
             global_object: None,
             thrown_error: JsValue::undefined(),
             return_value: JsValue::undefined(),
-            stack_start: stack,
+
             frame: null_mut(),
-            stack,
+
             stacktrace: None,
             stack_end,
             acc: JsValue::undefined(),
@@ -867,5 +880,17 @@ impl Drop for VirtualMachine {
         unsafe {
             // let _ = Vec::from_raw_parts(self.stack_start, 0, 16 * 1024);
         }
+    }
+}
+
+impl AsMut<Heap> for VirtualMachine {
+    fn as_mut(&mut self) -> &mut Heap {
+        &mut self.space
+    }
+}
+
+impl AsMut<Heap> for VirtualMachineRef {
+    fn as_mut(&mut self) -> &mut Heap {
+        &mut self.space
     }
 }

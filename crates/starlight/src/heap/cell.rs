@@ -115,7 +115,6 @@ mopafy!(Cell, core = core);
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Header {
-    #[cfg(feature = "valgrind-gc")]
     pub next: *mut Header,
     #[cfg(feature = "valgrind-gc")]
     pub heap: *mut Heap,
@@ -130,7 +129,6 @@ pub struct Header {
 impl Header {
     pub fn new(heap: *mut Heap, next: *mut Self, vtable: usize) -> Self {
         let mut this = Self {
-            #[cfg(feature = "valgrind-gc")]
             next,
             #[cfg(feature = "valgrind-gc")]
             heap,
@@ -259,27 +257,15 @@ macro_rules! impl_prim {
 impl_prim!(() bool f32 f64 u8 u16 u32 u64 u128 i8 i16 i32 i64 i128);
 impl<T: Cell + ?Sized> Gc<T> {
     /// Create rooted value from `self.` This will create local handle in persistent context of GC heap.
-    pub fn root(self) -> Handle<Gc<T>> {
+    pub fn root(self, mut heap: impl AsMut<Heap>) -> Handle<Gc<T>> {
         unsafe {
-            let heap = self.heap();
+            let heap = heap.as_mut();
             Handle::new(&mut *heap, self)
         }
     }
 
-    pub fn heap(self) -> *mut Heap {
-        #[cfg(feature = "valgrind-gc")]
-        unsafe {
-            (*self.cell.as_ptr()).heap
-        }
-        #[cfg(not(feature = "valgrind-gc"))]
-        if PreciseAllocation::is_precise(self.cell.as_ptr().cast()) {
-            unsafe { (*PreciseAllocation::from_cell(self.cell.as_ptr())).heap }
-        } else {
-            unsafe {
-                let block = HeapBlock::from_cell(self.cell.as_ptr());
-                (*block).heap()
-            }
-        }
+    pub fn heap(self, mut heap: impl AsMut<Heap>) -> *mut Heap {
+        return heap.as_mut();
     }
 
     pub fn ptr_eq<U: Cell + ?Sized>(this: Gc<T>, other: Gc<U>) -> bool {

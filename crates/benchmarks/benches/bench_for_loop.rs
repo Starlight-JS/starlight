@@ -13,12 +13,15 @@ for (let i = 0;i<10000;i = i + 1) {
 
 "#;
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut vm = VirtualMachine::new(Options::default());
+    let mut vm = VirtualMachine::new(Options {
+        dump_bytecode: true,
+        ..Default::default()
+    });
     // vm.space().defer_gc();
     let mut func = vm
         .compile(false, CODE, "<Code>")
         .unwrap_or_else(|_| panic!())
-        .root();
+        .root(&mut vm);
     let mut boa_ctx = boa::Context::new();
     let args = Arguments::new(&mut vm, JsValue::undefined(), 0);
     let mut args = Handle::new(vm.space(), args);

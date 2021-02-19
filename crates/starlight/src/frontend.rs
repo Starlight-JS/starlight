@@ -579,6 +579,10 @@ impl Compiler {
                 } else if decl && !mutable {
                     self.builder.emit(Op::OP_DECL_IMMUTABLE, &[name], true);
                 }
+
+                if !decl {
+                    self.builder.emit(Op::OP_SET_VAR, &[name], true);
+                }
             }
             Pat::Expr(e) => match &**e {
                 Expr::Member(member) => {

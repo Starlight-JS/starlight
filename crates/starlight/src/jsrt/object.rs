@@ -19,7 +19,7 @@ pub fn object_to_string(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsV
     } else if this_binding.is_null() {
         return Ok(JsValue::new(JsString::new(vm, "[object Undefined]")));
     }
-    let obj = this_binding.to_object(vm)?.root();
+    let obj = this_binding.to_object(vm)?.root(vm.space());
 
     let s = format!("[object {}]", obj.class().name);
     Ok(JsValue::new(JsString::new(vm, s)))
@@ -30,13 +30,14 @@ pub fn object_create(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValu
         let first = args.at(0);
         if first.is_object() || first.is_null() {
             let prototype = if first.is_object() {
-                Some(first.as_object().root())
+                Some(first.as_object().root(vm.space()))
             } else {
                 None
             };
-            let structure = Structure::new_unique_indexed(vm, prototype.map(|x| *x), false).root();
-            let res =
-                JsObject::new(vm, *structure, JsObject::get_class(), ObjectTag::Ordinary).root();
+            let structure =
+                Structure::new_unique_indexed(vm, prototype.map(|x| *x), false).root(vm.space());
+            let res = JsObject::new(vm, *structure, JsObject::get_class(), ObjectTag::Ordinary)
+                .root(vm.space());
             if !args.at(1).is_undefined() {
                 todo!("define properties");
             }
@@ -45,7 +46,7 @@ pub fn object_create(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValu
         }
     }
 
-    let msg = JsString::new(vm, "Object.create requires Object or null argument").root();
+    let msg = JsString::new(vm, "Object.create requires Object or null argument").root(vm.space());
     return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
 }
 

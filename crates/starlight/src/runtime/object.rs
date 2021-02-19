@@ -439,7 +439,7 @@ impl JsObject {
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        let mut obj = obj.root();
+        let mut obj = obj.root(vm.space());
         if !slot.is_used() {
             obj.get_own_property_slot(vm, name, slot);
         }
@@ -1174,7 +1174,10 @@ impl Gc<JsObject> {
             }
         } else {
             if !self.structure.is_indexed() {
-                let s = self.structure.root().change_indexed_transition(vm);
+                let s = self
+                    .structure
+                    .root(vm.space())
+                    .change_indexed_transition(vm);
 
                 self.set_structure(vm, s)
             }

@@ -53,6 +53,7 @@ pub fn size_class_index_for(size: usize) -> Option<usize> {
 }
 
 use std::{
+    alloc::System,
     collections::VecDeque,
     mem::size_of,
     ptr::{null_mut, NonNull},
@@ -70,6 +71,7 @@ pub struct ConservativeRoots {
 
 use super::{block::*, block_set::BlockSet, handle::HandleTrait};
 
+use dlmalloc::Dlmalloc;
 use hashbrown::HashSet;
 use intrusive_collections::{LinkedList, UnsafeRef};
 use wtf_rs::keep_on_stack;
@@ -151,7 +153,7 @@ impl SmallArena {
         }
         let block = HeapBlock::create_with_cell_size(space, self.cell_size).as_ptr();
         self.current = block;
-        space.block_set.add(block);
+        //space.block_set.add(block);
         Address::from_ptr((*block).allocate())
     }
     /// Sweep arena blocks and push them to correct listsl.
@@ -210,16 +212,14 @@ impl Heap {}
 
 #[cfg(not(feature = "valgrind-gc"))]
 pub struct Heap {
-    arenas: [*mut SmallArena; SIZE_CLASSES.len()],
-    block_set: BlockSet,
     constraints: Vec<Box<dyn MarkingConstraint>>,
-    sp: usize,
-    pub(crate) precise_allocations: Vec<*mut PreciseAllocation>,
+
     ndefers: u32,
     max_heap_size: usize,
     allocated: usize,
     pub(super) handles: HashSet<*mut dyn HandleTrait>,
-    stack_bounds: StackBounds,
+    alloc: dlmalloc::Dlmalloc,
+    list: *mut Header,
 }
 #[cfg(not(feature = "valgrind-gc"))]
 impl Heap {
@@ -227,24 +227,20 @@ impl Heap {
         let mut this = Box::new(Self {
             constraints: vec![],
             handles: Default::default(),
-
+            list: null_mut(),
             ndefers: 0,
             max_heap_size: 256 * 1024,
             allocated: 0,
-            block_set: BlockSet::new(),
-            sp: 0,
-            precise_allocations: vec![],
-            stack_bounds: StackBounds::current_thread_stack_bounds(),
-            arenas: [null_mut(); SIZE_CLASSES.len()],
+            alloc: Dlmalloc::new(),
         });
         this.add_core_constraints();
         this.init_arenas();
         this
     }
     fn init_arenas(&mut self) {
-        for i in 0..SIZE_CLASSES.len() {
+        /*    for i in 0..SIZE_CLASSES.len() {
             self.arenas[i] = Box::into_raw(Box::new(SmallArena::new(SIZE_CLASSES[i])));
-        }
+        }*/
     }
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn test_and_set_marked(cell: *mut Header) -> bool {
@@ -277,7 +273,6 @@ impl Heap {
         if self.ndefers > 0 {
             return;
         }
-        self.sp = dummy as usize;
 
         let mut task = Marking {
             gc: self,
@@ -293,7 +288,32 @@ impl Heap {
 
         let visited = task.bytes_visited;
         drop(task);
-        for arena in self.arenas.iter().copied() {
+        let mut prev = null_mut();
+        let mut cur = self.list;
+        self.allocated = 0;
+        while !cur.is_null() {
+            if (*cur).tag() == GC_MARKED {
+                prev = cur;
+                cur = (*cur).next;
+                (*prev).set_tag(GC_UNMARKED);
+                self.allocated += (*prev).get_dyn().compute_size() + core::mem::size_of::<Header>();
+            } else {
+                let unreached = cur;
+                cur = (*cur).next;
+                if !prev.is_null() {
+                    (*prev).next = cur;
+                } else {
+                    self.list = cur;
+                }
+                std::ptr::drop_in_place((*unreached).get_dyn());
+                self.alloc.free(unreached.cast(), 0, 0);
+            }
+        }
+        //self.allocated = visited;
+        if self.allocated >= self.max_heap_size {
+            self.max_heap_size = (self.allocated as f64 * 1.7) as usize;
+        }
+        /*for arena in self.arenas.iter().copied() {
             unsafe {
                 (*arena).sweep();
             }
@@ -309,7 +329,7 @@ impl Heap {
                 true
             }
         });
-        self.precise_allocations.sort_unstable();
+        self.precise_allocations.sort_unstable();*/
         self.allocated = visited;
         self.max_heap_size = (visited as f64 * 1.7) as usize;
     }
@@ -336,11 +356,12 @@ impl Heap {
     }
     #[inline(never)]
     unsafe fn alloc_slow(&mut self, size: usize) -> Address {
-        assert!(size > 4080);
+        /*assert!(size > 4080);
         let ix = self.precise_allocations.len();
         let precise = PreciseAllocation::try_create(self, size, ix as _);
         self.precise_allocations.push(precise);
-        Address::from_ptr((*precise).cell())
+        Address::from_ptr((*precise).cell())*/
+        unreachable!()
     }
 
     /// Allocate `size` bytes in GC heap.
@@ -355,12 +376,13 @@ impl Heap {
     pub unsafe fn allocate_raw(&mut self, size: usize) -> Address {
         self.collect_if_necessary();
         self.allocated += size;
-        if size > 4080 {
+        /*if size > 4080 {
             self.alloc_slow(size)
         } else {
             let arena = self.arenas[size_class_index_for(size).unwrap()];
             (*arena).allocate(self)
-        }
+        }*/
+        Address::from_ptr(self.alloc.malloc(size, 16))
     }
     pub fn heap_usage(&self) -> usize {
         self.allocated
@@ -391,7 +413,8 @@ impl Heap {
                     std::backtrace::Backtrace::capture()
                 );
             }
-
+            (*memory).next = self.list;
+            self.list = memory;
             Gc {
                 cell: NonNull::new_unchecked(memory),
                 marker: Default::default(),
@@ -399,7 +422,6 @@ impl Heap {
         }
     }
 }
-
 pub struct Marking<'a> {
     pub gc: &'a mut Heap,
     pub worklist: VecDeque<*mut Header>,
@@ -547,12 +569,12 @@ impl<'a> Tracer for Marking<'a> {
 impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
-            for arena in self.arenas.iter() {
+            /*for arena in self.arenas.iter() {
                 let _ = Box::from_raw(*arena);
             }
             for prec in self.precise_allocations.iter() {
                 (**prec).destroy();
-            }
+            }*/
             self.constraints.clear();
         }
     }
@@ -603,7 +625,7 @@ mod tests {
     fn test_gc_root() {
         let mut heap = Heap::new();
 
-        let x = heap.alloc(Foo).root();
+        let x = heap.alloc(Foo).root(&mut heap);
         let y = heap.alloc(Foo);
         heap.gc();
         assert_eq!(FOO.load(std::sync::atomic::Ordering::Relaxed), 1);
@@ -627,7 +649,7 @@ mod tests {
     fn test_gc_large_root() {
         let mut heap = Heap::new();
 
-        let x = heap.alloc(FooLarge([0; 8192])).root();
+        let x = heap.alloc(FooLarge([0; 8192])).root(&mut heap);
         let y = heap.alloc(FooLarge([0; 8192]));
         heap.gc();
         assert_eq!(FOO_LARGE.load(std::sync::atomic::Ordering::Relaxed), 1);
@@ -781,5 +803,11 @@ impl Drop for Heap {
                 libc::free(obj.cast());
             }
         }
+    }
+}
+
+impl AsMut<Heap> for Heap {
+    fn as_mut(&mut self) -> &mut Heap {
+        self
     }
 }

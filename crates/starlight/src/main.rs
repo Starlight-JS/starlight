@@ -45,7 +45,9 @@ fn main() {
     };
     let mut vm = VirtualMachine::new(opts);
     jsrt_init(&mut vm);
-    let func = vm.compile(false, &contents, "<script>").map(|x| x.root());
+    let func = vm
+        .compile(false, &contents, "<script>")
+        .map(|x| x.root(&mut vm));
     match func {
         Ok(mut func) => {
             let args = Arguments::new(&mut vm, JsValue::undefined(), 0);

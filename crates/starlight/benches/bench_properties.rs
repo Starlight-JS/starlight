@@ -14,7 +14,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut obj = JsObject::new(&mut vm, s, JsObject::get_class(), ObjectTag::Ordinary);
 
     let sym = vm.intern("x");
-    let local = obj.root();
+    let local = obj.root(&mut vm);
     c.bench_function("property set", |b| {
         b.iter(|| {
             let _ = obj.put(&mut vm, sym, JsValue::new(42), false);

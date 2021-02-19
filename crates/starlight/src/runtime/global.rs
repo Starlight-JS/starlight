@@ -262,7 +262,7 @@ mod tests {
     fn test_global_obj() {
         let mut vm = VirtualMachine::new(Options::default());
 
-        let mut global = JsGlobal::new(&mut vm).root();
+        let mut global = JsGlobal::new(&mut vm).root(vm.space());
         let attr = create_data(AttrExternal::new(Some(W | E)));
         assert!(attr.is_data() && !attr.is_accessor());
         global
