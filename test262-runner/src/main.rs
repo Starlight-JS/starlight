@@ -76,7 +76,7 @@ fn main() {
                     let mut code = String::new();
 
                     for include in test.desc.includes.iter() {
-                        match std::fs::read(&format!("test262/harness/{}", include)) {
+                        match std::fs::read(&format!("test262_harness/{}", include)) {
                             Ok(contents) => {
                                 code.push_str(&String::from_utf8(contents).unwrap());
                             }
