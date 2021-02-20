@@ -140,13 +140,14 @@ impl JsArray {
         slot: &mut Slot,
     ) -> bool {
         if name == Symbol::length() {
-            slot.set(
+            slot.set_1(
                 JsValue::new(obj.elements.length() as i32),
                 if obj.elements.writable() {
                     create_data(AttrExternal::new(Some(W)))
                 } else {
                     create_data(AttrExternal::new(Some(N)))
                 },
+                Some(obj.as_dyn()),
             );
             return true;
         }
@@ -251,7 +252,8 @@ impl Gc<JsObject> {
         let new_len_double = desc.value().to_number(ctx)?;
         let new_len = new_len_double as u32;
         if new_len as f64 != new_len_double {
-            todo!();
+            let msg = JsString::new(ctx, "invalid array length");
+            return Err(JsValue::new(JsTypeError::new(ctx, msg, None)));
         }
 
         let old_len = self.elements.length();
@@ -264,7 +266,8 @@ impl Gc<JsObject> {
 
         if !self.elements.writable() {
             if throwable {
-                todo!();
+                let msg = JsString::new(ctx, "'length' not writable");
+                return Err(JsValue::new(JsTypeError::new(ctx, msg, None)));
             }
             return Ok(false);
         }

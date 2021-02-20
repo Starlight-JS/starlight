@@ -635,7 +635,8 @@ impl JsObject {
             Entry::Occupied(x) => {
                 if !x.get().attributes().is_configurable() {
                     if throwable {
-                        todo!();
+                        let msg = JsString::new(_vm, "trying to delete non-configurable property");
+                        return Err(JsValue::new(JsTypeError::new(_vm, msg, None)));
                     }
                     return Ok(false);
                 }

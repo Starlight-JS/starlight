@@ -1,6 +1,6 @@
 use super::runtime::attributes::*;
 use crate::jsrt::{
-    array::{array_from, array_join, array_of},
+    array::{array_from, array_join, array_of, array_pop, array_push},
     error::range_error_constructor,
     object::*,
 };
@@ -592,6 +592,23 @@ impl VirtualMachine {
             self,
             name,
             &*DataDescriptor::new(JsValue::new(to_string), W | C | E),
+            false,
+        );
+
+        let name = self.intern_or_known_symbol("push");
+        let push = JsNativeFunction::new(self, name, array_push, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::new(push), W | C | E),
+            false,
+        );
+        let name = self.intern_or_known_symbol("pop");
+        let pop = JsNativeFunction::new(self, name, array_pop, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::new(pop), W | C | E),
             false,
         );
         self.global_data.array_prototype = Some(proto);

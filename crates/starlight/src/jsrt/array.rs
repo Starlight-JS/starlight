@@ -136,3 +136,53 @@ pub fn array_to_string(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsVa
     let mut args = Arguments::new(vm, args.this, 0);
     object_to_string(vm, &mut args)
 }
+
+// TODO(playX): Allow to push up to 2^53-1 values
+pub fn array_push(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
+    let mut obj = args.this.to_object(vm)?;
+    let n = obj.get(vm, Symbol::length())?.to_number(vm)?;
+    let mut n = if n as u32 as f64 == n {
+        n as u32 as u64
+    } else {
+        let msg = JsString::new(vm, "invalid length");
+        return Err(JsValue::new(JsRangeError::new(vm, msg, None)));
+    };
+
+    let max = 0x100000000u64;
+    let mut it = 0;
+    let last = args.size();
+    if (n + args.size() as u64) <= max {
+        while it != last {
+            obj.put(vm, Symbol::Indexed(it as _), args.at(it), false)?;
+            it += 1;
+            n += 1;
+        }
+    } else {
+        let msg = JsString::new(vm, "array size exceeded");
+        return Err(JsValue::new(JsRangeError::new(vm, msg, None)));
+    }
+    let len = n as f64;
+    obj.put(vm, Symbol::length(), JsValue::new(len), false)?;
+    Ok(JsValue::new(n as f64))
+}
+
+pub fn array_pop(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
+    let mut obj = args.this.to_object(vm)?.root(vm.space());
+    let n = obj.get(vm, Symbol::length())?.to_number(vm)?;
+    let len = if n as u32 as f64 == n {
+        n as u32
+    } else {
+        let msg = JsString::new(vm, "invalid length");
+        return Err(JsValue::new(JsRangeError::new(vm, msg, None)));
+    };
+    if len == 0 {
+        obj.put(vm, Symbol::length(), JsValue::new(0), true)?;
+        return Ok(JsValue::undefined());
+    } else {
+        let index = len - 1;
+        let element = obj.get(vm, Symbol::Indexed(index))?;
+        obj.delete(vm, Symbol::Indexed(index), true)?;
+        obj.put(vm, Symbol::length(), JsValue::new(index), true)?;
+        Ok(element)
+    }
+}

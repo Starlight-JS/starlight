@@ -1,2 +1,5 @@
-let x = [1, 2, 3, 4]
-print(1 in x)
+let arr = []
+arr.push(42)
+
+print(arr.pop())
+print(arr)
