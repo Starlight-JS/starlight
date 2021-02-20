@@ -577,7 +577,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let mut v3 = vm.upop(); // this
 
                 if v3.is_empty() {
-                    v3 = JsValue::new(vm.global_object());
+                    v3 = JsValue::new(JsValue::undefined());
                 }
                 let mut v3 = Handle::new(vm.space(), v3);
                 if !v1.is_callable() {
@@ -821,12 +821,20 @@ impl VirtualMachine {
             let _slot = nscope
                 .get_slot(self, Symbol::arguments(), &mut slot)
                 .unwrap_or_else(|_| panic!());
-
+            let this = if f.code.strict && !args_.this.is_object() {
+                JsValue::undefined()
+            } else {
+                if args_.this.is_undefined() {
+                    JsValue::new(self.global_object())
+                } else {
+                    args_.this
+                }
+            };
             eval_internal(
                 self,
                 f.code,
                 f.code.code_start,
-                args_.this,
+                this,
                 *nscope,
                 args_.ctor_call,
             )
