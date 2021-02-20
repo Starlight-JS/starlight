@@ -1,12 +1,2 @@
-function foo() {
-    'use strict';
-    return typeof (this);
-}
-
-function bar() {
-    return typeof (this);
-}
-
-
-print(foo())
-print(bar())
+let x = [1, 2, 3, 4]
+print(1 in x)

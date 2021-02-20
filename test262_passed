@@ -2096,7 +2096,9 @@ Passed test262/test/language/expressions/function/dstr/dflt-ary-ptrn-rest-not-fi
 Passed test262/test/language/expressions/function/dstr/ary-ptrn-rest-init-id.js
 Passed test262/test/language/expressions/function/param-eval-non-strict.js
 Passed test262/test/language/expressions/function/param-arguments-non-strict.js
+Passed test262/test/language/expressions/in/S8.12.6_A3.js
 Passed test262/test/language/expressions/in/S11.8.7_A2.4_T2.js
+Passed test262/test/language/expressions/in/S8.12.6_A1.js
 Passed test262/test/language/expressions/exponentiation/exp-operator-syntax-error-negate-unary-expression-base.js
 Passed test262/test/language/expressions/exponentiation/exp-operator-syntax-error-delete-unary-expression-base.js
 Passed test262/test/language/expressions/exponentiation/exp-operator-syntax-error-logical-not-unary-expression-base.js

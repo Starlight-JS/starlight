@@ -290,6 +290,9 @@ impl ByteCode {
                         writeln!(output, "dup")?;
                     }
                     Op::OP_PUSH_THIS => writeln!(output, "push_this")?,
+                    Op::OP_IN => {
+                        writeln!(output, "in")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }

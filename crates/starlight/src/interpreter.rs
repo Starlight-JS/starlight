@@ -127,9 +127,10 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 }
             }
             Op::OP_IN => {
+                let obj = vm.upop();
                 let val = vm.upop();
                 let val = Handle::new(vm.space(), val);
-                let obj = vm.upop();
+
                 let sym = val.to_symbol(vm)?;
 
                 let obj = if obj.is_object() {
