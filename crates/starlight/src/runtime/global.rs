@@ -36,7 +36,7 @@ impl JsGlobal {
             Some(JsValue::new(std::f64::INFINITY))
         } else if name == Symbol::NaN() {
             Some(JsValue::new(pure_nan::pure_nan()))
-        } else if name == Symbol::NaN() {
+        } else if name == Symbol::undefined() {
             Some(JsValue::undefined())
         } else {
             None

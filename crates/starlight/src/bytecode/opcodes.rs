@@ -224,12 +224,8 @@ pub enum Op {
     /// `( a -- )`
     OP_JMP_FALSE,
 
-    /// Like OP_JMP_TRUE but if the branch
-    /// is taken it also drops another stack element:
-    ///
-    /// if `b` is true: `( a b -- )`
-    /// if `b` is false: `( a b -- a )`
-    OP_JMP_TRUE_DROP,
+    OP_JMP_TRUE_NDROP,
+    OP_JMP_FALSE_NDROP,
 
     /// Conditional jump on the v7->is_continuing flag.
     /// Clears the flag once executed.

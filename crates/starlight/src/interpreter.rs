@@ -439,6 +439,26 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                     pc = pc.offset(offset as _);
                 }
             }
+            Op::OP_JMP_TRUE_NDROP => {
+                let offset = pc.cast::<i32>().read_unaligned();
+                pc = pc.add(4);
+                let val = vm.upop();
+
+                if !val.to_boolean() {
+                    pc = pc.offset(offset as _);
+                }
+
+                vm.upush(val);
+            }
+            Op::OP_JMP_FALSE_NDROP => {
+                let offset = pc.cast::<i32>().read_unaligned();
+                pc = pc.add(4);
+                let val = vm.upop();
+
+                if !val.to_boolean() {
+                    pc = pc.offset(offset as _);
+                }
+            }
             Op::OP_GET_VAR => {
                 let ix = pc.cast::<u32>().read_unaligned(); // name id
                 pc = pc.add(4);

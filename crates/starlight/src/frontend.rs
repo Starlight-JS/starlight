@@ -1,6 +1,7 @@
 use hashbrown::HashMap;
 use scope_analyzer::{Scope, VisitFnDecl};
 use swc_ecmascript::{ast::*, utils::IsDirective};
+use wtf_rs::pure_nan;
 
 use crate::{
     bytecode::opcodes::*,
@@ -338,9 +339,24 @@ impl Compiler {
             Expr::Ident(name) => {
                 let s: &str = &name.sym;
                 let name = self.intern_str(s);
-                let ix = self.builder.get_sym(name);
-                if used {
-                    self.builder.emit(Op::OP_GET_VAR, &[ix], true);
+                if name == Symbol::undefined() {
+                    self.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false)
+                } else if name == Symbol::NaN() {
+                    let ix = self
+                        .builder
+                        .get_val(&mut self.vm, Val::Float(pure_nan::pure_nan().to_bits()));
+                    self.builder.emit(Op::OP_PUSH_LIT, &[ix], false);
+                } else if name == Symbol::Infinity() {
+                    let ix = self
+                        .builder
+                        .get_val(&mut self.vm, Val::Float(std::f64::INFINITY.to_bits()));
+                    self.builder.emit(Op::OP_PUSH_LIT, &[ix], false);
+                } else {
+                    assert!(self.vm.description(name) != "undefined");
+                    let ix = self.builder.get_sym(name);
+                    if used {
+                        self.builder.emit(Op::OP_GET_VAR, &[ix], true);
+                    }
                 }
             }
 
@@ -521,12 +537,14 @@ impl Compiler {
                 match binary.op {
                     BinaryOp::LogicalOr => {
                         self.emit(&binary.left, true);
+                        self.builder.emit(Op::OP_DUP, &[], false);
                         let jtrue = self.cjmp(true);
+                        self.builder.emit(Op::OP_DROP, &[], false);
                         self.emit(&binary.right, true);
-                        let end = self.jmp();
+                        //let end = self.jmp();
                         jtrue(self);
-                        self.builder.emit(Op::OP_PUSH_TRUE, &[], false);
-                        end(self);
+                        // self.builder.emit(Op::OP_PUSH_TRUE, &[], false);
+                        //end(self);
                         if !used {
                             self.builder.emit(Op::OP_DROP, &[], false);
                         }
@@ -534,11 +552,12 @@ impl Compiler {
                     }
                     BinaryOp::LogicalAnd => {
                         self.emit(&binary.left, true);
+                        self.builder.emit(Op::OP_DUP, &[], false);
                         let jfalse = self.cjmp(false);
+                        self.builder.emit(Op::OP_DROP, &[], false);
                         self.emit(&binary.right, true);
                         let end = self.jmp();
                         jfalse(self);
-                        self.builder.emit(Op::OP_PUSH_FALSE, &[], false);
                         end(self);
                         if !used {
                             self.builder.emit(Op::OP_DROP, &[], false);

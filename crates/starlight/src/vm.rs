@@ -320,7 +320,7 @@ impl VirtualMachine {
             "input" => Symbol::input(),
             "multiline" => Symbol::multiline(),
             "global" => Symbol::global(),
-
+            "undefined" => Symbol::undefined(),
             "compare" => Symbol::compare(),
             "join" => Symbol::join(),
             "toPrimitive" => Symbol::toPrimitive(),

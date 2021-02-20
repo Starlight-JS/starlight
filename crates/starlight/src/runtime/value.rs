@@ -235,7 +235,7 @@ impl JsValue {
     }
 
     pub fn is_undefined_or_null(self) -> bool {
-        unsafe { (self.u.as_int64 & Self::UNDEFINED_TAG as i64) == Self::VALUE_NULL as i64 }
+        self.is_undefined() || self.is_null()
     }
 
     pub fn is_boolean(self) -> bool {
@@ -697,12 +697,14 @@ impl JsValue {
             }
         } else if self.is_cell() && self.as_cell().is::<JsString>() {
             self.as_cell().downcast::<JsString>().unwrap().len() != 0
-        } else if self.is_undefined_or_null() {
+        } else if self.is_undefined() {
+            false
+        } else if self.is_null() {
             false
         } else if self.is_boolean() {
             self.as_boolean()
         } else {
-            true && !self.is_empty()
+            true && !self.is_empty() && !self.is_undefined_or_null()
         }
     }
     fn number_compare(x: f64, y: f64) -> i32 {
