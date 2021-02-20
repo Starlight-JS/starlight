@@ -91,17 +91,24 @@ impl Compiler {
         VisitFnDecl::visit(body, &mut |decl| {
             if true {
                 let name = self.intern(&decl.ident);
-                let params = decl
-                    .function
-                    .params
-                    .iter()
-                    .map(|x: &Param| match x.pat {
-                        Pat::Ident(ref x) => self.intern(x),
+                let mut rest = None;
+                let mut params = vec![];
+                for x in decl.function.params.iter() {
+                    match x.pat {
+                        Pat::Ident(ref x) => params.push(self.intern(x)),
+                        Pat::Rest(ref r) => match &*r.arg {
+                            Pat::Ident(ref id) => {
+                                rest = Some(self.intern(id));
+                            }
+                            _ => unreachable!(),
+                        },
                         _ => todo!(),
-                    })
-                    .collect::<Vec<Symbol>>();
+                    }
+                }
+
                 let code = ByteCode::new(&mut self.vm, name, &params, false);
                 let mut code = Handle::new(self.vm.space(), code);
+                code.rest_param = rest;
                 let mut compiler = Compiler {
                     lci: Vec::new(),
                     builder: ByteCodeBuilder {
@@ -182,6 +189,12 @@ impl Compiler {
                         Pat::Ident(ref ident) => {
                             code.params.push(compiler.intern(ident));
                         }
+                        Pat::Rest(restpat) => match *restpat.arg {
+                            Pat::Ident(ref id) => {
+                                code.rest_param = Some(compiler.intern(id));
+                            }
+                            _ => unreachable!(),
+                        },
                         p => todo!("arrow param {:?}", p),
                     }
                 }
@@ -209,17 +222,24 @@ impl Compiler {
                     .as_ref()
                     .map(|x| self.intern(x))
                     .unwrap_or_else(|| self.vm.intern("<anonymous>"));
-                let params = fun
-                    .function
-                    .params
-                    .iter()
-                    .map(|x: &Param| match x.pat {
-                        Pat::Ident(ref x) => self.intern(x),
+                let mut rest = None;
+                let mut params = vec![];
+                for x in fun.function.params.iter() {
+                    match x.pat {
+                        Pat::Ident(ref x) => params.push(self.intern(x)),
+                        Pat::Rest(ref r) => match &*r.arg {
+                            Pat::Ident(ref id) => {
+                                rest = Some(self.intern(id));
+                            }
+                            _ => unreachable!(),
+                        },
                         _ => todo!(),
-                    })
-                    .collect::<Vec<Symbol>>();
+                    }
+                }
+
                 let code = ByteCode::new(&mut self.vm, name, &params, false);
                 let mut code = Handle::new(self.vm.space(), code);
+                code.rest_param = rest;
                 let mut compiler = Compiler {
                     lci: Vec::new(),
                     builder: ByteCodeBuilder {

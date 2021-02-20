@@ -784,6 +784,23 @@ impl VirtualMachine {
 
                 i += 1;
             }
+            if let Some(rest) = f.code.rest_param {
+                let mut args_arr =
+                    JsArray::new(self, args_.size() as u32 - i as u32).root(self.space());
+                let mut ix = 0;
+                for _ in i..args_.size() {
+                    args_arr.put_indexed_slot(
+                        self,
+                        ix,
+                        args_.at(ix as usize),
+                        &mut Slot::new(),
+                        false,
+                    )?;
+                    ix += 1;
+                }
+
+                nscope.put(self, rest, JsValue::new(*args_arr), false)?;
+            }
             for val in func.code.var_names.iter() {
                 nscope.define_own_property(
                     self,

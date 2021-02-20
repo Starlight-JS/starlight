@@ -2365,6 +2365,7 @@ Passed test262/test/built-ins/Error/prototype/name/S15.11.4.2_A2.js
 Passed test262/test/built-ins/Error/prototype/message/S15.11.4.3_A2.js
 Passed test262/test/built-ins/NaN/S15.1.1.1_A2_T2.js
 Passed test262/test/built-ins/Array/S15.4_A1.1_T4.js
+Passed test262/test/built-ins/Array/S15.4.5.2_A2_T1.js
 Passed test262/test/built-ins/Function/15.3.5.4_2-75gs.js
 Passed test262/test/built-ins/global/S10.2.3_A1.2_T1.js
 Passed test262/test/built-ins/global/10.2.1.1.3-4-22.js

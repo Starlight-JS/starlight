@@ -1,3 +1,5 @@
-"use strict";
-var x = false || undefined || 42;
-print(x)
+function add(...args) {
+    return args[0] + args[1];
+}
+
+print(add(2, 4))

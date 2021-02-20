@@ -24,6 +24,8 @@ pub struct ByteCode {
     pub code: Vec<u8>,
     #[unsafe_ignore_trace]
     pub code_start: *mut u8,
+    #[unsafe_ignore_trace]
+    pub rest_param: Option<Symbol>,
     pub codes: Vec<Gc<ByteCode>>,
     pub feedback: Vec<TypeFeedBack>,
     pub literals: Vec<JsValue>,
@@ -298,6 +300,7 @@ impl ByteCode {
         vm.allocate(Self {
             name,
             var_names: vec![],
+            rest_param: None,
             code: vec![],
             code_start: null_mut(),
             codes: vec![],

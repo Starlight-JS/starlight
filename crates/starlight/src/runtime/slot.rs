@@ -1,5 +1,5 @@
-use super::property_descriptor::StoredSlot;
 use super::{attributes::*, value::JsValue};
+use super::{object::JsObject, property_descriptor::StoredSlot};
 use crate::heap::cell::{Cell, Gc, Trace, Tracer};
 use std::{
     mem::transmute,
@@ -22,6 +22,7 @@ impl Slot {
     pub const PUT_MASK: u32 = 3;
     fn is_cacheable(&self) -> bool {
         (self.flags & Self::FLAG_CACHEABLE) != 0
+            && self.base.map(|obj| obj.is::<JsObject>()).unwrap_or(false)
     }
     fn is_put_force_unchacheable(&self) -> bool {
         (self.flags & Self::FLAG_FORCE_PUT_UNCACHEABLE) != 0
