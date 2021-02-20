@@ -16,7 +16,6 @@ pub mod js_arguments;
 pub mod number;
 pub mod object;
 pub mod property_descriptor;
-pub mod ref_ptr;
 pub mod slot;
 pub mod storage;
 pub mod string;

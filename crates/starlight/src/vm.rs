@@ -104,7 +104,7 @@ pub struct VirtualMachine {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct VirtualMachineRef(*mut VirtualMachine);
+pub struct VirtualMachineRef(pub(crate) *mut VirtualMachine);
 
 impl VirtualMachineRef {
     pub fn dispose(this: Self) {

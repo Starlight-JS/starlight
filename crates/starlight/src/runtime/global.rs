@@ -1,7 +1,6 @@
 use super::method_table::MethodTable;
 use super::{
-    attributes::*, object::*, property_descriptor::*, ref_ptr::*, slot::*, structure::*, symbol::*,
-    value::*,
+    attributes::*, object::*, property_descriptor::*, slot::*, structure::*, symbol::*, value::*,
 };
 use crate::heap::cell::*;
 use crate::vm::*;
@@ -12,7 +11,7 @@ use wtf_rs::segmented_vec::SegmentedVec;
 pub struct JsGlobal {
     sym_map: HashMap<Symbol, u32>,
     variables: SegmentedVec<StoredSlot>,
-    vm: Ref<VirtualMachine>,
+    vm: VirtualMachineRef,
 }
 
 #[allow(non_snake_case)]
@@ -24,7 +23,7 @@ impl JsGlobal {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),
                 variables: SegmentedVec::with_chunk_size(8),
-                vm: Ref::new(vm),
+                vm: VirtualMachineRef(vm),
             });
         }
         js_object

@@ -18,12 +18,12 @@ impl SymbolTable {
         if let Ok(uint) = s.parse::<u32>() {
             return Symbol::Indexed(uint);
         }
-        let s: &'static str = unsafe { std::mem::transmute::<&str, &'static str>(&s) };
+        let s: &'static str = Box::leak(s.to_string().into_boxed_str());
         if let Some(val) = self.set.get(&s) {
             Symbol::Key(*val)
         } else {
             let str = s.to_string();
-            let s: &'static str = unsafe { std::mem::transmute::<&str, &'static str>(&str) };
+            let s: &'static str = Box::leak(s.to_string().into_boxed_str());
             let val = s;
             std::mem::forget(str);
             self.set.insert(val);
