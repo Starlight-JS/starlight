@@ -1,5 +1,9 @@
 use super::runtime::attributes::*;
-use crate::jsrt::object::*;
+use crate::jsrt::{
+    array::{array_from, array_join, array_of},
+    error::range_error_constructor,
+    object::*,
+};
 use std::{fmt::Display, io::Write, sync::RwLock};
 use std::{ops::DerefMut, ptr::null_mut};
 use swc_common::{
@@ -319,6 +323,7 @@ impl VirtualMachine {
             "index" => Symbol::index(),
             "input" => Symbol::input(),
             "multiline" => Symbol::multiline(),
+
             "global" => Symbol::global(),
             "undefined" => Symbol::undefined(),
             "compare" => Symbol::compare(),
@@ -537,7 +542,7 @@ impl VirtualMachine {
     fn init_array(&mut self, obj_proto: Gc<JsObject>) {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
-        let structure = Structure::new_unique_indexed(self, None, false);
+        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let mut proto = JsObject::new(self, structure, JsObject::get_class(), ObjectTag::Ordinary);
         self.global_data
             .array_structure
@@ -556,14 +561,37 @@ impl VirtualMachine {
             &*DataDescriptor::new(JsValue::new(proto), NONE),
             false,
         );
+
         let name = self.intern("isArray");
         let is_array = JsNativeFunction::new(self, name, array_is_array, 1);
         let _ = constructor.put(self, name, JsValue::new(is_array), false);
-
+        let name = self.intern("of");
+        let array_of = JsNativeFunction::new(self, name, array_of, 1);
+        let _ = constructor.put(self, name, JsValue::new(array_of), false);
+        let name = self.intern("from");
+        let array_from = JsNativeFunction::new(self, name, array_from, 1);
+        let _ = constructor.put(self, name, JsValue::new(array_from), false);
         let _ = proto.define_own_property(
             self,
             Symbol::constructor(),
             &*DataDescriptor::new(JsValue::new(constructor), W | C),
+            false,
+        );
+        let name = self.intern_or_known_symbol("join");
+        let join = JsNativeFunction::new(self, name, array_join, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::new(join), W | C | E),
+            false,
+        );
+
+        let name = self.intern_or_known_symbol("toString");
+        let to_string = JsNativeFunction::new(self, name, array_join, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::new(to_string), W | C | E),
             false,
         );
         self.global_data.array_prototype = Some(proto);
@@ -821,6 +849,70 @@ impl VirtualMachine {
             );
 
             self.global_data.reference_error = Some(sub_proto);
+        }
+
+        // range error
+        {
+            let structure = Structure::new_unique_with_proto(self, Some(proto), false);
+            let mut sub_proto = JsObject::new(
+                self,
+                structure,
+                JsReferenceError::get_class(),
+                ObjectTag::Ordinary,
+            );
+
+            self.global_data
+                .range_error_structure
+                .unwrap()
+                .change_prototype_with_no_transition(sub_proto);
+            let sym = self.intern("RangeError");
+            let mut sub_ctor = JsNativeFunction::new(self, sym, range_error_constructor, 1);
+            let _ = sub_ctor.define_own_property(
+                self,
+                Symbol::prototype(),
+                &*DataDescriptor::new(JsValue::new(sub_proto), NONE),
+                false,
+            );
+            let _ = sub_proto.define_own_property(
+                self,
+                Symbol::constructor(),
+                &*DataDescriptor::new(JsValue::new(sub_ctor), W | C),
+                false,
+            );
+
+            let n = Symbol::name();
+            let s = JsString::new(self, "RangeError");
+            let e = JsString::new(self, "");
+            let m = Symbol::message();
+            let _ = sub_proto.define_own_property(
+                self,
+                n,
+                &*DataDescriptor::new(JsValue::new(s), W | C),
+                false,
+            );
+
+            let _ = sub_proto.define_own_property(
+                self,
+                m,
+                &*DataDescriptor::new(JsValue::new(e), W | C),
+                false,
+            );
+            let to_str = JsNativeFunction::new(self, Symbol::toString(), error_to_string, 0);
+            let _ = sub_proto.define_own_property(
+                self,
+                Symbol::toString(),
+                &*DataDescriptor::new(JsValue::new(to_str), W | C),
+                false,
+            );
+
+            let _ = self.global_object().define_own_property(
+                self,
+                sym,
+                &*DataDescriptor::new(JsValue::new(sub_proto), W | C),
+                false,
+            );
+
+            self.global_data.range_error = Some(sub_proto);
         }
     }
 }

@@ -1,5 +1,1 @@
-function add(...args) {
-    return args[0] + args[1];
-}
-
-print(add(2, 4))
+print([1, 2, 3])

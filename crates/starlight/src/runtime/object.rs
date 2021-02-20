@@ -310,6 +310,7 @@ impl JsObject {
             if value.is_empty() {
                 return false;
             }
+
             slot.set_1(value, object_data(), Some(obj.as_dyn()));
             return true;
         }

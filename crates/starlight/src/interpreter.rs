@@ -810,8 +810,12 @@ impl VirtualMachine {
                 )?;
             }
 
-            let args = JsArguments::new(self, *nscope, &f.code.params, args_.size() as _)
+            let mut args = JsArguments::new(self, *nscope, &f.code.params, args_.size() as _)
                 .root(self.space());
+
+            for k in i..args_.size() {
+                args.put(self, Symbol::Indexed(k as _), args_.at(k), false)?;
+            }
             let _ = nscope.put(self, Symbol::arguments(), JsValue::new(*args), false);
             let mut slot = Slot::new();
             let _slot = nscope
