@@ -27,7 +27,9 @@ swc_atoms = "0.2.5"
 swc_common = "0.10.9"
 swc_ecmascript = { version = "0.21.0", features = ["parser", "utils", "visit"] }
 minivec = "0.2"
+linked_list_allocator = { version = "0.8", default-features = false, optional = true }
 pico-args = "0.4"
+
 [features]
 debug-snapshots = [
     "serde",
@@ -38,7 +40,12 @@ debug-snapshots = [
     "erased-serde",
 ]
 
+dlmalloc-gc = []
 valgrind-gc = []
+default = ["dlmalloc-gc"]
+compress-ptr-32 = ["linked_list_allocator", "compressed-ptrs"]
+compress-ptr-16 = ["linked_list_allocator", "compressed-ptrs"]
+compressed-ptrs = []
 
 [dev-dependencies]
 criterion = "0.3"

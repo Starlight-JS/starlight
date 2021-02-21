@@ -45,6 +45,7 @@ fn main() {
     };
     let mut vm = VirtualMachine::new(opts);
     jsrt_init(&mut vm);
+    println!("memory used by GC: {}", vm.space().heap_usage());
     let func = vm
         .compile(false, &contents, "<script>")
         .map(|x| x.root(&mut vm));
@@ -81,6 +82,7 @@ fn main() {
             std::process::exit(1);
         }
     }
+    println!("memory used by GC: {}", vm.space().heap_usage());
     VirtualMachineRef::dispose(vm);
     std::process::exit(0);
 }

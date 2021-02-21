@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use super::{attributes::object_data, property_descriptor::StoredSlot, value::JsValue};
+use super::{
+    attributes::object_data, gc_array::GcVec, property_descriptor::StoredSlot, value::JsValue,
+};
 use crate::{
-    heap::cell::{Cell, Gc, Trace, Tracer},
+    gc::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
 use minivec::MiniVec;
@@ -16,7 +18,7 @@ pub type DenseArrayVector = MiniVec<JsValue>;
 #[repr(C)]
 pub struct IndexedElements {
     pub(crate) map: Option<Gc<SparseArrayMap>>,
-    pub(crate) vector: MiniVec<JsValue>,
+    pub(crate) vector: GcVec<JsValue>,
     length: u32,
     flags: u32,
 }
@@ -82,7 +84,7 @@ impl IndexedElements {
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,
-            vector: MiniVec::new(),
+            vector: GcVec::new(_vm, 0),
             map: None,
         }
     }
@@ -111,9 +113,10 @@ impl Cell for IndexedElements {}
 unsafe impl Trace for IndexedElements {
     fn trace(&self, tracer: &mut dyn Tracer) {
         self.map.trace(tracer);
-        for item in self.vector.iter() {
+        /*for item in self.vector.iter() {
             item.trace(tracer);
-        }
+        }*/
+        self.vector.trace(tracer);
     }
 }
 

@@ -2,7 +2,7 @@ use super::slot::*;
 use super::symbol::*;
 use super::value::*;
 use super::{object::*, property_descriptor::PropertyDescriptor};
-use crate::heap::cell::*;
+use crate::gc::cell::*;
 use crate::vm::*;
 pub type GetNonIndexedSlotType = fn(
     obj: Gc<JsObject>,

@@ -1,13 +1,10 @@
+use super::gc_array::GcVec;
+use crate::gc::cell::*;
+use crate::vm::VirtualMachine;
 use std::ops::{Index, IndexMut};
 
-use minivec::{mini_vec, MiniVec};
-
-use crate::heap::cell::*;
-
-use crate::vm::VirtualMachine;
-
 pub struct FixedStorage<T: Cell + Copy> {
-    pub(crate) data: MiniVec<T>,
+    pub(crate) data: GcVec<T>,
 }
 
 impl<T: Cell + Copy + Default> FixedStorage<T> {
@@ -27,7 +24,7 @@ impl<T: Cell + Copy + Default> FixedStorage<T> {
 
             self.data = ptr;
         }*/
-        self.data.reserve(n);
+        self.data.reserve(vm, n);
     }
     pub fn resize(&mut self, vm: &mut VirtualMachine, n: usize, value: T) {
         /*let previous = self.capacity();
@@ -37,7 +34,7 @@ impl<T: Cell + Copy + Default> FixedStorage<T> {
                 self.data[i] = value;
             }
         }*/
-        self.data.resize(n, value);
+        self.data.resize(vm, n, value);
     }
 
     pub fn size(&self) -> usize {
@@ -50,19 +47,25 @@ impl<T: Cell + Copy + Default> FixedStorage<T> {
 
     pub fn new(vm: &mut VirtualMachine, init: T) -> Self {
         Self {
-            data: MiniVec::new(),
+            data: GcVec::new(vm, 0),
         }
     }
 
     pub fn with_capacity(vm: &mut VirtualMachine, cap: usize, init: T) -> Self {
         if cap == 0 {
             return Self {
-                data: MiniVec::new(),
+                data: GcVec::new(vm, cap),
             };
         }
-        Self {
-            data: mini_vec![init;cap],
+        let mut this = Self {
+            data: GcVec::new(vm, cap),
+        };
+
+        for _ in 0..cap {
+            this.data.push(vm, init);
         }
+
+        this
     }
 
     pub fn with(vm: &mut VirtualMachine, cap: usize, value: T) -> Self {
@@ -92,7 +95,8 @@ unsafe impl<T: Cell + Copy> Trace for FixedStorage<T> {
         /*for i in 0..self.data.len() {
             self.data[i].trace(tracer);
         }*/
-        self.data.iter().for_each(|x| x.trace(tracer));
+
+        self.data.trace(tracer); //self.data.iter().for_each(|x| x.trace(tracer));
     }
 }
 

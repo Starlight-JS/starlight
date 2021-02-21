@@ -2,7 +2,7 @@ use super::{
     attributes::*, method_table::*, object::*, property_descriptor::*, slot::*, symbol::*, value::*,
 };
 use super::{error::JsTypeError, indexed_elements::MAX_VECTOR_SIZE, string::JsString};
-use crate::{heap::cell::*, vm::*};
+use crate::{gc::cell::*, vm::*};
 
 pub struct JsArray;
 #[allow(non_snake_case)]
@@ -314,7 +314,7 @@ impl Gc<JsObject> {
             } else {
                 self.elements.make_dense();
                 if self.elements.vector.len() > len as usize {
-                    self.elements.vector.resize(len as _, JsValue::empty());
+                    self.elements.vector.resize(ctx, len as _, JsValue::empty());
                 }
             }
             self.elements.set_length(len);

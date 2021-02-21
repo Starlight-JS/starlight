@@ -1,4 +1,4 @@
-use crate::{heap::cell::Gc, vm::VirtualMachine};
+use crate::{gc::cell::Gc, vm::VirtualMachine};
 
 use super::{
     attributes::*, object::JsObject, property_descriptor::DataDescriptor, symbol::Symbol,

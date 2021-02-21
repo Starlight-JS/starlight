@@ -8,7 +8,7 @@ use super::{
     value::JsValue,
 };
 use crate::{
-    heap::cell::{Cell, Gc, Trace},
+    gc::cell::{Cell, Gc, Trace},
     vm::VirtualMachine,
 };
 

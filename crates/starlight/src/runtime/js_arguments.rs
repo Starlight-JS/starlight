@@ -2,7 +2,7 @@ use super::{
     env::Env, method_table::*, object::*, property_descriptor::*, slot::*, symbol::*, value::*,
 };
 use super::{error::JsTypeError, string::JsString};
-use crate::{heap::cell::*, vm::*};
+use crate::{gc::cell::*, vm::*};
 use std::mem::ManuallyDrop;
 
 use super::{

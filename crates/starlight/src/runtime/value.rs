@@ -1,6 +1,6 @@
 use super::{attributes::string_length, object::ObjectTag, slot::*, string::JsStringObject};
 use crate::{
-    heap::cell::{Cell, Gc, Trace, Tracer},
+    gc::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
 
@@ -394,11 +394,7 @@ impl JsValue {
     }
 
     pub fn as_object(self) -> Gc<JsObject> {
-        assert!(
-            self.is_object(),
-            "not an object ptr {:p}",
-            self.as_cell().cell
-        );
+        assert!(self.is_object(), "not an object value ",);
         unsafe { self.as_cell().downcast_unchecked() }
     }
     pub fn as_symbol(self) -> Gc<JsSymbol> {

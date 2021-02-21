@@ -1,5 +1,5 @@
 use crate::{
-    heap::cell::{Cell, Gc, Trace, Tracer},
+    gc::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
 

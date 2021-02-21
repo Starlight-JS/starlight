@@ -49,12 +49,12 @@ impl Emitter for MyEmiter {
 }
 use crate::{
     frontend::Compiler,
-    gc::{handle::Handle, heap::Heap},
-    heap::{
+    gc::{
         cell::{Cell, Gc, Trace, Tracer},
         constraint::SimpleMarkingConstraint,
-        Allocator,
     },
+    gc::{handle::Handle, heap::Heap},
+    heap::Allocator,
     interpreter::frame::FrameBase,
     jsrt::{
         array::{array_ctor, array_is_array},

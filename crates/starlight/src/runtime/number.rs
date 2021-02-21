@@ -1,6 +1,6 @@
 use std::mem::ManuallyDrop;
 
-use crate::{heap::cell::Gc, vm::VirtualMachine};
+use crate::{gc::cell::Gc, vm::VirtualMachine};
 
 use super::object::JsObject;
 use super::{method_table::*, object::ObjectTag};

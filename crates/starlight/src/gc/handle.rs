@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::heap::cell::{Trace, Tracer};
+use crate::gc::cell::{Trace, Tracer};
 
 use super::heap::Heap;
 

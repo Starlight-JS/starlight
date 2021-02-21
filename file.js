@@ -1,7 +1,7 @@
-function bar() {
-    print(this)
+let obj = {
+    x: 42,
+    y: 3,
+    z: 4
 }
 
-let x = bar.bind(42)
-
-x()
+print(obj)

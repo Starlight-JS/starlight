@@ -21,7 +21,7 @@ use crate::{
 use frame::FrameBase;
 use std::ptr::null_mut;
 
-use crate::{bytecode::ByteCode, heap::cell::Gc, runtime::value::JsValue, vm::VirtualMachine};
+use crate::{bytecode::ByteCode, gc::cell::Gc, runtime::value::JsValue, vm::VirtualMachine};
 
 pub mod frame;
 const LOG: bool = false;

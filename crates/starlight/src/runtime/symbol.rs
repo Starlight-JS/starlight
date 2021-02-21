@@ -1,9 +1,6 @@
+use crate::gc::cell::{Cell, Trace};
+use crate::heap::Allocator;
 use std::hash::{Hash, Hasher};
-
-use crate::heap::{
-    cell::{Cell, Trace},
-    Allocator,
-};
 pub const DUMMY_SYMBOL: Symbol = Symbol::Key("");
 /// Runtime symbol type.
 ///

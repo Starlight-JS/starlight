@@ -1,6 +1,6 @@
 use super::{attributes::*, value::JsValue};
 use super::{object::JsObject, property_descriptor::StoredSlot};
-use crate::heap::cell::{Cell, Gc, Trace, Tracer};
+use crate::gc::cell::{Cell, Gc, Trace, Tracer};
 use std::{
     mem::transmute,
     ops::{Deref, DerefMut},

@@ -2,7 +2,7 @@ use super::method_table::MethodTable;
 use super::{
     attributes::*, object::*, property_descriptor::*, slot::*, structure::*, symbol::*, value::*,
 };
-use crate::heap::cell::*;
+use crate::gc::cell::*;
 use crate::vm::*;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;

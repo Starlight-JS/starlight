@@ -1,6 +1,6 @@
 use crate::{
     bytecode::ByteCode,
-    heap::cell::{Cell, Gc, Trace, Tracer},
+    gc::cell::{Cell, Gc, Trace, Tracer},
     runtime::{object::JsObject, value::JsValue},
 };
 

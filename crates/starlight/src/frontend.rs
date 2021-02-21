@@ -6,8 +6,8 @@ use wtf_rs::pure_nan;
 use crate::{
     bytecode::opcodes::*,
     bytecode::*,
+    gc::cell::{Gc, Trace, Tracer},
     gc::handle::Handle,
-    heap::cell::{Gc, Trace, Tracer},
     runtime::symbol::Symbol,
     vm::VirtualMachineRef,
 };

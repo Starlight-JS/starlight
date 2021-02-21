@@ -7,7 +7,7 @@ use super::{object::*, structure::Structure, value::JsValue};
 use super::{property_descriptor::DataDescriptor, slot::*};
 use crate::{
     bytecode::ByteCode,
-    heap::cell::{Gc, Trace, Tracer},
+    gc::cell::{Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
 pub struct JsFunction {
@@ -426,13 +426,12 @@ impl JsVMFunction {
         *this
     }
 }
-impl JsObject {
+impl Gc<JsObject> {
     pub fn func_construct_map(
         &mut self,
         vm: &mut VirtualMachine,
     ) -> Result<Gc<Structure>, JsValue> {
-        let obj = // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GC heap.
-unsafe { Gc::from_raw(self) };
+        let obj = *self;
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
 
@@ -443,7 +442,7 @@ unsafe { Gc::from_raw(self) };
 
         let mut slot = Slot::new();
         let proto = Symbol::prototype();
-        let res = Self::GetNonIndexedSlotMethod(obj, vm, proto, &mut slot)?;
+        let res = JsObject::GetNonIndexedSlotMethod(obj, vm, proto, &mut slot)?;
         let structure = unsafe {
             Structure::new_indexed(
                 vm,

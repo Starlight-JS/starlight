@@ -5,7 +5,7 @@ use super::{
 };
 use crate::gc::handle::Handle;
 use crate::{
-    heap::cell::{Cell, Gc, Trace, Tracer},
+    gc::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
 use std::collections::HashMap;

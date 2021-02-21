@@ -1,10 +1,18 @@
-pub mod block;
-
-pub mod block_set;
-
+pub mod cell;
+pub mod constraint;
 pub mod handle;
-pub mod heap;
 
+#[cfg(feature = "dlmalloc-gc")]
+pub mod dlmalloc_heap;
+
+#[cfg(feature = "dlmalloc-gc")]
+pub use dlmalloc_heap as heap;
+
+#[cfg(feature = "compressed-ptrs")]
+pub mod compressed_gc;
+
+#[cfg(feature = "compressed-ptrs")]
+pub use compressed_gc as heap;
 #[cfg(feature = "valgrind-gc")]
 pub(crate) mod valgrind;
 

@@ -14,10 +14,8 @@ use std::{
 };
 
 use crate::{
-    heap::{
-        cell::{Cell, Gc, Trace, Tracer},
-        Allocator,
-    },
+    gc::cell::{Cell, Gc, Trace, Tracer},
+    heap::Allocator,
     vm::VirtualMachine,
 };
 /*
@@ -218,10 +216,9 @@ impl<T: Cell> IndexMut<usize> for RawVec<T> {
         unsafe { &mut *self.data.as_mut_ptr().add(index) }
     }
 }
-/*
 
 pub struct GcVec<T: Cell> {
-    raw: Heap<RawVec<T>>,
+    raw: Gc<RawVec<T>>,
 }
 
 impl<T: Cell> GcVec<T> {
@@ -369,11 +366,9 @@ impl<T: Cell> serde::Serialize for GcVec<T> {
 
 impl<T: Cell> Cell for GcVec<T> {}
 
-impl<T: Cell> Trace for GcVec<T> {
+unsafe impl<T: Cell> Trace for GcVec<T> {
     fn trace(&self, tracer: &mut dyn Tracer) {
-        for i in 0..self.len() {
-            self[i].trace(tracer);
-        }
+        self.raw.trace(tracer);
     }
 }
 impl<T: Cell> AsRef<[T]> for GcVec<T> {
@@ -400,8 +395,8 @@ impl<T: Cell> Drop for RawVec<T> {
             }
         }
     }
-}*/
-
+}
+/*
 pub struct GcVec<T: Cell> {
     data: Gc<Vec<T>>,
 }
@@ -471,3 +466,4 @@ unsafe impl<T: Trace + Cell> Trace for GcVec<T> {
         self.data.trace(tracer);
     }
 }
+*/

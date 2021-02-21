@@ -20,11 +20,9 @@ use super::{
 use super::{method_table::MethodTable, value::JsValue};
 use crate::{
     define_jsclass,
+    gc::cell::{Cell, Gc, Trace, Tracer},
     gc::handle::Handle,
-    heap::{
-        addr::Address,
-        cell::{Cell, Gc, Trace, Tracer},
-    },
+    heap::addr::Address,
     vm::*,
 };
 use std::collections::hash_map::Entry;
@@ -696,7 +694,8 @@ impl JsObject {
         mode: EnumerationMode,
     ) {
         if obj.elements.dense() {
-            for (index, it) in obj.elements.vector.iter().enumerate() {
+            for index in 0..obj.elements.vector.len() {
+                let it = obj.elements.vector[index];
                 if !it.is_empty() {
                     collector(Symbol::Indexed(index as _), u32::MAX);
                 }
@@ -1187,7 +1186,7 @@ impl Gc<JsObject> {
 
             self.elements
                 .vector
-                .resize(index as usize + 1, JsValue::empty());
+                .resize(vm, index as usize + 1, JsValue::empty());
 
             if !absent {
                 self.elements.vector[index as usize] = val;

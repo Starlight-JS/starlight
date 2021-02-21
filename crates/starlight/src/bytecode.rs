@@ -4,10 +4,8 @@ use std::{collections::HashMap, fmt::Write, mem::transmute, ptr::null_mut};
 use serde::ser::SerializeStruct;
 
 use crate::{
-    heap::{
-        cell::{Cell, Gc, Trace, Tracer},
-        Allocator,
-    },
+    gc::cell::{Cell, Gc, Trace, Tracer},
+    heap::Allocator,
     runtime::{string::JsString, structure::Structure, symbol::Symbol, value::JsValue},
     vm::VirtualMachine,
 };
