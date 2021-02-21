@@ -15,6 +15,7 @@ for (;obj.x < 10000;obj.x = obj.x + 1) {
 
 "#;
 fn criterion_benchmark(c: &mut Criterion) {
+    starlight_platform_init();
     let mut vm = VirtualMachine::new(Options {
         dump_bytecode: true,
         ..Default::default()

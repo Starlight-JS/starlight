@@ -1,6 +1,7 @@
 use starlight::{
     gc::handle::Handle,
     jsrt::jsrt_init,
+    starlight_platform_init,
     vm::{Options, VirtualMachineRef},
 };
 use starlight::{
@@ -8,7 +9,7 @@ use starlight::{
     vm::VirtualMachine,
 };
 const HELP: &str = "\
-App
+Starlight
 USAGE:
   starlight [OPTIONS] [INPUT]
 FLAGS:
@@ -25,6 +26,7 @@ struct AppArgs {
     input: std::path::PathBuf,
 }
 fn main() {
+    starlight_platform_init();
     let args = match parse_args() {
         Ok(v) => v,
         Err(e) => {

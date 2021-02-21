@@ -9,6 +9,7 @@ use starlight::*;
 use vm::{Options, VirtualMachine};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
+    starlight_platform_init();
     let mut vm = VirtualMachine::new(Options::default());
     let s = Structure::new_indexed(&mut vm, None, false);
     let mut obj = JsObject::new(&mut vm, s, JsObject::get_class(), ObjectTag::Ordinary);

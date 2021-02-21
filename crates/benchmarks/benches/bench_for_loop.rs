@@ -13,6 +13,7 @@ for (let i = 0;i<10000;i = i + 1) {
 
 "#;
 fn criterion_benchmark(c: &mut Criterion) {
+    starlight_platform_init();
     let mut vm = VirtualMachine::new(Options {
         dump_bytecode: true,
         ..Default::default()

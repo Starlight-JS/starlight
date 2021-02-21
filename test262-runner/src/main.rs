@@ -3,12 +3,14 @@ use std::{fs::OpenOptions, io::Write, panic::AssertUnwindSafe};
 use starlight::{
     gc::handle::Handle,
     runtime::{arguments::Arguments, value::JsValue},
+    starlight_platform_init,
     vm::{Options, VirtualMachine, VirtualMachineRef},
 };
 
 use test262_harness::*;
 static mut RUNNING: Option<String> = None;
 fn main() {
+    starlight_platform_init();
     let _ = std::fs::remove_file("test262_result");
     let _ = std::fs::remove_file("test262_passed");
     std::panic::set_hook(Box::new(|descr| unsafe {
@@ -56,7 +58,7 @@ fn main() {
                         continue;
                     }
                     unsafe {
-                        println!("Running: {}", test.path.display());
+                        //println!("Running: {}", test.path.display());
                         RUNNING = Some(test.path.to_str().unwrap().to_string().clone());
                     }
 

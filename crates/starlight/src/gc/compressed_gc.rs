@@ -26,18 +26,19 @@ impl std::fmt::Pointer for NonZeroCompressed {
 }
 
 impl NonZeroCompressed {
+    #[inline(always)]
     pub fn as_ptr<T>(self) -> *mut T {
         decompress_ptr(self.0.get()).cast()
     }
-
+    #[inline(always)]
     pub fn get(self) -> Compressed {
         self.0.get()
     }
-
+    #[inline(always)]
     pub unsafe fn new_unchecked(x: Compressed) -> Self {
         Self(NonZeroCompressedInternal::new_unchecked(x))
     }
-
+    #[inline(always)]
     pub fn new(x: Compressed) -> Option<Self> {
         Some(Self(NonZeroCompressedInternal::new(x)?))
     }
@@ -81,6 +82,7 @@ pub struct StarliteHeap {
     allocated: usize,
     lock: SpinLock,
 }
+static mut BASE: usize = 0;
 impl StarliteHeap {
     pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
         {
@@ -111,21 +113,30 @@ unsafe impl Sync for StarliteHeap {}
 struct Handle(UnsafeCell<StarliteHeap>);
 unsafe impl Send for Handle {}
 unsafe impl Sync for Handle {}
-static STARLITE_HEAP: once_cell::sync::Lazy<Handle> = once_cell::sync::Lazy::new(|| unsafe {
-    let mut map = MmapMut::map_anon(HEAP_SIZE).expect("failed to initialize map");
-    let heap = LHeap::new(map.as_mut_ptr().add(16) as _, HEAP_SIZE - 16);
-    Handle(UnsafeCell::new(StarliteHeap {
-        alloc: heap,
-        allocated: 0,
-        base: map.as_mut_ptr() as _,
-        size: HEAP_SIZE - 16,
-        lock: SpinLock::new(),
-        map,
-    }))
-});
+static mut STARLITE_HEAP: MaybeUninit<Handle> = MaybeUninit::uninit();
+
+pub fn compressed_gc_init() {
+    unsafe {
+        let handle = unsafe {
+            let mut map = MmapMut::map_anon(HEAP_SIZE).expect("failed to initialize map");
+            let heap = LHeap::new(map.as_mut_ptr().add(16) as _, HEAP_SIZE - 16);
+            BASE = map.as_mut_ptr() as _;
+            Handle(UnsafeCell::new(StarliteHeap {
+                alloc: heap,
+                allocated: 0,
+                base: map.as_mut_ptr() as _,
+                size: HEAP_SIZE - 16,
+                lock: SpinLock::new(),
+                map,
+            }))
+        };
+
+        STARLITE_HEAP = MaybeUninit::new(handle);
+    }
+}
 
 pub fn heap() -> &'static mut StarliteHeap {
-    unsafe { &mut *(*STARLITE_HEAP).0.get() }
+    unsafe { &mut *(*STARLITE_HEAP.as_mut_ptr()).0.get() }
 }
 
 pub struct SBox<T> {
@@ -164,7 +175,7 @@ impl<T> SBox<T> {
     pub fn compress(self) -> CompressedBox<T> {
         let heap = heap();
 
-        let compressed = self.value.as_ptr() as isize - heap.base as isize;
+        let compressed = unsafe { self.value.as_ptr() as isize - BASE as isize };
 
         core::mem::forget(self);
         unsafe {
@@ -210,7 +221,7 @@ impl<T> CompressedBox<T> {
     }
     fn get_decompressed_ptr(&self) -> *mut T {
         let heap = heap();
-        let p = (heap.base as isize + self.compressed_ptr.get() as isize) as *mut T;
+        let p = unsafe { (heap.base as isize + self.compressed_ptr.get() as isize) as *mut T };
 
         p
     }
@@ -258,16 +269,15 @@ struct RcInner<T> {
     value: T,
     rc: u32,
 }
+#[inline(always)]
 pub fn decompress_ptr(x: Compressed) -> *mut u8 {
-    let heap = heap();
-    let p = (heap.base as isize + x as isize) as *mut u8;
+    let p = unsafe { (BASE as isize + x as isize) as *mut u8 };
 
     p
 }
-
+#[inline(always)]
 pub fn compress_ptr(x: *mut u8) -> Compressed {
-    let heap = heap();
-    let p = (x as isize - heap.base as isize) as Compressed;
+    let p = unsafe { (x as isize - BASE as isize) as Compressed };
 
     p
 }
@@ -346,7 +356,10 @@ impl<T> DerefMut for Rc<T> {
     }
 }
 
-use std::{collections::VecDeque, mem::size_of};
+use std::{
+    collections::VecDeque,
+    mem::{size_of, MaybeUninit},
+};
 
 use hashbrown::HashSet;
 
@@ -435,7 +448,7 @@ impl Heap {
         let mut cur = self.list;
         self.allocated = 0;
         while !cur.is_null() {
-            let sz = (*prev).get_dyn().compute_size() + core::mem::size_of::<Header>();
+            let sz = (*cur).get_dyn().compute_size() + core::mem::size_of::<Header>();
             if (*cur).tag() == GC_MARKED {
                 prev = cur;
                 cur = (*cur).next;

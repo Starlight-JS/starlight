@@ -13,7 +13,7 @@ default-members = ["crates/starlight", "test262-runner"]
 debug = false
 lto = "fat"
 codegen-units = 1
-opt-level = 's'
+opt-level = 3
 
 [profile.bench]
 debug = false

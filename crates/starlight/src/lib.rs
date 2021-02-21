@@ -58,3 +58,10 @@ pub fn val_add(x: JsValue, y: JsValue) -> JsValue {
     }
     JsValue::undefined()
 }
+
+pub fn starlight_platform_init() {
+    #[cfg(feature = "compressed-ptrs")]
+    {
+        gc::compressed_gc::compressed_gc_init();
+    }
+}
