@@ -1,7 +1,7 @@
-function newArray(...rest) {
-    let arr = [];
-    arr.push(...rest);
-    return arr;
+function bar() {
+    print(this)
 }
 
-print(newArray(1, 2, 3, 4));
+let x = bar.bind(42)
+
+x()

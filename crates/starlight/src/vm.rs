@@ -2,6 +2,7 @@ use super::runtime::attributes::*;
 use crate::jsrt::{
     array::{array_from, array_join, array_of, array_pop, array_push},
     error::range_error_constructor,
+    function::{function_bind, function_prototype, function_to_string},
     object::*,
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
@@ -499,6 +500,8 @@ impl VirtualMachine {
                 .cell
                 == obj_constructor.cell
         );
+
+        this.init_func(proto);
         this.space().undefer_gc();
         //this.space().gc();
         this
@@ -539,6 +542,47 @@ impl VirtualMachine {
         }
     }
     fn init_object(&mut self) {}
+    fn init_func(&mut self, obj_proto: Gc<JsObject>) {
+        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
+        let name = self.intern_or_known_symbol("Function");
+        let mut func_proto = JsNativeFunction::new(self, name, function_prototype, 1);
+        self.global_data
+            .function_struct
+            .unwrap()
+            .change_prototype_with_no_transition(func_proto);
+        self.global_data.func_prototype = Some(func_proto);
+        let mut func_ctor = JsNativeFunction::new(self, name, function_prototype, 1);
+
+        let _ = self
+            .global_object()
+            .put(self, name, JsValue::new(func_ctor), false);
+        let s = func_proto
+            .structure()
+            .change_prototype_transition(self, Some(obj_proto));
+        (*func_proto).set_structure(self, s);
+
+        let _ = func_proto.define_own_property(
+            self,
+            Symbol::constructor(),
+            &*DataDescriptor::new(JsValue::new(func_ctor), W | C),
+            false,
+        );
+        let f = JsNativeFunction::new(self, Symbol::toString(), function_bind, 0);
+        let name = self.intern_or_known_symbol("bind");
+        let _ = func_proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::new(f), W | C),
+            false,
+        );
+        let f = JsNativeFunction::new(self, Symbol::toString(), function_to_string, 0);
+        let _ = func_proto.define_own_property(
+            self,
+            Symbol::toString(),
+            &*DataDescriptor::new(JsValue::new(f), W | C),
+            false,
+        );
+    }
     fn init_array(&mut self, obj_proto: Gc<JsObject>) {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
@@ -961,7 +1005,7 @@ pub struct GlobalData {
     pub(crate) internal_error: Option<Gc<JsObject>>,
     pub(crate) eval_error: Option<Gc<JsObject>>,
     pub(crate) array_prototype: Option<Gc<JsObject>>,
-
+    pub(crate) func_prototype: Option<Gc<JsObject>>,
     pub(crate) string_structure: Option<Gc<Structure>>,
     pub(crate) number_structure: Option<Gc<Structure>>,
     pub(crate) array_structure: Option<Gc<Structure>>,

@@ -4,6 +4,7 @@ use crate::{
 };
 pub mod array;
 pub mod error;
+pub mod function;
 pub mod object;
 pub fn print(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsValue, JsValue> {
     for ix in 0..args.size() {

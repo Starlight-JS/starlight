@@ -1,6 +1,6 @@
-use std::mem::ManuallyDrop;
+use std::{mem::ManuallyDrop, unreachable};
 
-use super::{arguments::Arguments, error::JsTypeError, symbol::*};
+use super::{arguments::Arguments, error::JsTypeError, gc_array::GcArray, symbol::*};
 use super::{attributes::*, property_descriptor::PropertyDescriptor};
 use super::{method_table::*, string::JsString};
 use super::{object::*, structure::Structure, value::JsValue};
@@ -18,6 +18,7 @@ pub struct JsFunction {
 pub enum FuncType {
     Native(JsNativeFunction),
     User(JsVMFunction),
+    Bound(JsBoundFunction),
 }
 #[allow(non_snake_case)]
 impl JsFunction {
@@ -25,6 +26,15 @@ impl JsFunction {
         match self.ty {
             FuncType::Native(_) => false,
             FuncType::User(ref x) => x.code.strict,
+            FuncType::Bound(ref x) => x.target.as_function().is_strict(),
+        }
+    }
+
+    pub fn is_bound(&self) -> bool {
+        if let FuncType::Bound(_) = self.ty {
+            true
+        } else {
+            false
         }
     }
     pub fn as_native(&self) -> &JsNativeFunction {
@@ -49,6 +59,20 @@ impl JsFunction {
     pub fn as_vm_mut(&mut self) -> &mut JsVMFunction {
         match self.ty {
             FuncType::User(ref mut x) => x,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_bound(&self) -> &JsBoundFunction {
+        match self.ty {
+            FuncType::Bound(ref x) => x,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_bound_mut(&mut self) -> &mut JsBoundFunction {
+        match self.ty {
+            FuncType::Bound(ref mut x) => x,
             _ => unreachable!(),
         }
     }
@@ -79,6 +103,15 @@ impl JsFunction {
         match self.ty {
             FuncType::Native(ref x) => (x.func)(vm, args),
             FuncType::User(ref x) => return vm.perform_vm_call(x, JsValue::new(x.scope), args),
+            FuncType::Bound(ref x) => {
+                let mut args = Arguments {
+                    values: x.args,
+                    this: x.this,
+                    ctor_call: args.ctor_call,
+                };
+                let mut target = x.target;
+                target.as_function_mut().call(vm, &mut args)
+            }
         }
     }
     pub fn new(vm: &mut VirtualMachine, ty: FuncType, _strict: bool) -> Gc<JsObject> {
@@ -365,8 +398,10 @@ impl JsVMFunction {
             scope: *scope,
         };
 
-        let mut this = JsFunction::new(vm, FuncType::User(f), false).root(vm.space());
-        let mut proto = JsObject::new_empty(vm).root(vm.space());
+        let mut this = JsFunction::new(vm, FuncType::User(f), false)
+            .root(vm.space())
+            .root(vm.space());
+        let mut proto = JsObject::new_empty(vm).root(vm.space()).root(vm.space());
 
         let _ = proto.define_own_property(
             vm,
@@ -374,14 +409,20 @@ impl JsVMFunction {
             &*DataDescriptor::new(JsValue::new(*this), W | C),
             false,
         );
-
+        let desc = vm.description(code.name);
+        let s = JsString::new(vm, desc).root(vm.space());
         let _ = this.define_own_property(
             vm,
             Symbol::prototype(),
             &*DataDescriptor::new(JsValue::new(*proto), W),
             false,
         );
-
+        let _ = this.define_own_property(
+            vm,
+            Symbol::name(),
+            &*DataDescriptor::new(JsValue::new(*s), W | C),
+            false,
+        );
         *this
     }
 }
@@ -426,4 +467,12 @@ unsafe { Gc::from_raw(self) };
 
         Ok(structure)
     }
+}
+use starlight_derive::Trace;
+
+#[derive(Trace)]
+pub struct JsBoundFunction {
+    pub this: JsValue,
+    pub args: Gc<GcArray<JsValue>>,
+    pub target: Gc<JsObject>,
 }

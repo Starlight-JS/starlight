@@ -429,6 +429,7 @@ impl JsObject {
 
     pub fn is_callable(&self) -> bool {
         (self.flags & OBJ_FLAG_CALLABLE) != 0
+            || self.class as *const Class == JsFunction::get_class() as *const Class
     }
 
     // section 8.12.9 `[[DefineOwnProperty]]`
