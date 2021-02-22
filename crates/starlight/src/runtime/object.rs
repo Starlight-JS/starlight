@@ -954,17 +954,6 @@ impl Gc<JsObject> {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        /*let mut structure = self.structure;
-        let entry = structure.get(vm, name);
-        if !entry.is_not_found() {
-            slot.set_1(
-                *self.direct(entry.offset as _),
-                entry.attrs as _,
-                Some(unsafe { Heap::<JsObject>::from_raw(self).as_dyn() }),
-            );
-            return true;
-        }
-        false*/
         (self.class.method_table.GetOwnNonIndexedPropertySlot)(*self, vm, name, slot)
     }
     pub fn can_put(&self, vm: &mut VirtualMachine, name: Symbol, slot: &mut Slot) -> bool {

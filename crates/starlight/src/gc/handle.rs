@@ -1,8 +1,6 @@
-use std::ops::{Deref, DerefMut};
-
-use crate::gc::cell::{Trace, Tracer};
-
 use super::heap::Heap;
+use crate::gc::cell::{Trace, Tracer};
+use std::ops::{Deref, DerefMut};
 
 pub struct HandleInner<T: Trace> {
     value: T,
@@ -18,11 +16,18 @@ unsafe impl<T: Trace> Trace for HandleInner<T> {
 }
 impl<T: Trace> HandleTrait for HandleInner<T> {}
 
+/// Generic reference counted structure used by GC to trace stored value for GC objects.
+///
+///
+/// This type should always be used for `Gc<T>` types on stack so GC can see GC objects and mark then, not using
+/// `Handle<Gc<T>>` might result in UB or segfaults.
+///
 pub struct Handle<T: Trace> {
     inner: *mut HandleInner<T>,
 }
 
 impl<T: Trace> Handle<T> {
+    /// Create new handle from `value`. On each GC cycle `value` will be scanned through `T::trace` method.
     pub fn new(heap: &mut Heap, value: T) -> Handle<T> {
         unsafe {
             let mem = Box::into_raw(Box::new(HandleInner {

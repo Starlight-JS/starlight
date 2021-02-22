@@ -850,7 +850,6 @@ impl VirtualMachine {
         mut bcode: Gc<ByteCode>,
     ) -> Result<JsValue, JsValue> {
         match &bcode.feedback[feedback as usize] {
-            TypeFeedBack::Generic => return Env { record: scope }.get_variable(self, name),
             TypeFeedBack::Structure(structure, offset, count) => {
                 let count = *count;
                 let structure = *structure;
@@ -859,27 +858,22 @@ impl VirtualMachine {
                 if let Some(hit) = self.try_cache(structure, scope) {
                     return Ok(*hit.direct(offset as usize));
                 } else {
-                    if count == 64 {
-                        bcode.feedback[feedback as usize] = TypeFeedBack::Generic;
-                        Env { record: scope }.get_variable(self, name)
-                    } else {
-                        let mut slot = Slot::new();
-                        let val = Env { record: scope }.get_variable_slot(self, name, &mut slot)?;
+                    let mut slot = Slot::new();
+                    let val = Env { record: scope }.get_variable_slot(self, name, &mut slot)?;
 
-                        if slot.is_load_cacheable() {
-                            unsafe {
-                                bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
-                                    slot.base()
-                                        .unwrap()
-                                        .downcast_unchecked::<JsObject>()
-                                        .structure(),
-                                    slot.offset(),
-                                    count + 1,
-                                );
-                            }
+                    if slot.is_load_cacheable() {
+                        unsafe {
+                            bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
+                                slot.base()
+                                    .unwrap()
+                                    .downcast_unchecked::<JsObject>()
+                                    .structure(),
+                                slot.offset(),
+                                count + 1,
+                            );
                         }
-                        Ok(val)
                     }
+                    Ok(val)
                 }
             }
             TypeFeedBack::None => {
@@ -914,10 +908,6 @@ impl VirtualMachine {
     ) -> Result<(), JsValue> {
         let scope = &scope;
         match &bcode.feedback[feedback as usize] {
-            TypeFeedBack::Generic => {
-                Env { record: *scope }.set_variable(self, name, val, strict)?;
-                Ok(())
-            }
             TypeFeedBack::Structure(structure, offset, count) => {
                 let count = *count;
                 let structure = *structure;
@@ -925,20 +915,12 @@ impl VirtualMachine {
                 if let Some(mut hit) = self.try_cache(structure, *scope) {
                     *hit.direct_mut(offset as _) = val;
                 } else {
-                    if count == 64 {
-                        bcode.feedback[feedback as usize] = TypeFeedBack::Generic;
+                    let (base, slot) =
                         Env { record: *scope }.set_variable(self, name, val, strict)?;
-                    } else {
-                        let (base, slot) =
-                            Env { record: *scope }.set_variable(self, name, val, strict)?;
-                        if slot.is_store_cacheable() {
-                            unsafe {
-                                bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
-                                    base.structure(),
-                                    slot.offset(),
-                                    count + 1,
-                                );
-                            }
+                    if slot.is_store_cacheable() {
+                        unsafe {
+                            bcode.feedback[feedback as usize] =
+                                TypeFeedBack::Structure(base.structure(), slot.offset(), count + 1);
                         }
                     }
                 }
@@ -1008,7 +990,7 @@ impl VirtualMachine {
         let mut obj = if obj.is_object() {
             obj.as_object()
         } else {
-            obj.get_primitive_proto(self)
+            return self.store_prop_primitive(obj, name, val, strict);
         };
         obj.put(self, name, val, strict)
     }
@@ -1032,15 +1014,11 @@ impl VirtualMachine {
     ) -> Result<JsValue, JsValue> {
         let obj = Handle::new(self.space(), obj);
         match &bcode.feedback[feedback as usize] {
-            TypeFeedBack::Generic => {
-                let mut slot = Slot::new();
-                return obj.get_slot(self, name, &mut slot);
-            }
             TypeFeedBack::None => {
                 let mut slot = Slot::new();
                 let val = obj.get_slot(self, name, &mut slot)?;
 
-                if slot.is_load_cacheable() {
+                if slot.is_load_cacheable() && !slot.attributes().is_accessor() {
                     bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
                         slot.base()
                             .unwrap()
@@ -1051,7 +1029,7 @@ impl VirtualMachine {
                         0,
                     );
                 }
-                return Ok(val);
+                return slot.get(self, JsValue::new(*obj));
             }
             TypeFeedBack::Structure(structure, offset, count) => {
                 let structure = *structure;
@@ -1066,29 +1044,60 @@ impl VirtualMachine {
                 if let Some(hit) = self.try_cache(structure, *obj) {
                     return Ok(*hit.direct(offset as _));
                 } else {
-                    if count == 64 {
-                        bcode.feedback[feedback as usize] = TypeFeedBack::Generic;
-                        return obj.get(self, name);
-                    } else {
-                        let mut slot = Slot::new();
-                        let val = obj.get_slot(self, name, &mut slot)?;
-                        if slot.is_load_cacheable() {
-                            bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
-                                slot.base()
-                                    .unwrap()
-                                    .downcast::<JsObject>()
-                                    .unwrap()
-                                    .structure(),
-                                slot.offset(),
-                                count + 1,
-                            );
-                        }
-                        return Ok(val);
+                    let mut slot = Slot::new();
+                    let val = obj.get_slot(self, name, &mut slot)?;
+                    if slot.is_load_cacheable() && !slot.attributes().is_accessor() {
+                        bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
+                            slot.base()
+                                .unwrap()
+                                .downcast::<JsObject>()
+                                .unwrap()
+                                .structure(),
+                            slot.offset(),
+                            count + 1,
+                        );
                     }
+                    return slot.get(self, JsValue::new(*obj));
                 }
             }
             _ => unreachable!(),
         }
+    }
+    fn store_prop_primitive(
+        &mut self,
+        obj: JsValue,
+        name: Symbol,
+        val: JsValue,
+        strict: bool,
+    ) -> Result<(), JsValue> {
+        let mut slot = Slot::new();
+        let obj = obj.to_object(self)?;
+        if !obj.can_put(self, name, &mut slot) {
+            if strict {
+                let msg = JsString::new(self, "cannot put value to object").root(self.space());
+                return Err(JsValue::new(JsTypeError::new(self, *msg, None)));
+            }
+            return Ok(());
+        }
+
+        if slot.is_not_found() || slot.attributes().is_data() {
+            if strict {
+                let msg =
+                    JsString::new(self, "value to symbol in transient object").root(self.space());
+                return Err(JsValue::new(JsTypeError::new(self, *msg, None)));
+            }
+            return Ok(());
+        }
+
+        let ac = slot.accessor();
+        let mut args = Arguments::new(self, JsValue::new(obj), 1);
+        *args.at_mut(0) = val;
+        let mut args = Handle::new(self.space(), args);
+        ac.setter()
+            .as_object()
+            .as_function_mut()
+            .call(self, &mut args)
+            .map(|_| ())
     }
     fn set_prop(
         &mut self,
@@ -1099,62 +1108,29 @@ impl VirtualMachine {
         strict: bool,
         mut bcode: Gc<ByteCode>,
     ) -> Result<(), JsValue> {
-        let mut obj = if obj.is_object() {
-            obj.as_object()
-        } else {
-            obj.get_primitive_proto(self)
+        if obj.is_primitive() {
+            return self.store_prop_primitive(obj, name, val, strict);
         }
-        .root(self.space());
-        match &bcode.feedback[feedback as usize] {
-            TypeFeedBack::Generic => obj.put(self, name, val, strict),
-            TypeFeedBack::None => {
-                let mut slot = Slot::new();
-                let val = obj.put_slot(self, name, val, &mut slot, strict)?;
-                if slot.is_store_cacheable() {
-                    bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
-                        slot.base()
-                            .unwrap()
-                            .downcast::<JsObject>()
-                            .unwrap()
-                            .structure(),
-                        slot.offset(),
-                        0,
-                    );
-                }
+        let mut obj = obj.as_object().root(self.space());
+        if let TypeFeedBack::Structure(ref structure, ref offset, _) =
+            bcode.feedback[feedback as usize]
+        {
+            if Gc::ptr_eq(*structure, obj.structure()) {
+                *obj.direct_mut(*offset as _) = val;
                 return Ok(());
             }
-            TypeFeedBack::Structure(structure, offset, count) => {
-                let structure = *structure;
-                let offset = *offset;
-                let count = *count;
-
-                if let Some(hit) = self.try_cache(structure, *obj) {
-                    *obj.direct_mut(offset as _) = val;
-                    return Ok(());
-                } else {
-                    if count == 64 {
-                        bcode.feedback[feedback as usize] = TypeFeedBack::Generic;
-                        return obj.put(self, name, val, strict);
-                    } else {
-                        let mut slot = Slot::new();
-                        let val = obj.get_slot(self, name, &mut slot)?;
-                        if slot.is_store_cacheable() {
-                            bcode.feedback[feedback as usize] = TypeFeedBack::Structure(
-                                slot.base()
-                                    .unwrap()
-                                    .downcast::<JsObject>()
-                                    .unwrap()
-                                    .structure(),
-                                slot.offset(),
-                                count + 1,
-                            );
-                        }
-
-                        obj.put(self, name, val, strict)
-                    }
-                }
-            }
-            _ => unreachable!(),
         }
+
+        let previous = obj.structure();
+        let mut slot = Slot::new();
+        obj.put_slot(self, name, val, &mut slot, strict)?;
+
+        let res_ty = slot.put_result_type();
+        if !slot.is_put_cacheable() || !matches!(name, Symbol::Indexed(_)) {
+            return Ok(());
+        }
+        bcode.feedback[feedback as usize] =
+            TypeFeedBack::Structure(obj.structure(), slot.offset(), 0);
+        Ok(())
     }
 }

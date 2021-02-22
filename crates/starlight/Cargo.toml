@@ -20,10 +20,12 @@ swc_common = "0.10.9"
 swc_ecmascript = { version = "0.21.0", features = ["parser", "utils", "visit"] }
 minivec = "0.2"
 pico-args = "0.4"
+libmimalloc-sys = { version = "0.1", optional = true }
 
 [features]
 malloc-gc = []
 valgrind-gc = []
+gc = ["libmimalloc-sys"]
 default = ["malloc-gc"]
 compress-ptr-32 = ["compressed-ptrs"]
 compress-ptr-16 = ["compressed-ptrs"]
