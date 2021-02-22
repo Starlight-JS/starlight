@@ -11,7 +11,7 @@ members = [
 default-members = ["crates/starlight", "test262-runner"]
 [profile.release]
 debug = false
-lto = "fat"
+#lto = "fat"
 codegen-units = 1
 opt-level = 3
 

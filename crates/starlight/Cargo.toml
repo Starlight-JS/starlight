@@ -42,7 +42,7 @@ debug-snapshots = [
 
 dlmalloc-gc = []
 valgrind-gc = []
-default = ["dlmalloc-gc"]
+default = ["compress-ptr-32"]
 compress-ptr-32 = ["linked_list_allocator", "compressed-ptrs"]
 compress-ptr-16 = ["linked_list_allocator", "compressed-ptrs"]
 compressed-ptrs = []

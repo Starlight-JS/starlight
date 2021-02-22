@@ -90,7 +90,10 @@ impl StarliteHeap {
             let p = self.alloc.allocate_first_fit(layout);
             self.allocated += layout.size();
             self.lock.unlock();
-            p.map(|x| x.as_ptr()).unwrap_or_else(|_| null_mut())
+            p.map(|x| x.as_ptr()).unwrap_or_else(
+                #[cold]
+                |_| null_mut(),
+            )
         }
     }
 
@@ -271,15 +274,23 @@ struct RcInner<T> {
 }
 #[inline(always)]
 pub fn decompress_ptr(x: Compressed) -> *mut u8 {
-    let p = unsafe { (BASE as isize + x as isize) as *mut u8 };
-
-    p
+    let mut ptr = x as usize;
+    // assert_ne!(ptr, 0);
+    unsafe {
+        ptr <<= 4;
+        ptr += BASE;
+    }
+    ptr as _
 }
 #[inline(always)]
 pub fn compress_ptr(x: *mut u8) -> Compressed {
-    let p = unsafe { (x as isize - BASE as isize) as Compressed };
-
-    p
+    let mut ptr = x as usize;
+    unsafe {
+        ptr -= BASE;
+        ptr >>= 4;
+    }
+    // assert_ne!(ptr, 0);
+    ptr as _
 }
 pub struct Rc<T> {
     ptr: NonZeroCompressed,
@@ -451,14 +462,14 @@ impl Heap {
             let sz = (*cur).get_dyn().compute_size() + core::mem::size_of::<Header>();
             if (*cur).tag() == GC_MARKED {
                 prev = cur;
-                cur = (*cur).next;
+                cur = (*cur).next();
                 (*prev).set_tag(GC_UNMARKED);
                 self.allocated += sz;
             } else {
                 let unreached = cur;
-                cur = (*cur).next;
+                cur = (*cur).next();
                 if !prev.is_null() {
-                    (*prev).next = cur;
+                    (*prev).set_next(cur);
                 } else {
                     self.list = cur;
                 }
@@ -540,7 +551,16 @@ impl Heap {
             let arena = self.arenas[size_class_index_for(size).unwrap()];
             (*arena).allocate(self)
         }*/
-        Address::from_ptr(heap().alloc(Layout::from_size_align_unchecked(size, 16)))
+        let mut p = Address::from_ptr(heap().alloc(Layout::from_size_align_unchecked(size, 16)));
+        if p.is_null() {
+            self.gc();
+            p = Address::from_ptr(heap().alloc(Layout::from_size_align_unchecked(size, 16)));
+            if p.is_null() {
+                panic!("out of memory");
+            }
+        }
+
+        p
     }
     pub fn heap_usage(&self) -> usize {
         self.allocated
@@ -588,7 +608,7 @@ impl Heap {
                     std::backtrace::Backtrace::capture()
                 );
             }
-            (*memory).next = self.list;
+            (*memory).set_next(self.list);
             self.list = memory;
             Gc {
                 cell: NonZeroCompressed::new_unchecked(compress_ptr(memory as _)),
@@ -745,7 +765,7 @@ impl Drop for Heap {
             let mut object = self.list;
             while !object.is_null() {
                 let obj = object;
-                object = (*obj).next;
+                object = (*obj).next();
                 let sz = (*obj).get_dyn().compute_size() + size_of::<Header>();
                 std::ptr::drop_in_place((*obj).get_dyn());
                 heap().free(obj.cast(), Layout::from_size_align_unchecked(sz, 16));

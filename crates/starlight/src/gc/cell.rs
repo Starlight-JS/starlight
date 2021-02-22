@@ -13,7 +13,7 @@ use core::{mem::size_of, mem::transmute};
 use erased_serde::serialize_trait_object;
 use minivec::MiniVec;
 use mopa::{mopafy, Any};
-use std::collections::HashMap;
+use std::{collections::HashMap, ptr::null_mut};
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -118,21 +118,57 @@ mopafy!(Cell, core = core);
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Header {
+    #[cfg(not(feature = "compressed-ptrs"))]
     pub next: *mut Header,
-    #[cfg(feature = "valgrind-gc")]
-    pub heap: *mut Heap,
+    #[cfg(feature = "compressed-ptrs")]
+    pub next: Compressed,
     /// pointer to type vtable
     ty: usize,
-    #[cfg(any(feature = "tag-field", target_pointer_width = "32"))]
-    tag: u8,
+
     //zap: bool,
     data: [u8; 0],
 }
 
 impl Header {
+    pub fn next(&self) -> *mut Self {
+        #[cfg(not(feature = "compressed-ptrs"))]
+        {
+            self.next
+        }
+
+        #[cfg(feature = "compressed-ptrs")]
+        {
+            if self.next == 0 {
+                return null_mut();
+            }
+            super::compressed_gc::decompress_ptr(self.next).cast()
+        }
+    }
+    pub fn set_next(&mut self, p: *mut Header) {
+        #[cfg(not(feature = "compressed-ptrs"))]
+        {
+            self.next = p;
+        }
+
+        #[cfg(feature = "compressed-ptrs")]
+        {
+            self.next = if p.is_null() {
+                0
+            } else {
+                super::compressed_gc::compress_ptr(p.cast())
+            };
+        }
+    }
     pub fn new(heap: *mut Heap, next: *mut Self, vtable: usize) -> Self {
         let mut this = Self {
+            #[cfg(not(feature = "compressed-ptrs"))]
             next,
+            #[cfg(feature = "compressed-ptrs")]
+            next: if next.is_null() {
+                0
+            } else {
+                super::compressed_gc::compress_ptr(next.cast())
+            },
             #[cfg(feature = "valgrind-gc")]
             heap,
             ty: 0,
@@ -263,26 +299,28 @@ impl<T: Cell + ?Sized> Gc<T> {
         return heap.as_mut();
     }
 
+    #[inline]
     pub fn ptr_eq<U: Cell + ?Sized>(this: Gc<T>, other: Gc<U>) -> bool {
         this.cell == other.cell
     }
-
+    #[inline]
     pub fn get_dyn(&self) -> &dyn Cell {
         let hdr: *mut Header = self.cell.as_ptr();
         unsafe { (*hdr).get_dyn() }
     }
-
+    #[inline]
     pub fn get_dyn_mut(&mut self) -> &mut dyn Cell {
         let hdr: *mut Header = self.cell.as_ptr();
         unsafe { (*hdr).get_dyn() }
     }
-
+    #[inline]
     pub fn as_dyn(&self) -> Gc<dyn Cell> {
         Gc {
             cell: self.cell,
             marker: Default::default(),
         }
     }
+    #[inline]
     pub fn is<U: Cell>(self) -> bool {
         unsafe {
             let hdr: *mut Header = self.cell.as_ptr();
@@ -299,6 +337,7 @@ impl Gc<dyn Cell> {
     ///
     /// # Safety
     /// This function is unsafe because it does not do any checks to see if this heap cell is `T` or no.
+    #[inline]
     pub unsafe fn downcast_unchecked<T: Cell>(self) -> Gc<T> {
         {
             Gc {
@@ -307,7 +346,7 @@ impl Gc<dyn Cell> {
             }
         }
     }
-
+    #[inline]
     pub fn downcast<T: Cell>(self) -> Option<Gc<T>> {
         if self.is::<T>() {
             unsafe { Some(self.downcast_unchecked()) }
@@ -318,6 +357,7 @@ impl Gc<dyn Cell> {
 }
 impl<T: Cell> Deref for Gc<T> {
     type Target = T;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         unsafe {
             let cell: &mut Header = &mut *self.cell.as_ptr();
@@ -326,6 +366,7 @@ impl<T: Cell> Deref for Gc<T> {
     }
 }
 impl<T: Cell> DerefMut for Gc<T> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
             let cell: &mut Header = &mut *self.cell.as_ptr();

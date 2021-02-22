@@ -153,6 +153,7 @@ unsafe fn eval_bcode(vm: &mut VirtualMachine, frame: *mut FrameBase) -> Result<J
                 let mut v2 = vm.upop();
                 let mut v1 = vm.upop();
                 if v1.is_cell() || v2.is_cell() {
+                    assert!(!v1.is_number() || !v2.is_number());
                     v1 = v1.to_primitive(vm, JsHint::None)?;
                     v2 = v2.to_primitive(vm, JsHint::None)?;
                 }

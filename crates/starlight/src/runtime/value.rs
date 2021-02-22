@@ -1,9 +1,10 @@
 use super::{attributes::string_length, object::ObjectTag, slot::*, string::JsStringObject};
+#[cfg(feature = "compressed-ptrs")]
+use crate::gc::compressed_gc::Compressed;
 use crate::{
     gc::cell::{Cell, Gc, Trace, Tracer},
     vm::VirtualMachine,
 };
-
 use std::mem::transmute;
 use wtf_rs::{object_offsetof, pure_nan};
 pub const CMP_FALSE: i32 = 0;
@@ -133,6 +134,10 @@ impl JsValue {
     pub const OTHER_TAG: u64 = 0x2;
     pub const BOOL_TAG: u64 = 0x4;
     pub const UNDEFINED_TAG: u64 = 0x8;
+    #[cfg(feature = "compressed-ptrs")]
+    pub const CELL_TAG: u64 = Self::OTHER_TAG | 0x1;
+    #[cfg(feature = "compressed-ptrs")]
+    pub const CELL_MASK: u64 = Self::NUMBER_TAG | 0x7;
     pub const VALUE_FALSE: u64 = Self::OTHER_TAG | Self::BOOL_TAG | 0;
     pub const VALUE_TRUE: u64 = Self::OTHER_TAG | Self::BOOL_TAG | 1;
     pub const VALUE_UNDEFINED: u64 = Self::OTHER_TAG | Self::UNDEFINED_TAG;
@@ -243,7 +248,15 @@ impl JsValue {
     }
 
     pub fn is_cell(self) -> bool {
-        unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK as i64) == 0 }
+        #[cfg(not(feature = "compressed-ptrs"))]
+        unsafe {
+            (self.u.as_int64 & Self::NOT_CELL_MASK as i64) == 0
+        }
+
+        #[cfg(feature = "compressed-ptrs")]
+        unsafe {
+            (self.u.as_uint64 & Self::CELL_MASK) == Self::CELL_TAG
+        }
     }
 
     pub fn is_int32(self) -> bool {
@@ -261,8 +274,16 @@ impl JsValue {
 
     pub fn as_cell(self) -> Gc<dyn Cell> {
         // TODO(playX): we might want to insert is_empty check here too?
-        assert!(self.is_cell());
-        unsafe { self.u.ptr }
+        assert!(!self.is_number() && self.is_cell());
+        #[cfg(not(feature = "compressed-ptrs"))]
+        unsafe {
+            self.u.ptr
+        }
+
+        #[cfg(feature = "compressed-ptrs")]
+        unsafe {
+            std::mem::transmute((self.u.as_int64 >> 16) as i32 as Compressed)
+        }
     }
 }
 
@@ -789,9 +810,23 @@ impl From<bool> for JsValue {
 
 impl<T: Cell + ?Sized> From<Gc<T>> for JsValue {
     fn from(x: Gc<T>) -> Self {
-        Self {
+        #[cfg(not(feature = "compressed-ptrs"))]
+        return Self {
             u: EncodedValueDescriptor { ptr: x.as_dyn() },
-        }
+        };
+
+        #[cfg(feature = "compressed-ptrs")]
+        return unsafe {
+            let raw: Compressed = std::mem::transmute(x);
+
+            let shifted = (raw as u64) << 16;
+
+            Self {
+                u: EncodedValueDescriptor {
+                    as_int64: (shifted | Self::CELL_TAG) as i64,
+                },
+            }
+        };
     }
 }
 

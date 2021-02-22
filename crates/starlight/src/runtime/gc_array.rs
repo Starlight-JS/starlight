@@ -217,6 +217,7 @@ impl<T: Cell> IndexMut<usize> for RawVec<T> {
     }
 }
 
+/*
 pub struct GcVec<T: Cell> {
     raw: Gc<RawVec<T>>,
 }
@@ -395,7 +396,7 @@ impl<T: Cell> Drop for RawVec<T> {
             }
         }
     }
-}
+}*/
 /*
 pub struct GcVec<T: Cell> {
     data: Gc<Vec<T>>,
@@ -467,3 +468,73 @@ unsafe impl<T: Trace + Cell> Trace for GcVec<T> {
     }
 }
 */
+
+pub struct GcVec<T: Cell> {
+    data: Gc<Vec<T>>,
+}
+
+impl<T: Cell> GcVec<T> {
+    pub fn new(vm: &mut VirtualMachine, cap: usize) -> Self {
+        Self {
+            data: vm.allocate(Vec::with_capacity(cap)),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.len() == 0
+    }
+
+    pub fn reserve(&mut self, _: &mut VirtualMachine, n: usize) {
+        self.data.reserve(n);
+    }
+
+    pub fn resize(&mut self, _vm: &mut VirtualMachine, n: usize, data: T)
+    where
+        T: Clone,
+    {
+        self.data.resize(n, data)
+    }
+    pub fn clear(&mut self) {
+        self.data.clear();
+    }
+
+    pub fn shrink_to_fit(&mut self, _vm: &mut VirtualMachine) {
+        self.data.shrink_to_fit();
+    }
+
+    pub fn insert(&mut self, _vm: &mut VirtualMachine, at: usize, val: T) {
+        self.data.insert(at, val);
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn push(&mut self, _vm: &mut VirtualMachine, val: T) {
+        self.data.push(val);
+    }
+
+    pub fn pop(&mut self) -> Option<T> {
+        self.data.pop()
+    }
+}
+
+impl<T: Cell> Index<usize> for GcVec<T> {
+    type Output = T;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.data[index]
+    }
+}
+
+impl<T: Cell> IndexMut<usize> for GcVec<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.data[index]
+    }
+}
+
+impl<T: Cell> Cell for GcVec<T> {}
+unsafe impl<T: Trace + Cell> Trace for GcVec<T> {
+    fn trace(&self, tracer: &mut dyn Tracer) {
+        self.data.trace(tracer);
+    }
+}
