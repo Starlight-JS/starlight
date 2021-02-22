@@ -90,25 +90,6 @@ impl IndexedElements {
     }
 }
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for IndexedElements {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("IndexedElements", 4)?;
-        x.serialize_field("writable", self.writable())?;
-        x.serialize_field("dense", self.dense())?;
-        x.serialize_field("length", self.length)?;
-        if self.dense() {
-            x.serialize_field("data", &self.vector);
-        } else {
-            x.serialize_field("data", self.map.as_ref().unwrap())
-        }
-        x.end()
-    }
-}
-
 impl Cell for IndexedElements {}
 unsafe impl Trace for IndexedElements {
     fn trace(&self, tracer: &mut dyn Tracer) {
@@ -120,18 +101,6 @@ unsafe impl Trace for IndexedElements {
     }
 }
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for StoredSlot {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("StoredSlot", 1)?;
-        x.serialize_field("value", &self.value)?;
-
-        x.end()
-    }
-}
 impl Cell for StoredSlot {}
 unsafe impl Trace for StoredSlot {
     fn trace(&self, tracer: &mut dyn Tracer) {

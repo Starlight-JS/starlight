@@ -2,10 +2,10 @@ pub mod cell;
 pub mod constraint;
 pub mod handle;
 
-#[cfg(feature = "dlmalloc-gc")]
+#[cfg(feature = "malloc-gc")]
 pub mod dlmalloc_heap;
 
-#[cfg(feature = "dlmalloc-gc")]
+#[cfg(feature = "malloc-gc")]
 pub use dlmalloc_heap as heap;
 
 #[cfg(feature = "compressed-ptrs")]

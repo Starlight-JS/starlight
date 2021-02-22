@@ -6,18 +6,16 @@ use crate::{
 
 #[cfg(feature = "compressed-ptrs")]
 use super::compressed_gc::*;
-
 use crate::heap::addr::Address;
-use core::{mem::size_of, mem::transmute};
-#[cfg(feature = "debug-snapshots")]
-use erased_serde::serialize_trait_object;
+use core::mem::transmute;
 use minivec::MiniVec;
 use mopa::{mopafy, Any};
-use std::{collections::HashMap, ptr::null_mut};
+use std::collections::HashMap;
+#[cfg(not(feature = "compressed-ptrs"))]
+use std::ptr::NonNull;
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    ptr::NonNull,
 };
 pub const GC_DEAD: u8 = 0x4;
 pub const GC_WHITE: u8 = 0x0;
@@ -72,23 +70,13 @@ pub unsafe trait Trace: Any {
 }
 mopafy!(Trace);
 
-#[cfg(not(feature = "debug-snapshots"))]
-pub trait __CellBase {}
-#[cfg(not(feature = "debug-snapshots"))]
-impl<T> __CellBase for T {}
-
-#[cfg(feature = "debug-snapshots")]
-pub trait __CellBase: erased_serde::Serialize {}
-#[cfg(feature = "debug-snapshots")]
-impl<T: erased_serde::Serialize> __CellBase for T {}
-
 /// `Cell` is a type that can be allocated in GC heap and passed to JavaScript environment.
 ///
 ///
 /// All cells that is not part of `src/runtime` treatened as dummy objects and property accesses
 /// is no-op on them.
 ///
-pub trait Cell: Any + Trace + __CellBase {
+pub trait Cell: Any + Trace {
     /// Compute size of `Cell` for allocation.
     ///
     /// This function allows us to have some kind of unsized values on the GC heap.
@@ -111,8 +99,7 @@ pub trait Cell: Any + Trace + __CellBase {
     fn set_class_value(&mut self, _class: &'static Class) {}
     fn set_structure(&mut self, _vm: &mut VirtualMachine, _structure: Gc<Structure>) {}
 }
-#[cfg(feature = "debug-snapshots")]
-serialize_trait_object!(Cell);
+
 mopafy!(Cell, core = core);
 
 #[derive(Copy, Clone)]
@@ -139,7 +126,7 @@ impl Header {
         #[cfg(feature = "compressed-ptrs")]
         {
             if self.next == 0 {
-                return null_mut();
+                return std::ptr::null_mut();
             }
             super::compressed_gc::decompress_ptr(self.next).cast()
         }
@@ -424,16 +411,6 @@ impl<T: Cell> Cell for Gc<T> {
 
     fn set_structure(&mut self, _vm: &mut VirtualMachine, _structure: Gc<Structure>) {
         (**self).set_structure(_vm, _structure)
-    }
-}
-
-#[cfg(feature = "debug-snapshots")]
-impl<T: Cell> serde::Serialize for Heap<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        format!("Heap(at {:x})", self.cell).serialize(serializer)
     }
 }
 

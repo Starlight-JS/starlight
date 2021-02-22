@@ -1,8 +1,5 @@
 use std::{collections::HashMap, fmt::Write, mem::transmute, ptr::null_mut};
 
-#[cfg(feature = "debug-snapshots")]
-use serde::ser::SerializeStruct;
-
 use crate::{
     gc::cell::{Cell, Gc, Trace, Tracer},
     heap::Allocator,
@@ -316,18 +313,7 @@ impl ByteCode {
 }
 
 impl Cell for ByteCode {}
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for ByteCode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("ByteCode", 2)?;
-        x.serialize_field("code", &self.code)?;
-        x.serialize_field("is_strict", self.strict)?;
-        x.end()
-    }
-}
+
 pub enum TypeFeedBack {
     Generic,
     Structure(

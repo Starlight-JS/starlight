@@ -46,16 +46,3 @@ unsafe impl Trace for Arguments {
         self.values.trace(tracer);
     }
 }
-
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for Arguments {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let x = serializer.serialize_struct("Arguments", 2)?;
-        x.serialize_field("this", &self.this);
-        x.serialize_field("values", &self.values);
-        x.end()
-    }
-}

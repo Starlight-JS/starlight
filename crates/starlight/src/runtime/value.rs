@@ -929,23 +929,3 @@ impl Default for JsValue {
         Self::empty()
     }
 }
-
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for JsValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        if self.is_number() {
-            serializer.serialize_f64(self.number())
-        } else if self.is_boolean() {
-            serializer.serialize_bool(self.is_true())
-        } else if self.is_null() {
-            "null".serialize(serializer)
-        } else if self.is_undefined() {
-            "undefined".serialize(serializer)
-        } else {
-            self.as_cell().serialize(serializer)
-        }
-    }
-}

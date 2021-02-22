@@ -71,17 +71,6 @@ impl MapEntry {
     }
 }
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for MapEntry {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("MapEntry", 1)?;
-        x.serialize_field("offset", &self.offset)?;
-        x.end()
-    }
-}
 impl Cell for MapEntry {}
 unsafe impl Trace for MapEntry {}
 
@@ -94,26 +83,6 @@ pub struct TransitionKey {
 impl Cell for TransitionKey {}
 unsafe impl Trace for TransitionKey {}
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for TransitionKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("TransitionKey", 2)?;
-        x.serialize_field("name", &self.name.as_string())?;
-        x.serialize_field("attrs", &format!("{:x}", self.attrs))?;
-        x.end()
-    }
-}
-union U {
-    table: Option<Gc<Table>>,
-    pair: (TransitionKey, Option<Gc<Structure>>),
-}
-pub struct Transitions {
-    u: U,
-    flags: u8,
-}
 #[derive(Clone, Copy)]
 pub enum Transition {
     None,
@@ -207,104 +176,6 @@ const MASK_INDEXED: u8 = 16;
 
 type Table = HashMap<TransitionKey, Option<Gc<Structure>>>;
 
-impl Transitions {
-    pub fn new(enabled: bool, indexed: bool) -> Self {
-        let mut this = Self {
-            u: U { table: None },
-            flags: 0,
-        };
-        this.set_enabled(enabled);
-        this.set_indexed(indexed);
-        this
-    }
-    pub fn set_indexed(&mut self, indexed: bool) {
-        if indexed {
-            self.flags |= MASK_INDEXED;
-        } else {
-            self.flags &= !MASK_INDEXED;
-        }
-    }
-    pub fn set_enabled(&mut self, enabled: bool) {
-        if enabled {
-            self.flags |= MASK_ENABLED;
-        } else {
-            self.flags &= !MASK_ENABLED;
-        }
-    }
-
-    pub fn is_enabled_unique_transition(&self) -> bool {
-        (self.flags & MASK_UNIQUE_TRANSITION) != 0
-    }
-
-    pub fn enable_unique_transition(&mut self) {
-        self.flags |= MASK_UNIQUE_TRANSITION;
-    }
-
-    pub fn insert(
-        &mut self,
-        vm: &mut VirtualMachine,
-        name: Symbol,
-        attrs: AttrSafe,
-        map: Gc<Structure>,
-    ) {
-        let key = TransitionKey {
-            name,
-            attrs: attrs.raw(),
-        };
-        unsafe {
-            if (self.flags & MASK_HOLD_SINGLE) != 0 {
-                let mut table: Gc<Table> = vm.space().alloc(Default::default());
-                table.insert(self.u.pair.0, self.u.pair.1);
-                self.u.table = Some(table);
-                self.flags &= !MASK_HOLD_SINGLE;
-                self.flags &= MASK_HOLD_TABLE;
-            }
-            if (self.flags & MASK_HOLD_TABLE) != 0 {
-                self.u.table.unwrap().insert(key, Some(map));
-            } else {
-                self.u.pair.0 = key;
-                self.u.pair.1 = Some(map);
-                self.flags |= MASK_HOLD_SINGLE;
-            }
-        }
-    }
-
-    pub fn find(&self, name: Symbol, attrs: AttrSafe) -> Option<Gc<Structure>> {
-        let key = TransitionKey {
-            name,
-            attrs: attrs.raw(),
-        };
-        unsafe {
-            if (self.flags & MASK_HOLD_TABLE) != 0 {
-                return self.u.table.unwrap().get(&key).copied().flatten();
-            } else if (self.flags & MASK_HOLD_SINGLE) != 0 {
-                if self.u.pair.0 == key {
-                    return self.u.pair.1;
-                }
-            }
-        }
-        None
-    }
-
-    pub fn is_enabled(&self) -> bool {
-        (self.flags & MASK_ENABLED) != 0
-    }
-
-    pub fn is_indexed(&self) -> bool {
-        (self.flags & MASK_INDEXED) != 0
-    }
-}
-
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for Structure {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("Structure", 0);
-        x.end()
-    }
-}
 unsafe impl Trace for TransitionsTable {
     fn trace(&self, tracer: &mut dyn Tracer) {
         match self.var {
@@ -389,19 +260,6 @@ unsafe impl Trace for DeletedEntry {
 }
 
 impl Cell for DeletedEntry {}
-
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for DeletedEntry {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("DeletedEntry", 2)?;
-        x.serialize_field("offset", &self.offset)?;
-        x.serialize_field("prev", &self.prev)?;
-        x.end()
-    }
-}
 
 impl Structure {
     fn ctor(vm: &mut VirtualMachine, previous: Gc<Self>, unique: bool) -> Gc<Self> {

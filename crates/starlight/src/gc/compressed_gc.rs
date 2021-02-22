@@ -9,7 +9,7 @@ use core::{
 #[cfg(feature = "compress-ptr-16")]
 use std::num::NonZeroU16;
 
-use linked_list_allocator::Heap as LHeap;
+use dlmalloc::{Allocator, Dlmalloc};
 use memmap2::MmapMut;
 #[cfg(feature = "compress-ptr-32")]
 pub type NonZeroCompressedInternal = std::num::NonZeroU32;
@@ -75,10 +75,10 @@ impl SpinLock {
 }
 
 pub struct StarliteHeap {
-    map: MmapMut,
+    // map: MmapMut,
     size: usize,
     base: usize,
-    alloc: LHeap,
+    alloc: Dlmalloc<AllocDlmalloc>,
     allocated: usize,
     lock: SpinLock,
 }
@@ -87,20 +87,17 @@ impl StarliteHeap {
     pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
         {
             self.lock.lock();
-            let p = self.alloc.allocate_first_fit(layout);
+            let p = unsafe { self.alloc.malloc(layout.size(), layout.align()) };
             self.allocated += layout.size();
             self.lock.unlock();
-            p.map(|x| x.as_ptr()).unwrap_or_else(
-                #[cold]
-                |_| null_mut(),
-            )
+            p
         }
     }
 
     pub fn free(&mut self, p: *mut u8, layout: Layout) {
         unsafe {
             self.lock.lock();
-            self.alloc.deallocate(NonNull::new_unchecked(p), layout);
+            self.alloc.free(p, 0, 0);
             self.allocated -= layout.size();
             self.lock.unlock();
         }
@@ -121,16 +118,17 @@ static mut STARLITE_HEAP: MaybeUninit<Handle> = MaybeUninit::uninit();
 pub fn compressed_gc_init() {
     unsafe {
         let handle = unsafe {
-            let mut map = MmapMut::map_anon(HEAP_SIZE).expect("failed to initialize map");
-            let heap = LHeap::new(map.as_mut_ptr().add(16) as _, HEAP_SIZE - 16);
-            BASE = map.as_mut_ptr() as _;
+            //let mut map = MmapMut::map_anon(HEAP_SIZE).expect("failed to initialize map");
+            //let heap = LHeap::new(map.as_mut_ptr().add(16) as _, HEAP_SIZE - 16);
+            //BASE = map.as_mut_ptr() as _;
+            let mut alloc = AllocDlmalloc::new();
+            let base = alloc.map.as_mut_ptr() as usize;
             Handle(UnsafeCell::new(StarliteHeap {
-                alloc: heap,
+                alloc: Dlmalloc::new_with_allocator(alloc),
                 allocated: 0,
-                base: map.as_mut_ptr() as _,
+                base: base,
                 size: HEAP_SIZE - 16,
                 lock: SpinLock::new(),
-                map,
             }))
         };
 
@@ -275,7 +273,6 @@ struct RcInner<T> {
 #[inline(always)]
 pub fn decompress_ptr(x: Compressed) -> *mut u8 {
     let mut ptr = x as usize;
-    // assert_ne!(ptr, 0);
     unsafe {
         ptr <<= 4;
         ptr += BASE;
@@ -289,7 +286,6 @@ pub fn compress_ptr(x: *mut u8) -> Compressed {
         ptr -= BASE;
         ptr >>= 4;
     }
-    // assert_ne!(ptr, 0);
     ptr as _
 }
 pub struct Rc<T> {
@@ -370,6 +366,7 @@ impl<T> DerefMut for Rc<T> {
 use std::{
     collections::VecDeque,
     mem::{size_of, MaybeUninit},
+    sync::atomic::AtomicUsize,
 };
 
 use hashbrown::HashSet;
@@ -778,5 +775,53 @@ impl Drop for Heap {
 impl AsMut<Heap> for &mut Heap {
     fn as_mut(&mut self) -> &mut Heap {
         self
+    }
+}
+
+struct AllocDlmalloc {
+    map: MmapMut,
+    cursor: AtomicUsize,
+    end: usize,
+}
+impl AllocDlmalloc {
+    pub fn new() -> Self {
+        unsafe {
+            let mut map = MmapMut::map_anon(HEAP_SIZE).unwrap();
+            BASE = map.as_mut_ptr() as _;
+            let p = map.as_mut_ptr();
+            AllocDlmalloc {
+                map,
+                cursor: AtomicUsize::new(p as usize + 16),
+                end: p as usize + HEAP_SIZE,
+            }
+        }
+    }
+}
+unsafe impl Allocator for AllocDlmalloc {
+    fn alloc(&self, size: usize) -> (*mut u8, usize, u32) {
+        let mut p = self.cursor.fetch_add(size, Ordering::Relaxed);
+        if p > self.end {
+            (null_mut(), 0, 0)
+        } else {
+            (p as _, size, 0)
+        }
+    }
+    fn allocates_zeros(&self) -> bool {
+        false
+    }
+    fn remap(&self, ptr: *mut u8, oldsize: usize, newsize: usize, can_move: bool) -> *mut u8 {
+        null_mut()
+    }
+    fn page_size(&self) -> usize {
+        4096
+    }
+    fn free(&self, _ptr: *mut u8, _size: usize) -> bool {
+        false
+    }
+    fn free_part(&self, ptr: *mut u8, oldsize: usize, newsize: usize) -> bool {
+        false
+    }
+    fn can_release_part(&self, _flags: u32) -> bool {
+        false
     }
 }

@@ -47,17 +47,6 @@ impl Hash for Symbol {
     }
 }
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for Symbol {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("Symbol", 1)?;
-        x.serialize_field("as_str", &self.as_string())?;
-        x.end()
-    }
-}
 impl Cell for Symbol {}
 unsafe impl Trace for Symbol {}
 
@@ -78,18 +67,6 @@ impl JsSymbol {
 
 unsafe impl Trace for JsSymbol {}
 impl Cell for JsSymbol {}
-
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for JsSymbol {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("JsSymbol", 1)?;
-        x.serialize_field("sym", &self.sym)?;
-        x.end()
-    }
-}
 
 macro_rules! default_symbols {
     ($f: ident) => {

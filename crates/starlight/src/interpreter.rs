@@ -1030,6 +1030,7 @@ impl VirtualMachine {
         strict: bool,
         mut bcode: Gc<ByteCode>,
     ) -> Result<JsValue, JsValue> {
+        let obj = Handle::new(self.space(), obj);
         match &bcode.feedback[feedback as usize] {
             TypeFeedBack::Generic => {
                 let mut slot = Slot::new();
@@ -1060,8 +1061,9 @@ impl VirtualMachine {
                     obj.as_object()
                 } else {
                     obj.get_primitive_proto(self)
-                };
-                if let Some(hit) = self.try_cache(structure, obj) {
+                }
+                .root(self.space());
+                if let Some(hit) = self.try_cache(structure, *obj) {
                     return Ok(*hit.direct(offset as _));
                 } else {
                     if count == 64 {
@@ -1101,7 +1103,8 @@ impl VirtualMachine {
             obj.as_object()
         } else {
             obj.get_primitive_proto(self)
-        };
+        }
+        .root(self.space());
         match &bcode.feedback[feedback as usize] {
             TypeFeedBack::Generic => obj.put(self, name, val, strict),
             TypeFeedBack::None => {
@@ -1125,7 +1128,7 @@ impl VirtualMachine {
                 let offset = *offset;
                 let count = *count;
 
-                if let Some(hit) = self.try_cache(structure, obj) {
+                if let Some(hit) = self.try_cache(structure, *obj) {
                     *obj.direct_mut(offset as _) = val;
                     return Ok(());
                 } else {

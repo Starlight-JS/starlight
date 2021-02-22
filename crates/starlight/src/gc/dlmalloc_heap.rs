@@ -7,13 +7,13 @@ use std::{
 use dlmalloc::Dlmalloc;
 use hashbrown::HashSet;
 
-use crate::heap::addr::{round_up_to_multiple_of, Address};
-
 use super::{
     cell::{object_ty_of, Cell, Gc, Header, Tracer, GC_MARKED, GC_UNMARKED},
     constraint::MarkingConstraint,
     handle::HandleTrait,
 };
+use crate::heap::addr::{round_up_to_multiple_of, Address};
+use std::alloc::{alloc, dealloc, Layout};
 
 pub struct Heap {
     constraints: Vec<Box<dyn MarkingConstraint>>,
@@ -95,11 +95,12 @@ impl Heap {
         let mut cur = self.list;
         self.allocated = 0;
         while !cur.is_null() {
+            let sz = (*cur).get_dyn().compute_size() + core::mem::size_of::<Header>();
             if (*cur).tag() == GC_MARKED {
                 prev = cur;
                 cur = (*cur).next;
                 (*prev).set_tag(GC_UNMARKED);
-                self.allocated += (*prev).get_dyn().compute_size() + core::mem::size_of::<Header>();
+                self.allocated += sz;
             } else {
                 let unreached = cur;
                 cur = (*cur).next;
@@ -109,7 +110,7 @@ impl Heap {
                     self.list = cur;
                 }
                 std::ptr::drop_in_place((*unreached).get_dyn());
-                self.alloc.free(unreached.cast(), 0, 0);
+                dealloc(unreached.cast(), Layout::from_size_align_unchecked(sz, 16));
             }
         }
         //self.allocated = visited;
@@ -185,7 +186,8 @@ impl Heap {
             let arena = self.arenas[size_class_index_for(size).unwrap()];
             (*arena).allocate(self)
         }*/
-        Address::from_ptr(self.alloc.malloc(size, 16))
+        Address::from_ptr(alloc(Layout::from_size_align_unchecked(size, 16)))
+        // Address::from_ptr(self.alloc.malloc(size, 16))
     }
     pub fn heap_usage(&self) -> usize {
         self.allocated
@@ -391,8 +393,10 @@ impl Drop for Heap {
             while !object.is_null() {
                 let obj = object;
                 object = (*obj).next;
+                let sz = (*obj).get_dyn().compute_size() + size_of::<Header>();
                 std::ptr::drop_in_place((*obj).get_dyn());
-                self.alloc.free(obj.cast(), 0, 0);
+                dealloc(obj.cast(), Layout::from_size_align_unchecked(sz, 16));
+                //self.alloc.free(obj.cast(), 0, 0);
             }
             self.constraints.clear();
         }

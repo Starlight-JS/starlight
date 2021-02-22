@@ -1,4 +1,4 @@
-for (let i = 0; i < 100; i = i + 1) {
+for (let i = 0; i < 10000; i = i + 1) {
     var obj = new Object()
     obj.x = 0
     print(i)

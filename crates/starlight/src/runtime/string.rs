@@ -60,18 +60,6 @@ impl JsString {
 impl Cell for JsString {}
 unsafe impl Trace for JsString {}
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for JsString {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("JsString", 1)?;
-        x.serialize_field("data", self.as_str())?;
-        x.end()
-    }
-}
-
 pub struct JsStringObject {
     value: Gc<JsString>,
 }

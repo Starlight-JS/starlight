@@ -99,15 +99,3 @@ unsafe impl<T: Cell + Copy> Trace for FixedStorage<T> {
         self.data.trace(tracer); //self.data.iter().for_each(|x| x.trace(tracer));
     }
 }
-
-#[cfg(feature = "debug-snapshots")]
-impl<T: Cell + Copy> serde::Serialize for FixedStorage<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("FixedStorage", 1)?;
-        x.serialize_field("data", &self.data)?;
-        x.end()
-    }
-}

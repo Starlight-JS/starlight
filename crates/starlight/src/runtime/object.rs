@@ -116,21 +116,6 @@ pub union ObjectData {
     pub arguments: ManuallyDrop<JsArguments>,
 }
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for JsObject {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("JsObject", 5)?;
-        x.serialize_field("tag", &format!("{:?}", self.tag));
-        x.serialize_field("elements", &self.elements);
-        x.serialize_field("slots", &self.slots.data);
-        x.serialize_field("extensible", &self.is_extensible());
-        x.serialize_field("callable", &self.is_callable());
-        x.end()
-    }
-}
 impl Cell for JsObject {
     fn compute_size(&self) -> usize {
         object_size_with_tag(self.tag)

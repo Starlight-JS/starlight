@@ -135,18 +135,6 @@ impl Default for Slot {
     }
 }
 
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for Slot {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut x = serializer.serialize_struct("Slot", 2)?;
-        x.serialize_field("base", &self.base)?;
-        x.serialize_field("value", &self.value)?;
-        x.end()?
-    }
-}
 impl Cell for Slot {}
 unsafe impl Trace for Slot {
     fn trace(&self, tracer: &mut dyn Tracer) {

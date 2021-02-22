@@ -40,16 +40,3 @@ unsafe impl Trace for Accessor {
         self.getter.trace(tracer);
     }
 }
-
-#[cfg(feature = "debug-snapshots")]
-impl serde::Serialize for Accessor {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let x = serializer.serialize_struct("Accessor", 2)?;
-        x.serialize_field("getter", &self.getter)?;
-        x.serialize_field("setter", &self.setter)?;
-        x.end()
-    }
-}
