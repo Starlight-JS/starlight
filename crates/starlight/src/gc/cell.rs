@@ -126,7 +126,7 @@ impl Header {
         #[cfg(feature = "compressed-ptrs")]
         {
             if self.next == 0 {
-                return std::ptr::null_mut();
+                return null_mut();
             }
             super::compressed_gc::decompress_ptr(self.next).cast()
         }

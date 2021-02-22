@@ -5,8 +5,12 @@ pub mod handle;
 #[cfg(feature = "malloc-gc")]
 pub mod malloc_heap;
 
+#[cfg(feature = "gc")]
+pub mod migc;
 #[cfg(feature = "malloc-gc")]
 pub use malloc_heap as heap;
+#[cfg(feature = "gc")]
+pub use migc as heap;
 
 #[cfg(feature = "compressed-ptrs")]
 pub mod compressed_gc;

@@ -17,10 +17,10 @@ wtf-rs = { path = "../wtf-rs" }
 dlmalloc = "0.2"
 swc_atoms = "0.2.5"
 swc_common = "0.10.9"
-swc_ecmascript = { version = "0.21.0", features = ["parser", "utils", "visit"] }
+swc_ecmascript = { version = "0.24", features = ["parser", "utils", "visit"] }
 minivec = "0.2"
 pico-args = "0.4"
-libmimalloc-sys = { version = "0.1", optional = true }
+libmimalloc-sys = { version = "0.1", optional = true, features = ["extended"] }
 
 [features]
 malloc-gc = []

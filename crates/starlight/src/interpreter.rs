@@ -1029,6 +1029,9 @@ impl VirtualMachine {
                         0,
                     );
                 }
+                if slot.is_not_found() {
+                    return Ok(val);
+                }
                 return slot.get(self, JsValue::new(*obj));
             }
             TypeFeedBack::Structure(structure, offset, count) => {
@@ -1056,6 +1059,9 @@ impl VirtualMachine {
                             slot.offset(),
                             count + 1,
                         );
+                    }
+                    if slot.is_not_found() {
+                        return Ok(val);
                     }
                     return slot.get(self, JsValue::new(*obj));
                 }

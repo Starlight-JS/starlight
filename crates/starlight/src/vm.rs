@@ -104,6 +104,7 @@ pub struct VirtualMachine {
     interner: SymbolTable,
     stacktrace: Option<String>,
     global_data: Box<GlobalData>,
+    #[cfg(not(miri))]
     stack_map: memmap2::MmapMut,
     pub(crate) frame: *mut FrameBase,
 }
@@ -379,22 +380,36 @@ impl VirtualMachine {
     }
     pub fn new(opts: Options) -> VirtualMachineRef {
         let space = Heap::new();
-        let stack = memmap2::MmapMut::map_anon(8 * 1024 * 8).expect("failed to allocate stack");
-        let ptr = stack.as_ptr() as *mut JsValue;
 
-        let stack_end = unsafe { ptr.add(8 * 1024) };
-        unsafe {
-            let mut scan = ptr;
-            while scan < stack_end {
-                scan.write(JsValue::undefined());
-                scan = scan.add(1);
+        let (stack, stack_start, stack_end);
+        #[cfg(not(miri))]
+        {
+            stack = memmap2::MmapMut::map_anon(8 * 1024 * 8).expect("failed to allocate stack");
+            let ptr = stack.as_ptr() as *mut JsValue;
+
+            stack_end = unsafe { ptr.add(8 * 1024) };
+            unsafe {
+                let mut scan = ptr;
+                while scan < stack_end {
+                    scan.write(JsValue::undefined());
+                    scan = scan.add(1);
+                }
             }
-        }
-
+            stack_start = ptr;
+        };
+        #[cfg(miri)]
+        {
+            stack = ();
+            let mut stack = vec![JsValue::undefined(); 16 * 1024];
+            stack_start = stack.as_mut_ptr();
+            stack_end = unsafe { stack_start.add(16 * 1024) };
+            std::mem::forget(stack);
+        };
         let mut this = VirtualMachineRef(Box::into_raw(Box::new(Self {
             space,
-            stack: stack.as_ptr() as *mut _,
-            stack_start: stack.as_ptr() as *mut _,
+            stack: stack_start,
+            stack_start: stack_start,
+            #[cfg(not(miri))]
             stack_map: stack,
             options: opts,
             interner: SymbolTable::new(),

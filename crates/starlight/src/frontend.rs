@@ -95,10 +95,10 @@ impl Compiler {
                 let mut params = vec![];
                 for x in decl.function.params.iter() {
                     match x.pat {
-                        Pat::Ident(ref x) => params.push(self.intern(x)),
+                        Pat::Ident(ref x) => params.push(self.intern(&x.id)),
                         Pat::Rest(ref r) => match &*r.arg {
                             Pat::Ident(ref id) => {
-                                rest = Some(self.intern(id));
+                                rest = Some(self.intern(&id.id));
                             }
                             _ => unreachable!(),
                         },
@@ -187,11 +187,11 @@ impl Compiler {
                 for param in fun.params.iter() {
                     match param {
                         Pat::Ident(ref ident) => {
-                            code.params.push(compiler.intern(ident));
+                            code.params.push(compiler.intern(&ident.id));
                         }
                         Pat::Rest(restpat) => match *restpat.arg {
                             Pat::Ident(ref id) => {
-                                code.rest_param = Some(compiler.intern(id));
+                                code.rest_param = Some(compiler.intern(&id.id));
                             }
                             _ => unreachable!(),
                         },
@@ -226,10 +226,10 @@ impl Compiler {
                 let mut params = vec![];
                 for x in fun.function.params.iter() {
                     match x.pat {
-                        Pat::Ident(ref x) => params.push(self.intern(x)),
+                        Pat::Ident(ref x) => params.push(self.intern(&x.id)),
                         Pat::Rest(ref r) => match &*r.arg {
                             Pat::Ident(ref id) => {
-                                rest = Some(self.intern(id));
+                                rest = Some(self.intern(&id.id));
                             }
                             _ => unreachable!(),
                         },
@@ -629,7 +629,7 @@ impl Compiler {
         match p {
             PatOrExpr::Pat(p) => match &**p {
                 Pat::Ident(id) => {
-                    let ix = self.get_ident(id);
+                    let ix = self.get_ident(&id.id);
                     self.builder.emit(Op::OP_GET_VAR, &[ix], true);
                 }
                 _ => todo!("{:?}", p),
@@ -674,7 +674,7 @@ impl Compiler {
         match p {
             PatOrExpr::Pat(p) => match &**p {
                 Pat::Ident(id) => {
-                    let ix = self.get_ident(id);
+                    let ix = self.get_ident(&id.id);
                     self.builder.emit(Op::OP_SET_VAR, &[ix], true);
                 }
                 _ => todo!("{:?}", p),
@@ -910,7 +910,7 @@ impl Compiler {
     pub fn generate_pat_store(&mut self, pat: &Pat, decl: bool, mutable: bool) {
         match pat {
             Pat::Ident(id) => {
-                let name = self.get_ident(id);
+                let name = self.get_ident(&id.id);
                 if decl && mutable {
                     self.builder.emit(Op::OP_DECL_LET, &[name], true);
                 } else if decl && !mutable {
@@ -1043,7 +1043,7 @@ impl Compiler {
             match &decl.name {
                 Pat::Ident(name) => match decl.init {
                     Some(ref init) => {
-                        let s: &str = &name.sym;
+                        let s: &str = &name.id.sym;
                         let name = self.vm.intern_or_known_symbol(s);
                         let ix = self.builder.get_sym(name);
                         self.emit(init, true);
@@ -1058,7 +1058,7 @@ impl Compiler {
                         }
                     }
                     None => {
-                        let s: &str = &name.sym;
+                        let s: &str = &name.id.sym;
                         let name = self.vm.intern_or_known_symbol(s);
                         let ix = self.builder.get_sym(name);
                         self.builder.emit(Op::OP_PUSH_UNDEFINED, &[], false);
