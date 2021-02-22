@@ -233,7 +233,8 @@ impl JsObject {
     ) -> Result<(), JsValue> {
         if !obj.can_put(vm, name, slot) {
             if throwable {
-                todo!();
+                let msg = JsString::new(vm, "put failed").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
 
             return Ok(());
@@ -332,7 +333,8 @@ impl JsObject {
         }
         if !obj.can_put_indexed(vm, index, slot) {
             if throwable {
-                todo!()
+                let msg = JsString::new(vm, "put failed").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
             return Ok(());
         }
@@ -473,7 +475,8 @@ impl JsObject {
 
         if !obj.is_extensible() {
             if throwable {
-                todo!();
+                let msg = JsString::new(vm, "Object non extensible").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
 
             return Ok(false);
@@ -566,7 +569,9 @@ impl JsObject {
 
         if !slot.attributes().is_configurable() {
             if throwable {
-                todo!();
+                let msg =
+                    JsString::new(vm, "Can not delete non configurable property").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
             return Ok(false);
         }
@@ -650,7 +655,9 @@ impl JsObject {
 
         if !slot.attributes().is_configurable() {
             if throwable {
-                todo!();
+                let msg =
+                    JsString::new(vm, "Can not delete non configurable property").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
             return Ok(false);
         }
@@ -1192,7 +1199,12 @@ impl Gc<JsObject> {
     ) -> Result<bool, JsValue> {
         if index >= self.elements.length() && !self.elements.writable() {
             if throwable {
-                todo!()
+                let msg = JsString::new(
+                    vm,
+                    "adding an element to the array which length is not writable is rejected",
+                )
+                .root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
             return Ok(false);
         }
@@ -1237,7 +1249,8 @@ impl Gc<JsObject> {
             }
             None if !self.is_extensible() => {
                 if throwable {
-                    todo!()
+                    let msg = JsString::new(vm, "object non extensible").root(vm.space());
+                    return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
                 }
                 Ok(false)
             }

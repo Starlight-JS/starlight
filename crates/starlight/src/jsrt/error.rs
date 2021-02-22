@@ -105,6 +105,7 @@ pub fn error_to_string(vm: &mut VirtualMachine, args: &Arguments) -> Result<JsVa
             format!("{}: {}", name, msg),
         )))
     } else {
-        todo!()
+        let msg = JsString::new(vm, "Base must be an object").root(vm.space());
+        return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
     }
 }

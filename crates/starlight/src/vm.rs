@@ -186,10 +186,7 @@ impl VirtualMachine {
         let e = BufferedError::default();
 
         let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
-        // Real usage
-        // let fm = cm
-        //     .load_file(Path::new("test.js"))
-        //     .expect("failed to load test.js");
+
         let fm = cm.new_source_file(FileName::Custom("<script>".into()), code.into());
         let lexer = Lexer::new(
             // We want to parse ecmascript
@@ -230,10 +227,7 @@ impl VirtualMachine {
             let e = BufferedError::default();
 
             let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
-            // Real usage
-            // let fm = cm
-            //     .load_file(Path::new("test.js"))
-            //     .expect("failed to load test.js");
+
             let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
             let lexer = Lexer::new(
                 // We want to parse ecmascript
@@ -324,7 +318,8 @@ impl VirtualMachine {
             "index" => Symbol::index(),
             "input" => Symbol::input(),
             "multiline" => Symbol::multiline(),
-
+            "get" => Symbol::get(),
+            "set" => Symbol::set(),
             "global" => Symbol::global(),
             "undefined" => Symbol::undefined(),
             "compare" => Symbol::compare(),
@@ -484,7 +479,6 @@ impl VirtualMachine {
             .change_prototype_with_no_transition(proto);
         this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
         this.init_error(proto);
-        assert!(this.global_data().error_structure.is_some());
         let _ = this.global_object().define_own_property(
             &mut this,
             name,
@@ -492,15 +486,6 @@ impl VirtualMachine {
             false,
         );
         this.init_array(proto);
-        assert!(
-            this.global_object()
-                .get(&mut this, name)
-                .unwrap_or_else(|_| panic!())
-                .as_object()
-                .cell
-                == obj_constructor.cell
-        );
-
         this.init_func(proto);
         this.space().undefer_gc();
         //this.space().gc();
@@ -1029,11 +1014,7 @@ impl GlobalData {
 }
 
 impl Drop for VirtualMachine {
-    fn drop(&mut self) {
-        unsafe {
-            // let _ = Vec::from_raw_parts(self.stack_start, 0, 16 * 1024);
-        }
-    }
+    fn drop(&mut self) {}
 }
 
 impl AsMut<Heap> for VirtualMachine {

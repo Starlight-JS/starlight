@@ -1,4 +1,4 @@
-use super::{attributes::*, slot::*};
+use super::{attributes::*, error::JsTypeError, slot::*};
 use super::{
     method_table::MethodTable, object::EnumerationMode, property_descriptor::PropertyDescriptor,
 };
@@ -173,7 +173,8 @@ impl JsStringObject {
     ) -> Result<bool, JsValue> {
         if name == Symbol::length() {
             if throwable {
-                todo!();
+                let msg = JsString::new(vm, "delete failed").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
             return Ok(false);
         }

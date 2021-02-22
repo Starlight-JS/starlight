@@ -1,9 +1,12 @@
 use crate::{
-    gc::cell::{Cell, Gc, Trace, Tracer},
+    gc::{
+        cell::{Cell, Gc, Trace, Tracer},
+        handle::Handle,
+    },
     vm::VirtualMachine,
 };
 
-use super::value::JsValue;
+use super::{arguments::Arguments, value::JsValue};
 
 pub struct Accessor {
     getter: JsValue,
@@ -29,6 +32,23 @@ impl Accessor {
     pub fn new(vm: &mut VirtualMachine, getter: JsValue, setter: JsValue) -> Gc<Self> {
         let this = Self { getter, setter };
         vm.space().alloc(this)
+    }
+
+    pub fn invoke_getter(
+        &self,
+        vm: &mut VirtualMachine,
+        this_binding: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        if self.getter().is_callable() {
+            let args = Arguments::new(vm, this_binding, 0);
+            let mut args = Handle::new(vm.space(), args);
+            self.getter()
+                .as_object()
+                .as_function_mut()
+                .call(vm, &mut args)
+        } else {
+            Ok(JsValue::undefined())
+        }
     }
 }
 

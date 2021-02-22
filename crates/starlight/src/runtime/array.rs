@@ -91,7 +91,8 @@ impl JsArray {
     ) -> Result<bool, JsValue> {
         if name == Symbol::length() {
             if throwable {
-                todo!();
+                let msg = JsString::new(vm, "delete failed").root(vm.space());
+                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));
             }
             return Ok(false);
         }
@@ -188,13 +189,22 @@ impl JsArray {
 }
 
 impl Gc<JsObject> {
-    fn change_length_writable(&mut self, writable: bool, throwable: bool) -> Result<bool, JsValue> {
+    fn change_length_writable(
+        &mut self,
+        vm: &mut VirtualMachine,
+        writable: bool,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
         if !writable {
             self.elements.make_readonly();
         } else {
             if !self.elements.writable() {
                 if throwable {
-                    todo!()
+                    let msg = JsString::new(
+                        vm,
+                        "changing [[Writable]] of unconfigurable property not allowed",
+                    );
+                    return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
                 }
                 return Ok(false);
             }
@@ -244,7 +254,7 @@ impl Gc<JsObject> {
 
         if desc.is_value_absent() {
             if !desc.is_writable_absent() {
-                return self.change_length_writable(desc.is_writable(), throwable);
+                return self.change_length_writable(ctx, desc.is_writable(), throwable);
             }
             return Ok(true);
         }
@@ -259,7 +269,7 @@ impl Gc<JsObject> {
         let old_len = self.elements.length();
         if new_len == old_len {
             if !desc.is_writable_absent() {
-                return self.change_length_writable(desc.is_writable(), throwable);
+                return self.change_length_writable(ctx, desc.is_writable(), throwable);
             }
             return Ok(true);
         }
@@ -273,7 +283,7 @@ impl Gc<JsObject> {
         }
         let succ = self.set_length(ctx, new_len, throwable)?;
         if !desc.is_writable_absent() {
-            return self.change_length_writable(desc.is_writable(), throwable);
+            return self.change_length_writable(ctx, desc.is_writable(), throwable);
         }
         Ok(succ)
     }
@@ -326,7 +336,8 @@ impl Gc<JsObject> {
                 if !self.delete_indexed_internal(ctx, old, false)? {
                     self.elements.set_length(old + 1);
                     if throwable {
-                        todo!();
+                        let msg = JsString::new(ctx, "failed to shrink array").root(ctx.space());
+                        return Err(JsValue::new(JsTypeError::new(ctx, *msg, None)));
                     }
                     return Ok(false);
                 }
@@ -351,7 +362,9 @@ impl Gc<JsObject> {
                     if !self.delete_indexed_internal(ctx, index, false)? {
                         self.elements.set_length(index + 1);
                         if throwable {
-                            todo!()
+                            let msg =
+                                JsString::new(ctx, "failed to shrink array").root(ctx.space());
+                            return Err(JsValue::new(JsTypeError::new(ctx, *msg, None)));
                         }
                         return Ok(false);
                     }

@@ -269,7 +269,7 @@ impl StoredSlot {
             return Ok(self.value);
         }
         assert!(self.attributes.is_accessor());
-        todo!("Invoke accessor")
+        self.accessor().invoke_getter(context, this_binding)
     }
 
     pub fn accessor(&self) -> Gc<Accessor> {
