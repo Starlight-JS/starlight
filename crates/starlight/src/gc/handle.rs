@@ -1,6 +1,9 @@
 use super::heap::Heap;
 use crate::gc::cell::{Trace, Tracer};
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    ptr::null_mut,
+};
 
 pub struct HandleInner<T: Trace> {
     value: T,
@@ -33,9 +36,11 @@ impl<T: Trace> Handle<T> {
             let mem = Box::into_raw(Box::new(HandleInner {
                 value,
                 rc: 1,
-                heap: heap as *mut _,
+                heap: null_mut(),
             }));
-            (*heap).handles.insert(mem as *mut _);
+
+            heap.handles.insert(mem as *mut _);
+            (*mem).heap = heap as *mut _ as usize as _;
             Self { inner: mem }
         }
     }

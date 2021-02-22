@@ -100,7 +100,7 @@ pub struct VirtualMachine {
     pub(crate) stack_start: *mut JsValue,
     pub(crate) stack_end: *mut JsValue,
     pub(crate) stack: *mut JsValue,
-    space: Box<Heap>,
+    space: *mut Heap,
     interner: SymbolTable,
     stacktrace: Option<String>,
     global_data: Box<GlobalData>,
@@ -210,7 +210,7 @@ impl VirtualMachine {
                 return Err(JsValue::new(JsString::new(self, "parse error")));
             }
         };
-        self.space.defer_gc();
+        self.space().defer_gc();
         let vmref = VirtualMachineRef(self);
         let mut code = Handle::new(self.space(), Compiler::compile_script(vmref, &script));
         code.strict = code.strict || force_strict;
@@ -219,7 +219,7 @@ impl VirtualMachine {
         let envs = Structure::new_indexed(self, Some(self.global_object()), false);
         let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
         let fun = JsVMFunction::new(self, *code, env);
-        self.space.undefer_gc();
+        self.space().undefer_gc();
         return Ok(fun);
     }
     pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
@@ -358,7 +358,7 @@ impl VirtualMachine {
     #[inline(always)]
     pub fn upush(&mut self, val: JsValue) {
         unsafe {
-            if self.stack == self.stack_end.add(1) {
+            if self.stack >= self.stack_end {
                 panic!("Stack overflow");
             }
             self.stack.write(val);
@@ -406,7 +406,7 @@ impl VirtualMachine {
             std::mem::forget(stack);
         };
         let mut this = VirtualMachineRef(Box::into_raw(Box::new(Self {
-            space,
+            space: Box::into_raw(space),
             stack: stack_start,
             stack_start: stack_start,
             #[cfg(not(miri))]
@@ -425,7 +425,7 @@ impl VirtualMachine {
             acc: JsValue::undefined(),
         })));
         let c = this;
-        this.space.add_constraint(SimpleMarkingConstraint::new(
+        this.space().add_constraint(SimpleMarkingConstraint::new(
             "VM marking",
             move |tracer| unsafe {
                 let vm = c;
@@ -510,7 +510,7 @@ impl VirtualMachine {
         unwrap_unchecked(self.global_object)
     }
     pub fn space(&mut self) -> &mut Heap {
-        &mut self.space
+        unsafe { &mut *self.space }
     }
 
     pub fn space_offset() -> usize {
@@ -1034,12 +1034,12 @@ impl Drop for VirtualMachine {
 
 impl AsMut<Heap> for VirtualMachine {
     fn as_mut(&mut self) -> &mut Heap {
-        &mut self.space
+        unsafe { &mut *self.space }
     }
 }
 
 impl AsMut<Heap> for VirtualMachineRef {
     fn as_mut(&mut self) -> &mut Heap {
-        &mut self.space
+        unsafe { &mut *self.space }
     }
 }

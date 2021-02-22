@@ -16,7 +16,7 @@ starlight-derive = { path = "../starlight-derive" }
 wtf-rs = { path = "../wtf-rs" }
 dlmalloc = "0.2"
 swc_atoms = "0.2.5"
-swc_common = "0.10.9"
+swc_common = "0.10.11"
 swc_ecmascript = { version = "0.24", features = ["parser", "utils", "visit"] }
 minivec = "0.2"
 pico-args = "0.4"
