@@ -17,7 +17,7 @@ setjmp = "0.1"
 val-as-f64 = []
 val-as-u64 = []
 
-default = ["val-as-u64"]
+default = ["val-as-f64"]
 
 [dev-dependencies]
 criterion = "0.3"

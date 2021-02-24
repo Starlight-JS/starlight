@@ -289,8 +289,8 @@ impl JSValue {
         Self::new(0, OBJECT_TAG)
     }
     #[inline]
-    pub fn encode_object_value(val: *const ()) -> Self {
-        Self::new(val as usize as u64, OBJECT_TAG)
+    pub fn encode_object_value(val: GcPointer<dyn GcCell>) -> Self {
+        Self::new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
     }
     #[inline]
     pub fn encode_native_u32(val: u32) -> Self {
