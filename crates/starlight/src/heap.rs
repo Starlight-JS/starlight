@@ -201,7 +201,7 @@ pub struct SlotVisitor {
     sp: usize,
     cons_roots: Vec<(usize, usize)>,
 }
-pub fn usable_size<T: GcCell>(value: GcPointer<T>) -> usize {
+pub fn usable_size<T: GcCell + ?Sized>(value: GcPointer<T>) -> usize {
     unsafe {
         let base = value.base.as_ptr();
         if (*base).is_precise_allocation() {
@@ -225,7 +225,7 @@ impl SlotVisitor {
         };
         self.queue.push_back(base);
     }
-    pub fn visit<T: GcCell>(&mut self, value: GcPointer<T>) {
+    pub fn visit<T: GcCell + ?Sized>(&mut self, value: GcPointer<T>) {
         unsafe {
             let base = value.base.as_ptr();
             if (*base).is_marked() {
