@@ -88,7 +88,7 @@ impl GcPointerBase {
     }
 }
 
-pub struct GcPointer<T> {
+pub struct GcPointer<T: ?Sized> {
     pub(super) base: NonNull<GcPointerBase>,
     pub(super) marker: PhantomData<T>,
 }

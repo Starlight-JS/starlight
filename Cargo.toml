@@ -4,8 +4,7 @@ default-members = ["crates/starlight"]
 
 [profile.release]
 lto = true
-opt-level = 2
-
+opt-level = 's'
 
 [profile.bench]
 lto = true

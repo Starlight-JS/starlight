@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    mem::transmute,
     mem::{size_of, MaybeUninit},
     ptr::{null_mut, NonNull},
 };
@@ -442,7 +443,7 @@ impl Heap {
             });
             self.allocated = visitor.bytes_visited;
             if self.allocated > self.max_heap_size {
-                self.max_heap_size = (self.allocated as f64 * 1.6f64).floor() as usize;
+                self.max_heap_size = (self.allocated as f64 * 1.6f64) as usize;
             }
         }
     }
@@ -491,7 +492,8 @@ impl Heap {
             }
         }
     }
-    fn process_roots(&mut self, visitor: &mut SlotVisitor) {
+    #[doc(hidden)]
+    pub fn process_roots(&mut self, visitor: &mut SlotVisitor) {
         unsafe {
             let mut constraints = std::mem::replace(&mut self.constraints, vec![]);
             for constraint in constraints.iter_mut() {
@@ -512,10 +514,22 @@ impl Heap {
                         scan = scan.add(1);
                         continue;
                     }
-
+                    let mut found = false;
                     self.find_gc_object_pointer_for_marking(ptr, |_, ptr| {
                         visitor.visit_raw(ptr);
+                        found = true;
                     });
+                    if !found {
+                        let value = transmute::<_, crate::vm::value::JSValue>(ptr);
+                        if value.is_pointer() {
+                            self.find_gc_object_pointer_for_marking(
+                                value.get_pointer().cast(),
+                                |_, ptr| {
+                                    visitor.visit_raw(ptr);
+                                },
+                            );
+                        }
+                    }
                     scan = scan.add(1);
                 }
             }

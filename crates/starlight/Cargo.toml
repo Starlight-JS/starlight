@@ -11,6 +11,7 @@ mopa = "0.2"
 wtf-rs = { path = "../wtf-rs" }
 intrusive-collections = "0.9.0"
 memmap2 = "0.2"
+cfg-if = "1.0"
 setjmp = "0.1"
 [features]
 val-as-f64 = []
