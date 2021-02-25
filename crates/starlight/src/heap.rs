@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     mem::transmute,
     mem::{size_of, MaybeUninit},
     ptr::{null_mut, NonNull},
@@ -287,24 +287,29 @@ pub struct Heap {
     defers: usize,
     allocated: usize,
     max_heap_size: usize,
+    track_allocations: bool,
+    allocations: HashMap<*mut GcPointerBase, String>,
 }
 
 impl Heap {
-    pub fn new_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
+    pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> GcPointer<WeakRef<T>> {
         let slot = WeakSlot {
             value: p.base.as_ptr(),
             state: WeakState::Unmarked,
         };
         self.weak_slots.push_back(slot);
         unsafe {
-            WeakRef {
+            let weak = WeakRef {
                 inner: NonNull::new_unchecked(self.weak_slots.back().unwrap() as *const _ as *mut _),
                 marker: Default::default(),
-            }
+            };
+            self.allocate(weak)
         }
     }
-    pub fn new() -> Self {
+    pub fn new(track_allocations: bool) -> Self {
         let mut this = Self {
+            allocations: HashMap::new(),
+            track_allocations,
             large: OrderedSet::new(),
             arenas: [null_mut(); SIZE_CLASSES.len()],
             weak_slots: Default::default(),
@@ -344,13 +349,41 @@ impl Heap {
         let ix = size_class_index_for(size).unwrap();
         let arena = &mut **self.arenas.get_unchecked(ix);
         self.allocated += arena.cell_size;
-        arena.allocate(self)
+        #[cold]
+        #[inline(never)]
+        fn track_small(p: *mut u8, size: usize, this: &mut Heap) {
+            let backtrace = backtrace::Backtrace::new();
+            let fmt = format!(
+                "Small allocation of size {} at {:p}\n  backtrace: \n{:?}",
+                size, p, backtrace
+            );
+            this.allocations.insert(p.cast(), fmt);
+        }
+        let p = arena.allocate(self);
+        if self.track_allocations {
+            track_small(p, size, self);
+        }
+        p
     }
     #[inline(never)]
     unsafe fn allocate_slow(&mut self, size: usize) -> *mut u8 {
         let precise = PreciseAllocation::try_create(size, self);
         self.large.insert(precise);
         self.allocated = (*precise).cell_size();
+
+        #[cold]
+        #[inline(never)]
+        fn track_large(p: *mut u8, size: usize, this: &mut Heap) {
+            let backtrace = backtrace::Backtrace::new();
+            let fmt = format!(
+                "Large allocation of size {} at {:p}\n  backtrace: \n{:?}",
+                size, p, backtrace
+            );
+            this.allocations.insert(p.cast(), fmt);
+        }
+        if self.track_allocations {
+            track_large((*precise).cell().cast(), size, self)
+        };
         (*precise).cell().cast()
     }
     #[inline]
@@ -403,6 +436,13 @@ impl Heap {
     pub fn threshold(&self) -> usize {
         self.max_heap_size
     }
+    pub fn allocation_track<T: GcCell + ?Sized>(&self, ptr: GcPointer<T>) -> &str {
+        if let Some(info) = self.allocations.get(&ptr.base.as_ptr()) {
+            info
+        } else {
+            "<no track>"
+        }
+    }
     #[inline(never)]
     fn collect_internal(&mut self, _sp: *const usize) {
         fn current_stack_pointer() -> usize {
@@ -425,6 +465,16 @@ impl Heap {
             self.process_worklist(&mut visitor);
             self.update_weak_references();
             self.reset_weak_references();
+
+            if self.track_allocations {
+                #[cold]
+                #[inline(never)]
+                unsafe fn cleanup_allocations(this: &mut Heap) {
+                    this.allocations.retain(|alloc, _| (**alloc).is_marked());
+                }
+                cleanup_allocations(self);
+            }
+
             for arena in self.arenas.iter() {
                 let arena = &mut **arena;
                 arena.sweep();
@@ -520,7 +570,7 @@ impl Heap {
                         found = true;
                     });
                     if !found {
-                        let value = transmute::<_, crate::vm::value::JSValue>(ptr);
+                        let value = transmute::<_, crate::vm::value::JsValue>(ptr);
                         if value.is_pointer() {
                             self.find_gc_object_pointer_for_marking(
                                 value.get_pointer().cast(),
@@ -552,10 +602,12 @@ impl Heap {
             if (**self.large.first().unwrap()).above_lower_bound(ptr.cast())
                 && (**self.large.last().unwrap()).below_upper_bound(ptr.cast())
             {
-                let result = self.large.binary_search(&(ptr as *mut PreciseAllocation));
+                let result = self
+                    .large
+                    .binary_search(&(PreciseAllocation::from_cell(ptr.cast())));
                 match result {
-                    Ok(_) => {
-                        f(self, ptr.cast());
+                    Ok(index) => {
+                        f(self, (*self.large[index]).cell());
                     }
                     _ => (),
                 }

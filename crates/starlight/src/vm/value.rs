@@ -1,6 +1,8 @@
 use cfg_if::cfg_if;
 
-use crate::heap::cell::*;
+use crate::heap::{cell::*, SlotVisitor};
+
+use super::string::JsString;
 
 pub type TagKind = u32;
 
@@ -36,9 +38,9 @@ cfg_if!(
 /// A NaN-boxed encoded value.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct JSValue(u64);
+pub struct JsValue(u64);
 
-impl JSValue {
+impl JsValue {
     pub const NUM_TAG_EXP_BITS: u32 = 16;
     pub const NUM_DATA_BITS: u32 = (64 - Self::NUM_TAG_EXP_BITS);
     pub const TAG_WIDTH: u32 = 4;
@@ -250,9 +252,9 @@ impl JSValue {
 /// A NaN-boxed encoded value.
 #[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
-pub struct JSValue(f64);
+pub struct JsValue(f64);
 
-impl JSValue {
+impl JsValue {
     pub const NUM_TAG_EXP_BITS: u32 = 16;
     pub const NUM_DATA_BITS: u32 = (64 - Self::NUM_TAG_EXP_BITS);
     pub const TAG_WIDTH: u32 = 4;
@@ -464,3 +466,97 @@ impl JSValue {
         compile_error!("val-as-u64 or val-as-f64 should be enabled");
     }
 );
+
+unsafe impl Trace for JsValue {
+    fn trace(&self, visitor: &mut SlotVisitor) {
+        if self.is_pointer() {
+            self.get_object().trace(visitor);
+        }
+    }
+}
+
+impl JsValue {
+    #[inline]
+    pub unsafe fn fill(start: *mut Self, end: *mut Self, fill: JsValue) {
+        let mut cur = start;
+        while cur != end {
+            cur.write(fill);
+            cur = cur.add(1);
+        }
+    }
+
+    #[inline]
+    pub unsafe fn uninit_copy(
+        mut first: *mut Self,
+        last: *mut Self,
+        mut result: *mut JsValue,
+    ) -> *mut JsValue {
+        while first != last {
+            result.write(first.read());
+            first = first.add(1);
+            result = result.add(1);
+        }
+        result
+    }
+
+    #[inline]
+    pub unsafe fn copy_backward(
+        first: *mut Self,
+        mut last: *mut Self,
+        mut result: *mut JsValue,
+    ) -> *mut JsValue {
+        while first != last {
+            last = last.sub(1);
+            result = result.sub(1);
+            result.write(last.read());
+        }
+        result
+    }
+    #[inline]
+    pub unsafe fn copy(
+        mut first: *mut Self,
+        last: *mut Self,
+        mut result: *mut JsValue,
+    ) -> *mut JsValue {
+        while first != last {
+            result.write(first.read());
+            first = first.add(1);
+            result = result.add(1);
+        }
+        result
+    }
+
+    pub fn same_value_impl(lhs: Self, rhs: Self, _zero: bool) -> bool {
+        if lhs.is_number() {
+            if !rhs.is_number() {
+                return false;
+            }
+
+            let lhsn = lhs.get_number();
+            let rhsn = rhs.get_number();
+            if lhsn == rhsn {
+                return true;
+            }
+            return lhsn.is_nan() && rhsn.is_nan();
+        }
+
+        if !lhs.is_object() || !rhs.is_object() {
+            return lhs.get_raw() == rhs.get_raw();
+        }
+        if lhs.is_object() && rhs.is_object() {
+            if lhs.get_object().is::<JsString>() && rhs.get_object().is::<JsString>() {
+                return unsafe {
+                    lhs.get_object().downcast_unchecked::<JsString>().as_str()
+                        == rhs.get_object().downcast_unchecked::<JsString>().as_str()
+                };
+            }
+        }
+        lhs.get_raw() == rhs.get_raw()
+    }
+    pub fn same_value(x: JsValue, y: JsValue) -> bool {
+        Self::same_value_impl(x, y, false)
+    }
+    pub fn same_value_zero(lhs: Self, rhs: Self) -> bool {
+        Self::same_value_impl(lhs, rhs, true)
+    }
+}

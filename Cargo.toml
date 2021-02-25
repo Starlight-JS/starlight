@@ -1,10 +1,10 @@
 [workspace]
-members = ["crates/starlight", "crates/wtf-rs"]
+members = ["crates/starlight", "crates/wtf-rs", "crates/starlight-derive"]
 default-members = ["crates/starlight"]
 
 [profile.release]
 lto = true
-opt-level = 's'
+opt-level = 2
 
 [profile.bench]
 lto = true

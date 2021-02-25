@@ -1,24 +1,17 @@
 use starlight::{
-    heap::{
-        cell::{GcCell, Trace},
-        Heap, SlotVisitor,
-    },
-    vm::value::JSValue,
+    heap::usable_size,
+    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
+    Platform,
 };
 use wtf_rs::keep_on_stack;
 
-struct Foo {}
-unsafe impl Trace for Foo {
-    fn trace(&self, _visitor: &mut SlotVisitor) {
-        println!("trace foo");
-    }
-}
-impl GcCell for Foo {}
 fn main() {
-    let mut heap = Heap::new();
-
-    let mut f = JSValue::encode_object_value(heap.allocate(Foo {}).as_dyn());
-    println!("Foo at {:x}<-{:p}", f.get_raw(), &f);
-    keep_on_stack!(&mut f);
-    heap.gc();
+    Platform::initialize();
+    let mut rt = Runtime::new(true);
+    let mut arr = ArrayStorage::new(&mut rt, 0);
+    arr.push_back(&mut rt, JsValue::encode_f64_value(42.42));
+    assert!(arr.pop_back(&mut rt).get_double() == 42.42);
+    rt.heap().gc();
+    println!("{:p}->{:p}", &arr, arr);
+    println!("{}", rt.heap().allocation_track(arr));
 }

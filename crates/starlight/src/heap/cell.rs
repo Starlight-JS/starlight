@@ -241,12 +241,6 @@ unsafe impl<T: Trace> Trace for Vec<T> {
     }
 }
 
-unsafe impl<T: GcCell> Trace for WeakRef<T> {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        visitor.visit_weak(self);
-    }
-}
-
 unsafe impl<T: GcCell + ?Sized> Trace for GcPointer<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
         visitor.visit(*self);
@@ -275,5 +269,23 @@ impl<T: GcCell> DerefMut for GcPointer<T> {
 impl<T: GcCell> std::fmt::Pointer for GcPointer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:p}", self.base)
+    }
+}
+
+impl<T: GcCell + std::fmt::Debug> std::fmt::Debug for GcPointer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", **self)
+    }
+}
+impl<T: GcCell + std::fmt::Display> std::fmt::Display for GcPointer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", **self)
+    }
+}
+
+impl<T: GcCell> GcCell for WeakRef<T> {}
+unsafe impl<T: GcCell> Trace for WeakRef<T> {
+    fn trace(&self, visitor: &mut SlotVisitor) {
+        visitor.visit_weak(self);
     }
 }
