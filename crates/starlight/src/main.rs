@@ -1,17 +1,27 @@
 use starlight::{
-    heap::usable_size,
-    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
+    vm::{
+        object::{JsObject, ObjectTag},
+        structure::Structure,
+        symbol_table::Internable,
+        value::JsValue,
+        Runtime,
+    },
     Platform,
 };
-use wtf_rs::keep_on_stack;
 
 fn main() {
     Platform::initialize();
-    let mut rt = Runtime::new(true);
-    let mut arr = ArrayStorage::new(&mut rt, 0);
-    arr.push_back(&mut rt, JsValue::encode_f64_value(42.42));
-    assert!(arr.pop_back(&mut rt).get_double() == 42.42);
-    rt.heap().gc();
-    println!("{:p}->{:p}", &arr, arr);
-    println!("{}", rt.heap().allocation_track(arr));
+    let mut rt = Runtime::new(false);
+    let s = Structure::new_indexed(&mut rt, None, false);
+    let mut obj = JsObject::new(&mut rt, s, JsObject::get_class(), ObjectTag::Ordinary);
+    let _ = obj.put(
+        &mut rt,
+        "x".intern(),
+        JsValue::encode_f64_value(42.544),
+        false,
+    );
+
+    let val = obj.get(&mut rt, "x".intern()).unwrap_or_else(|_| panic!());
+
+    println!("{}", val.get_double());
 }

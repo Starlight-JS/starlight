@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     marker::PhantomData,
     mem::size_of,
     ops::{Deref, DerefMut},
@@ -148,6 +149,9 @@ pub struct GcPointer<T: ?Sized> {
 }
 
 impl<T: GcCell + ?Sized> GcPointer<T> {
+    pub fn ptr_eq<U: GcCell + ?Sized>(this: Self, other: GcPointer<U>) -> bool {
+        this.base == other.base
+    }
     #[inline]
     pub fn as_dyn(self) -> GcPointer<dyn GcCell> {
         GcPointer {
@@ -287,5 +291,25 @@ impl<T: GcCell> GcCell for WeakRef<T> {}
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
         visitor.visit_weak(self);
+    }
+}
+
+unsafe impl<K: Trace, V: Trace> Trace for HashMap<K, V> {
+    fn trace(&self, visitor: &mut SlotVisitor) {
+        for (key, value) in self.iter() {
+            key.trace(visitor);
+            value.trace(visitor);
+        }
+    }
+}
+
+impl<K: Trace + 'static, V: Trace + 'static> GcCell for HashMap<K, V> {}
+
+unsafe impl<T: Trace> Trace for Option<T> {
+    fn trace(&self, visitor: &mut SlotVisitor) {
+        match self {
+            Some(val) => val.trace(visitor),
+            _ => (),
+        }
     }
 }

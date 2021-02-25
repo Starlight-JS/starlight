@@ -72,10 +72,10 @@ pub struct Class {
 #[macro_export]
 macro_rules! define_jsclass_with_symbol {
     ($class: ident,$name : ident,$sym: ident) => {
-        pub fn get_class() -> &'static $crate::runtime::class::Class {
-            static CLASS: $crate::runtime::class::Class = $crate::runtime::class::Class {
+        pub fn get_class() -> &'static $crate::vm::class::Class {
+            static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
                 name: stringify!($name),
-                ty: $crate::runtime::class::JsClassType::$sym as _,
+                ty: $crate::vm::class::JsClassType::$sym as _,
                 method_table: MethodTable {
                     GetNonIndexedSlot: $class::GetNonIndexedSlotMethod,
                     GetIndexedSlot: $class::GetIndexedSlotMethod,

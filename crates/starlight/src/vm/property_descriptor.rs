@@ -117,7 +117,11 @@ pub struct StoredSlot {
     pub(crate) value: JsValue,
     attributes: AttrSafe,
 }
-
+unsafe impl Trace for StoredSlot {
+    fn trace(&self, visitor: &mut SlotVisitor) {
+        self.value.trace(visitor);
+    }
+}
 impl StoredSlot {
     pub fn value(&self) -> JsValue {
         self.value

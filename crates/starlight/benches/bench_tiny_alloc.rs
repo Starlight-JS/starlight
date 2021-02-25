@@ -8,7 +8,7 @@ struct Large([u8; 8192]);
 unsafe impl Trace for Large {}
 impl GcCell for Large {}
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut heap = Heap::new();
+    let mut heap = Heap::new(false);
     //heap.defer();
     c.bench_function("bench-alloc-f64", |b| {
         b.iter(|| {

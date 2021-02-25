@@ -40,7 +40,7 @@ impl GcPointer<ArrayStorage> {
         self.size = new_size;
     }
 
-    pub fn esnure_capacity(&mut self, rt: &mut Runtime, capacity: u32) {
+    pub fn ensure_capacity(&mut self, rt: &mut Runtime, capacity: u32) {
         assert!(
             capacity <= ArrayStorage::max_elements() as u32,
             "capacity overflows 32-bit storage"

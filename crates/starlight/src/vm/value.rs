@@ -291,7 +291,7 @@ impl JsValue {
         Self::new(0, OBJECT_TAG)
     }
     #[inline]
-    pub fn encode_object_value(val: GcPointer<dyn GcCell>) -> Self {
+    pub fn encode_object_value<T: GcCell + ?Sized>(val: GcPointer<T>) -> Self {
         Self::new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
     }
     #[inline]
