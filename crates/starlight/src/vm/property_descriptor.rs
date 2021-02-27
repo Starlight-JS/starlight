@@ -3,7 +3,7 @@ use crate::heap::{
     SlotVisitor,
 };
 
-use super::{attributes::*, value::JsValue, *};
+use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
 use std::ops::{Deref, DerefMut};
 #[derive(Clone, Copy)]
 pub union PropertyLayout {
@@ -269,8 +269,8 @@ impl StoredSlot {
             return Ok(self.value);
         }
         assert!(self.attributes.is_accessor());
-        todo!()
-        //self.accessor().invoke_getter(context, this_binding)
+
+        self.accessor().invoke_getter(context, this_binding)
     }
 
     pub fn accessor(&self) -> GcPointer<Accessor> {
@@ -294,9 +294,10 @@ impl StoredSlot {
             ($str: expr) => {{
                 *returned = false;
                 if throwable {
-                    /*let msg = JsString::new(vm, $str);
-                    return Err(JsValue::new(JsTypeError::new(vm, msg, None)));*/
-                    todo!()
+                    let msg = JsString::new(vm, $str);
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        vm, msg, None,
+                    )));
                 }
                 return Ok(false);
             }};
@@ -498,22 +499,24 @@ impl Accessor {
         vm.heap().allocate(this)
     }
 
-    /*pub fn invoke_getter(
+    pub fn invoke_getter(
         &self,
-        vm: &mut VirtualMachine,
+        vm: &mut Runtime,
         this_binding: JsValue,
     ) -> Result<JsValue, JsValue> {
         if self.getter().is_callable() {
-            let args = Arguments::new(vm, this_binding, 0);
-            let mut args = Handle::new(vm.space(), args);
+            let mut args = Arguments::new(vm, this_binding, 0);
+
             self.getter()
-                .as_object()
+                .get_object()
+                .downcast::<JsObject>()
+                .unwrap()
                 .as_function_mut()
                 .call(vm, &mut args)
         } else {
-            Ok(JsValue::undefined())
+            Ok(JsValue::encode_undefined_value())
         }
-    }*/
+    }
 }
 
 impl GcCell for Accessor {}

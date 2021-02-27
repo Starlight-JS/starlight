@@ -428,7 +428,7 @@ impl GcPointer<Structure> {
         self.table.is_some()
     }
     pub fn allocate_table(&mut self, vm: &mut Runtime) {
-        let mut stack = Vec::with_capacity(8);
+        let mut stack = vm.heap.allocate(Vec::with_capacity(8));
 
         if self.is_adding_map() {
             stack.push(*self);
@@ -706,9 +706,11 @@ impl GcPointer<Structure> {
                     return self.added.1;
                 }
             }
+
             self.allocate_table(vm);
         }
-        let it = unwrap_unchecked(self.table.as_ref()).get(&name);
+
+        let it = self.table.as_ref().unwrap().get(&name);
 
         it.copied().unwrap_or_else(MapEntry::not_found)
     }

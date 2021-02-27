@@ -7,8 +7,8 @@ use starlight_derive::GcTrace;
 pub struct CodeBlock {
     pub name: Symbol,
     pub variables: Vec<Symbol>,
-    pub rest_param: Symbol,
-    pub params: Symbol,
+    pub rest_param: Option<Symbol>,
+    pub params: Vec<Symbol>,
     pub names: Vec<Symbol>,
     pub code: Vec<u8>,
     pub literals: Vec<JsValue>,

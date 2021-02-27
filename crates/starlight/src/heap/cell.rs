@@ -67,12 +67,16 @@ mopafy!(GcCell);
 #[repr(C)]
 pub struct GcPointerBase {
     vtable: u64,
+    // mark: bool,
+    //dead: bool,
 }
 
 impl GcPointerBase {
     pub fn new(vtable: usize) -> Self {
         Self {
             vtable: vtable as _,
+            //mark: false,
+            // dead: true,
         }
     }
     pub fn data<T>(&self) -> *mut T {
@@ -111,7 +115,7 @@ impl GcPointerBase {
     pub fn get_dyn(&self) -> &mut dyn GcCell {
         unsafe {
             std::mem::transmute(mopa::TraitObject {
-                vtable: (self.vtable & (!0x03)) as *mut (),
+                vtable: (self.vtable & !(0x07)) as *mut (),
                 data: self.data::<u8>() as _,
             })
         }
@@ -124,7 +128,7 @@ impl GcPointerBase {
         PreciseAllocation::from_cell(self as *const Self as *mut _)
     }
     pub fn vtable(&self) -> usize {
-        (self.vtable & (!0x07)) as usize
+        (self.vtable & !(0x07)) as usize
     }
 }
 pub fn vtable_of<T: GcCell>(x: *const T) -> usize {
@@ -144,7 +148,7 @@ pub fn vtable_of_type<T: GcCell + Sized>() -> usize {
 /// that this points to a garbage collected object with the correct header,
 /// and not some arbitrary bits that you've decided to heap allocate.
 pub struct GcPointer<T: ?Sized> {
-    pub(super) base: NonNull<GcPointerBase>,
+    pub(crate) base: NonNull<GcPointerBase>,
     pub(super) marker: PhantomData<T>,
 }
 
@@ -174,6 +178,13 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
 
     #[inline]
     pub fn is<U: GcCell>(self) -> bool {
+        unsafe {
+            println!(
+                "{:x} {:x}",
+                (*self.base.as_ptr()).vtable(),
+                vtable_of_type::<U>()
+            );
+        }
         unsafe { (*self.base.as_ptr()).vtable() == vtable_of_type::<U>() }
     }
 
@@ -313,3 +324,5 @@ unsafe impl<T: Trace> Trace for Option<T> {
         }
     }
 }
+
+impl<T: Trace + 'static> GcCell for Vec<T> {}

@@ -1,4 +1,3 @@
-use super::method_table::*;
 use super::object::*;
 use super::slot::*;
 use super::string::*;
@@ -9,6 +8,7 @@ use super::Runtime;
 use super::{arguments::*, code_block::CodeBlock};
 use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
+use super::{error::JsTypeError, method_table::*};
 use crate::heap::{
     cell::{GcPointer, Trace},
     SlotVisitor,
@@ -100,7 +100,9 @@ impl JsFunction {
     pub fn call<'a>(&mut self, vm: &mut Runtime, args: &mut Arguments) -> Result<JsValue, JsValue> {
         match self.ty {
             FuncType::Native(ref x) => (x.func)(vm, args),
-            FuncType::User(ref x) => todo!("vm call"),
+            FuncType::User(ref x) => {
+                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope), args)
+            }
             FuncType::Bound(ref x) => {
                 let mut args = Arguments {
                     values: x.args,
@@ -121,12 +123,11 @@ impl JsFunction {
         );
 
         obj.set_callable(true);
-        unsafe {
-            *obj.data::<JsFunction>() = ManuallyDrop::new(JsFunction {
-                construct_struct: None,
-                ty,
-            });
-        }
+
+        *obj.data::<JsFunction>() = ManuallyDrop::new(JsFunction {
+            construct_struct: None,
+            ty,
+        });
 
         obj
     }
@@ -139,12 +140,11 @@ impl JsFunction {
         let mut obj = JsObject::new(vm, structure, JsFunction::get_class(), ObjectTag::Function);
 
         obj.set_callable(true);
-        unsafe {
-            *obj.data::<JsFunction>() = ManuallyDrop::new(JsFunction {
-                construct_struct: None,
-                ty,
-            });
-        }
+
+        *obj.data::<JsFunction>() = ManuallyDrop::new(JsFunction {
+            construct_struct: None,
+            ty,
+        });
 
         obj
     }
@@ -238,9 +238,19 @@ impl JsFunction {
         let result = JsObject::GetNonIndexedSlotMethod(obj, vm, name, slot)?;
         if name == "caller".intern() {
             slot.make_uncacheable();
-            /*if result.is_callable() && result.as_object().as_function().is_strict() {
-                todo!()
-            }*/
+            if result.is_callable()
+                && result
+                    .get_object()
+                    .downcast::<JsObject>()
+                    .unwrap()
+                    .as_function()
+                    .is_strict()
+            {
+                let msg = JsString::new(vm, "'caller' property is not accessible in strict mode");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
+            }
         }
         Ok(result)
     }
@@ -326,7 +336,7 @@ impl JsNativeFunction {
             false,
         );
         let n = "name".intern();
-        let k = "name";
+        let k = vm.description(name);
         let name = JsValue::encode_object_value(JsString::new(vm, &k));
         let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
 
@@ -356,7 +366,7 @@ impl JsNativeFunction {
             false,
         );
         let n = "name".intern();
-        let k = "name";
+        let k = vm.description(name);
         let name = JsValue::encode_object_value(JsString::new(vm, &k));
         let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
 

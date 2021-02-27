@@ -1,4 +1,7 @@
-use super::{attributes::*, indexed_elements::MAX_VECTOR_SIZE, object::*, Runtime};
+use super::{
+    attributes::*, error::JsTypeError, indexed_elements::MAX_VECTOR_SIZE, object::*,
+    string::JsString, Runtime,
+};
 use super::{
     method_table::*,
     object::EnumerationMode,
@@ -93,7 +96,10 @@ impl JsArray {
     ) -> Result<bool, JsValue> {
         if name == "length".intern() {
             if throwable {
-                todo!()
+                let msg = JsString::new(vm, "delete failed");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
             return Ok(false);
         }
@@ -201,7 +207,13 @@ impl GcPointer<JsObject> {
         } else {
             if !self.indexed.writable() {
                 if throwable {
-                    todo!()
+                    let msg = JsString::new(
+                        vm,
+                        "changing [[Writable]] of unconfigurable property not allowed",
+                    );
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        vm, msg, None,
+                    )));
                 }
                 return Ok(false);
             }
@@ -217,21 +229,39 @@ impl GcPointer<JsObject> {
     ) -> Result<bool, JsValue> {
         if desc.is_configurable() {
             if throwable {
-                todo!()
+                let msg = JsString::new(
+                    ctx,
+                    "changing [[Configurable]] of unconfigurable property not allowed",
+                );
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    ctx, msg, None,
+                )));
             }
             return Ok(false);
         }
 
         if desc.is_enumerable() {
             if throwable {
-                todo!()
+                let msg = JsString::new(
+                    ctx,
+                    "changing [[Enumerable]] of unconfigurable property not allowed",
+                );
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    ctx, msg, None,
+                )));
             }
             return Ok(false);
         }
 
         if desc.is_accessor() {
             if throwable {
-                todo!()
+                let msg = JsString::new(
+                    ctx,
+                    "changing description of unconfigurable property not allowed",
+                );
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    ctx, msg, None,
+                )));
             }
 
             return Ok(false);
@@ -247,7 +277,10 @@ impl GcPointer<JsObject> {
         let new_len_double = desc.value().to_number(ctx)?;
         let new_len = new_len_double as u32;
         if new_len as f64 != new_len_double {
-            todo!()
+            let msg = JsString::new(ctx, "invalid array length");
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                ctx, msg, None,
+            )));
         }
 
         let old_len = self.indexed.length();
@@ -260,7 +293,10 @@ impl GcPointer<JsObject> {
 
         if !self.indexed.writable() {
             if throwable {
-                todo!()
+                let msg = JsString::new(ctx, "'length' not writable");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    ctx, msg, None,
+                )));
             }
             return Ok(false);
         }
@@ -319,7 +355,10 @@ impl GcPointer<JsObject> {
                 if !self.delete_indexed_internal(ctx, old, false)? {
                     self.indexed.set_length(old + 1);
                     if throwable {
-                        todo!()
+                        let msg = JsString::new(ctx, "failed to shrink array");
+                        return Err(JsValue::encode_object_value(JsTypeError::new(
+                            ctx, msg, None,
+                        )));
                     }
                     return Ok(false);
                 }
@@ -344,7 +383,10 @@ impl GcPointer<JsObject> {
                     if !self.delete_indexed_internal(ctx, index, false)? {
                         self.indexed.set_length(index + 1);
                         if throwable {
-                            todo!()
+                            let msg = JsString::new(ctx, "failed to shrink array");
+                            return Err(JsValue::encode_object_value(JsTypeError::new(
+                                ctx, msg, None,
+                            )));
                         }
                         return Ok(false);
                     }

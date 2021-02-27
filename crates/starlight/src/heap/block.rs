@@ -178,7 +178,7 @@ impl BlockHeader {
             i -= 1;
         }*/
         let mut i = 0;
-        while i < self.end_atom() {
+        while i < self.end_atom() - 1 {
             let cell = unsafe { self.atoms().offset(i as _) };
             func(cell.cast());
             i += self.atoms_per_cell();
@@ -209,7 +209,7 @@ impl BlockHeader {
         if an % self.atoms_per_cell() != 0 {
             return false;
         }
-        if an >= self.end_atom() {
+        if an >= self.end_atom() || an < self.begin() as usize {
             return false;
         }
         true
@@ -249,6 +249,7 @@ impl BlockHeader {
             let cell = cell as *mut GcPointerBase;
             if (*cell).is_live() {
                 if !(*cell).is_marked() {
+                    println!("sweep {:p}", cell);
                     std::ptr::drop_in_place((*cell).get_dyn());
                     (*cell).dead();
                     freelist.free(cell.cast());

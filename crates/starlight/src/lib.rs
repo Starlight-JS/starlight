@@ -1,4 +1,4 @@
-#![feature(core_intrinsics)]
+#![feature(core_intrinsics, btree_retain)]
 use std::sync::atomic::AtomicBool;
 use vm::{value::JsValue, Runtime};
 

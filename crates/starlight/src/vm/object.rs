@@ -3,12 +3,14 @@ use super::{
     array_storage::ArrayStorage,
     attributes::*,
     class::Class,
+    error::*,
     function::*,
     global::JsGlobal,
     indexed_elements::IndexedElements,
     property_descriptor::StoredSlot,
     property_descriptor::{DataDescriptor, PropertyDescriptor},
     slot::*,
+    string::*,
     structure::Structure,
     symbol_table::{Internable, Symbol},
     value::JsValue,
@@ -257,9 +259,10 @@ impl JsObject {
     ) -> Result<(), JsValue> {
         if !obj.can_put(vm, name, slot) {
             if throwable {
-                /* let msg = JsString::new(vm, "put failed").root(vm.space());
-                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));*/
-                todo!()
+                let msg = JsString::new(vm, "put failed");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
 
             return Ok(());
@@ -283,8 +286,7 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 let ac = slot.accessor();
-                /*let args = Arguments::new(vm, JsValue::new(obj), 1);
-                let mut args = Handle::new(vm.space(), args);
+                let mut args = Arguments::new(vm, JsValue::encode_object_value(obj), 1);
 
                 *args.at_mut(0) = val;
                 return ac
@@ -294,8 +296,7 @@ impl JsObject {
                     .unwrap()
                     .as_function_mut()
                     .call(vm, &mut args)
-                    .map(|_| ());*/
-                todo!()
+                    .map(|_| ());
             }
         }
         obj.define_own_non_indexed_property_slot(
@@ -359,9 +360,10 @@ impl JsObject {
         }
         if !obj.can_put_indexed(vm, index, slot) {
             if throwable {
-                /*  let msg = JsString::new(vm, "put failed").root(vm.space());
-                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));*/
-                todo!()
+                let msg = JsString::new(vm, "put failed");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
             return Ok(());
         }
@@ -383,20 +385,18 @@ impl JsObject {
             }
 
             if slot.attributes().is_accessor() {
-                /* let ac = slot.accessor();
-                let args = Arguments::new(vm, JsValue::new(obj), 1);
-                let mut args = Handle::new(vm.space(), args);
+                let ac = slot.accessor();
+                let mut args = Arguments::new(vm, JsValue::encode_object_value(obj), 1);
 
                 *args.at_mut(0) = val;
                 return ac
                     .setter()
-                    .as_cell()
+                    .get_object()
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
                     .call(vm, &mut args)
-                    .map(|_| ());*/
-                todo!()
+                    .map(|_| ());
             }
         }
 
@@ -501,9 +501,10 @@ impl JsObject {
 
         if !obj.is_extensible() {
             if throwable {
-                /*let msg = JsString::new(vm, "Object non extensible").root(vm.space());
-                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));*/
-                todo!()
+                let msg = JsString::new(vm, "Object non extensible");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
 
             return Ok(false);
@@ -597,10 +598,10 @@ impl JsObject {
 
         if !slot.attributes().is_configurable() {
             if throwable {
-                /*let msg =
-                    JsString::new(vm, "Can not delete non configurable property").root(vm.space());
-                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));*/
-                todo!()
+                let msg = JsString::new(vm, "Can not delete non configurable property");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
             return Ok(false);
         }
@@ -653,9 +654,10 @@ impl JsObject {
             Entry::Occupied(x) => {
                 if !x.get().attributes().is_configurable() {
                     if throwable {
-                        /*let msg = JsString::new(_vm, "trying to delete non-configurable property");
-                        return Err(JsValue::new(JsTypeError::new(_vm, msg, None)));*/
-                        todo!()
+                        let msg = JsString::new(_vm, "trying to delete non-configurable property");
+                        return Err(JsValue::encode_object_value(JsTypeError::new(
+                            _vm, msg, None,
+                        )));
                     }
                     return Ok(false);
                 }
@@ -685,10 +687,10 @@ impl JsObject {
 
         if !slot.attributes().is_configurable() {
             if throwable {
-                /*let msg =
-                    JsString::new(vm, "Can not delete non configurable property").root(vm.space());
-                return Err(JsValue::new(JsTypeError::new(vm, *msg, None)));*/
-                todo!()
+                let msg = JsString::new(vm, "Can not delete non configurable property");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
             return Ok(false);
         }
@@ -752,8 +754,7 @@ impl JsObject {
         vm: &mut Runtime,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        /* let args = Arguments::new(vm, JsValue::new(obj), 0);
-        let mut args = Handle::new(vm.space(), args);
+        let mut args = Arguments::new(vm, JsValue::encode_object_value(obj), 0);
 
         macro_rules! try_ {
             ($sym: expr) => {
@@ -763,12 +764,12 @@ impl JsObject {
 
                 if m.is_callable() {
                     let res = m
-                        .as_cell()
+                        .get_object()
                         .downcast::<JsObject>()
                         .unwrap()
                         .as_function_mut()
                         .call(vm, &mut args)?;
-                    if res.is_primitive() || res.is_undefined_or_null() {
+                    if res.is_primitive() || (res.is_undefined() || res.is_null()) {
                         return Ok(res);
                     }
                 }
@@ -776,16 +777,17 @@ impl JsObject {
         }
 
         if hint == JsHint::String {
-            try_!(Symbol::toString());
-            try_!(Symbol::valueOf());
+            try_!("toString".intern());
+            try_!("valueOf".intern());
         } else {
-            try_!(Symbol::valueOf());
-            try_!(Symbol::toString());
+            try_!("valueOf".intern());
+            try_!("toString".intern());
         }
 
         let msg = JsString::new(vm, "invalid default value");
-        Err(JsValue::new(JsTypeError::new(vm, msg, None)))*/
-        todo!()
+        Err(JsValue::encode_object_value(JsTypeError::new(
+            vm, msg, None,
+        )))
     }
     /*const fn get_method_table() -> MethodTable {
         js_method_table!(JsObject)
@@ -866,16 +868,17 @@ impl GcPointer<JsObject> {
             Ok(val) => {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
                 let mut func = unsafe { val.get_object().downcast_unchecked::<JsObject>() };
-                /*let f = func.as_function_mut();
-                let args = Arguments::new(vm, JsValue::new(obj), 1);
-                let mut args = Handle::new(vm.space(), args);
+                let f = func.as_function_mut();
+                let mut args = Arguments::new(vm, JsValue::encode_object_value(obj), 1);
+
                 *args.at_mut(0) = match hint {
-                    JsHint::Number | JsHint::None => JsValue::new(JsString::new(vm, "number")),
-                    JsHint::String => JsValue::new(JsString::new(vm, "string")),
+                    JsHint::Number | JsHint::None => {
+                        JsValue::encode_object_value(JsString::new(vm, "number"))
+                    }
+                    JsHint::String => JsValue::encode_object_value(JsString::new(vm, "string")),
                 };
 
-                f.call(vm, &mut args)*/
-                todo!()
+                f.call(vm, &mut args)
             }
             _ => (self.class.method_table.DefaultValue)(obj, vm, hint),
         }
@@ -1006,14 +1009,15 @@ impl GcPointer<JsObject> {
         match val {
             Err(e) => Err(e),
             Ok(val) => {
-                /* if val.is_callable() {
+                if val.is_callable() {
                     return Ok(val);
                 } else {
                     let desc = vm.description(name);
                     let msg = JsString::new(vm, format!("Property '{}' is not a method", desc));
-                    Err(JsValue::new(JsTypeError::new(vm, msg, None)))
-                }*/
-                todo!("get method");
+                    Err(JsValue::encode_object_value(JsTypeError::new(
+                        vm, msg, None,
+                    )))
+                }
             }
         }
     }
@@ -1154,7 +1158,13 @@ impl GcPointer<JsObject> {
     ) -> Result<bool, JsValue> {
         if index >= self.indexed.length() && !self.indexed.writable() {
             if throwable {
-                todo!()
+                let msg = JsString::new(
+                    vm,
+                    "adding an element to the array which length is not writable is rejected",
+                );
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
             return Ok(false);
         }
@@ -1199,7 +1209,10 @@ impl GcPointer<JsObject> {
             }
             None if !self.is_extensible() => {
                 if throwable {
-                    todo!()
+                    let msg = JsString::new(vm, "object not extensible");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        vm, msg, None,
+                    )));
                 }
                 Ok(false)
             }
@@ -1273,7 +1286,10 @@ impl Env {
     ) -> Result<(GcPointer<JsObject>, Slot), JsValue> {
         if self.record.has_own_property(vm, name) {
             if !self.is_mutable(vm, name) && strict {
-                todo!();
+                let msg = JsString::new(vm, "Assignment to constant variable");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
             let mut slot = Slot::new();
             self.record.put_slot(vm, name, val, &mut slot, strict)?;
@@ -1284,7 +1300,10 @@ impl Env {
                 if cur.has_own_property(vm, name) {
                     let prop = cur.get_property(vm, name);
                     if !(prop.is_writable() && prop.raw != NONE) && strict {
-                        todo!()
+                        let msg = JsString::new(vm, "Assignment to constant variable");
+                        return Err(JsValue::encode_object_value(JsTypeError::new(
+                            vm, msg, None,
+                        )));
                     }
                     let mut slot = Slot::new();
                     cur.put_slot(vm, name, val, &mut slot, strict)?;
@@ -1294,7 +1313,11 @@ impl Env {
             }
 
             if strict {
-                todo!()
+                let desc = vm.description(name);
+                let msg = JsString::new(vm, format!("Variable '{}' does not exist", desc));
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             } else {
                 let mut slot = Slot::new();
                 vm.global_object()
@@ -1316,7 +1339,7 @@ impl Env {
             return Ok(slot.value());
         } else {
             let mut current = self.record.prototype();
-            while let Some(mut cur) = current {
+            while let Some(cur) = current {
                 if cur.get_own_property_slot(vm, name, slot) {
                     return Ok(slot.value());
                 }
@@ -1324,7 +1347,11 @@ impl Env {
             }
 
             if !vm.global_object().has_property(vm, name) {
-                todo!()
+                let desc = vm.description(name);
+                let msg = JsString::new(vm, format!("Can't find variable '{}'", desc));
+                return Err(JsValue::encode_object_value(JsReferenceError::new(
+                    vm, msg, None,
+                )));
             }
 
             let prop = vm.global_object().get(vm, name)?;
@@ -1346,7 +1373,14 @@ impl Env {
         let desc = DataDescriptor::new(val, if mutable { W | C | E } else { C | E });
 
         if self.has_own_variable(vm, name) {
-            todo!()
+            let desc = vm.description(name);
+            let msg = JsString::new(
+                vm,
+                format!("Identifier '{}' already exists in this scope", desc),
+            );
+            return Err(JsValue::encode_object_value(JsSyntaxError::new(
+                vm, msg, None,
+            )));
         }
 
         let _ = self.record.define_own_property(vm, name, &*desc, false);

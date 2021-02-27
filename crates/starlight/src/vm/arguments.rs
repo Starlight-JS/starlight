@@ -2,10 +2,12 @@ use std::mem::ManuallyDrop;
 
 use super::{
     array_storage::ArrayStorage,
+    error::JsTypeError,
     method_table::*,
     object::{EnumerationMode, Env, JsHint, JsObject, ObjectTag},
     property_descriptor::*,
     slot::*,
+    string::JsString,
     symbol_table::Internable,
     symbol_table::{Symbol, DUMMY_SYMBOL},
     value::*,
@@ -95,7 +97,10 @@ impl JsArguments {
         match obj.define_own_indexed_property_internal(vm, index, desc, throwable) {
             Ok(false) | Err(_) => {
                 if throwable {
-                    todo!()
+                    let msg = JsString::new(vm, "[[DefineOwnProperty]] failed");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        vm, msg, None,
+                    )));
                 }
                 return Ok(false);
             }
@@ -211,8 +216,19 @@ impl JsArguments {
         let v = JsObject::GetNonIndexedSlotMethod(obj, vm, name, slot);
         if name == "caller".intern() {
             match v {
-                Ok(x) => {
-                    todo!()
+                Ok(x) if x.is_callable() => {
+                    if x.get_object()
+                        .downcast::<JsObject>()
+                        .unwrap()
+                        .as_function()
+                        .is_strict()
+                    {
+                        let msg =
+                            JsString::new(vm, "access to strict function 'caller' not allowed");
+                        return Err(JsValue::encode_object_value(JsTypeError::new(
+                            vm, msg, None,
+                        )));
+                    }
                 }
                 _ => (),
             }

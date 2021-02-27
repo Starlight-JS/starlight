@@ -14,6 +14,7 @@ use self::{
 use crate::utils::ordered_set::OrderedSet;
 use block::*;
 use intrusive_collections::{LinkedList, UnsafeRef};
+use libmimalloc_sys::{mi_free, mi_usable_size};
 use wtf_rs::keep_on_stack;
 pub mod block;
 pub mod block_set;
@@ -21,7 +22,7 @@ pub mod cell;
 pub mod precise_allocation;
 pub mod tiny_bloom_filter;
 pub const SIZE_CLASSES: [usize; 15] = [
-    16, 24, 32, 48, 64, 96, 128, 256, 512, 768, 1024, 1562, 2048, 3172, 4096,
+    16, 24, 32, 48, 64, 96, 128, 256, 512, 768, 1024, 1562, 2048, 3172, 4080,
 ];
 
 macro_rules! smatch {
@@ -57,7 +58,7 @@ pub fn size_class_index_for(size: usize) -> Option<usize> {
         1562=>11,
         2048=>12,
         3172=>13,
-        4096=>14
+        4080=>14
     )
 }
 
@@ -198,18 +199,20 @@ impl SmallArena {
 
 pub struct SlotVisitor {
     queue: VecDeque<*mut GcPointerBase>,
+
     bytes_visited: usize,
     sp: usize,
     cons_roots: Vec<(usize, usize)>,
 }
 pub fn usable_size<T: GcCell + ?Sized>(value: GcPointer<T>) -> usize {
     unsafe {
-        let base = value.base.as_ptr();
+        /*let base = value.base.as_ptr();
         if unlikely((*base).is_precise_allocation()) {
             return (*(*base).precise_allocation()).cell_size as usize;
         }
         let block = Block::from_cell(value.base.as_ptr().cast());
-        (*block).header().cell_size as usize
+        (*block).header().cell_size as usize*/
+        libmimalloc_sys::mi_usable_size(value.base.as_ptr().cast())
     }
 }
 impl SlotVisitor {
@@ -217,13 +220,15 @@ impl SlotVisitor {
         if (*base).is_marked() {
             return;
         }
-
+        // let trace = Backtrace::new();
+        // self.trace.push_back(format!("{:?}", trace));
         (*base).mark();
-        self.bytes_visited += if (*base).is_precise_allocation() {
+        /*self.bytes_visited += if (*base).is_precise_allocation() {
             (*(*base).precise_allocation()).cell_size as usize
         } else {
             (*Block::from_cell(base.cast())).header().cell_size as usize
-        };
+        };*/
+        self.bytes_visited += 1;
         self.queue.push_back(base);
     }
     pub fn visit<T: GcCell + ?Sized>(&mut self, value: GcPointer<T>) {
@@ -232,9 +237,11 @@ impl SlotVisitor {
             if (*base).is_marked() {
                 return;
             }
-
+            // let trace = Backtrace::new();
+            //self.trace.push_back(format!("{:?}", trace));
             (*base).mark();
-            self.bytes_visited += usable_size(value);
+            self.bytes_visited += 1;
+            // self.bytes_visited += usable_size(value);
             self.queue.push_back(base);
         }
     }
@@ -288,8 +295,10 @@ pub struct Heap {
     defers: usize,
     allocated: usize,
     max_heap_size: usize,
+    pointers: OrderedSet<usize>,
     track_allocations: bool,
     allocations: HashMap<*mut GcPointerBase, String>,
+    mi_heap: *mut libmimalloc_sys::mi_heap_t,
 }
 
 impl Heap {
@@ -319,7 +328,9 @@ impl Heap {
             sp: 0,
             defers: 0,
             allocated: 0,
-            max_heap_size: 32 * 1024,
+            pointers: OrderedSet::new(),
+            max_heap_size: 4 * 1024,
+            mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
         };
 
         this.init_arenas();
@@ -345,7 +356,7 @@ impl Heap {
             self.gc();
         }
     }
-    #[inline(always)]
+    /* #[inline(always)]
     unsafe fn allocate_fast(&mut self, size: usize) -> *mut u8 {
         let ix = size_class_index_for(size).unwrap();
         let arena = &mut **self.arenas.get_unchecked(ix);
@@ -386,23 +397,40 @@ impl Heap {
             track_large((*precise).cell().cast(), size, self)
         };
         (*precise).cell().cast()
-    }
+    }*/
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
         self.collect_if_necessary();
 
         let real_size = value.compute_size() + size_of::<GcPointerBase>();
         unsafe {
-            let pointer = if real_size <= 4096 {
+            /*let pointer = if real_size <= 4096 {
                 self.allocate_fast(real_size)
             } else {
                 self.allocate_slow(real_size)
             }
-            .cast::<GcPointerBase>();
+            .cast::<GcPointerBase>();*/
+            let pointer = libmimalloc_sys::mi_heap_malloc_aligned(self.mi_heap, real_size, 16)
+                .cast::<GcPointerBase>();
             let vtable = std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn GcCell).vtable;
             pointer.write(GcPointerBase::new(vtable as _));
             (*pointer).data::<T>().write(value);
             (*pointer).live();
+            self.allocated += mi_usable_size(pointer.cast());
+            self.pointers.insert(pointer as _);
+            #[cold]
+            #[inline(never)]
+            fn track_small(p: *mut u8, size: usize, this: &mut Heap) {
+                let backtrace = backtrace::Backtrace::new();
+                let fmt = format!(
+                    "Small allocation of size {} at {:p}\n  backtrace: \n{:?}",
+                    size, p, backtrace
+                );
+                this.allocations.insert(p.cast(), fmt);
+            }
+            if unlikely(self.track_allocations) {
+                track_small(pointer.cast(), mi_usable_size(pointer.cast()), self);
+            }
             GcPointer {
                 base: NonNull::new_unchecked(pointer),
                 marker: Default::default(),
@@ -457,6 +485,7 @@ impl Heap {
         }
         let mut visitor = SlotVisitor {
             bytes_visited: 0,
+
             cons_roots: vec![],
             queue: VecDeque::new(),
             sp: self.sp,
@@ -471,12 +500,17 @@ impl Heap {
                 #[cold]
                 #[inline(never)]
                 unsafe fn cleanup_allocations(this: &mut Heap) {
-                    this.allocations.retain(|alloc, _| (**alloc).is_marked());
+                    this.allocations.retain(|alloc, info| {
+                        if !(**alloc).is_marked() {
+                            println!("retain {:p} \n{}", *alloc, info);
+                        }
+                        (**alloc).is_marked()
+                    });
                 }
                 cleanup_allocations(self);
             }
 
-            for arena in self.arenas.iter() {
+            /*for arena in self.arenas.iter() {
                 let arena = &mut **arena;
                 arena.sweep();
             }
@@ -491,8 +525,32 @@ impl Heap {
                     PreciseAllocation::destroy(&mut **pcell);
                     false
                 }
+            });*/
+            let mut allocated = 0;
+            self.pointers.retain(|pointer| {
+                let ptr = *pointer as *mut GcPointerBase;
+                if (*ptr).is_marked() {
+                    (*ptr).unmark();
+
+                    allocated += mi_usable_size(ptr.cast());
+                    true
+                } else {
+                    (*ptr).dead();
+                    std::ptr::drop_in_place((*ptr).get_dyn());
+                    mi_free(ptr.cast());
+                    false
+                }
             });
-            self.allocated = visitor.bytes_visited;
+            self.pointers.shrink_to_fit();
+            /*self.pointers = OrderedSet::from_sorted_set(Vec::with_capacity(visitor.bytes_visited));
+            libmimalloc_sys::mi_heap_visit_blocks(
+                self.mi_heap,
+                true,
+                Some(sweep),
+                self as *mut Self as _,
+            );*/
+            self.allocated = allocated;
+            // self.allocated = visitor.bytes_visited;
             if self.allocated > self.max_heap_size {
                 self.max_heap_size = (self.allocated as f64 * 1.6f64) as usize;
             }
@@ -572,7 +630,7 @@ impl Heap {
                     });
                     if !found {
                         let value = transmute::<_, crate::vm::value::JsValue>(ptr);
-                        if value.is_pointer() {
+                        if value.is_object() {
                             self.find_gc_object_pointer_for_marking(
                                 value.get_pointer().cast(),
                                 |_, ptr| {
@@ -599,7 +657,7 @@ impl Heap {
         ptr: *mut u8,
         mut f: impl FnMut(&mut Self, *mut GcPointerBase),
     ) {
-        if !self.large.is_empty() {
+        /*if !self.large.is_empty() {
             if (**self.large.first().unwrap()).above_lower_bound(ptr.cast())
                 && (**self.large.last().unwrap()).below_upper_bound(ptr.cast())
             {
@@ -627,11 +685,8 @@ impl Heap {
         }
 
         let mut try_ptr = |p: *mut GcPointerBase| {
-            if !(*p).is_live() {
-                return false;
-            }
             let live = (*candidate).header().is_live(p.cast());
-            if live {
+            if live && (*p).is_live() {
                 f(self, p.cast());
             }
             live
@@ -641,7 +696,24 @@ impl Heap {
             return;
         }
         let aligned = (*candidate).header().cell_align(ptr.cast());
-        try_ptr(aligned as *mut _);
+        try_ptr(aligned as *mut _);*/
+
+        if !self.pointers.is_empty() {
+            if self.pointers.contains(&(ptr as usize)) {
+                f(self, ptr.cast());
+            }
+        }
+    }
+
+    pub fn defer_gc(&mut self) {
+        self.defers += 1;
+    }
+
+    pub fn undefer_gc(&mut self) {
+        self.defers -= 1;
+        if self.defers == 0 {
+            self.collect_if_necessary();
+        }
     }
 }
 
@@ -683,4 +755,31 @@ impl Drop for SmallArena {
             }
         }
     }
+}
+
+unsafe extern "C" fn sweep(
+    _heap: *const libmimalloc_sys::mi_heap_t,
+    _area: *const libmimalloc_sys::mi_heap_area_t,
+    block: *mut libc::c_void,
+    block_sz: usize,
+    arg: *mut libc::c_void,
+) -> bool {
+    if block.is_null() {
+        return true;
+    }
+    let heap = &mut *(arg.cast::<Heap>());
+    let ptr = block.cast::<GcPointerBase>();
+    if !(*ptr).is_marked() {
+        (*ptr).dead();
+        (*ptr).unmark();
+        std::ptr::drop_in_place((*ptr).get_dyn());
+
+        mi_free(ptr.cast());
+    } else {
+        heap.allocated += block_sz;
+        heap.pointers.insert(block as _);
+        (*ptr).unmark();
+    }
+
+    true
 }

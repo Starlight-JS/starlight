@@ -1,10 +1,9 @@
+use crate::heap::{cell::*, SlotVisitor};
+use cfg_if::cfg_if;
 use std::intrinsics::likely;
 
-use cfg_if::cfg_if;
-
-use crate::heap::{cell::*, SlotVisitor};
-
 use super::{
+    error::*,
     object::{JsHint, JsObject},
     string::JsString,
     symbol_table::*,
@@ -259,10 +258,15 @@ impl JsValue {
 
     } else if #[cfg(feature="val-as-f64")] {
 /// A NaN-boxed encoded value.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct JsValue(f64);
-
+impl PartialEq for JsValue {
+    fn eq(&self,other: &Self) -> bool {
+        self.get_raw() == other.get_raw()
+    }
+}
+impl Eq for JsValue {}
 impl JsValue {
     pub const NUM_TAG_EXP_BITS: u32 = 16;
     pub const NUM_DATA_BITS: u32 = (64 - Self::NUM_TAG_EXP_BITS);
@@ -478,7 +482,7 @@ impl JsValue {
 
 unsafe impl Trace for JsValue {
     fn trace(&self, visitor: &mut SlotVisitor) {
-        if self.is_pointer() {
+        if self.is_pointer() && !self.is_empty() {
             self.get_object().trace(visitor);
         }
     }
@@ -570,13 +574,22 @@ impl JsValue {
     }
     pub fn to_object(self, rt: &mut Runtime) -> Result<GcPointer<JsObject>, JsValue> {
         if self.is_undefined() || self.is_null() {
-            todo!()
+            let msg = JsString::new(rt, "ToObject to null or undefined");
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                rt, msg, None,
+            )));
         }
         if self.is_object() && self.get_object().is::<JsObject>() {
             return Ok(unsafe { self.get_object().downcast_unchecked() });
         }
 
         todo!()
+    }
+    pub fn is_jsobject(self) -> bool {
+        self.is_object() && self.get_object().is::<JsObject>()
+    }
+    pub fn is_symbol(self) -> bool {
+        self.is_object() && self.get_object().is::<JsSymbol>()
     }
     pub fn to_primitive(self, rt: &mut Runtime, hint: JsHint) -> Result<JsValue, JsValue> {
         if self.is_object() && self.get_object().is::<JsObject>() {
@@ -605,6 +618,72 @@ impl JsValue {
     }
     pub fn is_js_string(self) -> bool {
         self.is_object() && self.get_object().is::<JsString>()
+    }
+
+    pub fn abstract_equal(self, other: JsValue, rt: &mut Runtime) -> Result<bool, JsValue> {
+        let mut lhs = self;
+        let mut rhs = other;
+
+        loop {
+            if likely(lhs.is_number() && rhs.is_number()) {
+                return Ok(self.get_number() == rhs.get_number());
+            }
+
+            if (lhs.is_undefined() || lhs.is_null()) && (rhs.is_undefined() && rhs.is_null()) {
+                return Ok(true);
+            }
+
+            if lhs.is_string() && rhs.is_string() {
+                return Ok(lhs.get_string().as_str() == rhs.get_string().as_str());
+            }
+
+            if lhs.is_symbol() && rhs.is_symbol() {
+                return Ok(lhs.get_raw() == rhs.get_raw());
+            }
+            if lhs.is_jsobject() && rhs.is_jsobject() {
+                return Ok(lhs.get_raw() == rhs.get_raw());
+            }
+            if lhs.is_number() && rhs.is_string() {
+                rhs = JsValue::encode_f64_value(rhs.to_number(rt)?);
+                continue;
+            }
+
+            if lhs.is_bool() {
+                lhs = JsValue::encode_f64_value(lhs.to_number(rt)?);
+                continue;
+            }
+
+            if rhs.is_bool() {
+                rhs = JsValue::encode_f64_value(rhs.to_number(rt)?);
+                continue;
+            }
+
+            if (lhs.is_string() || lhs.is_number()) && rhs.is_object() {
+                rhs = rhs.to_primitive(rt, JsHint::None)?;
+                continue;
+            }
+
+            if lhs.is_object() && (rhs.is_string() || rhs.is_number()) {
+                lhs = lhs.to_primitive(rt, JsHint::None)?;
+                continue;
+            }
+            break Ok(false);
+        }
+    }
+
+    pub fn strict_equal(self, other: JsValue) -> bool {
+        if likely(self.is_number() && other.is_number()) {
+            return self.get_number() == other.get_number();
+        }
+
+        if !self.is_object() || !other.is_object() {
+            return self.get_raw() == other.get_raw();
+        }
+
+        if self.is_string() && other.is_string() {
+            return self.get_string().as_str() == other.get_string().as_str();
+        }
+        self.get_raw() == other.get_raw()
     }
     #[inline]
     pub fn compare(self, rhs: Self, left_first: bool, rt: &mut Runtime) -> Result<i32, JsValue> {
@@ -709,5 +788,75 @@ impl JsValue {
         } else {
             unreachable!()
         }
+    }
+    pub fn to_symbol(self, rt: &mut Runtime) -> Result<Symbol, JsValue> {
+        if self.is_number() {
+            let n = self.get_number();
+            if n as u32 as f64 == n {
+                return Ok(Symbol::Index(n as u32));
+            }
+            return Ok(n.to_string().intern());
+        }
+        if self.is_string() {
+            return Ok(self.get_string().as_str().intern());
+        }
+        if self.is_null() {
+            return Ok("null".intern());
+        }
+        if self.is_object() && self.get_object().is::<JsSymbol>() {
+            return Ok(unsafe { self.get_object().downcast_unchecked::<JsSymbol>().symbol() });
+        }
+
+        if self.get_bool() {
+            if self.get_bool() {
+                return Ok("true".intern());
+            } else {
+                return Ok("false".intern());
+            }
+        }
+
+        if self.is_undefined() {
+            return Ok("undefined".intern());
+        }
+        let mut obj = self.get_object().downcast::<JsObject>().unwrap();
+        let prim = obj.to_primitive(rt, JsHint::String)?;
+        prim.to_symbol(rt)
+    }
+
+    pub fn get_primitive_proto(self, vm: &mut Runtime) -> GcPointer<JsObject> {
+        assert!(!self.is_empty());
+        assert!(self.is_primitive());
+        if self.is_string() {
+            return vm.global_data().string_prototype.unwrap();
+        } else if self.is_number() {
+            return vm.global_data().number_prototype.unwrap();
+        } else if self.is_bool() {
+            return vm.global_data().boolean_prototype.unwrap();
+        } else {
+            return vm.global_data().symbol_prototype.unwrap();
+        }
+    }
+}
+
+impl From<f64> for JsValue {
+    fn from(x: f64) -> Self {
+        Self::encode_untrusted_f64_value(x)
+    }
+}
+
+impl From<i32> for JsValue {
+    fn from(x: i32) -> Self {
+        Self::encode_f64_value(x as _)
+    }
+}
+
+impl From<u32> for JsValue {
+    fn from(x: u32) -> Self {
+        Self::encode_f64_value(x as _)
+    }
+}
+impl<T: GcCell + ?Sized> From<GcPointer<T>> for JsValue {
+    fn from(x: GcPointer<T>) -> Self {
+        Self::encode_object_value(x)
     }
 }
