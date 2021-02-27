@@ -21,7 +21,10 @@ fn main() {
         false,
     );
 
+    obj.delete(&mut rt, "x".intern(), false)
+        .unwrap_or_else(|_| panic!());
+
     let val = obj.get(&mut rt, "x".intern()).unwrap_or_else(|_| panic!());
 
-    println!("{}", val.get_double());
+    println!("{}", val.is_undefined());
 }

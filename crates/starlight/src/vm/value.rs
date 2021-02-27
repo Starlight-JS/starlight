@@ -1,11 +1,20 @@
+use std::intrinsics::likely;
+
 use cfg_if::cfg_if;
 
 use crate::heap::{cell::*, SlotVisitor};
 
-use super::string::JsString;
+use super::{
+    object::{JsHint, JsObject},
+    string::JsString,
+    symbol_table::*,
+    Runtime,
+};
 
 pub type TagKind = u32;
-
+pub const CMP_FALSE: i32 = 0;
+pub const CMP_TRUE: i32 = 1;
+pub const CMP_UNDEF: i32 = -1;
 pub const FIRST_TAG: TagKind = 0xfff9;
 pub const LAST_TAG: TagKind = 0xffff;
 pub const EMPTY_INVALID_TAG: u32 = FIRST_TAG;
@@ -77,7 +86,7 @@ impl JsValue {
         Self::new(0, OBJECT_TAG)
     }
     #[inline]
-    pub fn encode_object_value(val: GcPointer<dyn GcCell>) -> Self {
+    pub fn encode_object_value<T: GcCell + ?Sized>(val: GcPointer<T>) -> Self {
         Self::new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
     }
     #[inline]
@@ -558,5 +567,147 @@ impl JsValue {
     }
     pub fn same_value_zero(lhs: Self, rhs: Self) -> bool {
         Self::same_value_impl(lhs, rhs, true)
+    }
+    pub fn to_object(self, rt: &mut Runtime) -> Result<GcPointer<JsObject>, JsValue> {
+        if self.is_undefined() || self.is_null() {
+            todo!()
+        }
+        if self.is_object() && self.get_object().is::<JsObject>() {
+            return Ok(unsafe { self.get_object().downcast_unchecked() });
+        }
+
+        todo!()
+    }
+    pub fn to_primitive(self, rt: &mut Runtime, hint: JsHint) -> Result<JsValue, JsValue> {
+        if self.is_object() && self.get_object().is::<JsObject>() {
+            let mut object = unsafe { self.get_object().downcast_unchecked::<JsObject>() };
+            object.to_primitive(rt, hint)
+        } else {
+            Ok(self)
+        }
+    }
+    fn number_compare(x: f64, y: f64) -> i32 {
+        if x.is_nan() || y.is_nan() {
+            return CMP_UNDEF;
+        }
+        if x == y {
+            return CMP_FALSE;
+        }
+        if x < y {
+            CMP_TRUE
+        } else {
+            CMP_FALSE
+        }
+    }
+    pub fn get_string(&self) -> GcPointer<JsString> {
+        assert!(self.is_string() || self.is_js_string());
+        unsafe { self.get_object().downcast_unchecked() }
+    }
+    pub fn is_js_string(self) -> bool {
+        self.is_object() && self.get_object().is::<JsString>()
+    }
+    #[inline]
+    pub fn compare(self, rhs: Self, left_first: bool, rt: &mut Runtime) -> Result<i32, JsValue> {
+        let lhs = self;
+        if likely(lhs.is_number() && rhs.is_number()) {
+            return Ok(Self::number_compare(self.get_number(), rhs.get_number()));
+        }
+
+        let px;
+        let py;
+        if left_first {
+            px = lhs.to_primitive(rt, JsHint::Number)?;
+            py = rhs.to_primitive(rt, JsHint::Number)?;
+        } else {
+            py = rhs.to_primitive(rt, JsHint::Number)?;
+            px = lhs.to_primitive(rt, JsHint::Number)?;
+        }
+        if likely(px.is_number() && py.is_number()) {
+            return Ok(Self::number_compare(px.get_number(), py.get_number()));
+        }
+        if likely(px.is_js_string() && py.is_js_string()) {
+            if px.get_string().as_str() < py.get_string().as_str() {
+                Ok(CMP_TRUE)
+            } else {
+                Ok(CMP_FALSE)
+            }
+        } else {
+            let nx = px.to_number(rt)?;
+            let ny = py.to_number(rt)?;
+            Ok(Self::number_compare(nx, ny))
+        }
+    }
+    pub fn compare_left(self, rhs: Self, rt: &mut Runtime) -> Result<i32, JsValue> {
+        Self::compare(self, rhs, true, rt)
+    }
+    pub fn to_number(self, rt: &mut Runtime) -> Result<f64, JsValue> {
+        if self.is_double() {
+            Ok(self.get_double())
+        } else if self.is_object() && self.get_object().is::<JsString>() {
+            let s = unsafe { self.get_object().downcast_unchecked::<JsString>() };
+            if let Ok(n) = s.as_str().parse::<i32>() {
+                return Ok(n as f64);
+            }
+            Ok(s.as_str()
+                .parse::<f64>()
+                .unwrap_or_else(|_| f64::from_bits(0x7ff8000000000000)))
+        } else if self.is_bool() {
+            Ok(self.get_bool() as u8 as f64)
+        } else if self.is_null() {
+            Ok(0.0)
+        } else if self.is_undefined() {
+            Ok(f64::from_bits(0x7ff8000000000000))
+        } else if self.is_object() && self.get_object().is::<JsObject>() {
+            let obj = unsafe { self.get_object().downcast_unchecked::<JsObject>() };
+
+            match (obj.class().method_table.DefaultValue)(obj, rt, JsHint::Number) {
+                Ok(val) => val.to_number(rt),
+                Err(e) => Err(e),
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    pub fn is_callable(&self) -> bool {
+        self.is_object()
+            && self
+                .get_object()
+                .downcast::<JsObject>()
+                .map(|object| object.is_callable())
+                .unwrap_or(false)
+    }
+
+    pub fn is_primitive(&self) -> bool {
+        self.is_number()
+            || self.is_bool()
+            || (self.is_object() && self.get_object().is::<JsString>())
+            || (self.is_object() && self.get_object().is::<JsSymbol>())
+    }
+
+    pub fn to_string(&self, rt: &mut Runtime) -> Result<String, JsValue> {
+        if self.is_number() {
+            Ok(self.get_number().to_string())
+        } else if self.is_null() {
+            Ok("null".to_string())
+        } else if self.is_undefined() {
+            Ok("undefined".to_string())
+        } else if self.is_bool() {
+            Ok(self.get_bool().to_string())
+        } else if self.is_object() {
+            let object = self.get_object();
+            if let Some(jsstr) = object.downcast::<JsString>() {
+                return Ok(jsstr.as_str().to_owned());
+            } else if let Some(mut object) = object.downcast::<JsObject>() {
+                return match object.to_primitive(rt, JsHint::String) {
+                    Ok(val) => val.to_string(rt),
+                    Err(e) => Err(e),
+                };
+            }
+
+            todo!()
+        } else {
+            unreachable!()
+        }
     }
 }

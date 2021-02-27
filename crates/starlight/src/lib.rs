@@ -1,8 +1,9 @@
+#![feature(core_intrinsics)]
 use std::sync::atomic::AtomicBool;
-
 use vm::{value::JsValue, Runtime};
 
 pub mod heap;
+pub mod jsrt;
 pub mod utils;
 pub mod vm;
 

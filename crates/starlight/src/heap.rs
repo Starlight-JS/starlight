@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
+    intrinsics::unlikely,
     mem::transmute,
     mem::{size_of, MaybeUninit},
     ptr::{null_mut, NonNull},
@@ -204,7 +205,7 @@ pub struct SlotVisitor {
 pub fn usable_size<T: GcCell + ?Sized>(value: GcPointer<T>) -> usize {
     unsafe {
         let base = value.base.as_ptr();
-        if (*base).is_precise_allocation() {
+        if unlikely((*base).is_precise_allocation()) {
             return (*(*base).precise_allocation()).cell_size as usize;
         }
         let block = Block::from_cell(value.base.as_ptr().cast());

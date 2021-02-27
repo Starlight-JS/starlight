@@ -654,7 +654,7 @@ impl GcPointer<Structure> {
 
             return map;
         }
-        if self.transit_count > 32 {
+        if self.transit_count > 64 {
             // stop transition
             let mut map = Structure::new_unique(
                 vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.

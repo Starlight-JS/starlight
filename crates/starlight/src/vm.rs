@@ -3,8 +3,12 @@ use crate::heap::{cell::GcPointer, cell::Trace, Heap, SlotVisitor};
 pub mod class;
 #[macro_use]
 pub mod method_table;
+pub mod arguments;
+pub mod array;
 pub mod array_storage;
 pub mod attributes;
+pub mod code_block;
+pub mod function;
 pub mod global;
 pub mod indexed_elements;
 pub mod object;
@@ -18,9 +22,16 @@ pub mod value;
 pub struct Runtime {
     heap: Box<Heap>,
     global_data: GlobalData,
+    global_object: Option<GcPointer<JsObject>>,
 }
 
 impl Runtime {
+    pub fn description(&self, sym: Symbol) -> String {
+        match sym {
+            Symbol::Key(key) => symbol_table::symbol_table().description(key).to_owned(),
+            Symbol::Index(x) => x.to_string(),
+        }
+    }
     pub fn heap(&mut self) -> &mut Heap {
         &mut self.heap
     }
@@ -29,8 +40,13 @@ impl Runtime {
         let heap = Box::new(Heap::new(track_allocations));
         Box::new(Self {
             heap,
+            global_object: None,
             global_data: GlobalData::default(),
         })
+    }
+
+    pub fn global_object(&self) -> GcPointer<JsObject> {
+        unwrap_unchecked(self.global_object)
     }
 
     pub fn global_data(&self) -> &GlobalData {
@@ -39,8 +55,9 @@ impl Runtime {
 }
 
 use starlight_derive::GcTrace;
+use wtf_rs::unwrap_unchecked;
 
-use self::{object::JsObject, structure::Structure};
+use self::{object::JsObject, structure::Structure, symbol_table::Symbol};
 
 #[derive(Default, GcTrace)]
 pub struct GlobalData {
@@ -71,4 +88,14 @@ pub struct GlobalData {
     pub(crate) type_error_structure: Option<GcPointer<Structure>>,
     pub(crate) uri_error_structure: Option<GcPointer<Structure>>,
     pub(crate) eval_error_structure: Option<GcPointer<Structure>>,
+}
+
+impl GlobalData {
+    pub fn get_function_struct(&self) -> GcPointer<Structure> {
+        unwrap_unchecked(self.function_struct)
+    }
+
+    pub fn get_object_prototype(&self) -> GcPointer<JsObject> {
+        unwrap_unchecked(self.object_prototype)
+    }
 }

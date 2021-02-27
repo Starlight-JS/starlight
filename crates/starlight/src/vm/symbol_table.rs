@@ -2,7 +2,9 @@ use dashmap::DashMap;
 use std::sync::atomic::Ordering;
 use std::{mem::MaybeUninit, sync::atomic::AtomicU32};
 
-use crate::heap::cell::{GcCell, Trace};
+use crate::heap::cell::{GcCell, GcPointer, Trace};
+
+use super::Runtime;
 pub struct SymbolTable {
     symbols: DashMap<&'static str, u32>,
     ids: DashMap<u32, &'static str>,
@@ -102,3 +104,20 @@ impl Internable for usize {
         self.to_string().intern()
     }
 }
+
+pub struct JsSymbol {
+    sym: Symbol,
+}
+
+impl JsSymbol {
+    pub fn new(rt: &mut Runtime, sym: Symbol) -> GcPointer<Self> {
+        rt.heap().allocate(Self { sym })
+    }
+
+    pub fn symbol(&self) -> Symbol {
+        self.sym
+    }
+}
+
+unsafe impl Trace for JsSymbol {}
+impl GcCell for JsSymbol {}
