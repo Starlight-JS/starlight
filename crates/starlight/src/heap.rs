@@ -449,10 +449,6 @@ impl Heap {
     }
     #[inline(never)]
     pub fn gc(&mut self) {
-        unsafe {
-            let mut jmpbuf: MaybeUninit<setjmp::jmp_buf> = MaybeUninit::uninit();
-            setjmp::setjmp(jmpbuf.as_mut_ptr());
-        }
         let x = self as *const Self as usize;
         keep_on_stack!(&x);
         self.collect_internal(&x);
