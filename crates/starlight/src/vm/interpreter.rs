@@ -43,7 +43,7 @@ impl Runtime {
             )?;
         }
 
-        let mut args = JsArguments::new(self, nscope, &func.code.params, args_.size() as _);
+        let mut args = JsArguments::new(self, nscope.clone(), &func.code.params, args_.size() as _);
 
         for k in i..args_.size() {
             args.put(self, Symbol::Index(k as _), args_.at(k), false)?;

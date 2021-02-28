@@ -15,7 +15,7 @@ impl JsArray {
     pub fn new(vm: &mut Runtime, n: u32) -> GcPointer<JsObject> {
         let mut arr = JsObject::new(
             vm,
-            vm.global_data().array_structure.unwrap(),
+            vm.global_data().array_structure.clone().unwrap(),
             Self::get_class(),
             ObjectTag::Array,
         );
@@ -322,7 +322,7 @@ impl GcPointer<JsObject> {
         // dense array shrink
         if self.indexed.dense() {
             if len > MAX_VECTOR_SIZE as u32 {
-                if let Some(mut map) = self.indexed.map {
+                if let Some(map) = self.indexed.map.as_mut() {
                     let mut copy = vec![];
                     map.iter().for_each(|x| {
                         copy.push(*x.0);
@@ -343,7 +343,7 @@ impl GcPointer<JsObject> {
             } else {
                 self.indexed.make_dense();
                 if self.indexed.vector.size() > len {
-                    self.indexed.vector.resize(ctx, len as _);
+                    self.indexed.vector.resize(ctx.heap(), len as _);
                 }
             }
             self.indexed.set_length(len);

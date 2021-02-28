@@ -10,6 +10,7 @@ pub mod arguments;
 pub mod array;
 pub mod array_storage;
 pub mod attributes;
+pub mod bigint;
 pub mod code_block;
 pub mod error;
 pub mod function;
@@ -65,28 +66,29 @@ impl Runtime {
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
         let s = Structure::new_unique_indexed(&mut this, None, false);
         let mut proto = JsObject::new(&mut this, s, JsObject::get_class(), ObjectTag::Ordinary);
-        this.global_data.object_prototype = Some(proto);
+        this.global_data.object_prototype = Some(proto.clone());
         this.global_data.function_struct = Some(Structure::new_indexed(&mut this, None, false));
         this.global_data.normal_arguments_structure =
             Some(Structure::new_indexed(&mut this, None, false));
         this.global_object = Some(JsGlobal::new(&mut this));
         this.global_data
             .empty_object_struct
+            .as_mut()
             .unwrap()
-            .change_prototype_with_no_transition(proto);
+            .change_prototype_with_no_transition(proto.clone());
 
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
         let _ = obj_constructor.define_own_property(
             &mut this,
             "prototype".intern(),
-            &*DataDescriptor::new(JsValue::from(proto), NONE),
+            &*DataDescriptor::new(JsValue::from(proto.clone()), NONE),
             false,
         );
         let _ = proto.define_own_property(
             &mut this,
             "constructor".intern(),
-            &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
+            &*DataDescriptor::new(JsValue::from(obj_constructor.clone()), W | C),
             false,
         );
         let obj_to_string =
@@ -100,11 +102,12 @@ impl Runtime {
         let name = "Object".intern();
         this.global_data
             .empty_object_struct
+            .as_mut()
             .unwrap()
-            .change_prototype_with_no_transition(proto);
+            .change_prototype_with_no_transition(proto.clone());
         this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
         keep_on_stack!(&mut proto);
-        this.init_error(proto);
+        this.init_error(proto.clone());
         keep_on_stack!(&mut proto);
         let _ = this.global_object().define_own_property(
             &mut this,
@@ -113,7 +116,7 @@ impl Runtime {
             false,
         );
         keep_on_stack!(&mut proto);
-        this.init_array(proto);
+        this.init_array(proto.clone());
         keep_on_stack!(&mut proto);
         this.init_func(proto);
 
@@ -123,7 +126,7 @@ impl Runtime {
     }
 
     pub fn global_object(&self) -> GcPointer<JsObject> {
-        unwrap_unchecked(self.global_object)
+        unwrap_unchecked(self.global_object.clone())
     }
 
     pub fn global_data(&self) -> &GlobalData {
@@ -175,10 +178,10 @@ pub struct GlobalData {
 
 impl GlobalData {
     pub fn get_function_struct(&self) -> GcPointer<Structure> {
-        unwrap_unchecked(self.function_struct)
+        unwrap_unchecked(self.function_struct.clone())
     }
 
     pub fn get_object_prototype(&self) -> GcPointer<JsObject> {
-        unwrap_unchecked(self.object_prototype)
+        unwrap_unchecked(self.object_prototype.clone())
     }
 }

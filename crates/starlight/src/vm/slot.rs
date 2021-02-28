@@ -26,7 +26,11 @@ impl Slot {
     pub const PUT_MASK: u32 = 3;
     fn is_cacheable(&self) -> bool {
         (self.flags & Self::FLAG_CACHEABLE) != 0
-            && self.base.map(|obj| obj.is::<JsObject>()).unwrap_or(false)
+            && self
+                .base
+                .as_ref()
+                .map(|obj| obj.is::<JsObject>())
+                .unwrap_or(false)
     }
     fn is_put_force_unchacheable(&self) -> bool {
         (self.flags & Self::FLAG_FORCE_PUT_UNCACHEABLE) != 0

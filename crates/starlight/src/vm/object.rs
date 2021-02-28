@@ -94,7 +94,7 @@ pub struct JsObject {
     pub(crate) indexed: GcPointer<IndexedElements>,
     pub(crate) slots: FixedStorage,
     pub(crate) flags: u32,
-    pub(crate) object_data_start: AlignAs<(), JsValue>,
+    pub(crate) object_data_start: u64,
 }
 impl JsObject {
     pub fn direct(&self, n: usize) -> &JsValue {
@@ -208,7 +208,7 @@ fn is_absent_descriptor(desc: &PropertyDescriptor) -> bool {
 
 #[allow(non_snake_case)]
 impl JsObject {
-    pub fn prototype(&self) -> Option<GcPointer<JsObject>> {
+    pub fn prototype(&self) -> Option<&GcPointer<JsObject>> {
         self.structure.prototype()
     }
 
@@ -223,7 +223,7 @@ impl JsObject {
                 break true;
             }
             match obj.prototype() {
-                Some(proto) => obj = proto,
+                Some(proto) => obj = proto.clone(),
                 _ => break false,
             }
         }
@@ -269,7 +269,7 @@ impl JsObject {
         }
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(*base, obj) && slot.attributes().is_data() {
+                if GcPointer::ptr_eq(&base, &obj) && slot.attributes().is_data() {
                     obj.define_own_non_indexed_property_slot(
                         vm,
                         name,
@@ -325,11 +325,11 @@ impl JsObject {
             slot.set_1(*value, object_data(), Some(obj.as_dyn()));
             return true;
         }
-        if let Some(map) = obj.indexed.map {
+        if let Some(map) = obj.indexed.map.as_ref() {
             if index < obj.indexed.length() {
                 let it = map.get(&index);
                 if let Some(it) = it {
-                    slot.set_from_slot(it, Some(obj.as_dyn()));
+                    slot.set_from_slot(it, Some(obj.clone().as_dyn()));
                     return true;
                 }
             }
@@ -369,7 +369,7 @@ impl JsObject {
         }
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(*base, obj) && slot.attributes().is_data() {
+                if GcPointer::ptr_eq(&base, &obj) && slot.attributes().is_data() {
                     obj.define_own_indexed_property_slot(
                         vm,
                         index,
@@ -422,7 +422,7 @@ impl JsObject {
             }
 
             match obj.prototype() {
-                Some(proto) => obj = proto,
+                Some(proto) => obj = proto.clone(),
                 None => break false,
             }
         }
@@ -459,7 +459,7 @@ impl JsObject {
 
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(*base, obj) {
+                if GcPointer::ptr_eq(&base, &obj) {
                     let mut returned = false;
                     if slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
                         if slot.has_offset() {
@@ -486,9 +486,10 @@ impl JsObject {
                                 &mut offset,
                             );
                             obj.structure = new_struct;
-                            let s = obj.structure;
+                            let s = &obj.structure;
+                            let sz = s.get_slots_size();
                             //   println!("resize to {} from {}", s.get_slots_size(), obj.slots.size());
-                            obj.slots.resize(vm, s.get_slots_size() as _);
+                            obj.slots.resize(vm.heap(), sz as _);
 
                             *obj.direct_mut(offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
@@ -517,9 +518,9 @@ impl JsObject {
             .add_property_transition(vm, name, stored.attributes(), &mut offset);
         obj.structure = s;
 
-        let s = obj.structure;
-
-        obj.slots.resize(vm, s.get_slots_size() as _);
+        let s = &obj.structure;
+        let sz = s.get_slots_size();
+        obj.slots.resize(vm.heap(), sz as _);
 
         assert!(stored.value() == desc.value());
         *obj.direct_mut(offset as _) = stored.value();
@@ -549,7 +550,7 @@ impl JsObject {
             let mut returned = false;
             if !slot.is_not_found() {
                 if let Some(base) = slot.base() {
-                    if GcPointer::ptr_eq(*base, obj) {
+                    if GcPointer::ptr_eq(&base, &obj) {
                         if !slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
                             return Ok(returned);
                         }
@@ -647,7 +648,7 @@ impl JsObject {
         if self.indexed.map.is_none() {
             return Ok(true);
         }
-        let mut map = self.indexed.map.unwrap();
+        let map = self.indexed.map.as_mut().unwrap();
 
         match map.entry(index) {
             Entry::Vacant(_) => Ok(true),
@@ -681,7 +682,7 @@ impl JsObject {
             return obj.delete_indexed_internal(vm, index, throwable);
         }
         let mut slot = Slot::new();
-        if !(obj.class.method_table.GetOwnIndexedPropertySlot)(obj, vm, index, &mut slot) {
+        if !(obj.class.method_table.GetOwnIndexedPropertySlot)(obj.clone(), vm, index, &mut slot) {
             return Ok(true);
         }
 
@@ -727,7 +728,7 @@ impl JsObject {
             }
         }
 
-        if let Some(map) = obj.indexed.map {
+        if let Some(map) = &obj.indexed.map {
             for it in map.iter() {
                 if mode == EnumerationMode::IncludeNotEnumerable
                     || it.1.attributes().is_enumerable()
@@ -754,7 +755,7 @@ impl JsObject {
         vm: &mut Runtime,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        let mut args = Arguments::new(vm, JsValue::encode_object_value(obj), 0);
+        let mut args = Arguments::new(vm, JsValue::encode_object_value(obj.clone()), 0);
 
         macro_rules! try_ {
             ($sym: expr) => {
@@ -795,7 +796,7 @@ impl JsObject {
 
     define_jsclass!(JsObject, Object);
     pub fn new_empty(vm: &mut Runtime) -> GcPointer<Self> {
-        let structure = vm.global_data().empty_object_struct.unwrap();
+        let structure = vm.global_data().empty_object_struct.clone().unwrap();
         Self::new(vm, structure, Self::get_class(), ObjectTag::Ordinary)
     }
     pub fn new(
@@ -807,7 +808,7 @@ impl JsObject {
         let init = IndexedElements::new(vm);
         let indexed = vm.heap().allocate(init);
         let storage = ArrayStorage::with_size(
-            vm,
+            vm.heap(),
             structure.get_slots_size() as _,
             structure.get_slots_size() as _,
         );
@@ -816,7 +817,7 @@ impl JsObject {
             class,
 
             slots: storage,
-            object_data_start: AlignAs::new(()),
+            object_data_start: 0,
             indexed,
             flags: OBJ_FLAG_EXTENSIBLE,
             tag,
@@ -836,7 +837,7 @@ impl GcPointer<JsObject> {
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
-        (self.class.method_table.GetOwnPropertyNames)(*self, vm, collector, mode)
+        (self.class.method_table.GetOwnPropertyNames)(self.clone(), vm, collector, mode)
     }
     pub fn get_property_names(
         &self,
@@ -844,7 +845,7 @@ impl GcPointer<JsObject> {
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
-        (self.class.method_table.GetPropertyNames)(*self, vm, collector, mode)
+        (self.class.method_table.GetPropertyNames)(self.clone(), vm, collector, mode)
     }
     pub fn put_non_indexed_slot(
         &mut self,
@@ -854,7 +855,7 @@ impl GcPointer<JsObject> {
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        (self.class.method_table.PutNonIndexedSlot)(*self, vm, name, val, slot, throwable)
+        (self.class.method_table.PutNonIndexedSlot)(self.clone(), vm, name, val, slot, throwable)
     }
     #[allow(clippy::wrong_self_convention)]
     /// 7.1 Type Conversion
@@ -863,7 +864,7 @@ impl GcPointer<JsObject> {
     pub fn to_primitive(&mut self, vm: &mut Runtime, hint: JsHint) -> Result<JsValue, JsValue> {
         let exotic_to_prim = self.get_method(vm, "toPrimitive".intern());
 
-        let obj = *self;
+        let obj = self.clone();
         match exotic_to_prim {
             Ok(val) => {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
@@ -889,7 +890,7 @@ impl GcPointer<JsObject> {
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        (self.class.method_table.DeleteNonIndexed)(*self, rt, name, throwable)
+        (self.class.method_table.DeleteNonIndexed)(self.clone(), rt, name, throwable)
     }
     pub fn delete(
         &mut self,
@@ -908,17 +909,17 @@ impl GcPointer<JsObject> {
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        (self.class.method_table.DeleteIndexed)(*self, rt, index, throwable)
+        (self.class.method_table.DeleteIndexed)(self.clone(), rt, index, throwable)
     }
 
     pub fn has_indexed_property(&self) -> bool {
-        let mut obj = *self;
+        let mut obj = self.clone();
         loop {
             if obj.structure.is_indexed() {
                 return true;
             }
             match obj.prototype() {
-                Some(proto) => obj = proto,
+                Some(proto) => obj = proto.clone(),
                 None => break false,
             }
         }
@@ -929,10 +930,10 @@ impl GcPointer<JsObject> {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        (self.class.method_table.GetNonIndexedPropertySlot)(*self, vm, name, slot)
+        (self.class.method_table.GetNonIndexedPropertySlot)(self.clone(), vm, name, slot)
     }
     pub fn get_indexed_property_slot(&self, vm: &mut Runtime, index: u32, slot: &mut Slot) -> bool {
-        (self.class.method_table.GetIndexedPropertySlot)(*self, vm, index, slot)
+        (self.class.method_table.GetIndexedPropertySlot)(self.clone(), vm, index, slot)
     }
 
     pub fn get_own_non_indexed_property_slot(
@@ -941,7 +942,7 @@ impl GcPointer<JsObject> {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        (self.class.method_table.GetOwnNonIndexedPropertySlot)(*self, vm, name, slot)
+        (self.class.method_table.GetOwnNonIndexedPropertySlot)(self.clone(), vm, name, slot)
     }
     pub fn can_put(&self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
         if let Symbol::Index(index) = name {
@@ -970,7 +971,7 @@ impl GcPointer<JsObject> {
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        (self.class.method_table.PutIndexedSlot)(*self, vm, index, val, slot, throwable)
+        (self.class.method_table.PutIndexedSlot)(self.clone(), vm, index, val, slot, throwable)
     }
     pub fn put_slot(
         &mut self,
@@ -987,7 +988,7 @@ impl GcPointer<JsObject> {
         }
     }
     pub fn structure(&self) -> GcPointer<Structure> {
-        self.structure
+        self.structure.clone()
     }
     pub fn get_property_slot(&self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
         if let Symbol::Index(index) = name {
@@ -1064,7 +1065,12 @@ impl GcPointer<JsObject> {
         throwable: bool,
     ) -> Result<bool, JsValue> {
         (self.class.method_table.DefineOwnIndexedPropertySlot)(
-            *self, vm, index, desc, slot, throwable,
+            self.clone(),
+            vm,
+            index,
+            desc,
+            slot,
+            throwable,
         )
     }
     pub fn get_own_property_slot(&self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
@@ -1097,7 +1103,7 @@ impl GcPointer<JsObject> {
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        (self.class.method_table.GetIndexedSlot)(*self, rt, index, slot)
+        (self.class.method_table.GetIndexedSlot)(self.clone(), rt, index, slot)
     }
 
     pub fn get_non_indexed_slot(
@@ -1106,7 +1112,7 @@ impl GcPointer<JsObject> {
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        (self.class.method_table.GetNonIndexedSlot)(*self, rt, name, slot)
+        (self.class.method_table.GetNonIndexedSlot)(self.clone(), rt, name, slot)
     }
     pub fn get_own_indexed_property_slot(
         &self,
@@ -1114,7 +1120,7 @@ impl GcPointer<JsObject> {
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        (self.class.method_table.GetOwnIndexedPropertySlot)(*self, vm, index, slot)
+        (self.class.method_table.GetOwnIndexedPropertySlot)(self.clone(), vm, index, slot)
         //unsafe { JsObject::GetOwnIndexedPropertySlotMethod(*self, vm, index, slot) }
     }
     fn define_own_indexe_value_dense_internal(
@@ -1137,7 +1143,7 @@ impl GcPointer<JsObject> {
                 self.structure = s;
             }
 
-            self.indexed.vector.resize(vm, index + 1);
+            self.indexed.vector.resize(vm.heap(), index + 1);
 
             if !absent {
                 *self.indexed.vector.at_mut(index) = val;
@@ -1253,7 +1259,12 @@ impl GcPointer<JsObject> {
         throwable: bool,
     ) -> Result<bool, JsValue> {
         (self.class.method_table.DefineOwnNonIndexedPropertySlot)(
-            *self, vm, name, desc, slot, throwable,
+            self.clone(),
+            vm,
+            name,
+            desc,
+            slot,
+            throwable,
         )
     }
     pub fn define_own_property(
@@ -1293,9 +1304,9 @@ impl Env {
             }
             let mut slot = Slot::new();
             self.record.put_slot(vm, name, val, &mut slot, strict)?;
-            return Ok((self.record, slot));
+            return Ok((self.record.clone(), slot));
         } else {
-            let mut current = self.record.prototype();
+            let mut current = self.record.prototype().cloned();
             while let Some(mut cur) = current {
                 if cur.has_own_property(vm, name) {
                     let prop = cur.get_property(vm, name);
@@ -1307,9 +1318,9 @@ impl Env {
                     }
                     let mut slot = Slot::new();
                     cur.put_slot(vm, name, val, &mut slot, strict)?;
-                    return Ok((cur, slot));
+                    return Ok((cur.clone(), slot));
                 }
-                current = cur.prototype();
+                current = cur.prototype().cloned();
             }
 
             if strict {

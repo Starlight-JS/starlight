@@ -29,7 +29,7 @@ impl Arguments {
         self.values.size() as _
     }
     pub fn new(vm: &mut Runtime, this: JsValue, size: usize) -> Self {
-        let mut arr = ArrayStorage::with_size(vm, size as _, size as _);
+        let mut arr = ArrayStorage::with_size(vm.heap(), size as _, size as _);
         for i in 0..size {
             *arr.at_mut(i as _) = JsValue::encode_undefined_value();
         }
@@ -115,7 +115,10 @@ impl JsArguments {
                             if desc.is_data() {
                                 let data = DataDescriptor { parent: *desc };
                                 if !data.is_value_absent() {
-                                    Env { record: arg.env }.set_variable(
+                                    Env {
+                                        record: arg.env.clone(),
+                                    }
+                                    .set_variable(
                                         vm,
                                         mapped,
                                         desc.value(),
@@ -141,7 +144,7 @@ impl JsArguments {
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        if !JsObject::GetOwnIndexedPropertySlotMethod(obj, vm, index, slot) {
+        if !JsObject::GetOwnIndexedPropertySlotMethod(obj.clone(), vm, index, slot) {
             return false;
         }
         let arg = obj.as_arguments();
@@ -297,7 +300,7 @@ impl JsArguments {
         params: &[Symbol],
         len: u32,
     ) -> GcPointer<JsObject> {
-        let struct_ = vm.global_data().normal_arguments_structure.unwrap();
+        let struct_ = vm.global_data().normal_arguments_structure.clone().unwrap();
         let mut obj = JsObject::new(
             vm,
             struct_,

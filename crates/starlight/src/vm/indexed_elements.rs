@@ -51,11 +51,11 @@ impl IndexedElements {
     }
 
     pub fn ensure_map(&mut self, vm: &mut Runtime) -> GcPointer<SparseArrayMap> {
-        match self.map {
-            Some(map) => map,
+        match self.map.as_ref() {
+            Some(map) => map.clone(),
             None => {
                 let map = vm.heap().allocate(HashMap::with_capacity(8));
-                self.map = Some(map);
+                self.map = Some(map.clone());
                 map
             }
         }
@@ -89,7 +89,7 @@ impl IndexedElements {
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,
-            vector: ArrayStorage::new(_vm, 0),
+            vector: ArrayStorage::new(_vm.heap(), 0),
             map: None,
         }
     }

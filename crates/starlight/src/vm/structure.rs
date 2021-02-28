@@ -81,7 +81,7 @@ pub struct TransitionKey {
 impl GcCell for TransitionKey {}
 unsafe impl Trace for TransitionKey {}
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum Transition {
     None,
     Table(Option<GcPointer<Table>>),
@@ -131,12 +131,12 @@ impl TransitionsTable {
             name,
             attrs: attrs.raw(),
         };
-        if let Transition::Pair(x, y) = self.var {
+        if let Transition::Pair(x, y) = &self.var {
             let mut table = vm.heap().allocate(HashMap::new());
-            table.insert(x, y);
+            table.insert(x.clone(), y.clone());
             self.var = Transition::Table(Some(table));
         }
-        if let Transition::Table(Some(mut table)) = self.var {
+        if let Transition::Table(Some(ref mut table)) = self.var {
             table.insert(key, Some(map));
         } else {
             self.var = Transition::Pair(key, Some(map));
@@ -148,11 +148,11 @@ impl TransitionsTable {
             name,
             attrs: attrs.raw(),
         };
-        if let Transition::Table(ref table) = self.var {
-            return table.unwrap().get(&key).copied().flatten();
-        } else if let Transition::Pair(key_, map) = self.var {
-            if key == key_ {
-                return map;
+        if let Transition::Table(ref table) = &self.var {
+            return table.as_ref().unwrap().get(&key).cloned().flatten();
+        } else if let Transition::Pair(key_, map) = &self.var {
+            if key == *key_ {
+                return map.clone();
             }
         }
         None
@@ -171,8 +171,8 @@ type Table = HashMap<TransitionKey, Option<GcPointer<Structure>>>;
 unsafe impl Trace for TransitionsTable {
     fn trace(&self, tracer: &mut SlotVisitor) {
         match self.var {
-            Transition::Pair(_, x) => x.trace(tracer),
-            Transition::Table(table) => {
+            Transition::Pair(_, ref x) => x.trace(tracer),
+            Transition::Table(ref table) => {
                 table.trace(tracer);
             }
             _ => (),
@@ -208,7 +208,7 @@ impl Structure {
         self.id = id;
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct DeletedEntryHolder {
     entry: Option<GcPointer<DeletedEntry>>,
     size: u32,
@@ -217,14 +217,14 @@ pub struct DeletedEntryHolder {
 impl DeletedEntryHolder {
     pub fn push(&mut self, vm: &mut Runtime, offset: u32) {
         let entry = vm.heap().allocate(DeletedEntry {
-            prev: self.entry,
+            prev: self.entry.clone(),
             offset,
         });
         self.entry = Some(entry);
     }
     pub fn pop(&mut self) -> u32 {
-        let res = unwrap_unchecked(self.entry).offset;
-        self.entry = unwrap_unchecked(self.entry).prev;
+        let res = unwrap_unchecked(self.entry.as_ref()).offset;
+        self.entry = unwrap_unchecked(self.entry.as_ref()).prev.clone();
         self.size -= 1;
         res
     }
@@ -256,15 +256,15 @@ impl GcCell for DeletedEntry {}
 impl Structure {
     fn ctor(vm: &mut Runtime, previous: GcPointer<Self>, unique: bool) -> GcPointer<Self> {
         let mut this = vm.heap().allocate(Structure {
-            prototype: previous.prototype,
-            previous: Some(previous),
+            prototype: previous.prototype.clone(),
+            previous: Some(previous.clone()),
             table: if unique && previous.is_unique() {
-                previous.table
+                previous.table.clone()
             } else {
                 None
             },
             transitions: TransitionsTable::new(!unique, previous.transitions.is_indexed()),
-            deleted: previous.deleted,
+            deleted: previous.deleted.clone(),
             added: (
                 DUMMY_SYMBOL,
                 MapEntry {
@@ -417,8 +417,8 @@ impl GcPointer<Structure> {
         it.attrs = attributes;
     }
 
-    pub fn table(&self) -> Option<GcPointer<TargetTable>> {
-        self.table
+    pub fn table(&self) -> Option<&GcPointer<TargetTable>> {
+        self.table.as_ref()
     }
     pub fn is_adding_map(&self) -> bool {
         self.added.0 != DUMMY_SYMBOL
@@ -431,10 +431,10 @@ impl GcPointer<Structure> {
         let mut stack = vm.heap.allocate(Vec::with_capacity(8));
 
         if self.is_adding_map() {
-            stack.push(*self);
+            stack.push(self.clone());
         }
 
-        let mut current = self.previous;
+        let mut current = self.previous.clone();
         loop {
             match current {
                 Some(cur) => {
@@ -444,10 +444,10 @@ impl GcPointer<Structure> {
                         break;
                     } else {
                         if cur.is_adding_map() {
-                            stack.push(cur);
+                            stack.push(cur.clone());
                         }
                     }
-                    current = cur.previous;
+                    current = cur.previous.clone();
                 }
                 None => {
                     self.table = Some(vm.heap().allocate(HashMap::new()));
@@ -456,7 +456,7 @@ impl GcPointer<Structure> {
             }
         }
         assert!(self.table.is_some());
-        let mut table = self.table.unwrap();
+        let table = self.table.as_mut().unwrap();
 
         for it in stack.iter() {
             table.insert((*it).added.0, (*it).added.1);
@@ -488,8 +488,8 @@ impl GcPointer<Structure> {
         !self.is_unique() || self.transitions.is_enabled()
     }
 
-    pub fn prototype(&self) -> Option<GcPointer<JsObject>> {
-        self.prototype
+    pub fn prototype(&self) -> Option<&GcPointer<JsObject>> {
+        self.prototype.as_ref()
     }
 
     pub fn flatten(&mut self) {
@@ -499,7 +499,7 @@ impl GcPointer<Structure> {
     }
 
     pub fn get_slots_size(&self) -> usize {
-        if let Some(table) = self.table {
+        if let Some(table) = self.table.as_ref() {
             table.len() + self.deleted.size as usize
         } else {
             self.calculated_size as _
@@ -515,7 +515,7 @@ impl GcPointer<Structure> {
     ) -> GcPointer<Structure> {
         let mut map = Structure::new_unique(
             vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-            *self,
+            self.clone(),
         );
         if !map.has_table() {
             map.allocate_table(vm);
@@ -528,18 +528,18 @@ impl GcPointer<Structure> {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Structure::new_unique(
                     vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                    *self,
+                    self.clone(),
                 )
             } else {
                 // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                *self
+                self.clone()
             };
             map.transitions.set_indexed(true);
             map
         } else {
             Structure::new_unique(
                 vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                *self,
+                self.clone(),
             )
             .change_indexed_transition(vm)
         }
@@ -554,25 +554,25 @@ impl GcPointer<Structure> {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Structure::new_unique(
                     vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                    *self,
+                    self.clone(),
                 )
             } else {
                 // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                *self
+                self.clone()
             };
             map.prototype = prototype;
             map
         } else {
             let mut map = Structure::new_unique(
                 vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                *self,
+                self.clone(),
             );
             map.change_prototype_transition(vm, prototype)
         }
     }
 
     pub fn change_extensible_transition(&mut self, vm: &mut Runtime) -> GcPointer<Structure> {
-        Structure::new_unique(vm, *self)
+        Structure::new_unique(vm, self.clone())
     }
     pub fn change_attributes_transition(
         &mut self,
@@ -582,7 +582,7 @@ impl GcPointer<Structure> {
     ) -> GcPointer<Structure> {
         let mut map = Structure::new_unique(
             vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-            *self,
+            self.clone(),
         );
         if !map.has_table() {
             map.allocate_table(vm);
@@ -632,11 +632,11 @@ impl GcPointer<Structure> {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Structure::new_unique(
                     vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                    *self,
+                    self.clone(),
                 )
             } else {
                 // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                *self
+                self.clone()
             };
             if !map.deleted.empty() {
                 entry.offset = map.deleted.pop();
@@ -658,14 +658,14 @@ impl GcPointer<Structure> {
             // stop transition
             let mut map = Structure::new_unique(
                 vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                *self,
+                self.clone(),
             );
             // go to above unique path
             return map.add_property_transition(vm, name, attributes, offset);
         }
         let mut map = Structure::new(
             vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-            *self,
+            self.clone(),
         );
 
         if !map.deleted.empty() {
@@ -689,7 +689,7 @@ impl GcPointer<Structure> {
             map.calculated_size = self.get_slots_size() as u32 + 1;
         }
         map.transit_count += 1;
-        self.transitions.insert(vm, name, attributes, map);
+        self.transitions.insert(vm, name, attributes, map.clone());
         *offset = map.added.1.offset;
         assert!(map.get_slots_size() as u32 > map.added.1.offset);
 
@@ -736,6 +736,6 @@ impl GcPointer<Structure> {
     }
     pub fn change_prototype_with_no_transition(&mut self, prototype: GcPointer<JsObject>) -> Self {
         self.prototype = Some(prototype);
-        *self
+        self.clone()
     }
 }

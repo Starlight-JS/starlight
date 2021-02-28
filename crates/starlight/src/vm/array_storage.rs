@@ -3,7 +3,7 @@ use std::mem::size_of;
 use super::{value::JsValue, Runtime};
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
-    SlotVisitor,
+    Heap, SlotVisitor,
 };
 /// A GC-managed resizable vector of values. It is used for storage of property
 /// values in objects and also indexed property values in arrays. It supports
@@ -21,7 +21,7 @@ pub struct ArrayStorage {
 }
 
 impl GcPointer<ArrayStorage> {
-    pub fn resize_within_capacity(&mut self, _rt: &mut Runtime, new_size: u32) {
+    pub fn resize_within_capacity(&mut self, _rt: &mut Heap, new_size: u32) {
         assert!(
             new_size <= self.capacity(),
             "new_size must be <= capacity in resize_Within_capacity"
@@ -40,7 +40,7 @@ impl GcPointer<ArrayStorage> {
         self.size = new_size;
     }
 
-    pub fn ensure_capacity(&mut self, rt: &mut Runtime, capacity: u32) {
+    pub fn ensure_capacity(&mut self, rt: &mut Heap, capacity: u32) {
         assert!(
             capacity <= ArrayStorage::max_elements() as u32,
             "capacity overflows 32-bit storage"
@@ -52,19 +52,19 @@ impl GcPointer<ArrayStorage> {
 
         unsafe { self.reallocate_to_larger(rt, capacity, 0, 0, self.size()) }
     }
-    pub fn resize(&mut self, rt: &mut Runtime, new_size: u32) {
+    pub fn resize(&mut self, rt: &mut Heap, new_size: u32) {
         self.shift(rt, 0, 0, new_size)
     }
 
     #[cold]
-    pub fn push_back_slowpath(&mut self, rt: &mut Runtime, value: JsValue) {
+    pub fn push_back_slowpath(&mut self, rt: &mut Heap, value: JsValue) {
         let size = self.size();
 
         self.resize(rt, self.size() + 1);
         *self.at_mut(size) = value;
     }
 
-    pub fn push_back(&mut self, rt: &mut Runtime, value: JsValue) {
+    pub fn push_back(&mut self, rt: &mut Heap, value: JsValue) {
         let currsz = self.size();
         if currsz < self.capacity() {
             unsafe {
@@ -76,7 +76,7 @@ impl GcPointer<ArrayStorage> {
         self.push_back_slowpath(rt, value)
     }
 
-    pub fn pop_back(&mut self, _rt: &mut Runtime) -> JsValue {
+    pub fn pop_back(&mut self, _rt: &mut Heap) -> JsValue {
         let sz = self.size();
         assert!(sz > 0, "empty ArrayStorage");
 
@@ -94,7 +94,7 @@ impl GcPointer<ArrayStorage> {
         assert!(index < self.size(), "index out of range");
         unsafe { &mut *self.data_mut().add(index as _) }
     }
-    pub fn shift(&mut self, rt: &mut Runtime, from_first: u32, to_first: u32, to_last: u32) {
+    pub fn shift(&mut self, rt: &mut Heap, from_first: u32, to_first: u32, to_last: u32) {
         assert!(to_first <= to_last, "First must be before last");
         assert!(from_first <= self.size, "from_first must be before size");
         unsafe {
@@ -136,7 +136,7 @@ impl GcPointer<ArrayStorage> {
 
     pub unsafe fn reallocate_to_larger(
         &mut self,
-        rt: &mut Runtime,
+        rt: &mut Heap,
         capacity: u32,
         from_first: u32,
         to_first: u32,
@@ -189,13 +189,13 @@ impl ArrayStorage {
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
-    pub fn with_size(rt: &mut Runtime, size: u32, capacity: u32) -> GcPointer<Self> {
+    pub fn with_size(rt: &mut Heap, size: u32, capacity: u32) -> GcPointer<Self> {
         let mut this = Self::new(rt, capacity);
         this.resize_within_capacity(rt, size);
         this
     }
-    pub fn new(rt: &mut Runtime, capacity: u32) -> GcPointer<Self> {
-        let cell = rt.heap().allocate(Self {
+    pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {
+        let cell = rt.allocate(Self {
             capacity,
             size: 0,
             data: [],

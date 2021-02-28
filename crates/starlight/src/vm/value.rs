@@ -239,7 +239,7 @@ impl JsValue {
     #[inline]
     pub fn get_object(&self) -> GcPointer<dyn GcCell> {
         assert!(self.is_object());
-        unsafe { std::mem::transmute(self.0 & Self::DATA_MASK) }
+        unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>(self.0 & Self::DATA_MASK) }.clone()
     }
 
     #[inline]
@@ -258,6 +258,7 @@ impl JsValue {
 
     } else if #[cfg(feature="val-as-f64")] {
 /// A NaN-boxed encoded value.
+
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct JsValue(f64);
@@ -458,7 +459,7 @@ impl JsValue {
     #[inline]
     pub fn get_object(&self) -> GcPointer<dyn GcCell> {
         assert!(self.is_object());
-        unsafe { std::mem::transmute(self.0.to_bits() & Self::DATA_MASK) }
+        unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>(self.0.to_bits() & Self::DATA_MASK) }.clone()
     }
 
     #[inline]
@@ -775,7 +776,7 @@ impl JsValue {
             Ok(self.get_bool().to_string())
         } else if self.is_object() {
             let object = self.get_object();
-            if let Some(jsstr) = object.downcast::<JsString>() {
+            if let Some(jsstr) = object.clone().downcast::<JsString>() {
                 return Ok(jsstr.as_str().to_owned());
             } else if let Some(mut object) = object.downcast::<JsObject>() {
                 return match object.to_primitive(rt, JsHint::String) {
@@ -827,13 +828,13 @@ impl JsValue {
         assert!(!self.is_empty());
         assert!(self.is_primitive());
         if self.is_string() {
-            return vm.global_data().string_prototype.unwrap();
+            return vm.global_data().string_prototype.clone().unwrap();
         } else if self.is_number() {
-            return vm.global_data().number_prototype.unwrap();
+            return vm.global_data().number_prototype.clone().unwrap();
         } else if self.is_bool() {
-            return vm.global_data().boolean_prototype.unwrap();
+            return vm.global_data().boolean_prototype.clone().unwrap();
         } else {
-            return vm.global_data().symbol_prototype.unwrap();
+            return vm.global_data().symbol_prototype.clone().unwrap();
         }
     }
 }

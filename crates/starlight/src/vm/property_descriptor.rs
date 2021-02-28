@@ -12,6 +12,7 @@ pub union PropertyLayout {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+
 pub struct PropertyDescriptor {
     pub attrs: AttrExternal,
     pub value: PropertyLayout,
@@ -431,7 +432,7 @@ impl StoredSlot {
                     JsValue::encode_undefined_value(),
                     JsValue::encode_undefined_value(),
                 );
-                self.value = JsValue::encode_object_value(ac.as_dyn());
+                self.value = JsValue::encode_object_value(ac.clone().as_dyn());
                 ac
             };
             if accs.is_getter_absent() {

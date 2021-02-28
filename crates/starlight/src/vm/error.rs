@@ -19,7 +19,7 @@ impl JsError {
     ) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            structure.unwrap_or_else(|| vm.global_data().error_structure.unwrap()),
+            structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap()),
             Self::get_class(),
             ObjectTag::Ordinary,
         );
@@ -46,7 +46,7 @@ impl JsEvalError {
     ) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            structure.unwrap_or_else(|| vm.global_data().eval_error_structure.unwrap()),
+            structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap()),
             Self::get_class(),
             ObjectTag::Ordinary,
         );
@@ -73,7 +73,7 @@ impl JsRangeError {
     ) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            structure.unwrap_or_else(|| vm.global_data().range_error_structure.unwrap()),
+            structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap()),
             Self::get_class(),
             ObjectTag::Ordinary,
         );
@@ -100,7 +100,8 @@ impl JsReferenceError {
     ) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            structure.unwrap_or_else(|| vm.global_data().reference_error_structure.unwrap()),
+            structure
+                .unwrap_or_else(|| vm.global_data().reference_error_structure.clone().unwrap()),
             Self::get_class(),
             ObjectTag::Ordinary,
         );
@@ -127,7 +128,7 @@ impl JsSyntaxError {
     ) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.unwrap()),
+            structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap()),
             Self::get_class(),
             ObjectTag::Ordinary,
         );
@@ -154,7 +155,7 @@ impl JsTypeError {
     ) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            structure.unwrap_or_else(|| vm.global_data().type_error_structure.unwrap()),
+            structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap()),
             Self::get_class(),
             ObjectTag::Ordinary,
         );

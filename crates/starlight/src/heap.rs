@@ -14,7 +14,7 @@ use self::{
 use crate::utils::ordered_set::OrderedSet;
 use block::*;
 use intrusive_collections::{LinkedList, UnsafeRef};
-use libmimalloc_sys::{mi_free, mi_usable_size};
+use libmimalloc_sys::{mi_free, mi_heap_check_owned, mi_heap_contains_block, mi_usable_size};
 use wtf_rs::keep_on_stack;
 pub mod block;
 pub mod block_set;
@@ -231,7 +231,7 @@ impl SlotVisitor {
         self.bytes_visited += 1;
         self.queue.push_back(base);
     }
-    pub fn visit<T: GcCell + ?Sized>(&mut self, value: GcPointer<T>) {
+    pub fn visit<T: GcCell + ?Sized>(&mut self, value: &GcPointer<T>) {
         unsafe {
             let base = value.base.as_ptr();
             if (*base).is_marked() {
@@ -286,6 +286,7 @@ impl MarkingConstraint for SimpleMarkingConstraint {
 }
 
 pub struct Heap {
+    list: *mut GcPointerBase,
     large: OrderedSet<*mut PreciseAllocation>,
     arenas: [*mut SmallArena; SIZE_CLASSES.len()],
     weak_slots: std::collections::LinkedList<WeakSlot>,
@@ -320,6 +321,7 @@ impl Heap {
         let mut this = Self {
             allocations: HashMap::new(),
             track_allocations,
+            list: null_mut(),
             large: OrderedSet::new(),
             arenas: [null_mut(); SIZE_CLASSES.len()],
             weak_slots: Default::default(),
@@ -416,8 +418,10 @@ impl Heap {
             pointer.write(GcPointerBase::new(vtable as _));
             (*pointer).data::<T>().write(value);
             (*pointer).live();
+            (*pointer).next = self.list;
+            self.list = pointer;
             self.allocated += mi_usable_size(pointer.cast());
-            self.pointers.insert(pointer as _);
+            //  self.pointers.push(pointer as _);
             #[cold]
             #[inline(never)]
             fn track_small(p: *mut u8, size: usize, this: &mut Heap) {
@@ -522,8 +526,8 @@ impl Heap {
                     false
                 }
             });*/
-            let mut allocated = 0;
-            self.pointers.retain(|pointer| {
+            //let mut allocated = 0;
+            /*self.pointers.retain(|pointer| {
                 let ptr = *pointer as *mut GcPointerBase;
                 if (*ptr).is_marked() {
                     (*ptr).unmark();
@@ -536,8 +540,32 @@ impl Heap {
                     mi_free(ptr.cast());
                     false
                 }
-            });
-            self.pointers.shrink_to_fit();
+            });*/
+            let mut prev = null_mut();
+            let mut cur = self.list;
+            self.allocated = 0;
+            while !cur.is_null() {
+                let sz = mi_usable_size(cur.cast());
+                if (*cur).is_marked() {
+                    prev = cur;
+                    cur = (*cur).next;
+                    (*prev).unmark();
+
+                    self.allocated += sz;
+                } else {
+                    let unreached = cur;
+                    cur = (*cur).next;
+                    if !prev.is_null() {
+                        (*prev).next = cur;
+                    } else {
+                        self.list = cur;
+                    }
+                    (*unreached).dead();
+                    std::ptr::drop_in_place((*unreached).get_dyn());
+                    mi_free(unreached.cast());
+                }
+            }
+            //self.pointers.shrink_to_fit();
             /*self.pointers = OrderedSet::from_sorted_set(Vec::with_capacity(visitor.bytes_visited));
             libmimalloc_sys::mi_heap_visit_blocks(
                 self.mi_heap,
@@ -545,7 +573,7 @@ impl Heap {
                 Some(sweep),
                 self as *mut Self as _,
             );*/
-            self.allocated = allocated;
+            //   self.allocated = allocated;
             // self.allocated = visitor.bytes_visited;
             if self.allocated > self.max_heap_size {
                 self.max_heap_size = (self.allocated as f64 * 1.6f64) as usize;
@@ -693,10 +721,20 @@ impl Heap {
         }
         let aligned = (*candidate).header().cell_align(ptr.cast());
         try_ptr(aligned as *mut _);*/
-
+        /*
         if !self.pointers.is_empty() {
             if self.pointers.contains(&(ptr as usize)) {
                 f(self, ptr.cast());
+            }
+        }*/
+
+        if mi_is_in_heap_region(ptr.cast()) {
+            if mi_heap_check_owned(self.mi_heap, ptr.cast()) {
+                if mi_heap_contains_block(self.mi_heap, ptr.cast()) {
+                    if (*ptr.cast::<GcPointerBase>()).is_live() {
+                        f(self, ptr.cast());
+                    }
+                }
             }
         }
     }
@@ -778,4 +816,8 @@ unsafe extern "C" fn sweep(
     }
 
     true
+}
+
+extern "C" {
+    fn mi_is_in_heap_region(p: *const ()) -> bool;
 }

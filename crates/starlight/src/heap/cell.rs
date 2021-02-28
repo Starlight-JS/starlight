@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
     mem::size_of,
     ops::{Deref, DerefMut},
-    ptr::NonNull,
+    ptr::{null_mut, NonNull},
 };
 
 use mopa::mopafy;
@@ -67,6 +67,7 @@ mopafy!(GcCell);
 #[repr(C)]
 pub struct GcPointerBase {
     vtable: u64,
+    pub next: *mut Self,
     // mark: bool,
     //dead: bool,
 }
@@ -75,6 +76,7 @@ impl GcPointerBase {
     pub fn new(vtable: usize) -> Self {
         Self {
             vtable: vtable as _,
+            next: null_mut(),
             //mark: false,
             // dead: true,
         }
@@ -153,7 +155,7 @@ pub struct GcPointer<T: ?Sized> {
 }
 
 impl<T: GcCell + ?Sized> GcPointer<T> {
-    pub fn ptr_eq<U: GcCell + ?Sized>(this: Self, other: GcPointer<U>) -> bool {
+    pub fn ptr_eq<U: GcCell + ?Sized>(this: &Self, other: &GcPointer<U>) -> bool {
         this.base == other.base
     }
     #[inline]
@@ -258,7 +260,7 @@ unsafe impl<T: Trace> Trace for Vec<T> {
 
 unsafe impl<T: GcCell + ?Sized> Trace for GcPointer<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
-        visitor.visit(*self);
+        visitor.visit(self);
     }
 }
 

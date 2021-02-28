@@ -101,15 +101,15 @@ impl JsFunction {
         match self.ty {
             FuncType::Native(ref x) => (x.func)(vm, args),
             FuncType::User(ref x) => {
-                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope), args)
+                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args)
             }
             FuncType::Bound(ref x) => {
                 let mut args = Arguments {
-                    values: x.args,
+                    values: x.args.clone(),
                     this: x.this,
                     ctor_call: args.ctor_call,
                 };
-                let mut target = x.target;
+                let mut target = x.target.clone();
                 target.as_function_mut().call(vm, &mut args)
             }
         }
@@ -387,7 +387,7 @@ unsafe impl Trace for JsFunction {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct JsVMFunction {
     pub code: GcPointer<CodeBlock>,
     pub scope: GcPointer<JsObject>,
@@ -401,7 +401,10 @@ impl JsVMFunction {
         // let vm = vm.space().new_local_context();
         let envs = Structure::new_indexed(vm, Some(env), false);
         let scope = JsObject::new(vm, envs, JsObject::get_class(), ObjectTag::Ordinary);
-        let f = JsVMFunction { code, scope: scope };
+        let f = JsVMFunction {
+            code: code.clone(),
+            scope: scope,
+        };
 
         let mut this = JsFunction::new(vm, FuncType::User(f), false);
         let mut proto = JsObject::new_empty(vm);
@@ -409,7 +412,7 @@ impl JsVMFunction {
         let _ = proto.define_own_property(
             vm,
             "constructor".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(this), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(this.clone()), W | C),
             false,
         );
         let desc = vm.description(code.name);
@@ -434,18 +437,18 @@ impl GcPointer<JsObject> {
         &mut self,
         vm: &mut Runtime,
     ) -> Result<GcPointer<Structure>, JsValue> {
-        let obj = *self;
+        let obj = self.clone();
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
 
         let vm = vm;
-        if let Some(s) = func.construct_struct {
+        if let Some(s) = func.construct_struct.clone() {
             return Ok(s);
         }
 
         let mut slot = Slot::new();
         let proto = "prototype".intern();
-        let res = JsObject::GetNonIndexedSlotMethod(obj, vm, proto, &mut slot)?;
+        let res = JsObject::GetNonIndexedSlotMethod(obj.clone(), vm, proto, &mut slot)?;
         let structure = unsafe {
             Structure::new_indexed(
                 vm,
@@ -460,11 +463,12 @@ impl GcPointer<JsObject> {
         if slot.is_load_cacheable()
             && slot
                 .base()
-                .map(|base| GcPointer::ptr_eq(base, obj))
+                .as_ref()
+                .map(|base| GcPointer::ptr_eq(&base, &obj))
                 .unwrap_or(false)
             && slot.attributes().is_data()
         {
-            func.construct_struct = Some(structure);
+            func.construct_struct = Some(structure.clone());
         }
 
         Ok(structure)
