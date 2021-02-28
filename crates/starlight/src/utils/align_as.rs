@@ -6,7 +6,7 @@ use core::ops::{Deref, DerefMut};
 /// of structures that are generic over alignment.
 ///
 /// Example:
-/// ```
+/// ```rust,ignore
 /// extern crate alignas;
 /// use alignas::AlignAs;
 /// use std::{mem, slice};
