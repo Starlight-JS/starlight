@@ -11,7 +11,8 @@ use std::{
 use self::cell::{GcCell, GcPointer, GcPointerBase, WeakRef, WeakSlot, WeakState};
 use crate::utils::ordered_set::OrderedSet;
 use libmimalloc_sys::{
-    mi_free, mi_heap_check_owned, mi_heap_contains_block, mi_heap_destroy, mi_usable_size,
+    mi_free, mi_heap_check_owned, mi_heap_contains_block, mi_heap_destroy, mi_heap_visit_blocks,
+    mi_usable_size,
 };
 use wtf_rs::keep_on_stack;
 pub mod cell;
@@ -167,8 +168,8 @@ impl Heap {
             pointer.write(GcPointerBase::new(vtable as _));
             (*pointer).data::<T>().write(value);
             (*pointer).live();
-            (*pointer).next = self.list;
-            self.list = pointer;
+            //(*pointer).next = self.list;
+            //self.list = pointer;
             self.allocated += mi_usable_size(pointer.cast());
             //  self.pointers.push(pointer as _);
             #[cold]
@@ -293,10 +294,11 @@ impl Heap {
                     false
                 }
             });*/
-            let mut prev = null_mut();
-            let mut cur = self.list;
+            //let mut prev = null_mut();
+            //let mut cur = self.list;
             self.allocated = 0;
-            while !cur.is_null() {
+            //self.list = null_mut();
+            /* while !cur.is_null() {
                 let sz = mi_usable_size(cur.cast());
                 if (*cur).is_marked() {
                     prev = cur;
@@ -316,15 +318,15 @@ impl Heap {
                     std::ptr::drop_in_place((*unreached).get_dyn());
                     mi_free(unreached.cast());
                 }
-            }
+            }*/
             //self.pointers.shrink_to_fit();
-            /*self.pointers = OrderedSet::from_sorted_set(Vec::with_capacity(visitor.bytes_visited));
+            /*self.pointers = OrderedSet::from_sorted_set(Vec::with_capacity(visitor.bytes_visited));*/
             libmimalloc_sys::mi_heap_visit_blocks(
                 self.mi_heap,
                 true,
                 Some(sweep),
                 self as *mut Self as _,
-            );*/
+            );
             //   self.allocated = allocated;
             // self.allocated = visitor.bytes_visited;
             if self.allocated > self.max_heap_size {
@@ -493,12 +495,13 @@ impl Heap {
 impl Drop for Heap {
     fn drop(&mut self) {
         unsafe {
-            let mut cur = self.list;
+            /*let mut cur = self.list;
             while !cur.is_null() {
                 let next = (*cur).next;
                 std::ptr::drop_in_place((*cur).get_dyn());
                 cur = next;
-            }
+            }*/
+            mi_heap_visit_blocks(self.mi_heap, true, Some(sweep), self as *mut Self as _);
             mi_heap_destroy(self.mi_heap);
         }
     }
@@ -525,8 +528,8 @@ unsafe extern "C" fn sweep(
         mi_free(ptr.cast());
     } else {
         heap.allocated += block_sz;
-        (*ptr).next = heap.list;
-        heap.list = ptr;
+        //(*ptr).next = heap.list;
+        //heap.list = ptr;
         (*ptr).unmark();
     }
 

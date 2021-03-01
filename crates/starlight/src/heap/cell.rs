@@ -56,6 +56,7 @@ pub unsafe trait Trace {
 /// is no-op on them.
 ///
 pub trait GcCell: mopa::Any + Trace {
+    /// Used when object has dynamic size i.e arrays
     fn compute_size(&self) -> usize {
         std::mem::size_of_val(self)
     }
@@ -67,16 +68,14 @@ mopafy!(GcCell);
 #[repr(C)]
 pub struct GcPointerBase {
     vtable: u64,
-    pub next: *mut Self,
-    // mark: bool,
-    //dead: bool,
+    //pub next: *mut Self,
 }
 
 impl GcPointerBase {
     pub fn new(vtable: usize) -> Self {
         Self {
             vtable: vtable as _,
-            next: null_mut(),
+            //  next: null_mut(),
             //mark: false,
             // dead: true,
         }
@@ -163,6 +162,11 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
 
 impl<T: GcCell + ?Sized> GcPointer<T> {
     #[inline]
+    pub fn is<U: GcCell>(self) -> bool {
+        unsafe { (*self.base.as_ptr()).vtable() == vtable_of_type::<U>() }
+    }
+
+    #[inline]
     pub fn get_dyn(&self) -> &dyn GcCell {
         unsafe { (*self.base.as_ptr()).get_dyn() }
     }
@@ -170,18 +174,6 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
     #[inline]
     pub fn get_dyn_mut(&mut self) -> &mut dyn GcCell {
         unsafe { (*self.base.as_ptr()).get_dyn() }
-    }
-
-    #[inline]
-    pub fn is<U: GcCell>(self) -> bool {
-        unsafe {
-            println!(
-                "{:x} {:x}",
-                (*self.base.as_ptr()).vtable(),
-                vtable_of_type::<U>()
-            );
-        }
-        unsafe { (*self.base.as_ptr()).vtable() == vtable_of_type::<U>() }
     }
 
     #[inline]
