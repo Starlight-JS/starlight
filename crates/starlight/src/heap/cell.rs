@@ -8,7 +8,7 @@ use std::{
 
 use mopa::mopafy;
 
-use super::{precise_allocation::PreciseAllocation, SlotVisitor};
+use super::SlotVisitor;
 
 /// Indicates that a type can be traced by a garbage collector.
 ///
@@ -122,13 +122,7 @@ impl GcPointerBase {
             })
         }
     }
-    pub fn is_precise_allocation(&self) -> bool {
-        PreciseAllocation::is_precise(self as *const Self as *mut ())
-    }
 
-    pub fn precise_allocation(&self) -> *mut PreciseAllocation {
-        PreciseAllocation::from_cell(self as *const Self as *mut _)
-    }
     pub fn vtable(&self) -> usize {
         (self.vtable & !(0x07)) as usize
     }
