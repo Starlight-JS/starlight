@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
     mem::size_of,
     ops::{Deref, DerefMut},
-    ptr::{null_mut, NonNull},
+    ptr::NonNull,
 };
 
 use mopa::mopafy;
@@ -314,3 +314,4 @@ unsafe impl<T: Trace> Trace for Option<T> {
 }
 
 impl<T: Trace + 'static> GcCell for Vec<T> {}
+impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {}

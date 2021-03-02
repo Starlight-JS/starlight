@@ -17,8 +17,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
     populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, long_lived);
-
-    let mut array = ArrayStorage::with_size(&mut rt, ARRAY_SIZE as _, ARRAY_SIZE as _);
+    let arr = ArrayStorage::with_size(&mut rt, ARRAY_SIZE as _, ARRAY_SIZE as _);
+    let mut array = rt.allocate(arr);
     for i in 0..(ARRAY_SIZE / 2) {
         *array.at_mut(i as _) = JsValue::encode_f64_value(1.0 / i as f64);
     }
@@ -69,7 +69,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     }
 
     if long_lived.j != 0xdead || array.at(1000).get_number() != 1.0 / 1000.0 {
-        println!("Failed");
+        println!(
+            "Failed (j = {}, array[1000] = {})",
+            long_lived.j,
+            array.at(1000).get_number()
+        );
     }
 }
 
@@ -84,7 +88,7 @@ pub struct Node {
 }
 const STRETCH_TREE_DEPTH: usize = 18;
 const LONG_LIVED_TREE_DEPTH: usize = 16;
-const ARRAY_SIZE: usize = 2000;
+const ARRAY_SIZE: usize = 500000;
 const MIN_TREE_DEPTH: usize = 4;
 const MAX_TREE_DEPTH: usize = 16;
 

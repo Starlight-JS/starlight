@@ -1,6 +1,6 @@
 use std::mem::size_of;
 
-use super::{value::JsValue, Runtime};
+use super::value::JsValue;
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
     Heap, SlotVisitor,
