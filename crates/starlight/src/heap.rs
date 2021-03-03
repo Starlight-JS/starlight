@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crossbeam::queue::SegQueue;
 use std::{
     collections::{HashMap, VecDeque},
     intrinsics::unlikely,
@@ -8,7 +9,10 @@ use std::{
     sync::atomic::AtomicBool,
 };
 
-use self::cell::{GcCell, GcPointer, GcPointerBase, WeakRef, WeakSlot, WeakState};
+use self::cell::{
+    GcCell, GcPointer, GcPointerBase, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
+    POSSIBLY_BLACK, POSSIBLY_GREY,
+};
 use crate::utils::ordered_set::OrderedSet;
 use libmimalloc_sys::{
     mi_free, mi_good_size, mi_heap_check_owned, mi_heap_collect, mi_heap_contains_block,
@@ -29,22 +33,17 @@ pub fn usable_size<T: GcCell + ?Sized>(value: GcPointer<T>) -> usize {
 }
 impl SlotVisitor {
     unsafe fn visit_raw(&mut self, base: *mut GcPointerBase) {
-        if (*base).is_marked() {
+        if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
             return;
         }
-
-        (*base).mark();
         self.queue.push_back(base);
     }
     pub fn visit<T: GcCell + ?Sized>(&mut self, value: &GcPointer<T>) {
         unsafe {
             let base = value.base.as_ptr();
-            if (*base).is_marked() {
+            if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
                 return;
             }
-
-            (*base).mark();
-
             self.queue.push_back(base);
         }
     }
@@ -102,6 +101,7 @@ pub struct Heap {
     track_allocations: bool,
     allocations: HashMap<*mut GcPointerBase, String>,
     mi_heap: *mut libmimalloc_sys::mi_heap_t,
+    write_queue: SegQueue<usize>,
 }
 
 impl Heap {
@@ -130,6 +130,7 @@ impl Heap {
             constraints: vec![],
             sp: 0,
             defers: 0,
+            write_queue: SegQueue::new(),
             allocated: 0,
             max_heap_size: 4 * 1024,
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
@@ -168,7 +169,7 @@ impl Heap {
             let vtable = std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn GcCell).vtable;
             pointer.write(GcPointerBase::new(vtable as _));
             (*pointer).data::<T>().write(value);
-            (*pointer).live();
+            // (*pointer).live();
 
             self.allocated += mi_good_size(real_size);
             #[cold]
@@ -253,10 +254,10 @@ impl Heap {
                 #[inline(never)]
                 unsafe fn cleanup_allocations(this: &mut Heap) {
                     this.allocations.retain(|alloc, info| {
-                        if !(**alloc).is_marked() {
+                        if (**alloc).state() == DEFINETELY_WHITE {
                             println!("retain {:p} \n{}", *alloc, info);
                         }
-                        (**alloc).is_marked()
+                        (**alloc).state() == POSSIBLY_BLACK
                     });
                 }
                 cleanup_allocations(self);
@@ -293,7 +294,7 @@ impl Heap {
                     unsafe {
                         let cell = &*slot.value;
 
-                        if !cell.is_marked() {
+                        if cell.state() == DEFINETELY_WHITE {
                             slot.value = null_mut();
                         }
                     }
@@ -356,6 +357,7 @@ impl Heap {
     fn process_worklist(&mut self, visitor: &mut SlotVisitor) {
         while let Some(ptr) = visitor.queue.pop_front() {
             unsafe {
+                (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
                 (*ptr).get_dyn().trace(visitor);
             }
         }
@@ -368,9 +370,7 @@ impl Heap {
         //if mi_is_in_heap_region(ptr.cast()) {
         if mi_heap_check_owned(self.mi_heap, ptr.cast()) {
             if mi_heap_contains_block(self.mi_heap, ptr.cast()) {
-                if (*ptr.cast::<GcPointerBase>()).is_live() {
-                    f(self, ptr.cast());
-                }
+                f(self, ptr.cast());
             }
         }
         //}
@@ -410,9 +410,7 @@ unsafe extern "C" fn sweep(
     }
     let heap = &mut *(arg.cast::<Heap>());
     let ptr = block.cast::<GcPointerBase>();
-    if !(*ptr).is_marked() {
-        (*ptr).dead();
-        (*ptr).unmark();
+    if (*ptr).state() == DEFINETELY_WHITE {
         std::ptr::drop_in_place((*ptr).get_dyn());
 
         mi_free(ptr.cast());
@@ -420,7 +418,7 @@ unsafe extern "C" fn sweep(
         heap.allocated += block_sz;
         //(*ptr).next = heap.list;
         //heap.list = ptr;
-        (*ptr).unmark();
+        assert!((*ptr).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
     }
 
     true

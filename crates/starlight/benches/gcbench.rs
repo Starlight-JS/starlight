@@ -4,12 +4,15 @@ use starlight::{
         cell::{GcCell, GcPointer, Trace},
         Heap, SlotVisitor,
     },
-    vm::{array_storage::ArrayStorage, value::JsValue},
+    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
+    Platform,
 };
 use wtf_rs::keep_on_stack;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut rt = Heap::new(false);
+    Platform::initialize();
+    let mut rrt = Runtime::new(false);
+    let mut rt = rrt.heap();
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
     let mut long_lived = rt.allocate(Node::new(None, None));

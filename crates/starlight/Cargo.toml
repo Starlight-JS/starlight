@@ -17,6 +17,7 @@ libc = "0.2"
 libmimalloc-sys = { version = "0.1", features = ["extended"] }
 starlight-derive = { path = "../starlight-derive" }
 backtrace = "0.3"
+crossbeam = "0.8"
 [features]
 val-as-f64 = []
 val-as-u64 = []

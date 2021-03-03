@@ -4,6 +4,7 @@ use std::{
     mem::size_of,
     ops::{Deref, DerefMut},
     ptr::NonNull,
+    sync::atomic::{AtomicU8, Ordering},
 };
 
 use mopa::mopafy;
@@ -64,21 +65,35 @@ pub trait GcCell: mopa::Any + Trace {
 
 mopafy!(GcCell);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct GcPointerBase {
     vtable: u64,
-    //pub next: *mut Self,
+    cell_state: AtomicU8, //pub next: *mut Self,
 }
+
+pub const POSSIBLY_BLACK: u8 = 0;
+pub const POSSIBLY_GREY: u8 = 2;
+pub const DEFINETELY_WHITE: u8 = 1;
 
 impl GcPointerBase {
     pub fn new(vtable: usize) -> Self {
         Self {
-            vtable: vtable as _,
+            vtable: (vtable as u64 | 0),
+            cell_state: AtomicU8::new(DEFINETELY_WHITE),
             //  next: null_mut(),
             //mark: false,
             // dead: true,
         }
+    }
+
+    pub fn state(&self) -> u8 {
+        self.cell_state.load(Ordering::Acquire)
+    }
+
+    pub fn set_state(&self, from: u8, to: u8) -> bool {
+        self.cell_state
+            .compare_exchange(from, to, Ordering::AcqRel, Ordering::Relaxed)
+            == Ok(from)
     }
     pub fn data<T>(&self) -> *mut T {
         unsafe {
@@ -116,14 +131,14 @@ impl GcPointerBase {
     pub fn get_dyn(&self) -> &mut dyn GcCell {
         unsafe {
             std::mem::transmute(mopa::TraitObject {
-                vtable: (self.vtable & !(0x07)) as *mut (),
+                vtable: (self.vtable) as *mut (),
                 data: self.data::<u8>() as _,
             })
         }
     }
 
     pub fn vtable(&self) -> usize {
-        (self.vtable & !(0x07)) as usize
+        (self.vtable) as usize
     }
 }
 pub fn vtable_of<T: GcCell>(x: *const T) -> usize {
