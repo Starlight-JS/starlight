@@ -31,6 +31,7 @@ use property_descriptor::*;
 use value::*;
 pub struct Runtime {
     heap: Box<Heap>,
+    pub(crate) stack: Stack,
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
 }
@@ -50,6 +51,7 @@ impl Runtime {
         let heap = Box::new(Heap::new(track_allocations));
         let mut this = Box::new(Self {
             heap,
+            stack: Stack::new(),
             global_object: None,
             global_data: GlobalData::default(),
         });
@@ -140,6 +142,7 @@ use wtf_rs::{keep_on_stack, unwrap_unchecked};
 use self::{
     function::JsNativeFunction,
     global::JsGlobal,
+    interpreter::stack::Stack,
     object::JsObject,
     structure::Structure,
     symbol_table::{Internable, Symbol},

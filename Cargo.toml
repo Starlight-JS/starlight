@@ -5,7 +5,7 @@ default-members = ["crates/starlight"]
 [profile.release]
 lto = true
 debug = true
-opt-level = 2
+opt-level = 3
 
 [profile.bench]
 lto = true

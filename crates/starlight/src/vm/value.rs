@@ -1,6 +1,6 @@
 use crate::heap::{cell::*, SlotVisitor};
 use cfg_if::cfg_if;
-use std::intrinsics::likely;
+use std::{hint::unreachable_unchecked, intrinsics::likely};
 
 use super::{
     error::*,
@@ -721,7 +721,7 @@ impl JsValue {
         Self::compare(self, rhs, true, rt)
     }
     pub fn to_number(self, rt: &mut Runtime) -> Result<f64, JsValue> {
-        if self.is_double() {
+        if likely(self.is_double()) {
             Ok(self.get_double())
         } else if self.is_object() && self.get_object().is::<JsString>() {
             let s = unsafe { self.get_object().downcast_unchecked::<JsString>() };
@@ -745,7 +745,7 @@ impl JsValue {
                 Err(e) => Err(e),
             }
         } else {
-            todo!()
+            unsafe { unreachable_unchecked() }
         }
     }
 

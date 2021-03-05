@@ -1,4 +1,5 @@
 use core::ops::{Deref, DerefMut};
+use std::mem::ManuallyDrop;
 
 /// Wrap an object of type T to give it the alignment requirements of an object of type A.
 ///
@@ -21,15 +22,20 @@ use core::ops::{Deref, DerefMut};
 /// ints.copy_from_slice(unsafe { slice::from_raw_parts(ptr, 8) });
 /// ```
 #[repr(C)]
-pub union AlignAs<T: Copy, A: Copy> {
+pub union AlignAs<T: Copy, A> {
     t: T,
-    _marker: A,
+    _marker: ManuallyDrop<A>,
 }
 
-impl<T: Copy, A: Copy> AlignAs<T, A> {
+impl<T: Copy, A> AlignAs<T, A> {
     #[inline]
     pub fn new(t: T) -> Self {
         AlignAs { t }
+    }
+
+    #[inline]
+    pub fn raw(&self) -> *const T {
+        self as *const Self as *const T
     }
 }
 

@@ -308,3 +308,7 @@ macro_rules! offset_of_tuple {
         _memoffset_offset_from!(field_ptr, base_ptr)
     }};
 }
+
+pub const fn round_up(x: usize, y: usize) -> usize {
+    ((x) + (y - 1)) & !(y - 1)
+}

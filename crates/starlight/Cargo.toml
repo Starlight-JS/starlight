@@ -21,7 +21,7 @@ crossbeam = "0.8"
 [features]
 val-as-f64 = []
 val-as-u64 = []
-
+enable-gc-tracking = []
 default = ["val-as-f64"]
 
 [dev-dependencies]

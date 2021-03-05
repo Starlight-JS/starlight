@@ -401,11 +401,7 @@ impl ArithProfile {
     pub fn observe_lhs(&mut self, val: JsValue) {
         let mut new_profile = *self;
         if val.is_number() {
-            if val.is_int32() {
-                new_profile.lhs_saw_int32();
-            } else {
-                new_profile.lhs_saw_number();
-            }
+            new_profile.lhs_saw_number();
         } else {
             new_profile.lhs_saw_non_number();
         }
@@ -414,11 +410,7 @@ impl ArithProfile {
     pub fn observe_rhs(&mut self, val: JsValue) {
         let mut new_profile = *self;
         if val.is_number() {
-            if val.is_int32() {
-                new_profile.rhs_saw_int32();
-            } else {
-                new_profile.rhs_saw_number();
-            }
+            new_profile.rhs_saw_number();
         } else {
             new_profile.rhs_saw_non_number();
         }

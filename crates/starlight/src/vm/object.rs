@@ -17,12 +17,9 @@ use super::{
     Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
-use crate::{
-    heap::{
-        cell::{GcCell, GcPointer, Trace},
-        SlotVisitor,
-    },
-    utils::align_as::AlignAs,
+use crate::heap::{
+    cell::{GcCell, GcPointer, Trace},
+    SlotVisitor,
 };
 use std::{
     collections::hash_map::Entry,
@@ -94,7 +91,7 @@ pub struct JsObject {
     pub(crate) indexed: GcPointer<IndexedElements>,
     pub(crate) slots: FixedStorage,
     pub(crate) flags: u32,
-    pub(crate) object_data_start: u64,
+    pub(crate) object_data_start: u8,
 }
 impl JsObject {
     pub fn direct(&self, n: usize) -> &JsValue {

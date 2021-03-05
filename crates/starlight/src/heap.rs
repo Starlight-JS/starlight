@@ -6,7 +6,7 @@ use std::{
     mem::size_of,
     mem::transmute,
     ptr::{null_mut, NonNull},
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, AtomicU8},
 };
 
 use self::cell::{
@@ -87,6 +87,12 @@ impl MarkingConstraint for SimpleMarkingConstraint {
     }
 }
 
+pub const GC_NONE: u8 = 0;
+pub const GC_PRE_MARK: u8 = 1;
+pub const GC_CONCURRENT_MARK: u8 = 2;
+pub const GC_AFTER_MARK: u8 = 3;
+pub const GC_SWEEP: u8 = 4;
+
 pub struct Heap {
     list: *mut GcPointerBase,
     #[allow(dead_code)]
@@ -102,6 +108,8 @@ pub struct Heap {
     allocations: HashMap<*mut GcPointerBase, String>,
     mi_heap: *mut libmimalloc_sys::mi_heap_t,
     write_queue: SegQueue<usize>,
+    gc_state: AtomicU8,
+    needs_to_stop: AtomicBool,
 }
 
 impl Heap {
@@ -124,6 +132,7 @@ impl Heap {
             allocations: HashMap::new(),
             should_stop: AtomicBool::new(false),
             track_allocations,
+            gc_state: AtomicU8::new(0),
             list: null_mut(),
             large: OrderedSet::new(),
             weak_slots: Default::default(),
@@ -134,6 +143,7 @@ impl Heap {
             allocated: 0,
             max_heap_size: 4 * 1024,
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
+            needs_to_stop: AtomicBool::new(false),
         };
 
         this.add_constraint(SimpleMarkingConstraint::new("thread roots", |visitor| {
@@ -182,6 +192,7 @@ impl Heap {
                 );
                 this.allocations.insert(p.cast(), fmt);
             }
+            #[cfg(feature = "enable-gc-tracking")]
             if unlikely(self.track_allocations) {
                 track_small(pointer.cast(), mi_usable_size(pointer.cast()), self);
             }
@@ -248,7 +259,7 @@ impl Heap {
             self.process_worklist(&mut visitor);
             self.update_weak_references();
             self.reset_weak_references();
-
+            #[cfg(feature = "enable-gc-tracking")]
             if self.track_allocations {
                 #[cold]
                 #[inline(never)]

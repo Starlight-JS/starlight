@@ -40,6 +40,7 @@ pub struct Structure {
     id: StructureID,
     transitions: TransitionsTable,
     table: Option<GcPointer<TargetTable>>,
+    /// Singly linked list
     deleted: DeletedEntryHolder,
     added: (Symbol, MapEntry),
     previous: Option<GcPointer<Structure>>,
@@ -513,10 +514,7 @@ impl GcPointer<Structure> {
         vm: &mut Runtime,
         name: Symbol,
     ) -> GcPointer<Structure> {
-        let mut map = Structure::new_unique(
-            vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-            self.clone(),
-        );
+        let mut map = Structure::new_unique(vm, self.clone());
         if !map.has_table() {
             map.allocate_table(vm);
         }
@@ -526,22 +524,14 @@ impl GcPointer<Structure> {
     pub fn change_indexed_transition(&mut self, vm: &mut Runtime) -> GcPointer<Structure> {
         if self.is_unique() {
             let mut map = if self.transitions.is_enabled_unique_transition() {
-                Structure::new_unique(
-                    vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                    self.clone(),
-                )
+                Structure::new_unique(vm, self.clone())
             } else {
-                // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
                 self.clone()
             };
             map.transitions.set_indexed(true);
             map
         } else {
-            Structure::new_unique(
-                vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                self.clone(),
-            )
-            .change_indexed_transition(vm)
+            Structure::new_unique(vm, self.clone()).change_indexed_transition(vm)
         }
     }
 
@@ -552,21 +542,14 @@ impl GcPointer<Structure> {
     ) -> GcPointer<Structure> {
         if self.is_unique() {
             let mut map = if self.transitions.is_enabled_unique_transition() {
-                Structure::new_unique(
-                    vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                    self.clone(),
-                )
+                Structure::new_unique(vm, self.clone())
             } else {
-                // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
                 self.clone()
             };
             map.prototype = prototype;
             map
         } else {
-            let mut map = Structure::new_unique(
-                vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                self.clone(),
-            );
+            let mut map = Structure::new_unique(vm, self.clone());
             map.change_prototype_transition(vm, prototype)
         }
     }
@@ -580,10 +563,7 @@ impl GcPointer<Structure> {
         name: Symbol,
         attributes: AttrSafe,
     ) -> GcPointer<Structure> {
-        let mut map = Structure::new_unique(
-            vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-            self.clone(),
-        );
+        let mut map = Structure::new_unique(vm, self.clone());
         if !map.has_table() {
             map.allocate_table(vm);
         }
@@ -630,12 +610,8 @@ impl GcPointer<Structure> {
             }
 
             let mut map = if self.transitions.is_enabled_unique_transition() {
-                Structure::new_unique(
-                    vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                    self.clone(),
-                )
+                Structure::new_unique(vm, self.clone())
             } else {
-                // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
                 self.clone()
             };
             if !map.deleted.empty() {
@@ -656,17 +632,11 @@ impl GcPointer<Structure> {
         }
         if self.transit_count > 64 {
             // stop transition
-            let mut map = Structure::new_unique(
-                vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-                self.clone(),
-            );
+            let mut map = Structure::new_unique(vm, self.clone());
             // go to above unique path
             return map.add_property_transition(vm, name, attributes, offset);
         }
-        let mut map = Structure::new(
-            vm, // Heap::from_raw is safe here as there is no way to allocate JsObject not in the GcPointer heap.
-            self.clone(),
-        );
+        let mut map = Structure::new(vm, self.clone());
 
         if !map.deleted.empty() {
             let slot = map.deleted.pop();
