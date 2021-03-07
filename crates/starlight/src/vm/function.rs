@@ -28,6 +28,35 @@ pub enum FuncType {
 
 #[allow(non_snake_case)]
 impl JsFunction {
+    pub fn has_instance(
+        &self,
+        this: GcPointer<JsObject>,
+        rt: &mut Runtime,
+        val: JsValue,
+    ) -> Result<bool, JsValue> {
+        if !val.is_jsobject() {
+            return Ok(false);
+        }
+
+        let got = this.get(rt, "prototype".intern())?;
+        if !got.is_jsobject() {
+            let msg = JsString::new(rt, "'prototype' is not object");
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                rt, msg, None,
+            )));
+        }
+
+        let proto = got.get_jsobject();
+        let mut obj = val.get_jsobject().prototype().copied();
+        while let Some(obj_) = obj {
+            if GcPointer::ptr_eq(&obj_, &proto) {
+                return Ok(true);
+            } else {
+                obj = obj_.prototype().copied();
+            }
+        }
+        Ok(false)
+    }
     pub fn is_strict(&self) -> bool {
         match self.ty {
             FuncType::Native(_) => false,

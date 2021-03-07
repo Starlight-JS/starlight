@@ -1,6 +1,6 @@
 use crate::{
     heap::{
-        cell::{GcPointer, Trace},
+        cell::{GcPointer, Trace, WeakRef},
         SlotVisitor,
     },
     vm::structure::Structure,
@@ -15,7 +15,7 @@ pub enum ObservedType {
 
 pub enum TypeFeedBack {
     PropertyCache {
-        structure: GcPointer<Structure>,
+        structure: WeakRef<Structure>,
         offset: u32,
     },
     None,

@@ -1,6 +1,9 @@
 use crate::heap::{cell::*, SlotVisitor};
 use cfg_if::cfg_if;
-use std::{hint::unreachable_unchecked, intrinsics::likely};
+use std::{
+    hint::unreachable_unchecked,
+    intrinsics::{likely, unlikely},
+};
 
 use super::{
     error::*,
@@ -720,6 +723,21 @@ impl JsValue {
     pub fn compare_left(self, rhs: Self, rt: &mut Runtime) -> Result<i32, JsValue> {
         Self::compare(self, rhs, true, rt)
     }
+    pub fn to_int32(self, rt: &mut Runtime) -> Result<i32, JsValue> {
+        let number = self.to_number(rt)?;
+        if unlikely(number.is_nan() || number.is_infinite()) {
+            return Ok(0);
+        }
+        Ok(number.floor() as i32)
+    }
+
+    pub fn to_uint32(self, rt: &mut Runtime) -> Result<u32, JsValue> {
+        let number = self.to_number(rt)?;
+        if unlikely(number.is_nan() || number.is_infinite()) {
+            return Ok(0);
+        }
+        Ok(number.floor() as u32)
+    }
     pub fn to_number(self, rt: &mut Runtime) -> Result<f64, JsValue> {
         if likely(self.is_double()) {
             Ok(self.get_double())
@@ -836,6 +854,11 @@ impl JsValue {
         } else {
             return vm.global_data().symbol_prototype.clone().unwrap();
         }
+    }
+
+    pub fn get_jsobject(self) -> GcPointer<JsObject> {
+        assert!(self.is_jsobject());
+        unsafe { self.get_object().downcast_unchecked() }
     }
 }
 

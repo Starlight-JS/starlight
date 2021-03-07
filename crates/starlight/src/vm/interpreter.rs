@@ -1,4 +1,10 @@
-use crate::bytecode::profile::*;
+use self::frame::CallFrame;
+use super::{
+    arguments::*, array::*, attributes::*, code_block::CodeBlock, error::JsTypeError, error::*,
+    function::JsVMFunction, object::*, property_descriptor::*, slot::*, string::JsString,
+    structure::*, symbol_table::*, value::*, Runtime,
+};
+use crate::bytecode::*;
 use crate::{
     bytecode::opcodes::Opcode,
     heap::{
@@ -6,16 +12,12 @@ use crate::{
         SlotVisitor,
     },
 };
-use wtf_rs::unwrap_unchecked;
-
-use self::frame::CallFrame;
-
-use super::{
-    arguments::*, array::*, attributes::*, code_block::CodeBlock, error::JsTypeError, error::*,
-    function::JsVMFunction, object::*, property_descriptor::*, slot::*, string::JsString,
-    structure::*, symbol_table::*, value::*, Runtime,
+use std::{
+    hint::unreachable_unchecked,
+    intrinsics::{likely, unlikely},
+    mem::size_of,
 };
-use std::{hint::unreachable_unchecked, intrinsics::likely, mem::size_of};
+use wtf_rs::unwrap_unchecked;
 pub mod frame;
 pub mod stack;
 
@@ -265,9 +267,266 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let rhs = rhs.to_number(rt)?;
                 frame.push(JsValue::encode_f64_value(lhs % rhs));
             }
+            Opcode::OP_SHL => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+
+                let left = lhs.to_int32(rt)?;
+                let right = rhs.to_uint32(rt)?;
+                frame.push(JsValue::encode_f64_value((left << (right & 0x1f)) as f64));
+            }
+            Opcode::OP_SHR => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+
+                let left = lhs.to_int32(rt)?;
+                let right = rhs.to_uint32(rt)?;
+                frame.push(JsValue::encode_f64_value((left >> (right & 0x1f)) as f64));
+            }
+
+            Opcode::OP_USHR => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+
+                let left = lhs.to_uint32(rt)?;
+                let right = rhs.to_uint32(rt)?;
+                frame.push(JsValue::encode_f64_value((left >> (right & 0x1f)) as f64));
+            }
+            Opcode::OP_LESS => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(
+                    lhs.compare(rhs, true, rt)? == CMP_TRUE,
+                ));
+            }
+            Opcode::OP_LESSEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(
+                    rhs.compare(lhs, false, rt)? == CMP_FALSE,
+                ));
+            }
+
+            Opcode::OP_GREATER => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(
+                    rhs.compare(lhs, false, rt)? == CMP_TRUE,
+                ));
+            }
+            Opcode::OP_GREATEREQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(
+                    lhs.compare(rhs, true, rt)? == CMP_FALSE,
+                ));
+            }
+
+            Opcode::OP_INSTANCEOF => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                if unlikely(!rhs.is_jsobject()) {
+                    let msg = JsString::new(rt, "'instanceof' requires object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+
+                let robj = rhs.get_jsobject();
+                if unlikely(!robj.is_callable()) {
+                    let msg = JsString::new(rt, "'instanceof' requires constructor");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+
+                frame.push(JsValue::encode_bool_value(
+                    robj.as_function().has_instance(robj, rt, lhs)?,
+                ));
+            }
+            Opcode::OP_IN => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                if unlikely(!rhs.is_jsobject()) {
+                    let msg = JsString::new(rt, "'in' requires object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+                let sym = lhs.to_symbol(rt)?;
+                frame.push(JsValue::encode_bool_value(
+                    rhs.get_jsobject().has_property(rt, sym),
+                ));
+            }
+
+            Opcode::OP_EQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(lhs.abstract_equal(rhs, rt)?));
+            }
+            Opcode::OP_STRICTEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(lhs.strict_equal(rhs)));
+            }
+            Opcode::OP_NEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(!lhs.abstract_equal(rhs, rt)?));
+            }
+            Opcode::OP_NSTRICTEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
+            }
+            Opcode::OP_GET_ENV => {
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                let result = 'search: loop {
+                    let mut current = Some((*frame).env.get_jsobject());
+                    while let Some(env) = current {
+                        if (Env { record: env }).has_own_variable(rt, name) {
+                            break 'search Some(env);
+                        }
+                        current = env.prototype().copied();
+                    }
+                    break 'search None;
+                };
+
+                match result {
+                    Some(env) => frame.push(JsValue::encode_object_value(env)),
+                    None => frame.push(JsValue::encode_undefined_value()),
+                }
+            }
+
+            Opcode::OP_GET_VAR => {
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                let value = get_var(rt, name, frame, fdbk)?;
+                frame.push(value);
+            }
+            Opcode::OP_SET_VAR => {
+                let val = frame.pop();
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                set_var(rt, frame, name, fdbk, val)?;
+            }
             _ => unreachable_unchecked(),
         }
     }
+}
+fn get_env(rt: &mut Runtime, frame: &mut CallFrame, name: Symbol) -> Option<GcPointer<JsObject>> {
+    'search: loop {
+        let mut current = Some((*frame).env.get_jsobject());
+        while let Some(env) = current {
+            if (Env { record: env }).has_own_variable(rt, name) {
+                break 'search Some(env);
+            }
+            current = env.prototype().copied();
+        }
+        break 'search None;
+    }
+}
+
+unsafe fn get_var(
+    rt: &mut Runtime,
+    name: Symbol,
+    frame: &mut CallFrame,
+    fdbk: u32,
+) -> Result<JsValue, JsValue> {
+    let env = get_env(rt, frame, name);
+    let env = match env {
+        Some(env) => env,
+        None => rt.global_object(),
+    };
+
+    if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
+        .feedback
+        .get_unchecked(fdbk as usize)
+    {
+        if let Some(structure) = structure.upgrade() {
+            if GcPointer::ptr_eq(&structure, &env.structure()) {
+                return Ok(*env.direct(*offset as usize));
+            }
+        }
+    }
+
+    let mut slot = Slot::new();
+    if likely(env.get_own_property_slot(rt, name, &mut slot)) {
+        *unwrap_unchecked(frame.code_block)
+            .feedback
+            .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+            structure: rt.heap().make_weak(env.structure()),
+            offset: slot.offset(),
+        };
+
+        let value = slot.value();
+        return Ok(value);
+    };
+    let msg = JsString::new(
+        rt,
+        format!("Undeclared variable '{}'", rt.description(name)),
+    );
+    Err(JsValue::encode_object_value(JsReferenceError::new(
+        rt, msg, None,
+    )))
+}
+
+unsafe fn set_var(
+    rt: &mut Runtime,
+    frame: &mut CallFrame,
+    name: Symbol,
+    fdbk: u32,
+    val: JsValue,
+) -> Result<(), JsValue> {
+    let env = get_env(rt, frame, name);
+    let mut env = match env {
+        Some(env) => env,
+        None if !unwrap_unchecked(frame.code_block).strict => rt.global_object(),
+        _ => {
+            let msg = JsString::new(
+                rt,
+                format!("Unresolved reference '{}'", rt.description(name)),
+            );
+            return Err(JsValue::encode_object_value(JsReferenceError::new(
+                rt, msg, None,
+            )));
+        }
+    };
+    if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
+        .feedback
+        .get_unchecked(fdbk as usize)
+    {
+        if let Some(structure) = structure.upgrade() {
+            if GcPointer::ptr_eq(&structure, &env.structure()) {
+                *env.direct_mut(*offset as usize) = val;
+            }
+        }
+    }
+
+    let mut slot = Slot::new();
+    assert!(env.get_own_property_slot(rt, name, &mut slot));
+    *unwrap_unchecked(frame.code_block)
+        .feedback
+        .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+        structure: rt.heap().make_weak(env.structure()),
+        offset: slot.offset(),
+    };
+    *env.direct_mut(slot.offset() as usize) = val;
+    Ok(())
 }
 
 /// Type used internally in JIT/interpreter to represent spread result.

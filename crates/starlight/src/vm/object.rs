@@ -241,6 +241,7 @@ impl JsObject {
                 Some(obj.as_dyn()),
                 entry.offset,
             );
+
             return true;
         }
         false

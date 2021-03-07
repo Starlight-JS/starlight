@@ -1,7 +1,10 @@
 use super::symbol_table::Symbol;
 use super::value::JsValue;
-use crate::heap::cell::{GcCell, Trace};
 use crate::heap::SlotVisitor;
+use crate::{
+    bytecode::TypeFeedBack,
+    heap::cell::{GcCell, Trace},
+};
 use starlight_derive::GcTrace;
 #[derive(GcTrace)]
 pub struct CodeBlock {
@@ -12,6 +15,7 @@ pub struct CodeBlock {
     pub names: Vec<Symbol>,
     pub code: Vec<u8>,
     pub literals: Vec<JsValue>,
+    pub feedback: Vec<TypeFeedBack>,
     pub strict: bool,
 }
 

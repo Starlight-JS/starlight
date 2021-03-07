@@ -113,7 +113,7 @@ pub struct Heap {
 }
 
 impl Heap {
-    pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> GcPointer<WeakRef<T>> {
+    pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
         let slot = WeakSlot {
             value: p.base.as_ptr(),
             state: WeakState::Unmarked,
@@ -124,7 +124,7 @@ impl Heap {
                 inner: NonNull::new_unchecked(self.weak_slots.back().unwrap() as *const _ as *mut _),
                 marker: Default::default(),
             };
-            self.allocate(weak)
+            weak
         }
     }
     pub fn new(track_allocations: bool) -> Self {
