@@ -2,7 +2,6 @@
 use crossbeam::queue::SegQueue;
 use std::{
     collections::{HashMap, VecDeque},
-    intrinsics::unlikely,
     mem::size_of,
     mem::transmute,
     ptr::{null_mut, NonNull},
@@ -16,11 +15,12 @@ use self::cell::{
 use crate::utils::ordered_set::OrderedSet;
 use libmimalloc_sys::{
     mi_free, mi_good_size, mi_heap_check_owned, mi_heap_collect, mi_heap_contains_block,
-    mi_heap_destroy, mi_heap_malloc_small, mi_heap_visit_blocks, mi_usable_size,
+    mi_heap_destroy, mi_heap_visit_blocks,
 };
 use wtf_rs::keep_on_stack;
 pub mod cell;
 pub mod marker_thread;
+pub mod rcheap;
 pub struct SlotVisitor {
     queue: VecDeque<*mut GcPointerBase>,
 
@@ -113,6 +113,20 @@ pub struct Heap {
 }
 
 impl Heap {
+    pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
+        let slot = WeakSlot {
+            value: 0 as *mut _,
+            state: WeakState::Unmarked,
+        };
+        self.weak_slots.push_back(slot);
+        unsafe {
+            let weak = WeakRef {
+                inner: NonNull::new_unchecked(self.weak_slots.back().unwrap() as *const _ as *mut _),
+                marker: Default::default(),
+            };
+            weak
+        }
+    }
     pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
         let slot = WeakSlot {
             value: p.base.as_ptr(),
@@ -302,6 +316,7 @@ impl Heap {
                     if slot.value.is_null() {
                         continue;
                     }
+
                     unsafe {
                         let cell = &*slot.value;
 
@@ -315,9 +330,13 @@ impl Heap {
     }
 
     fn reset_weak_references(&mut self) {
-        for slot in self.weak_slots.iter_mut() {
-            if slot.state == WeakState::Mark {
-                slot.state = WeakState::Unmarked;
+        let mut cursor = self.weak_slots.cursor_front_mut();
+        while let Some(item) = cursor.current() {
+            if item.state == WeakState::Free {
+                cursor.remove_current();
+            } else {
+                item.state = WeakState::Unmarked;
+                cursor.move_next();
             }
         }
     }
@@ -437,4 +456,11 @@ unsafe extern "C" fn sweep(
 
 extern "C" {
     fn mi_is_in_heap_region(p: *const u8) -> bool;
+}
+
+impl<T: GcCell> Copy for WeakRef<T> {}
+impl<T: GcCell> Clone for WeakRef<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }

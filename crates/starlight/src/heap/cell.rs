@@ -230,6 +230,7 @@ impl<T: GcCell> WeakRef<T> {
         unsafe {
             let inner = &*self.inner.as_ptr();
             if inner.value.is_null() {
+                println!("upgrade failed");
                 return None;
             }
 

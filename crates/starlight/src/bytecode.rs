@@ -1,6 +1,6 @@
 use crate::{
     heap::{
-        cell::{GcPointer, Trace, WeakRef},
+        cell::{Trace, WeakRef},
         SlotVisitor,
     },
     vm::structure::Structure,

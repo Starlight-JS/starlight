@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use wtf_rs::unwrap_unchecked;
 
 use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
+    cell::{GcCell, GcPointer, Trace, WeakRef},
     SlotVisitor,
 };
 
@@ -86,7 +86,7 @@ unsafe impl Trace for TransitionKey {}
 pub enum Transition {
     None,
     Table(Option<GcPointer<Table>>),
-    Pair(TransitionKey, Option<GcPointer<Structure>>),
+    Pair(TransitionKey, WeakRef<Structure>),
 }
 
 pub struct TransitionsTable {
@@ -138,9 +138,9 @@ impl TransitionsTable {
             self.var = Transition::Table(Some(table));
         }
         if let Transition::Table(Some(ref mut table)) = self.var {
-            table.insert(key, Some(map));
+            table.insert(key, vm.heap().make_weak(map));
         } else {
-            self.var = Transition::Pair(key, Some(map));
+            self.var = Transition::Pair(key, vm.heap().make_weak(map));
         }
     }
 
@@ -150,10 +150,14 @@ impl TransitionsTable {
             attrs: attrs.raw(),
         };
         if let Transition::Table(ref table) = &self.var {
-            return table.as_ref().unwrap().get(&key).cloned().flatten();
+            return table
+                .as_ref()
+                .unwrap()
+                .get(&key)
+                .and_then(|structure| structure.upgrade());
         } else if let Transition::Pair(key_, map) = &self.var {
             if key == *key_ {
-                return map.clone();
+                return map.upgrade();
             }
         }
         None
@@ -167,7 +171,7 @@ impl TransitionsTable {
     }
 }
 
-type Table = HashMap<TransitionKey, Option<GcPointer<Structure>>>;
+type Table = HashMap<TransitionKey, WeakRef<Structure>>;
 
 unsafe impl Trace for TransitionsTable {
     fn trace(&self, tracer: &mut SlotVisitor) {

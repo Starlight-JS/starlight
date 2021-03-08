@@ -22,6 +22,8 @@ crossbeam = "0.8"
 val-as-f64 = []
 val-as-u64 = []
 enable-gc-tracking = []
+# enable compressed RC which stores RC in 5 bits
+compressed-rc = []
 default = ["val-as-f64"]
 
 [dev-dependencies]
