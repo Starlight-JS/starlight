@@ -16,8 +16,8 @@ use crate::heap::{
 use std::mem::ManuallyDrop;
 
 pub struct JsFunction {
-    construct_struct: Option<GcPointer<Structure>>,
-    ty: FuncType,
+    pub construct_struct: Option<GcPointer<Structure>>,
+    pub ty: FuncType,
 }
 
 pub enum FuncType {

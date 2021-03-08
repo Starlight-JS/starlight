@@ -6,8 +6,10 @@ use std::{
 };
 
 use super::{
+    attributes::*,
     error::*,
     object::{JsHint, JsObject},
+    slot::*,
     string::JsString,
     symbol_table::*,
     Runtime,
@@ -859,6 +861,63 @@ impl JsValue {
     pub fn get_jsobject(self) -> GcPointer<JsObject> {
         assert!(self.is_jsobject());
         unsafe { self.get_object().downcast_unchecked() }
+    }
+
+    pub fn get_slot(
+        self,
+        rt: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        if !self.is_jsobject() {
+            if self.is_null() {
+                let msg = JsString::new(rt, "null does not have properties");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    rt, msg, None,
+                )));
+            }
+
+            if self.is_undefined() {
+                let msg = JsString::new(rt, "undefined does not have properties");
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    rt, msg, None,
+                )));
+            }
+
+            assert!(self.is_primitive());
+            if self.is_js_string() {
+                let str = unsafe { self.get_object().downcast_unchecked::<JsString>() };
+
+                if name == "length".intern() {
+                    slot.set_1(
+                        JsValue::encode_f64_value(str.len() as _),
+                        string_length(),
+                        Some(str.as_dyn()),
+                    );
+                    return Ok(slot.value());
+                }
+
+                if let Symbol::Index(index) = name {
+                    if index < str.len() {
+                        let char = str
+                            .as_str()
+                            .chars()
+                            .nth(index as usize)
+                            .map(|x| JsValue::encode_object_value(JsString::new(rt, x.to_string())))
+                            .unwrap_or(JsValue::encode_undefined_value());
+                        slot.set_1(char, string_indexed(), Some(str.as_dyn()));
+                        return Ok(slot.value());
+                    }
+                }
+            }
+            let proto = self.get_primitive_proto(rt);
+            if proto.get_property_slot(rt, name, slot) {
+                return slot.get(rt, self);
+            }
+            return Ok(JsValue::encode_undefined_value());
+        }
+
+        self.get_jsobject().get_slot(rt, name, slot)
     }
 }
 

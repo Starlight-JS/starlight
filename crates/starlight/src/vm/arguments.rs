@@ -25,6 +25,17 @@ pub struct Arguments {
 }
 
 impl Arguments {
+    pub fn from_array_storage(
+        rt: &mut Runtime,
+        this: JsValue,
+        values: GcPointer<ArrayStorage>,
+    ) -> Self {
+        Self {
+            this,
+            values,
+            ctor_call: false,
+        }
+    }
     pub fn size(&self) -> usize {
         self.values.size() as _
     }

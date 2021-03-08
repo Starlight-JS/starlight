@@ -99,6 +99,15 @@ impl Stack {
 
 unsafe impl Trace for Stack {
     fn trace(&self, visitor: &mut SlotVisitor) {
-        visitor.add_conservative_roots(self.start as _, self.cursor as _);
+        if !self.current.is_null() {
+            unsafe {
+                visitor.add_conservative_roots(self.start as _, (*self.current).sp as _);
+                let mut frame = self.current;
+                while !frame.is_null() {
+                    (*frame).trace(visitor);
+                    frame = (*frame).prev;
+                }
+            }
+        }
     }
 }

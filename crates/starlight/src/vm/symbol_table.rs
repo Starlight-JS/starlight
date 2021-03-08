@@ -58,7 +58,18 @@ pub enum Symbol {
     Key(SymbolID),
     Index(u32),
 }
+impl Symbol {
+    pub fn is_index(self) -> bool {
+        match self {
+            Self::Index(_) => true,
+            _ => false,
+        }
+    }
 
+    pub fn is_key(self) -> bool {
+        !self.is_index()
+    }
+}
 impl GcCell for Symbol {}
 unsafe impl Trace for Symbol {}
 
