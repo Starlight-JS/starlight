@@ -268,8 +268,17 @@ impl Heap {
             queue: VecDeque::new(),
             sp: self.sp,
         };
+
         unsafe {
+            let registers = crate::vm::thread::Thread::capture_registers();
+            if !registers.is_empty() {
+                visitor.cons_roots.push((
+                    registers.first().unwrap() as *const usize as _,
+                    registers.last().unwrap() as *const usize as _,
+                ));
+            }
             self.process_roots(&mut visitor);
+            drop(registers);
             self.process_worklist(&mut visitor);
             self.update_weak_references();
             self.reset_weak_references();
@@ -300,7 +309,7 @@ impl Heap {
             if self.allocated > self.max_heap_size {
                 self.max_heap_size = (self.allocated as f64 * 1.5f64) as usize;
             }
-            mi_heap_collect(self.mi_heap, true);
+            mi_heap_collect(self.mi_heap, false);
         }
     }
 
