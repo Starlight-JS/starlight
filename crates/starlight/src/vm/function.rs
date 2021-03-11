@@ -349,7 +349,7 @@ pub type JsAPI = fn(vm: &mut Runtime, arguments: &Arguments) -> Result<JsValue, 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct JsNativeFunction {
-    func: JsAPI,
+    pub(crate) func: JsAPI,
 }
 
 impl JsNativeFunction {

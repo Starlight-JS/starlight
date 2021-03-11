@@ -86,14 +86,7 @@ impl GcPointer<ArrayStorage> {
             val
         }
     }
-    pub fn at(&self, index: u32) -> &JsValue {
-        assert!(index < self.size(), "index out of range");
-        unsafe { &*self.data().add(index as _) }
-    }
-    pub fn at_mut(&mut self, index: u32) -> &mut JsValue {
-        assert!(index < self.size(), "index out of range");
-        unsafe { &mut *self.data_mut().add(index as _) }
-    }
+
     pub fn shift(&mut self, rt: &mut Heap, from_first: u32, to_first: u32, to_last: u32) {
         assert!(to_first <= to_last, "First must be before last");
         assert!(from_first <= self.size, "from_first must be before size");
@@ -215,6 +208,14 @@ impl ArrayStorage {
     }
     pub fn as_slice_mut(&mut self) -> &mut [JsValue] {
         unsafe { std::slice::from_raw_parts_mut(self.data_mut(), self.size as _) }
+    }
+    pub fn at(&self, index: u32) -> &JsValue {
+        assert!(index < self.size(), "index out of range");
+        unsafe { &*self.data().add(index as _) }
+    }
+    pub fn at_mut(&mut self, index: u32) -> &mut JsValue {
+        assert!(index < self.size(), "index out of range");
+        unsafe { &mut *self.data_mut().add(index as _) }
     }
 }
 

@@ -30,10 +30,11 @@ use object::*;
 use property_descriptor::*;
 use value::*;
 pub struct Runtime {
-    heap: Box<Heap>,
+    pub(crate) heap: Box<Heap>,
     pub(crate) stack: Stack,
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
+    pub(crate) external_references: Option<Box<[usize]>>,
 }
 
 impl Runtime {
@@ -47,16 +48,17 @@ impl Runtime {
         &mut self.heap
     }
 
-    pub fn new(track_allocations: bool) -> Box<Runtime> {
+    pub fn new(track_allocations: bool, external_references: Option<Box<[usize]>>) -> Box<Runtime> {
         let heap = Box::new(Heap::new(track_allocations));
         let mut this = Box::new(Self {
             heap,
             stack: Stack::new(),
             global_object: None,
             global_data: GlobalData::default(),
+            external_references,
         });
         let vm = &mut *this as *mut Runtime;
-        this.heap.defer_gc();
+        this.heap.defer();
         this.heap.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",
             move |visitor| {
@@ -122,7 +124,7 @@ impl Runtime {
         keep_on_stack!(&mut proto);
         this.init_func(proto);
 
-        this.heap.undefer_gc();
+        this.heap.undefer();
 
         this
     }

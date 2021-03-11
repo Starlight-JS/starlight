@@ -1,3 +1,59 @@
+//! # Starlight's memory heap
+//!
+//!
+//! In JavaScript memory is managed automatically and invisibly to users. Starlight for this "magic" implements
+//! tracing garbage collector.
+//!
+//! # Algorithm
+//!
+//! - *Marking*: The collector marks objects as it finds references to them. Objects not marked are deleted.
+//!  Most of the collector’s time is spent visiting objects to find references to other objects.
+//! - *Constraints*: The collector allows to supply additional constraints on when objects should
+//!  be marked, to support custom object lifetime rules.
+//! - *Conservatism*: The collector scans the stack and registers conservatively, that is, checking each word
+//!     to see if it is in the bounds of some object and then marking it if it is. This means that all of the Rust, assembly, and just-in-time (JIT) compiler-generated code in our system
+//!     can store heap pointers in local variables without any hassles.
+//!
+//!
+//! # Allocation
+//! [mimalloc](https://github.com/microsoft/mimalloc) is used for allocation. MiMalloc offers great allocation speed, cache locality,
+//! wide range of API that helps us to implement sweeping and conservative scanning very effectively.
+//!
+//! # Conservative roots
+//!
+//!
+//! Garbage collection begins by looking at local variables and some global state to figure out the initial set
+//! of marked objects. Introspecting the values of local variables is tricky. Starlight uses Rust local variables
+//! for pointers to the garbage collector’s heap, but C-like languages provide no facility for precisely
+//! introspecting the values of specific variables of arbitrary stack frames. Starlight solves this problem
+//! by marking objects conservatively when scanning roots. We use mimalloc in part because it makes it easy to ask whether an arbitrary pointer could possibly be a pointer to some object.
+//! We view this as an important optimization. Without conservative root scanning, Rust code would have to use some API to notify the collector about what objects it points to. Conservative root scanning means not having to do any of that work.
+//!
+//!
+//!
+//! # Why not reference counting?
+//!
+//!
+//! I considered using reference counting for Starlight but then decided to keep using mostly-precise GC. RC is not just
+//! slower at mutator times but also does not prevent cycles, increases object header size and makes it harder to work with
+//! objects at JIT level.
+//!
+//!
+//! # Why not use existing Rust crate for GC?
+//!
+//!
+//! All of these crates is fully precise collectors which require you to use special API to handle rooted objects which
+//! sometimes comes with big overhed (i.e rust-gc crate which is really slow). Our GC allows for GC pointers to be copyable
+//! and handled with zero overhead.
+//!
+//! # Why not use BDWGC?
+//!
+//! Boehm-Demers-Wise's GC is great library and it is used in many projects but it does not suit Starlight use:
+//! - It can't scan Rust standard library types.
+//! - No support for weak references which is necessary for inline caches and JS `WeakRef` type.
+//! - Quite slow compared to what we have implemented.
+//! - There's no API for proper precise marking.
+//!
 #![allow(dead_code)]
 use crossbeam::queue::SegQueue;
 use std::{
@@ -14,13 +70,13 @@ use self::cell::{
 };
 use crate::utils::ordered_set::OrderedSet;
 use libmimalloc_sys::{
-    mi_free, mi_good_size, mi_heap_check_owned, mi_heap_collect, mi_heap_contains_block,
-    mi_heap_destroy, mi_heap_visit_blocks,
+    mi_free, mi_good_size, mi_heap_area_t, mi_heap_check_owned, mi_heap_collect,
+    mi_heap_contains_block, mi_heap_destroy, mi_heap_t, mi_heap_visit_blocks,
 };
 use wtf_rs::keep_on_stack;
 pub mod cell;
-pub mod marker_thread;
-pub mod rcheap;
+pub mod snapshot;
+/// Visits garbage collected objects
 pub struct SlotVisitor {
     queue: VecDeque<*mut GcPointerBase>,
 
@@ -38,6 +94,7 @@ impl SlotVisitor {
         }
         self.queue.push_back(base);
     }
+    /// Visit a reference to the specified value
     pub fn visit<T: GcCell + ?Sized>(&mut self, value: &GcPointer<T>) {
         unsafe {
             let base = value.base.as_ptr();
@@ -47,9 +104,11 @@ impl SlotVisitor {
             self.queue.push_back(base);
         }
     }
+    /// Add pointer range for scanning for GC objects.
     pub fn add_conservative_roots(&mut self, from: usize, to: usize) {
         self.cons_roots.push((from, to));
     }
+    /// Visit weak reference.
     pub fn visit_weak<T: GcCell>(&mut self, slot: &WeakRef<T>) {
         unsafe {
             let inner = &mut *slot.inner.as_ptr();
@@ -93,11 +152,12 @@ pub const GC_CONCURRENT_MARK: u8 = 2;
 pub const GC_AFTER_MARK: u8 = 3;
 pub const GC_SWEEP: u8 = 4;
 
+/// Garbage collected heap.
 pub struct Heap {
     list: *mut GcPointerBase,
     #[allow(dead_code)]
     large: OrderedSet<*mut GcPointerBase>,
-    weak_slots: std::collections::LinkedList<WeakSlot>,
+    pub(crate) weak_slots: std::collections::LinkedList<WeakSlot>,
     constraints: Vec<Box<dyn MarkingConstraint>>,
     sp: usize,
     defers: usize,
@@ -106,13 +166,57 @@ pub struct Heap {
     max_heap_size: usize,
     track_allocations: bool,
     allocations: HashMap<*mut GcPointerBase, String>,
-    mi_heap: *mut libmimalloc_sys::mi_heap_t,
+    pub(crate) mi_heap: *mut libmimalloc_sys::mi_heap_t,
     write_queue: SegQueue<usize>,
     gc_state: AtomicU8,
     needs_to_stop: AtomicBool,
 }
 
 impl Heap {
+    pub(crate) fn walk(heap: *mut mi_heap_t, mut closure: impl FnMut(usize, usize) -> bool) {
+        unsafe extern "C" fn walk(
+            _heap: *const mi_heap_t,
+            _area: *const mi_heap_area_t,
+            block: *mut libc::c_void,
+            block_sz: usize,
+            arg: *mut libc::c_void,
+        ) -> bool {
+            if block.is_null() {
+                return true;
+            }
+            let closure: *mut dyn FnMut(usize, usize) -> bool =
+                std::mem::transmute(*arg.cast::<(usize, usize)>());
+
+            (&mut *closure)(block as usize, block_sz)
+        }
+
+        let f: &mut dyn FnMut(usize, usize) -> bool = &mut closure;
+        let trait_obj: (usize, usize) = unsafe { std::mem::transmute(f) };
+        unsafe {
+            mi_heap_visit_blocks(
+                heap,
+                true,
+                Some(walk),
+                &trait_obj as *const (usize, usize) as _,
+            );
+        }
+    }
+    #[deprecated(since = "0.0.0", note = "Write barrier is not used anywhere for now")]
+    pub fn write_barrier<T: GcCell, U: GcCell>(&self, object: GcPointer<T>, field: GcPointer<U>) {
+        unsafe {
+            let object_base = &mut *object.base.as_ptr();
+            let field_base = &mut *field.base.as_ptr();
+            if object_base.state() == POSSIBLY_BLACK && field_base.state() == DEFINETELY_WHITE {
+                self.add_to_remembered_set(object_base);
+            }
+        }
+    }
+
+    fn add_to_remembered_set(&self, object: &mut GcPointerBase) {
+        object.force_set_state(POSSIBLY_GREY);
+        self.write_queue.push(object as *mut _ as usize);
+    }
+    /// Create null WeakRef. This weak will always return None on [WeakRef::upgrade](WeakRef::upgrade).  
     pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
         let slot = WeakSlot {
             value: 0 as *mut _,
@@ -127,6 +231,7 @@ impl Heap {
             weak
         }
     }
+    /// Create WeakRef<T> from GC pointer.
     pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
         let slot = WeakSlot {
             value: p.base.as_ptr(),
@@ -166,18 +271,27 @@ impl Heap {
                 crate::vm::thread::THREAD.with(|th| th.bounds.origin as usize),
             );
         }));
+
         this
     }
+    /// Add marking constraint to constraints list. It will be executed at start of GC cycle.
     pub fn add_constraint(&mut self, constraint: impl MarkingConstraint + 'static) {
         self.constraints.push(Box::new(constraint));
     }
-
+    /// Trigger GC cycle if necessary.
     pub fn collect_if_necessary(&mut self) {
         if self.allocated >= self.max_heap_size {
             self.gc();
         }
     }
 
+    /// Allocate `value` in GC heap.
+    ///
+    ///
+    /// Returns value allocated on GC heap. Note that this function might trigger GC cycle but in most cases
+    /// it is quite fast to call function and it is most of the time is inlined.
+    ///
+    ///
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
         self.collect_if_necessary();
@@ -193,8 +307,6 @@ impl Heap {
             let vtable = std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn GcCell).vtable;
             pointer.write(GcPointerBase::new(vtable as _));
             (*pointer).data::<T>().write(value);
-            // (*pointer).live();
-
             self.allocated += mi_good_size(real_size);
             #[cold]
             #[inline(never)]
@@ -216,6 +328,9 @@ impl Heap {
             }
         }
     }
+    /// Defer GC. GC will not happen until [undefer](Heap::undefer) is invoked.
+    ///
+    /// TODO: Mark this function as unsafe or add `DeferGC` type which undefers GC when goes out of scope.
     pub fn defer(&mut self) {
         self.defers += 1;
     }
@@ -229,6 +344,7 @@ impl Heap {
             self.collect_if_necessary();
         }
     }
+    /// Trigger garbage collection cycle.
     #[inline(never)]
     pub fn gc(&mut self) {
         let x = self as *const Self as usize;
@@ -257,6 +373,10 @@ impl Heap {
             sp = &sp as *const usize as usize;
             sp
         }
+        // Capture all the registers to scan them conservatively. Note that this also captures
+        // FPU registers too because JS values is NaN boxed and exist in FPU registers.
+        let registers = crate::vm::thread::Thread::capture_registers();
+        // Get stack pointer for scanning thread stack.
         self.sp = current_stack_pointer();
         if self.defers > 0 {
             return;
@@ -270,7 +390,6 @@ impl Heap {
         };
 
         unsafe {
-            let registers = crate::vm::thread::Thread::capture_registers();
             if !registers.is_empty() {
                 visitor.cons_roots.push((
                     registers.first().unwrap() as *const usize as _,
@@ -312,7 +431,22 @@ impl Heap {
             mi_heap_collect(self.mi_heap, false);
         }
     }
-
+    /// Update all weak references.
+    ///
+    ///
+    /// Algorithm:
+    /// ```rust,ignore
+    /// for weak_slot in weak_slots {
+    ///     if weak_slot.is_marked() {
+    ///         if !weak_slot.object.is_marked() {
+    ///             weak_slot.object = NULL;
+    ///         }
+    ///     }
+    ///     
+    /// }
+    ///
+    /// ```
+    ///
     fn update_weak_references(&mut self) {
         for slot in self.weak_slots.iter_mut() {
             match slot.state {
@@ -337,7 +471,8 @@ impl Heap {
             }
         }
     }
-
+    /// Walk all weak slots and reset them. If slot is free then it is unlinked from slots linked list
+    /// otherwise it is just unmarked.
     fn reset_weak_references(&mut self) {
         let mut cursor = self.weak_slots.cursor_front_mut();
         while let Some(item) = cursor.current() {
@@ -349,8 +484,14 @@ impl Heap {
             }
         }
     }
-    #[doc(hidden)]
-    pub fn process_roots(&mut self, visitor: &mut SlotVisitor) {
+    /// This function marks all potential roots.
+    ///
+    ///
+    /// How it works:
+    /// - Execute all marking constraints
+    /// - Scan pointer ranges that were added to `SlotVisitor` during execution of constraints
+    /// for potential root objects.
+    fn process_roots(&mut self, visitor: &mut SlotVisitor) {
         unsafe {
             let mut constraints = std::mem::replace(&mut self.constraints, vec![]);
             for constraint in constraints.iter_mut() {
@@ -392,7 +533,18 @@ impl Heap {
             }
         }
     }
-
+    /// Process mark stack marking all values from it in LIFO way.
+    ///
+    ///
+    /// This function is very simple:
+    ///
+    /// ```rust,ignore
+    /// while let Some(object) = visitor.queue.pop_front() {
+    ///     grey2black(object);
+    ///     object.vtable.trace(object,visitor);
+    /// }
+    /// ```
+    ///
     fn process_worklist(&mut self, visitor: &mut SlotVisitor) {
         while let Some(ptr) = visitor.queue.pop_front() {
             unsafe {
@@ -401,28 +553,22 @@ impl Heap {
             }
         }
     }
+    /// Tried to find GC object for marking at `ptr`.
+    ///
+    ///
+    /// TODO: Interior pointers. Right now this function just checks if `ptr` is a block allocated inside mimalloc heap.
+    ///
+    ///
+    ///
     unsafe fn find_gc_object_pointer_for_marking(
         &mut self,
         ptr: *mut u8,
         mut f: impl FnMut(&mut Self, *mut GcPointerBase),
     ) {
-        //if mi_is_in_heap_region(ptr.cast()) {
         if mi_heap_check_owned(self.mi_heap, ptr.cast()) {
             if mi_heap_contains_block(self.mi_heap, ptr.cast()) {
                 f(self, ptr.cast());
             }
-        }
-        //}
-    }
-
-    pub fn defer_gc(&mut self) {
-        self.defers += 1;
-    }
-
-    pub fn undefer_gc(&mut self) {
-        self.defers -= 1;
-        if self.defers == 0 {
-            self.collect_if_necessary();
         }
     }
 }
@@ -444,6 +590,7 @@ unsafe extern "C" fn sweep(
     block_sz: usize,
     arg: *mut libc::c_void,
 ) -> bool {
+    // weird, mimalloc passes NULL pointer at first iteration.
     if block.is_null() {
         return true;
     }
@@ -455,16 +602,10 @@ unsafe extern "C" fn sweep(
         mi_free(ptr.cast());
     } else {
         heap.allocated += block_sz;
-        //(*ptr).next = heap.list;
-        //heap.list = ptr;
         assert!((*ptr).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
     }
 
     true
-}
-
-extern "C" {
-    fn mi_is_in_heap_region(p: *const u8) -> bool;
 }
 
 impl<T: GcCell> Copy for WeakRef<T> {}

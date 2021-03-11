@@ -862,7 +862,10 @@ impl JsValue {
         assert!(self.is_jsobject());
         unsafe { self.get_object().downcast_unchecked() }
     }
-
+    pub fn get_jsstring(self) -> GcPointer<JsString> {
+        assert!(self.is_js_string());
+        unsafe { self.get_object().downcast_unchecked() }
+    }
     pub fn get_slot(
         self,
         rt: &mut Runtime,
@@ -918,6 +921,21 @@ impl JsValue {
         }
 
         self.get_jsobject().get_slot(rt, name, slot)
+    }
+
+    pub fn to_boolean(self) -> bool {
+        if self.is_number() {
+            let num = self.get_number();
+            return num != 0.0 && !num.is_nan();
+        } else if self.is_js_string() {
+            return !self.get_jsstring().is_empty();
+        } else if self.is_null() || self.is_undefined() {
+            return false;
+        } else if self.is_bool() {
+            return self.get_bool();
+        } else {
+            return true;
+        }
     }
 }
 

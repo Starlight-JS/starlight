@@ -21,8 +21,8 @@ pub type DenseArrayMap = ArrayStorage;
 pub struct IndexedElements {
     pub(crate) map: Option<GcPointer<SparseArrayMap>>,
     pub(crate) vector: GcPointer<DenseArrayMap>,
-    length: u32,
-    flags: u32,
+    pub(crate) length: u32,
+    pub(crate) flags: u32,
 }
 
 impl IndexedElements {

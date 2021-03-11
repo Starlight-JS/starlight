@@ -1,22 +1,18 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use gc::{Gc, GcCell};
 use gc_derive::Trace;
-use starlight::vm::value::JsValue;
-use std::{
-    ops::{Deref, DerefMut},
-    ptr::NonNull,
-};
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut _temp_tree = Some(make_tree(STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
-    let mut long_lived = Gc::new(GcCell::new(Node::new(None, None)));
+    let long_lived = Gc::new(GcCell::new(Node::new(None, None)));
     long_lived.borrow_mut().j = 0xdead;
     long_lived.borrow_mut().i = 0xdead;
 
     populate(LONG_LIVED_TREE_DEPTH as _, long_lived.clone());
 
     let mut depth = MIN_TREE_DEPTH;
-    let mut c = c.benchmark_group("gcbench-rc");
+    let mut c = c.benchmark_group("gcbench-rust-gc");
 
     while depth <= MAX_TREE_DEPTH {
         c.sample_size(10).bench_function(
@@ -79,7 +75,6 @@ pub struct Node {
 impl gc::Finalize for Node {}
 const STRETCH_TREE_DEPTH: usize = 18;
 const LONG_LIVED_TREE_DEPTH: usize = 16;
-const ARRAY_SIZE: usize = 500000;
 const MIN_TREE_DEPTH: usize = 4;
 const MAX_TREE_DEPTH: usize = 16;
 
@@ -91,7 +86,7 @@ const fn num_iters(i: usize) -> usize {
     2 * tree_size(STRETCH_TREE_DEPTH) / tree_size(i)
 }
 
-fn populate(mut idepth: i32, mut this_node: Gc<GcCell<Node>>) {
+fn populate(mut idepth: i32, this_node: Gc<GcCell<Node>>) {
     //keep_on_stack!(&mut this_node);
     if idepth <= 0 {
         return;

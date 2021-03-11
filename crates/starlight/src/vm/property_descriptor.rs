@@ -116,7 +116,7 @@ impl PropertyDescriptor {
 
 pub struct StoredSlot {
     pub(crate) value: JsValue,
-    attributes: AttrSafe,
+    pub(crate) attributes: AttrSafe,
 }
 unsafe impl Trace for StoredSlot {
     fn trace(&self, visitor: &mut SlotVisitor) {
@@ -475,8 +475,8 @@ impl StoredSlot {
 }
 
 pub struct Accessor {
-    getter: JsValue,
-    setter: JsValue,
+    pub(crate) getter: JsValue,
+    pub(crate) setter: JsValue,
 }
 
 impl Accessor {

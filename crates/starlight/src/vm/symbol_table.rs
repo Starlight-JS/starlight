@@ -6,8 +6,8 @@ use crate::heap::cell::{GcCell, GcPointer, Trace};
 
 use super::Runtime;
 pub struct SymbolTable {
-    symbols: DashMap<&'static str, u32>,
-    ids: DashMap<u32, &'static str>,
+    pub(crate) symbols: DashMap<&'static str, u32>,
+    pub(crate) ids: DashMap<u32, &'static str>,
     key: AtomicU32,
 }
 
@@ -42,7 +42,7 @@ impl SymbolTable {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct SymbolID(u32);
+pub struct SymbolID(pub(crate) u32);
 
 impl SymbolID {
     pub const PUBLIC_START: SymbolID = Self(128);

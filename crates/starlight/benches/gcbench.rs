@@ -11,7 +11,7 @@ use wtf_rs::keep_on_stack;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let mut rrt = Runtime::new(false);
+    let mut rrt = Runtime::new(false, None);
     let mut rt = rrt.heap();
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;

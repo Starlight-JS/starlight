@@ -1,13 +1,19 @@
-#![feature(core_intrinsics, btree_retain, llvm_asm, linked_list_cursors)]
+#![feature(
+    core_intrinsics,
+    btree_retain,
+    llvm_asm,
+    linked_list_cursors,
+    destructuring_assignment,
+    const_raw_ptr_to_usize_cast
+)]
 use std::sync::atomic::AtomicBool;
 use vm::{value::JsValue, Runtime};
-
+#[macro_use]
+pub mod utils;
 pub mod bytecode;
 pub mod heap;
 pub mod jsrt;
-pub mod utils;
 pub mod vm;
-
 pub fn val_add(x: JsValue, y: JsValue, slowpath: fn(JsValue, JsValue) -> JsValue) -> JsValue {
     if x.is_double() && y.is_double() {
         return JsValue::encode_f64_value(x.get_double() + y.get_double());
@@ -30,8 +36,11 @@ impl Platform {
         }
     }
 
-    pub fn new_runtime(track_allocations: bool) -> Box<Runtime> {
+    pub fn new_runtime(
+        track_allocations: bool,
+        external_references: Option<Box<[usize]>>,
+    ) -> Box<Runtime> {
         Self::initialize();
-        vm::Runtime::new(track_allocations)
+        vm::Runtime::new(track_allocations, external_references)
     }
 }

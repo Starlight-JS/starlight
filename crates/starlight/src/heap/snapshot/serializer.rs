@@ -1,0 +1,634 @@
+use crate::{
+    bytecode::TypeFeedBack,
+    heap::{
+        cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
+        Heap,
+    },
+    vm::{
+        arguments::{Arguments, JsArguments},
+        array_storage::ArrayStorage,
+        attributes::AttrSafe,
+        code_block::CodeBlock,
+        function::{FuncType, JsFunction},
+        global::JsGlobal,
+        indexed_elements::*,
+        interpreter::SpreadValue,
+        object::{JsObject, ObjectTag},
+        property_descriptor::{Accessor, StoredSlot},
+        slot::*,
+        string::JsString,
+        structure::{
+            DeletedEntry, DeletedEntryHolder, MapEntry, Structure, Transition, TransitionKey,
+            TransitionsTable,
+        },
+        symbol_table::{symbol_table, JsSymbol, Symbol, SymbolID},
+        value::*,
+        GlobalData,
+    },
+};
+use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
+use std::{collections::HashMap, io::Write};
+
+pub struct SnapshotSerializer {
+    reference_map: HashMap<usize, u32>,
+    pub(super) output: Vec<u8>,
+    symbol_map: HashMap<Symbol, u32>,
+}
+
+impl SnapshotSerializer {
+    pub(super) fn new() -> Self {
+        Self {
+            reference_map: HashMap::new(),
+            output: vec![],
+            symbol_map: HashMap::new(),
+        }
+    }
+    pub(crate) fn build_reference_map(&mut self, rt: &mut Runtime) {
+        VM_NATIVE_REFERENCES
+            .iter()
+            .enumerate()
+            .for_each(|(index, reference)| {
+                self.reference_map.insert(*reference, index as u32);
+            });
+
+        if let Some(ref references) = rt.external_references {
+            for (_index, reference) in references.iter().enumerate() {
+                let ix = self.reference_map.len() as u32;
+                let result = self.reference_map.insert(*reference, ix);
+                match result {
+                    Some(_) => {
+                        panic!("Reference 0x{:x}", reference);
+                    }
+                    _ => (),
+                }
+            }
+        }
+    }
+    pub(crate) fn build_symbol_table(&mut self) {
+        let symtab = symbol_table();
+        let patch_at = self.output.len();
+        self.write_u32(0);
+        let mut count = 0u32;
+        for entry in symtab.symbols.iter() {
+            let key = entry.key();
+            let index = entry.value();
+            let ix = self.symbol_map.len() as u32;
+            self.symbol_map.insert(Symbol::Key(SymbolID(*index)), ix);
+            self.write_u32(ix);
+            self.write_u32(key.len() as u32);
+            for byte in key.bytes() {
+                self.write_u8(byte);
+            }
+            count += 1;
+        }
+        let count = count.to_le_bytes();
+        self.output[patch_at] = count[0];
+        self.output[patch_at + 1] = count[1];
+        self.output[patch_at + 2] = count[2];
+        self.output[patch_at + 3] = count[3];
+    }
+    pub(crate) fn build_heap_reference_map(&mut self, rt: &mut Runtime) {
+        let heap = rt.heap();
+
+        Heap::walk(heap.mi_heap, |object, _| {
+            let ix = self.reference_map.len() as u32;
+
+            self.reference_map.insert(object as usize, ix);
+            true
+        });
+
+        for weak_slot in heap.weak_slots.iter() {
+            let addr = weak_slot as *const _ as usize;
+            let ix = self.reference_map.len() as u32;
+            self.reference_map.insert(addr, ix);
+        }
+    }
+
+    pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
+        rt.serialize(self);
+        let heap = rt.heap();
+
+        Heap::walk(heap.mi_heap, |object, _| unsafe {
+            let base = &mut *(object as *mut GcPointerBase);
+            base.get_dyn().serialize(self);
+            true
+        });
+    }
+
+    pub fn get_gcpointer<T: GcCell + ?Sized>(&self, at: GcPointer<T>) -> u32 {
+        *self
+            .reference_map
+            .get(&(at.base.as_ptr() as usize))
+            .unwrap()
+    }
+    pub fn write_symbol(&mut self, sym: Symbol) {
+        match sym {
+            Symbol::Index(index) => {
+                self.write_u8(0xff);
+                self.write_u32(index);
+            }
+            Symbol::Key(id) => {
+                if id < SymbolID::PUBLIC_START {
+                    self.write_u8(0x1f);
+                    self.write_u32(id.0);
+                } else {
+                    self.write_u8(0x2f);
+                    let index = self.symbol_map.get(&sym).copied().unwrap();
+                    self.write_u32(index);
+                }
+            }
+        }
+    }
+    pub fn write_weakref<T: GcCell + Sized>(&mut self, weak_ref: WeakRef<T>) {
+        let key = weak_ref.inner.as_ptr() as usize;
+        let ix = *self.reference_map.get(&key).unwrap();
+        self.write_u32(ix);
+    }
+    pub fn write_gcpointer<T: GcCell + ?Sized>(&mut self, at: GcPointer<T>) {
+        let reference = self.get_gcpointer(at);
+        self.output.write_all(&reference.to_le_bytes()).unwrap();
+    }
+
+    pub fn write_u64(&mut self, val: u64) {
+        self.output.write_all(&val.to_le_bytes()).unwrap();
+    }
+
+    pub fn write_u32(&mut self, val: u32) {
+        self.output.write_all(&val.to_le_bytes()).unwrap();
+    }
+
+    pub fn write_u16(&mut self, val: u16) {
+        self.output.write_all(&val.to_le_bytes()).unwrap();
+    }
+
+    pub fn write_u8(&mut self, val: u8) {
+        self.output.write_all(&val.to_le_bytes()).unwrap();
+    }
+
+    pub fn write_reference<T>(&mut self, ref_: *const T) {
+        let ix = self.reference_map.get(&(ref_ as usize)).copied().unwrap();
+        self.write_u32(ix);
+    }
+}
+
+use libmimalloc_sys::*;
+use wtf_rs::segmented_vec::SegmentedVec;
+
+unsafe extern "C" fn build_reference_map(
+    _heap: *const mi_heap_t,
+    _area: *const mi_heap_area_t,
+    block: *mut libc::c_void,
+    _: usize,
+    arg: *mut libc::c_void,
+) -> bool {
+    if block.is_null() {
+        return true;
+    }
+    let arg: &mut (*mut Heap, *mut SnapshotSerializer) =
+        &mut *(arg.cast::<(*mut Heap, *mut SnapshotSerializer)>());
+    let _heap = &mut *arg.0;
+    let serializer = &mut *arg.1;
+    let ix = serializer.reference_map.len() as u32;
+    serializer.reference_map.insert(block as usize, ix);
+    true
+}
+
+pub trait Serializable {
+    fn serialize(&self, serializer: &mut SnapshotSerializer);
+}
+
+impl Serializable for JsValue {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        if self.is_object() {
+            let object = self.get_object();
+            serializer.output.push(0xff);
+            serializer.write_gcpointer(object);
+        } else {
+            serializer.output.push(0x1f);
+            serializer.write_u64(unsafe { std::mem::transmute(*self) });
+        }
+    }
+}
+
+impl Serializable for ArrayStorage {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u32(self.size());
+        serializer.write_u32(self.capacity());
+        for i in 0..self.size() {
+            let item = self.at(i);
+            item.serialize(serializer);
+        }
+    }
+}
+
+impl<T: GcCell + ?Sized> Serializable for GcPointer<T> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_gcpointer(*self);
+    }
+}
+impl<T: GcCell> Serializable for WeakRef<T> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_weakref(*self);
+    }
+}
+
+impl Serializable for JsString {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u32(self.len());
+        for byte in self.as_str().bytes() {
+            serializer.write_u8(byte);
+        }
+    }
+}
+
+impl Serializable for Symbol {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_symbol(*self);
+    }
+}
+
+impl<T: Serializable> Serializable for Vec<T> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(self.len() as _);
+        serializer.write_u64(self.capacity() as _);
+        for item in self.iter() {
+            item.serialize(serializer);
+        }
+    }
+}
+
+impl<K: Serializable, V: Serializable> Serializable for HashMap<K, V> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(self.len() as _);
+        serializer.write_u64(self.capacity() as _);
+        for (key, value) in self.iter() {
+            key.serialize(serializer);
+            value.serialize(serializer);
+        }
+    }
+}
+
+impl Serializable for String {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(self.len() as _);
+        serializer.write_u64(self.capacity() as _);
+        for byte in self.bytes() {
+            serializer.write_u8(byte);
+        }
+    }
+}
+
+impl Serializable for JsObject {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u32(self.tag as _);
+        serializer.write_reference(self.class);
+        serializer.write_gcpointer(self.slots);
+        serializer.write_gcpointer(self.structure);
+        serializer.write_gcpointer(self.indexed);
+        match self.tag {
+            ObjectTag::NormalArguments => {
+                self.as_arguments().serialize(serializer);
+            }
+            ObjectTag::Global => {
+                self.as_global().serialize(serializer);
+            }
+            ObjectTag::Function => {
+                self.as_function().serialize(serializer);
+            }
+            _ => (),
+        }
+    }
+}
+
+impl<T: Serializable> Serializable for Option<T> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        match self {
+            Some(item) => {
+                serializer.write_u8(0x01);
+                item.serialize(serializer);
+            }
+            None => {
+                serializer.write_u8(0x0);
+            }
+        }
+    }
+}
+
+impl Serializable for JsFunction {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.construct_struct.serialize(serializer);
+        match &self.ty {
+            FuncType::User(vm) => {
+                serializer.write_u8(0x01);
+                vm.scope.serialize(serializer);
+                vm.code.serialize(serializer);
+            }
+            FuncType::Native(native_fn) => {
+                serializer.write_u8(0x02);
+                serializer.write_reference(native_fn.func as *const u8);
+            }
+            FuncType::Bound(bound_fn) => {
+                serializer.write_u8(0x03);
+                bound_fn.args.serialize(serializer);
+                bound_fn.target.serialize(serializer);
+                bound_fn.this.serialize(serializer);
+            }
+        }
+    }
+}
+impl Serializable for bool {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        if *self {
+            serializer.write_u8(0x01);
+        } else {
+            serializer.write_u8(0x00);
+        }
+    }
+}
+impl Serializable for u8 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u8(*self);
+    }
+}
+
+impl Serializable for u32 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u32(*self);
+    }
+}
+
+impl Serializable for TypeFeedBack {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        match self {
+            TypeFeedBack::PropertyCache { structure, offset } => {
+                serializer.write_u8(0x01);
+                serializer.write_weakref(*structure);
+                serializer.write_u32(*offset);
+            }
+            _ => {
+                // other type feedback is ignored
+                serializer.write_u8(0x0);
+            }
+        }
+    }
+}
+
+impl Serializable for CodeBlock {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.name.serialize(serializer);
+        self.names.serialize(serializer);
+        self.strict.serialize(serializer);
+        self.variables.serialize(serializer);
+        self.code.serialize(serializer);
+        self.feedback.serialize(serializer);
+        self.literals.serialize(serializer);
+    }
+}
+
+impl Serializable for AttrSafe {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.raw().serialize(serializer);
+    }
+}
+
+impl Serializable for MapEntry {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.offset.serialize(serializer);
+        self.attrs.serialize(serializer);
+    }
+}
+
+impl Serializable for TransitionKey {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.name.serialize(serializer);
+        self.attrs.serialize(serializer);
+    }
+}
+impl Serializable for Transition {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        match self {
+            Self::None => {
+                serializer.write_u8(0x0);
+            }
+            Self::Table(table) => {
+                serializer.write_u8(0x01);
+                table.serialize(serializer);
+            }
+            Self::Pair(key, structure) => {
+                serializer.write_u8(0x02);
+                key.serialize(serializer);
+                structure.serialize(serializer);
+            }
+        }
+    }
+}
+
+impl Serializable for TransitionsTable {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.var.serialize(serializer);
+        self.enabled.serialize(serializer);
+        self.unique.serialize(serializer);
+        self.indexed.serialize(serializer);
+    }
+}
+
+impl Serializable for DeletedEntry {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.prev.serialize(serializer);
+        self.offset.serialize(serializer);
+    }
+}
+
+impl Serializable for DeletedEntryHolder {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.entry.serialize(serializer);
+        self.size.serialize(serializer);
+    }
+}
+
+impl Serializable for Structure {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.transitions.serialize(serializer);
+        self.table.serialize(serializer);
+        self.deleted.serialize(serializer);
+        self.added.0.serialize(serializer);
+        self.added.1.serialize(serializer);
+        self.previous.serialize(serializer);
+        self.prototype.serialize(serializer);
+        self.calculated_size.serialize(serializer);
+        self.transit_count.serialize(serializer);
+    }
+}
+
+impl<T: Serializable> Serializable for SegmentedVec<T> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(self.len() as _);
+        for item in self.iter() {
+            item.serialize(serializer);
+        }
+    }
+}
+impl Serializable for StoredSlot {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.value.serialize(serializer);
+        self.attributes.serialize(serializer);
+    }
+}
+impl Serializable for JsGlobal {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.sym_map.serialize(serializer);
+        self.variables.serialize(serializer);
+    }
+}
+
+impl<T: Serializable> Serializable for &[T] {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(self.len() as _);
+        for x in self.iter() {
+            x.serialize(serializer);
+        }
+    }
+}
+impl<T: Serializable> Serializable for Box<T> {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        (**self).serialize(serializer);
+    }
+}
+impl Serializable for JsArguments {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        (&*self.mapping).serialize(serializer);
+        self.env.serialize(serializer);
+    }
+}
+
+impl Serializable for IndexedElements {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.vector.serialize(serializer);
+        self.map.serialize(serializer);
+        self.length.serialize(serializer);
+        self.flags.serialize(serializer);
+    }
+}
+
+impl Serializable for f64 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(self.to_bits());
+    }
+}
+
+impl Serializable for f32 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u32(self.to_bits());
+    }
+}
+
+impl Serializable for i8 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u8(*self as u8);
+    }
+}
+
+impl Serializable for u16 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u16(*self);
+    }
+}
+
+impl Serializable for i16 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u16(*self as u16);
+    }
+}
+
+impl Serializable for i32 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u32(*self as u32);
+    }
+}
+
+impl Serializable for i64 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(*self as u64);
+    }
+}
+
+impl Serializable for u64 {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        serializer.write_u64(*self);
+    }
+}
+
+impl Serializable for Arguments {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.ctor_call.serialize(serializer);
+        self.this.serialize(serializer);
+        self.values.serialize(serializer);
+    }
+}
+
+impl Serializable for Accessor {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.getter.serialize(serializer);
+        self.setter.serialize(serializer);
+    }
+}
+
+impl Serializable for SpreadValue {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.array.serialize(serializer);
+    }
+}
+
+impl Serializable for Slot {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.parent.serialize(serializer);
+        self.base.serialize(serializer);
+        self.offset.serialize(serializer);
+        self.flags.serialize(serializer);
+    }
+}
+
+impl Serializable for JsSymbol {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.symbol().serialize(serializer);
+    }
+}
+
+impl Serializable for GlobalData {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.normal_arguments_structure.serialize(serializer);
+        self.empty_object_struct.serialize(serializer);
+        self.function_struct.serialize(serializer);
+        self.object_prototype.serialize(serializer);
+        self.number_prototype.serialize(serializer);
+        self.string_prototype.serialize(serializer);
+        self.boolean_prototype.serialize(serializer);
+        self.symbol_prototype.serialize(serializer);
+        self.error.serialize(serializer);
+        self.type_error.serialize(serializer);
+        self.reference_error.serialize(serializer);
+        self.range_error.serialize(serializer);
+        self.syntax_error.serialize(serializer);
+        self.internal_error.serialize(serializer);
+        self.eval_error.serialize(serializer);
+        self.array_prototype.serialize(serializer);
+        self.func_prototype.serialize(serializer);
+        self.string_structure.serialize(serializer);
+        self.number_structure.serialize(serializer);
+        self.array_structure.serialize(serializer);
+        self.error_structure.serialize(serializer);
+        self.range_error_structure.serialize(serializer);
+        self.reference_error_structure.serialize(serializer);
+        self.syntax_error_structure.serialize(serializer);
+        self.type_error_structure.serialize(serializer);
+        self.uri_error_structure.serialize(serializer);
+        self.eval_error_structure.serialize(serializer);
+    }
+}
+
+impl Serializable for Runtime {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.global_data.serialize(serializer);
+        self.global_object.serialize(serializer);
+    }
+}

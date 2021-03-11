@@ -37,16 +37,16 @@ use super::{symbol_table::*, Runtime};
 ///
 /// More info here: [JavaScript engine fundamentals: Shapes and Inline Caches](https://mathiasbynens.be/notes/shapes-ics)
 pub struct Structure {
-    id: StructureID,
-    transitions: TransitionsTable,
-    table: Option<GcPointer<TargetTable>>,
+    pub(crate) id: StructureID,
+    pub(crate) transitions: TransitionsTable,
+    pub(crate) table: Option<GcPointer<TargetTable>>,
     /// Singly linked list
-    deleted: DeletedEntryHolder,
-    added: (Symbol, MapEntry),
-    previous: Option<GcPointer<Structure>>,
-    prototype: Option<GcPointer<JsObject>>,
-    calculated_size: u32,
-    transit_count: u32,
+    pub(crate) deleted: DeletedEntryHolder,
+    pub(crate) added: (Symbol, MapEntry),
+    pub(crate) previous: Option<GcPointer<Structure>>,
+    pub(crate) prototype: Option<GcPointer<JsObject>>,
+    pub(crate) calculated_size: u32,
+    pub(crate) transit_count: u32,
 }
 
 pub type StructureID = u32;
@@ -75,8 +75,8 @@ unsafe impl Trace for MapEntry {}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransitionKey {
-    name: Symbol,
-    attrs: u32,
+    pub name: Symbol,
+    pub attrs: u32,
 }
 
 impl GcCell for TransitionKey {}
@@ -90,10 +90,10 @@ pub enum Transition {
 }
 
 pub struct TransitionsTable {
-    var: Transition,
-    enabled: bool,
-    unique: bool,
-    indexed: bool,
+    pub var: Transition,
+    pub enabled: bool,
+    pub unique: bool,
+    pub indexed: bool,
 }
 
 impl TransitionsTable {
@@ -215,8 +215,8 @@ impl Structure {
 }
 #[derive(Clone)]
 pub struct DeletedEntryHolder {
-    entry: Option<GcPointer<DeletedEntry>>,
-    size: u32,
+    pub entry: Option<GcPointer<DeletedEntry>>,
+    pub size: u32,
 }
 
 impl DeletedEntryHolder {
@@ -246,8 +246,8 @@ impl DeletedEntryHolder {
 pub type TargetTable = HashMap<Symbol, MapEntry>;
 
 pub struct DeletedEntry {
-    prev: Option<GcPointer<DeletedEntry>>,
-    offset: u32,
+    pub prev: Option<GcPointer<DeletedEntry>>,
+    pub offset: u32,
 }
 
 unsafe impl Trace for DeletedEntry {

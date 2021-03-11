@@ -11,9 +11,9 @@ use crate::heap::{
 use super::{attributes::*, object::JsObject, property_descriptor::StoredSlot, value::*};
 pub struct Slot {
     pub parent: StoredSlot,
-    base: Option<GcPointer<dyn GcCell>>,
-    offset: u32,
-    flags: u32,
+    pub(crate) base: Option<GcPointer<dyn GcCell>>,
+    pub(crate) offset: u32,
+    pub(crate) flags: u32,
 }
 
 impl Slot {

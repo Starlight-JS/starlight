@@ -16,7 +16,6 @@ use crate::{
 use std::{
     hint::unreachable_unchecked,
     intrinsics::{likely, unlikely},
-    mem::size_of,
 };
 use wtf_rs::unwrap_unchecked;
 pub mod frame;
@@ -122,7 +121,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                        this: JsValue,
                        args_: GcPointer<ArrayStorage>|
      -> Result<(), JsValue> {
-        let scope = unsafe { env.get_object().downcast_unchecked::<JsObject>() };
+        let scope = env.get_object().downcast_unchecked::<JsObject>();
         let structure = Structure::new_indexed(rt, Some(scope), false);
 
         let mut nscope = JsObject::new(rt, structure, JsObject::get_class(), ObjectTag::Ordinary);
@@ -131,7 +130,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         for p in func.code.params.iter() {
             let _ = nscope
                 .put(rt, *p, *args_.at(i), false)
-                .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
+                .unwrap_or_else(|_| unreachable_unchecked());
             i += 1;
         }
 
@@ -190,6 +189,22 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
                 ip = ip.offset(offset as isize);
+            }
+            Opcode::OP_JMP_IF_FALSE => {
+                let offset = ip.cast::<i32>().read();
+                ip = ip.add(4);
+                let value = frame.pop();
+                if !value.to_boolean() {
+                    ip = ip.offset(offset as _);
+                }
+            }
+            Opcode::OP_JMP_IF_TRUE => {
+                let offset = ip.cast::<i32>().read();
+                ip = ip.add(4);
+                let value = frame.pop();
+                if value.to_boolean() {
+                    ip = ip.offset(offset as _);
+                }
             }
             Opcode::OP_POP => {
                 frame.pop();
@@ -662,6 +677,69 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(result);
                 }
             }
+            Opcode::OP_NEW => {
+                let argc = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let mut args = ArrayStorage::new(rt.heap(), argc);
+
+                for _ in 0..argc {
+                    let arg = frame.pop();
+                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
+                        let spread = arg.get_object().downcast_unchecked::<SpreadValue>();
+                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
+                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
+                            args.push_back(rt.heap(), real_arg);
+                        }
+                    } else {
+                        frame.push(arg);
+                    }
+                }
+                let this = frame.pop();
+                let func = frame.pop();
+                if !func.is_callable() {
+                    let msg = JsString::new(rt, "not a callable object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+                let mut func_object = func.get_jsobject();
+                let map = func_object.func_construct_map(rt)?;
+                let func = func_object.as_function_mut();
+                let mut args_ = Arguments::from_array_storage(rt, this, args);
+                args_.ctor_call = true;
+                let result = func.construct(rt, &mut args_, Some(map))?;
+                frame.push(result);
+            }
+            Opcode::OP_PUSH_CATCH => {
+                let offset = ip.cast::<i32>().read();
+                ip = ip.add(4);
+                let env = frame.env;
+
+                frame.try_stack.push((env, ip.offset(offset as isize)));
+            }
+            Opcode::OP_POP_CATCH => {
+                frame.try_stack.pop();
+            }
+            Opcode::OP_PUSH_ENV => {
+                let map = Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
+                let env = JsObject::new(rt, map, JsObject::get_class(), ObjectTag::Ordinary);
+                frame.env = JsValue::encode_object_value(env);
+            }
+            Opcode::OP_POP_ENV => {
+                let env = frame.env.get_jsobject();
+                frame.env = JsValue::encode_object_value(
+                    env.prototype().copied().expect("no environments left"),
+                );
+            }
+            Opcode::OP_POS => {
+                let value = frame.pop();
+                if value.is_number() {
+                    frame.push(value);
+                }
+                let x = value.to_number(rt)?;
+                frame.push(JsValue::encode_f64_value(x));
+            }
+
             _ => unreachable_unchecked(),
         }
     }

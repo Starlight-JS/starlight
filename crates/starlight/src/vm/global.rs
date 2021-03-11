@@ -23,8 +23,8 @@ use super::{
 };
 
 pub struct JsGlobal {
-    sym_map: HashMap<Symbol, u32>,
-    variables: SegmentedVec<StoredSlot>,
+    pub(crate) sym_map: HashMap<Symbol, u32>,
+    pub(crate) variables: SegmentedVec<StoredSlot>,
     vm: *mut Runtime,
 }
 

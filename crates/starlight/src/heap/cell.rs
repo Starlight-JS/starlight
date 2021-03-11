@@ -9,7 +9,7 @@ use std::{
 
 use mopa::mopafy;
 
-use super::SlotVisitor;
+use super::{snapshot::serializer::Serializable, SlotVisitor};
 
 /// Indicates that a type can be traced by a garbage collector.
 ///
@@ -56,7 +56,7 @@ pub unsafe trait Trace {
 /// All cells that is not part of `src/vm` treatened as dummy objects and property accesses
 /// is no-op on them.
 ///
-pub trait GcCell: mopa::Any + Trace {
+pub trait GcCell: mopa::Any + Trace + Serializable {
     /// Used when object has dynamic size i.e arrays
     fn compute_size(&self) -> usize {
         std::mem::size_of_val(self)
@@ -86,6 +86,16 @@ impl GcPointerBase {
         }
     }
 
+    pub fn test_and_set_marked(&mut self) -> bool {
+        let prev = self.vtable & (1 << 0);
+        self.vtable |= 1 << 0;
+        prev == 0
+    }
+
+    pub fn unmark(&mut self) {
+        self.vtable &= !(1 << 0);
+    }
+
     pub fn state(&self) -> u8 {
         self.cell_state.load(Ordering::Acquire)
     }
@@ -94,6 +104,9 @@ impl GcPointerBase {
         self.cell_state
             .compare_exchange(from, to, Ordering::AcqRel, Ordering::Relaxed)
             == Ok(from)
+    }
+    pub fn force_set_state(&self, to: u8) {
+        self.cell_state.store(to, Ordering::AcqRel);
     }
     pub fn data<T>(&self) -> *mut T {
         unsafe {
@@ -105,40 +118,22 @@ impl GcPointerBase {
     pub fn raw(&self) -> u64 {
         self.vtable
     }
-    pub fn is_live(&self) -> bool {
-        ((self.vtable >> 1) & 1) == 1
-    }
-
-    pub fn is_marked(&self) -> bool {
-        ((self.vtable >> 0) & 1) == 1
-    }
-
-    pub fn mark(&mut self) {
-        self.vtable |= 1 << 0;
-    }
-
-    pub fn unmark(&mut self) {
-        self.vtable &= !(1 << 0);
-    }
-
-    pub fn live(&mut self) {
-        self.vtable |= 1 << 1;
-    }
-    pub fn dead(&mut self) {
-        self.vtable &= !(1 << 1);
-    }
 
     pub fn get_dyn(&self) -> &mut dyn GcCell {
         unsafe {
             std::mem::transmute(mopa::TraitObject {
-                vtable: (self.vtable) as *mut (),
+                vtable: (self.vtable & !(1 << 0)) as *mut (),
                 data: self.data::<u8>() as _,
             })
         }
     }
 
     pub fn vtable(&self) -> usize {
-        (self.vtable) as usize
+        (self.vtable & !(1 << 0)) as usize
+    }
+
+    pub fn is_marked(&self) -> bool {
+        (self.vtable & (1 << 0)) != 0
     }
 }
 pub fn vtable_of<T: GcCell>(x: *const T) -> usize {
@@ -221,7 +216,7 @@ pub struct WeakSlot {
 }
 
 pub struct WeakRef<T: GcCell> {
-    pub(super) inner: NonNull<WeakSlot>,
+    pub(crate) inner: NonNull<WeakSlot>,
     pub(super) marker: PhantomData<T>,
 }
 
@@ -251,7 +246,7 @@ macro_rules! impl_prim {
     };
 }
 
-impl_prim!(String bool f32 f64 u8 i8 u16 i16 u32 i32 u64 i64 u128 i128);
+impl_prim!(String bool f32 f64 u8 i8 u16 i16 u32 i32 u64 i64 );
 unsafe impl<T: Trace> Trace for Vec<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
         for val in self.iter() {
@@ -318,7 +313,10 @@ unsafe impl<K: Trace, V: Trace> Trace for HashMap<K, V> {
     }
 }
 
-impl<K: Trace + 'static, V: Trace + 'static> GcCell for HashMap<K, V> {}
+impl<K: Trace + 'static + Serializable, V: Trace + 'static + Serializable> GcCell
+    for HashMap<K, V>
+{
+}
 
 unsafe impl<T: Trace> Trace for Option<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
@@ -329,5 +327,5 @@ unsafe impl<T: Trace> Trace for Option<T> {
     }
 }
 
-impl<T: Trace + 'static> GcCell for Vec<T> {}
+impl<T: Trace + Serializable + 'static> GcCell for Vec<T> {}
 impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {}

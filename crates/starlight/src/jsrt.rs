@@ -1,8 +1,9 @@
 use crate::{
     heap::cell::GcPointer,
     vm::{
-        attributes::*, error::*, function::*, object::*, property_descriptor::*, string::*,
-        structure::*, symbol_table::*, value::*, Runtime,
+        arguments::JsArguments, array::JsArray, attributes::*, error::*, function::*,
+        global::JsGlobal, object::*, property_descriptor::*, string::*, structure::*,
+        symbol_table::*, value::*, Runtime,
     },
 };
 
@@ -455,3 +456,41 @@ impl Runtime {
         }
     }
 }
+use once_cell::sync::Lazy;
+
+pub static VM_NATIVE_REFERENCES: Lazy<[usize; 32]> = Lazy::new(|| {
+    [
+        JsArguments::get_class() as *const _ as usize,
+        JsObject::get_class() as *const _ as usize,
+        JsArray::get_class() as *const _ as usize,
+        JsFunction::get_class() as *const _ as usize,
+        JsError::get_class() as *const _ as usize,
+        JsTypeError::get_class() as *const _ as usize,
+        JsSyntaxError::get_class() as *const _ as usize,
+        JsReferenceError::get_class() as *const _ as usize,
+        JsRangeError::get_class() as *const _ as usize,
+        JsEvalError::get_class() as *const _ as usize,
+        JsGlobal::get_class() as *const _ as usize,
+        function::function_bind as usize,
+        function::function_prototype as usize,
+        function::function_to_string as usize,
+        object::object_constructor as usize,
+        object::object_create as usize,
+        object::object_to_string as usize,
+        array::array_ctor as usize,
+        array::array_from as usize,
+        array::array_is_array as usize,
+        array::array_join as usize,
+        array::array_of as usize,
+        array::array_pop as usize,
+        array::array_push as usize,
+        array::array_to_string as usize,
+        error::error_constructor as usize,
+        error::error_to_string as usize,
+        error::eval_error_constructor as usize,
+        error::range_error_constructor as usize,
+        error::reference_error_constructor as usize,
+        error::syntax_error_constructor as usize,
+        error::type_error_constructor as usize,
+    ]
+});
