@@ -1,5 +1,5 @@
 use vm::function::JsFunction;
-use wtf_rs::segmented_vec::SegmentedVec;
+use wtf_rs::{segmented_vec::SegmentedVec, unwrap_unchecked};
 
 use super::serializer::Serializable;
 use crate::{
@@ -52,10 +52,12 @@ pub struct Deserializer<'a> {
 impl<'a> Deserializer<'a> {
     pub fn get_u32(&mut self) -> u32 {
         let mut buf = [0; 4];
-        buf[0] = self.reader[self.pc];
-        buf[1] = self.reader[self.pc + 1];
-        buf[2] = self.reader[self.pc + 2];
-        buf[3] = self.reader[self.pc + 3];
+        unsafe {
+            buf[0] = *self.reader.get_unchecked(self.pc);
+            buf[1] = *self.reader.get_unchecked(self.pc + 1);
+            buf[2] = *self.reader.get_unchecked(self.pc + 2);
+            buf[3] = *self.reader.get_unchecked(self.pc + 3);
+        }
         self.pc += 4;
         u32::from_le_bytes(buf)
     }
@@ -67,29 +69,33 @@ impl<'a> Deserializer<'a> {
 
     pub fn get_u16(&mut self) -> u16 {
         let mut buf = [0; 2];
-        buf[0] = self.reader[self.pc];
-        buf[1] = self.reader[self.pc + 1];
+        unsafe {
+            buf[0] = *self.reader.get_unchecked(self.pc);
+            buf[1] = *self.reader.get_unchecked(self.pc + 1);
+        }
         self.pc += 2;
         u16::from_le_bytes(buf)
     }
 
     pub fn get_u64(&mut self) -> u64 {
         let mut buf = [0; 8];
-        buf[0] = self.reader[self.pc];
-        buf[1] = self.reader[self.pc + 1];
-        buf[2] = self.reader[self.pc + 2];
-        buf[3] = self.reader[self.pc + 3];
-        buf[4] = self.reader[self.pc + 4];
-        buf[5] = self.reader[self.pc + 5];
-        buf[6] = self.reader[self.pc + 6];
-        buf[7] = self.reader[self.pc + 7];
+        unsafe {
+            buf[0] = *self.reader.get_unchecked(self.pc);
+            buf[1] = *self.reader.get_unchecked(self.pc + 1);
+            buf[2] = *self.reader.get_unchecked(self.pc + 2);
+            buf[3] = *self.reader.get_unchecked(self.pc + 3);
+            buf[4] = *self.reader.get_unchecked(self.pc + 4);
+            buf[5] = *self.reader.get_unchecked(self.pc + 5);
+            buf[6] = *self.reader.get_unchecked(self.pc + 6);
+            buf[7] = *self.reader.get_unchecked(self.pc + 7);
+        }
         self.pc += 8;
         u64::from_le_bytes(buf)
     }
 
     pub fn get_reference(&mut self) -> *const u8 {
         let index = self.get_u32();
-        self.reference_map.get(&index).copied().unwrap() as *const u8
+        unwrap_unchecked(self.reference_map.get(&index).copied()) as *const u8
     }
 
     fn build_reference_map(&mut self, rt: &mut Runtime) {
@@ -113,11 +119,14 @@ impl<'a> Deserializer<'a> {
         for _ in 0..count {
             let index = self.get_u32();
             let len = self.get_u32();
-            let mut bytes = vec![];
+            /*let mut bytes = vec![];
             for _ in 0..len {
                 bytes.push(self.get_u8());
             }
-            let sym = String::from_utf8_unchecked(bytes).intern();
+            let sym = String::from_utf8_unchecked(bytes).intern();*/
+            let sym = std::str::from_utf8_unchecked(&self.reader[self.pc..self.pc + len as usize])
+                .intern();
+            self.pc += len as usize;
             self.symbol_map.insert(index, sym);
         }
     }
@@ -166,7 +175,7 @@ impl<'a> Deserializer<'a> {
 
         for _ in 0..count {
             let ref_id = self.get_u32();
-            let base = self.reference_map.get(&ref_id).copied().unwrap();
+            let base = unwrap_unchecked(self.reference_map.get(&ref_id).copied());
             logln_if!(
                 self.log_deser,
                 "deserialize #{}:0x{:x} '{}'",
@@ -239,7 +248,7 @@ impl<'a> Deserializer<'a> {
             this.build_symbol_table();
             this.deserialize_internal(&mut runtime);
         }
-        runtime.heap().undefer();
+
         runtime
     }
 }
