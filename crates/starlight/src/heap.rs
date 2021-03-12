@@ -271,7 +271,7 @@ impl Heap {
             defers: 0,
             write_queue: SegQueue::new(),
             allocated: 0,
-            max_heap_size: 4 * 1024,
+            max_heap_size: 100 * 1024,
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
             needs_to_stop: AtomicBool::new(false),
         };

@@ -467,6 +467,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
         // but they should be the same for all types that is allocated in GC heap.
+        Vec::<crate::heap::cell::GcPointer<crate::vm::structure::Structure>>::deserialize as _,
+        Vec::<crate::heap::cell::GcPointer<crate::vm::structure::Structure>>::allocate as _,
         GcPointer::<u8>::deserialize as _,
         GcPointer::<u8>::allocate as _,
         WeakRef::<u8>::deserialize as _,
