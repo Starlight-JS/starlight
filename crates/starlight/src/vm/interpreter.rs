@@ -10,6 +10,7 @@ use crate::{
     bytecode::opcodes::Opcode,
     heap::{
         cell::{GcCell, GcPointer, Trace},
+        snapshot::deserializer::Deserializable,
         SlotVisitor,
     },
 };
@@ -869,7 +870,11 @@ impl SpreadValue {
     }
 }
 
-impl GcCell for SpreadValue {}
+impl GcCell for SpreadValue {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 unsafe impl Trace for SpreadValue {
     fn trace(&self, visitor: &mut SlotVisitor) {
         self.array.trace(visitor);

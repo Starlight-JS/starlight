@@ -2,6 +2,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::{
     heap::{
         cell::{GcCell, GcPointer, Trace},
+        snapshot::serializer::{Serializable, SnapshotSerializer},
         Heap, SlotVisitor,
     },
     vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
@@ -137,7 +138,14 @@ impl Node {
         }
     }
 }
-impl GcCell for Node {}
+impl GcCell for Node {
+    fn deser_pair(&self) -> (usize, usize) {
+        (0, 0)
+    }
+}
+impl Serializable for Node {
+    fn serialize(&self, _serializer: &mut SnapshotSerializer) {}
+}
 unsafe impl Trace for Node {
     fn trace(&self, visitor: &mut SlotVisitor) {
         self.left.trace(visitor);

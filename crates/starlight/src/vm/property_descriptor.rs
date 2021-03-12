@@ -1,9 +1,9 @@
+use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
+use crate::heap::snapshot::deserializer::Deserializable;
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
     SlotVisitor,
 };
-
-use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
 use std::ops::{Deref, DerefMut};
 #[derive(Clone, Copy)]
 pub union PropertyLayout {
@@ -121,6 +121,12 @@ pub struct StoredSlot {
 unsafe impl Trace for StoredSlot {
     fn trace(&self, visitor: &mut SlotVisitor) {
         self.value.trace(visitor);
+    }
+}
+
+impl GcCell for StoredSlot {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
     }
 }
 impl StoredSlot {
@@ -520,7 +526,11 @@ impl Accessor {
     }
 }
 
-impl GcCell for Accessor {}
+impl GcCell for Accessor {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 
 unsafe impl Trace for Accessor {
     fn trace(&self, tracer: &mut SlotVisitor) {

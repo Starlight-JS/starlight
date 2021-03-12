@@ -1,12 +1,22 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use starlight::heap::{
     cell::{GcCell, Trace},
+    snapshot::serializer::{Serializable, SnapshotSerializer},
     usable_size, Heap,
 };
 use wtf_rs::keep_on_stack;
 struct Large([u8; 8192]);
 unsafe impl Trace for Large {}
-impl GcCell for Large {}
+impl GcCell for Large {
+    fn deser_pair(&self) -> (usize, usize) {
+        (0, 0)
+    }
+}
+
+impl Serializable for Large {
+    fn serialize(&self, _serializer: &mut SnapshotSerializer) {}
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut heap = Heap::new(false);
     //heap.defer();

@@ -1,26 +1,21 @@
-use std::mem::size_of;
-
-use crate::heap::cell::{GcCell, GcPointer, Trace};
-
 use super::Runtime;
+use crate::heap::cell::{GcCell, GcPointer, Trace};
+use crate::heap::snapshot::deserializer::Deserializable;
+use std::mem::size_of;
 
 #[repr(C)]
 pub struct JsString {
-    cap: u32,
-    len: u32,
-    data: [u8; 0],
+    pub(crate) string: String,
 }
 
 impl JsString {
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.string.is_empty()
     }
     pub fn new(vm: &mut Runtime, as_str: impl AsRef<str>) -> GcPointer<Self> {
         let str = as_str.as_ref();
         let proto = Self {
-            cap: str.len() as _,
-            len: str.len() as _,
-            data: [],
+            string: str.to_owned(),
         };
         let cell = vm.heap().allocate(proto);
 
@@ -28,22 +23,20 @@ impl JsString {
     }
 
     pub fn as_str(&self) -> &str {
-        unsafe {
-            std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-                self.data.as_ptr(),
-                self.len as _,
-            ))
-        }
+        &self.string
     }
 
     pub fn len(&self) -> u32 {
-        self.len
+        self.string.len() as _
     }
 }
 
 unsafe impl Trace for JsString {}
 impl GcCell for JsString {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
     fn compute_size(&self) -> usize {
-        self.cap as usize + size_of::<Self>()
+        size_of::<Self>()
     }
 }

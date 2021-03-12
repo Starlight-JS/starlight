@@ -1,10 +1,9 @@
+use super::Runtime;
+use crate::heap::cell::{GcCell, GcPointer, Trace};
+use crate::heap::snapshot::deserializer::Deserializable;
 use dashmap::DashMap;
 use std::sync::atomic::Ordering;
 use std::{mem::MaybeUninit, sync::atomic::AtomicU32};
-
-use crate::heap::cell::{GcCell, GcPointer, Trace};
-
-use super::Runtime;
 pub struct SymbolTable {
     pub(crate) symbols: DashMap<&'static str, u32>,
     pub(crate) ids: DashMap<u32, &'static str>,
@@ -70,7 +69,11 @@ impl Symbol {
         !self.is_index()
     }
 }
-impl GcCell for Symbol {}
+impl GcCell for Symbol {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 unsafe impl Trace for Symbol {}
 
 pub const DUMMY_SYMBOL: Symbol = Symbol::Key(SymbolID(0));
@@ -117,7 +120,7 @@ impl Internable for usize {
 }
 
 pub struct JsSymbol {
-    sym: Symbol,
+    pub(crate) sym: Symbol,
 }
 
 impl JsSymbol {
@@ -131,4 +134,8 @@ impl JsSymbol {
 }
 
 unsafe impl Trace for JsSymbol {}
-impl GcCell for JsSymbol {}
+impl GcCell for JsSymbol {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}

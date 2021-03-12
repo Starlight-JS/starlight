@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use wtf_rs::unwrap_unchecked;
 
+use super::{attributes::*, object::JsObject};
+use super::{symbol_table::*, Runtime};
+use crate::heap::snapshot::deserializer::Deserializable;
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace, WeakRef},
     SlotVisitor,
 };
-
-use super::{attributes::*, object::JsObject};
-use super::{symbol_table::*, Runtime};
 /// In JavaScript programs, it's common to have multiple objects with the same property keys. Such objects
 /// have the same *shape*.
 /// ```js
@@ -70,7 +70,11 @@ impl MapEntry {
     }
 }
 
-impl GcCell for MapEntry {}
+impl GcCell for MapEntry {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 unsafe impl Trace for MapEntry {}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -79,7 +83,11 @@ pub struct TransitionKey {
     pub attrs: u32,
 }
 
-impl GcCell for TransitionKey {}
+impl GcCell for TransitionKey {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 unsafe impl Trace for TransitionKey {}
 
 #[derive(Clone)]
@@ -171,7 +179,7 @@ impl TransitionsTable {
     }
 }
 
-type Table = HashMap<TransitionKey, WeakRef<Structure>>;
+pub type Table = HashMap<TransitionKey, WeakRef<Structure>>;
 
 unsafe impl Trace for TransitionsTable {
     fn trace(&self, tracer: &mut SlotVisitor) {
@@ -184,7 +192,11 @@ unsafe impl Trace for TransitionsTable {
         }
     }
 }
-impl GcCell for Structure {}
+impl GcCell for Structure {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 unsafe impl Trace for Structure {
     fn trace(&self, tracer: &mut SlotVisitor) {
         self.transitions.trace(tracer);
@@ -255,8 +267,21 @@ unsafe impl Trace for DeletedEntry {
         self.prev.trace(tracer)
     }
 }
-
-impl GcCell for DeletedEntry {}
+unsafe impl Trace for DeletedEntryHolder {
+    fn trace(&self, visitor: &mut SlotVisitor) {
+        self.entry.trace(visitor);
+    }
+}
+impl GcCell for DeletedEntryHolder {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
+impl GcCell for DeletedEntry {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 
 impl Structure {
     fn ctor(vm: &mut Runtime, previous: GcPointer<Self>, unique: bool) -> GcPointer<Self> {

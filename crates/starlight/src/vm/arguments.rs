@@ -66,7 +66,11 @@ impl Arguments {
     }
 }
 
-impl GcCell for Arguments {}
+impl GcCell for Arguments {
+    fn deser_pair(&self) -> (usize, usize) {
+        panic!("unserializable")
+    }
+}
 unsafe impl Trace for Arguments {
     fn trace(&self, tracer: &mut SlotVisitor) {
         self.this.trace(tracer);

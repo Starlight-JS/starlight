@@ -8,8 +8,8 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub fn take(runtime: &mut Runtime) -> Self {
-        let mut serializer = serializer::SnapshotSerializer::new();
+    pub fn take(log: bool, runtime: &mut Runtime) -> Self {
+        let mut serializer = serializer::SnapshotSerializer::new(log);
 
         serializer.build_reference_map(runtime);
         serializer.build_symbol_table();

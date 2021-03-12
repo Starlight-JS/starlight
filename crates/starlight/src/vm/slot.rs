@@ -148,7 +148,11 @@ impl Default for Slot {
     }
 }
 
-impl GcCell for Slot {}
+impl GcCell for Slot {
+    fn deser_pair(&self) -> (usize, usize) {
+        unreachable!()
+    }
+}
 unsafe impl Trace for Slot {
     fn trace(&self, tracer: &mut SlotVisitor) {
         if let Some(ref obj) = self.base {

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
+    snapshot::deserializer::Deserializable,
     SlotVisitor,
 };
 
@@ -101,4 +102,8 @@ unsafe impl Trace for IndexedElements {
         self.map.trace(visitor);
     }
 }
-impl GcCell for IndexedElements {}
+impl GcCell for IndexedElements {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}

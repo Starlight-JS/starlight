@@ -961,3 +961,9 @@ impl<T: GcCell + ?Sized> From<GcPointer<T>> for JsValue {
         Self::encode_object_value(x)
     }
 }
+use crate::heap::snapshot::deserializer::Deserializable;
+impl GcCell for JsValue {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}

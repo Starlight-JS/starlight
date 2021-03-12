@@ -50,3 +50,7 @@ harness = false
 [[bench]]
 name = "gcbench-gc"
 harness = false
+
+[[bench]]
+name = "bench_snapshot"
+harness = false

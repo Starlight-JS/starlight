@@ -25,7 +25,7 @@ use super::{
 pub struct JsGlobal {
     pub(crate) sym_map: HashMap<Symbol, u32>,
     pub(crate) variables: SegmentedVec<StoredSlot>,
-    vm: *mut Runtime,
+    pub(crate) vm: *mut Runtime,
 }
 
 unsafe impl Trace for JsGlobal {

@@ -19,6 +19,7 @@ use super::{
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
+    snapshot::deserializer::Deserializable,
     SlotVisitor,
 };
 use std::{
@@ -158,6 +159,9 @@ unsafe impl Trace for JsObject {
     }
 }
 impl GcCell for JsObject {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
     fn compute_size(&self) -> usize {
         object_size_with_tag(self.tag)
     }

@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{
-    heap::cell::GcPointer,
+    heap::cell::{GcPointer, WeakRef},
     vm::{
-        arguments::JsArguments, array::JsArray, attributes::*, error::*, function::*,
-        global::JsGlobal, object::*, property_descriptor::*, string::*, structure::*,
-        symbol_table::*, value::*, Runtime,
+        arguments::JsArguments, array::JsArray, array_storage::ArrayStorage, attributes::*,
+        code_block::CodeBlock, error::*, function::*, global::JsGlobal,
+        indexed_elements::IndexedElements, interpreter::SpreadValue, object::*,
+        property_descriptor::*, string::*, structure::*, symbol_table::*, value::*, Runtime,
     },
 };
 
@@ -456,10 +459,58 @@ impl Runtime {
         }
     }
 }
+use crate::heap::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
-pub static VM_NATIVE_REFERENCES: Lazy<[usize; 32]> = Lazy::new(|| {
-    [
+pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
+    Box::leak(Box::new([
+        /* deserializer functions */
+        // following GcPointer and WeakRef method references is obtained from `T = u8`
+        // but they should be the same for all types that is allocated in GC heap.
+        GcPointer::<u8>::deserialize as _,
+        GcPointer::<u8>::allocate as _,
+        WeakRef::<u8>::deserialize as _,
+        WeakRef::<u8>::allocate as _,
+        JsObject::deserialize as _,
+        JsObject::allocate as _,
+        JsValue::deserialize as _,
+        JsValue::allocate as _,
+        TargetTable::deserialize as _,
+        TargetTable::allocate as _,
+        SpreadValue::deserialize as _,
+        Structure::deserialize as _,
+        Structure::allocate as _,
+        crate::vm::structure::Table::deserialize as _,
+        crate::vm::structure::Table::allocate as _,
+        SpreadValue::allocate as _,
+        ArrayStorage::deserialize as _,
+        ArrayStorage::allocate as _,
+        DeletedEntry::deserialize as _,
+        DeletedEntry::allocate as _,
+        JsString::deserialize as _,
+        JsString::allocate as _,
+        u8::deserialize as _,
+        u8::allocate as _,
+        u16::deserialize as _,
+        u16::allocate as _,
+        u32::deserialize as _,
+        u32::allocate as _,
+        u64::deserialize as _,
+        u64::allocate as _,
+        i8::deserialize as _,
+        i8::allocate as _,
+        i16::deserialize as _,
+        i16::allocate as _,
+        i32::deserialize as _,
+        i32::allocate as _,
+        i64::deserialize as _,
+        i64::allocate as _,
+        HashMap::<u32, StoredSlot>::deserialize as _,
+        HashMap::<u32, StoredSlot>::allocate as _,
+        IndexedElements::deserialize as _,
+        IndexedElements::allocate as _,
+        CodeBlock::deserialize as _,
+        CodeBlock::allocate as _,
         JsArguments::get_class() as *const _ as usize,
         JsObject::get_class() as *const _ as usize,
         JsArray::get_class() as *const _ as usize,
@@ -492,5 +543,5 @@ pub static VM_NATIVE_REFERENCES: Lazy<[usize; 32]> = Lazy::new(|| {
         error::reference_error_constructor as usize,
         error::syntax_error_constructor as usize,
         error::type_error_constructor as usize,
-    ]
+    ]))
 });

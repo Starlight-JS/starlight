@@ -1,4 +1,5 @@
 use std::{
+    any::type_name,
     collections::HashMap,
     marker::PhantomData,
     mem::size_of,
@@ -7,9 +8,10 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
+use super::{
+    snapshot::deserializer::Deserializable, snapshot::serializer::Serializable, SlotVisitor,
+};
 use mopa::mopafy;
-
-use super::{snapshot::serializer::Serializable, SlotVisitor};
 
 /// Indicates that a type can be traced by a garbage collector.
 ///
@@ -61,6 +63,12 @@ pub trait GcCell: mopa::Any + Trace + Serializable {
     fn compute_size(&self) -> usize {
         std::mem::size_of_val(self)
     }
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
+    fn deser_pair(&self) -> (usize, usize);
 }
 
 mopafy!(GcCell);
@@ -241,7 +249,11 @@ macro_rules! impl_prim {
     ($($t: ty)*) => {
         $(
             unsafe impl Trace for $t {}
-            impl GcCell for $t {}
+            impl GcCell for $t {
+                fn deser_pair(&self) -> (usize,usize) {
+                    (Self::deserialize as usize,Self::allocate as usize)
+                }
+            }
         )*
     };
 }
@@ -297,7 +309,11 @@ impl<T: GcCell + std::fmt::Display> std::fmt::Display for GcPointer<T> {
     }
 }
 
-impl<T: GcCell> GcCell for WeakRef<T> {}
+impl<T: GcCell> GcCell for WeakRef<T> {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
         visitor.visit_weak(self);
@@ -313,9 +329,14 @@ unsafe impl<K: Trace, V: Trace> Trace for HashMap<K, V> {
     }
 }
 
-impl<K: Trace + 'static + Serializable, V: Trace + 'static + Serializable> GcCell
-    for HashMap<K, V>
+impl<
+        K: GcCell + Eq + std::hash::Hash + Trace + 'static + Serializable + Deserializable,
+        V: GcCell + Trace + 'static + Serializable + Deserializable,
+    > GcCell for HashMap<K, V>
 {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
@@ -327,5 +348,19 @@ unsafe impl<T: Trace> Trace for Option<T> {
     }
 }
 
-impl<T: Trace + Serializable + 'static> GcCell for Vec<T> {}
-impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {}
+impl<T: GcCell + Serializable + 'static + Deserializable> GcCell for Vec<T> {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as usize, Self::allocate as usize)
+    }
+}
+impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
+
+impl<T: GcCell + Serializable + Deserializable + 'static> GcCell for Option<T> {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}

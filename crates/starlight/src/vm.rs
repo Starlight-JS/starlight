@@ -47,7 +47,30 @@ impl Runtime {
     pub fn heap(&mut self) -> &mut Heap {
         &mut self.heap
     }
+    pub(crate) fn new_empty(
+        track_allocations: bool,
+        external_references: Option<Box<[usize]>>,
+    ) -> Box<Self> {
+        let heap = Box::new(Heap::new(track_allocations));
+        let mut this = Box::new(Self {
+            heap,
+            stack: Stack::new(),
+            global_object: None,
+            global_data: GlobalData::default(),
+            external_references,
+        });
+        let vm = &mut *this as *mut Runtime;
+        this.heap.add_constraint(SimpleMarkingConstraint::new(
+            "Mark VM roots",
+            move |visitor| {
+                let rt = unsafe { &mut *vm };
+                rt.global_object.trace(visitor);
+                rt.global_data.trace(visitor);
+            },
+        ));
 
+        this
+    }
     pub fn new(track_allocations: bool, external_references: Option<Box<[usize]>>) -> Box<Runtime> {
         let heap = Box::new(Heap::new(track_allocations));
         let mut this = Box::new(Self {

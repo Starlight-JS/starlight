@@ -246,6 +246,17 @@ impl Heap {
             weak
         }
     }
+    /// Create WeakRef<T> from GC pointer.
+    pub fn make_weak_slot(&mut self, p: *mut GcPointerBase) -> *mut WeakSlot {
+        let slot = WeakSlot {
+            value: p,
+            state: WeakState::Unmarked,
+        };
+        self.weak_slots.push_back(slot);
+        {
+            self.weak_slots.back_mut().unwrap() as *mut _
+        }
+    }
     pub fn new(track_allocations: bool) -> Self {
         let mut this = Self {
             allocations: HashMap::new(),
@@ -284,7 +295,21 @@ impl Heap {
             self.gc();
         }
     }
-
+    pub fn allocate_raw(&mut self, vtable: *mut (), size: usize) -> *mut GcPointerBase {
+        let real_size = size + size_of::<GcPointerBase>();
+        unsafe {
+            let pointer = if real_size <= libmimalloc_sys::MI_SMALL_SIZE_MAX {
+                libmimalloc_sys::mi_heap_malloc_small(self.mi_heap, real_size)
+            } else {
+                libmimalloc_sys::mi_heap_malloc_aligned(self.mi_heap, real_size, 16)
+            }
+            .cast::<GcPointerBase>();
+            pointer.write(GcPointerBase::new(vtable as _));
+            std::ptr::copy_nonoverlapping(&0u8, (*pointer).data(), size);
+            self.allocated += mi_good_size(real_size);
+            return pointer;
+        }
+    }
     /// Allocate `value` in GC heap.
     ///
     ///

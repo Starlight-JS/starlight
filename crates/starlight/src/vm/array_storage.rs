@@ -3,6 +3,7 @@ use std::mem::size_of;
 use super::value::JsValue;
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
+    snapshot::deserializer::Deserializable,
     Heap, SlotVisitor,
 };
 /// A GC-managed resizable vector of values. It is used for storage of property
@@ -15,9 +16,9 @@ use crate::heap::{
 /// not contain any native pointers.
 #[repr(C)]
 pub struct ArrayStorage {
-    size: u32,
-    capacity: u32,
-    data: [JsValue; 0],
+    pub(crate) size: u32,
+    pub(crate) capacity: u32,
+    pub(crate) data: [JsValue; 0],
 }
 
 impl GcPointer<ArrayStorage> {
@@ -228,6 +229,9 @@ unsafe impl Trace for ArrayStorage {
 }
 
 impl GcCell for ArrayStorage {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
     fn compute_size(&self) -> usize {
         (self.capacity as usize * size_of::<JsValue>()) + size_of::<Self>()
     }

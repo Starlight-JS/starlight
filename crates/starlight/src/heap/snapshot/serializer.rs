@@ -33,11 +33,13 @@ pub struct SnapshotSerializer {
     reference_map: HashMap<usize, u32>,
     pub(super) output: Vec<u8>,
     symbol_map: HashMap<Symbol, u32>,
+    log: bool,
 }
 
 impl SnapshotSerializer {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(log: bool) -> Self {
         Self {
+            log,
             reference_map: HashMap::new(),
             output: vec![],
             symbol_map: HashMap::new(),
@@ -105,14 +107,63 @@ impl SnapshotSerializer {
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
-        rt.serialize(self);
         let heap = rt.heap();
-
+        let patch_at = self.output.len();
+        self.write_u32(0);
+        let mut count: u32 = 0;
         Heap::walk(heap.mi_heap, |object, _| unsafe {
             let base = &mut *(object as *mut GcPointerBase);
+            self.write_reference(object as *const u8);
+            logln_if!(
+                self.log,
+                "serialize reference {:p} '{}' at index {}",
+                base,
+                base.get_dyn().type_name(),
+                self.reference_map.get(&(object)).unwrap()
+            );
+            self.try_write_reference(base.get_dyn().deser_pair().0 as *const u8)
+                .unwrap_or_else(|| {
+                    panic!("no deserializer for type '{}'", base.get_dyn().type_name());
+                });
+            self.write_reference(base.get_dyn().deser_pair().1 as *const u8);
+            let patch_at = self.output.len();
+            self.write_u32(0);
             base.get_dyn().serialize(self);
+            let buf = (self.output.len() as u32).to_le_bytes();
+            self.output[patch_at] = buf[0];
+            self.output[patch_at + 1] = buf[1];
+            self.output[patch_at + 2] = buf[2];
+            self.output[patch_at + 3] = buf[3];
+            count += 1;
             true
         });
+        let buf = count.to_le_bytes();
+        self.output[patch_at] = buf[0];
+        self.output[patch_at + 1] = buf[1];
+        self.output[patch_at + 2] = buf[2];
+        self.output[patch_at + 3] = buf[3];
+        let mut count: u32 = 0;
+        let patch_at = self.output.len();
+        self.write_u32(0);
+
+        for weak_slot in heap.weak_slots.iter() {
+            if weak_slot.value.is_null() {
+                self.write_u8(0x0);
+            } else {
+                self.write_u8(0x1);
+                self.write_reference(weak_slot.value);
+            }
+
+            self.write_reference(weak_slot);
+
+            count += 1;
+        }
+        let buf = count.to_le_bytes();
+        self.output[patch_at] = buf[0];
+        self.output[patch_at + 1] = buf[1];
+        self.output[patch_at + 2] = buf[2];
+        self.output[patch_at + 3] = buf[3];
+        rt.serialize(self);
     }
 
     pub fn get_gcpointer<T: GcCell + ?Sized>(&self, at: GcPointer<T>) -> u32 {
@@ -169,10 +220,18 @@ impl SnapshotSerializer {
         let ix = self.reference_map.get(&(ref_ as usize)).copied().unwrap();
         self.write_u32(ix);
     }
+
+    pub fn try_write_reference<T>(&mut self, ref_: *const T) -> Option<()> {
+        let ix = self.reference_map.get(&(ref_ as usize)).copied()?;
+        self.write_u32(ix);
+        Some(())
+    }
 }
 
 use libmimalloc_sys::*;
 use wtf_rs::segmented_vec::SegmentedVec;
+
+use super::deserializer::Deserializable;
 
 unsafe extern "C" fn build_reference_map(
     _heap: *const mi_heap_t,
@@ -221,7 +280,7 @@ impl Serializable for ArrayStorage {
     }
 }
 
-impl<T: GcCell + ?Sized> Serializable for GcPointer<T> {
+impl<T: GcCell + ?Sized + 'static> Serializable for GcPointer<T> {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         serializer.write_gcpointer(*self);
     }
@@ -285,6 +344,7 @@ impl Serializable for JsObject {
         serializer.write_gcpointer(self.slots);
         serializer.write_gcpointer(self.structure);
         serializer.write_gcpointer(self.indexed);
+        serializer.write_u32(self.flags);
         match self.tag {
             ObjectTag::NormalArguments => {
                 self.as_arguments().serialize(serializer);
@@ -300,7 +360,7 @@ impl Serializable for JsObject {
     }
 }
 
-impl<T: Serializable> Serializable for Option<T> {
+impl<T: Deserializable + Serializable> Serializable for Option<T> {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         match self {
             Some(item) => {
@@ -382,6 +442,8 @@ impl Serializable for CodeBlock {
         self.code.serialize(serializer);
         self.feedback.serialize(serializer);
         self.literals.serialize(serializer);
+        self.rest_param.serialize(serializer);
+        self.params.serialize(serializer);
     }
 }
 
