@@ -14,6 +14,7 @@ use crate::{
 pub struct CallFrame {
     pub prev: *mut CallFrame,
     pub sp: *mut JsValue,
+    pub limit: *mut JsValue,
     pub callee: JsValue,
     pub ip: *mut u8,
     pub code_block: Option<GcPointer<CodeBlock>>,

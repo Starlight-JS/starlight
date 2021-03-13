@@ -1,9 +1,8 @@
 use self::frame::CallFrame;
 use super::{
     arguments::*, array::*, array_storage::ArrayStorage, attributes::*, code_block::CodeBlock,
-    error::JsTypeError, error::*, function::JsVMFunction, function::*, object::*,
-    property_descriptor::*, slot::*, string::JsString, structure::*, symbol_table::*, value::*,
-    Runtime,
+    error::JsTypeError, error::*, function::JsVMFunction, object::*, property_descriptor::*,
+    slot::*, string::JsString, structure::*, symbol_table::*, value::*, Runtime,
 };
 use crate::bytecode::*;
 use crate::{
@@ -83,7 +82,16 @@ impl Runtime {
             }
         };
 
-        todo!()
+        unsafe {
+            eval_internal(
+                self,
+                func.code,
+                &func.code.code[0] as *const u8 as *mut u8,
+                _this,
+                args_.ctor_call,
+                nscope,
+            )
+        }
     }
 }
 
@@ -110,12 +118,25 @@ unsafe fn eval_internal(
     (*frame).exit_on_return = true;
     (*frame).ip = ip;
 
-    todo!()
+    loop {
+        let result = eval(rt, frame);
+        match result {
+            Ok(value) => return Ok(value),
+            Err(e) => {
+                if let Some((env, ip)) = (*frame).try_stack.pop() {
+                    (*frame).env = env;
+                    (*frame).ip = ip;
+                    (*frame).push(e);
+                    continue;
+                }
+            }
+        }
+    }
 }
 
 pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
     let mut ip = (*frame).ip;
-    let setup_frame = |rt: &mut Runtime,
+    /*let setup_frame = |rt: &mut Runtime,
                        frame: &mut CallFrame,
                        func: &JsVMFunction,
                        env: JsValue,
@@ -178,7 +199,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         frame.env = JsValue::encode_object_value(nscope);
 
         Ok(())
-    };
+    };*/
     let mut frame: &'static mut CallFrame = &mut *frame;
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
@@ -648,7 +669,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 let mut func_object = func.get_jsobject();
                 let func = func_object.as_function_mut();
-                if let FuncType::User(ref vm_function) = func.ty {
+                /*if let FuncType::User(ref vm_function) = func.ty {
                     let new_frame = rt.stack.new_frame();
                     if new_frame.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
@@ -672,11 +693,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )?;
                     frame.ip = ip;
                     frame = &mut *new_frame;
-                } else {
-                    let mut args_ = Arguments::from_array_storage(rt, this, args);
-                    let result = func.call(rt, &mut args_)?;
-                    frame.push(result);
-                }
+                } else {*/
+                let mut args_ = Arguments::from_array_storage(rt, this, args);
+                let result = func.call(rt, &mut args_)?;
+                frame.push(result);
             }
             Opcode::OP_NEW => {
                 let argc = ip.cast::<u32>().read();
@@ -739,6 +759,61 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 let x = value.to_number(rt)?;
                 frame.push(JsValue::encode_f64_value(x));
+            }
+
+            Opcode::OP_DECL_CONST => {
+                let val = frame.pop();
+                let name = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let name = unwrap_unchecked(frame.code_block).names[name as usize];
+                Env {
+                    record: frame.env.get_jsobject(),
+                }
+                .declare_variable(rt, name, val, false)?;
+            }
+            Opcode::OP_DECL_LET => {
+                let val = frame.pop();
+                let name = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let name = unwrap_unchecked(frame.code_block).names[name as usize];
+                Env {
+                    record: frame.env.get_jsobject(),
+                }
+                .declare_variable(rt, name, val, true)?;
+            }
+            Opcode::OP_DELETE_VAR => {
+                let name = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let name = unwrap_unchecked(frame.code_block).names[name as usize];
+                let env = get_env(rt, frame, name);
+
+                match env {
+                    Some(mut env) => {
+                        frame.push(JsValue::encode_bool_value(env.delete(rt, name, false)?))
+                    }
+                    None => {
+                        frame.push(JsValue::encode_bool_value(true));
+                    }
+                }
+            }
+
+            Opcode::OP_RET => {
+                let mut value = if frame.sp <= frame.limit {
+                    JsValue::encode_undefined_value()
+                } else {
+                    frame.pop()
+                };
+
+                if frame.ctor && !value.is_jsobject() {
+                    value = frame.this;
+                }
+
+                if frame.exit_on_return {
+                    return Ok(value);
+                }
+                let _ = rt.stack.pop_frame().unwrap();
+                frame = &mut *rt.stack.current;
+                ip = frame.ip;
             }
 
             _ => unreachable_unchecked(),

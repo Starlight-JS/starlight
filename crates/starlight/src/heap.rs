@@ -35,7 +35,7 @@
 //!
 //!
 //! I considered using reference counting for Starlight but then decided to keep using mostly-precise GC. RC is not just
-//! slower at mutator times but also does not prevent cycles, increases object header size and makes it harder to work with
+//! slower at mutator times but also does not prevent cycles, increases object header size and need to invoke destructors makes it harder to work with
 //! objects at JIT level.
 //!
 //!
@@ -48,7 +48,7 @@
 //!
 //! # Why not use BDWGC?
 //!
-//! Boehm-Demers-Wise's GC is great library and it is used in many projects but it does not suit Starlight use:
+//! Boehm-Demers-Weiser GC is great library and it is used in many projects but it does not suit Starlight use:
 //! - It can't scan Rust standard library types.
 //! - No support for weak references which is necessary for inline caches and JS `WeakRef` type.
 //! - Quite slow compared to what we have implemented.

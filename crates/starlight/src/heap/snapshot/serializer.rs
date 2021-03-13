@@ -30,7 +30,7 @@ use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
 use std::{collections::HashMap, io::Write};
 
 pub struct SnapshotSerializer {
-    reference_map: HashMap<usize, u32>,
+    pub(crate) reference_map: HashMap<usize, u32>,
     pub(super) output: Vec<u8>,
     symbol_map: HashMap<Symbol, u32>,
     log: bool,

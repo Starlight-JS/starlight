@@ -26,7 +26,7 @@ pub struct Arguments {
 
 impl Arguments {
     pub fn from_array_storage(
-        rt: &mut Runtime,
+        _rt: &mut Runtime,
         this: JsValue,
         values: GcPointer<ArrayStorage>,
     ) -> Self {

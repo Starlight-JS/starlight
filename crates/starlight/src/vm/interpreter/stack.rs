@@ -1,20 +1,15 @@
-use std::{intrinsics::unlikely, ptr::null_mut};
-
 use super::*;
-use crate::vm::{string::JsString, value::*};
-use crate::{
-    heap::{cell::Trace, SlotVisitor},
-    vm::error::*,
-};
+use crate::heap::{cell::Trace, SlotVisitor};
 use frame::*;
 use memmap2::MmapMut;
+use std::{intrinsics::unlikely, ptr::null_mut};
+#[allow(dead_code)]
 pub struct Stack {
     map: MmapMut,
     start: *mut JsValue,
     cursor: *mut JsValue,
-    size: usize,
     end: *mut JsValue,
-    current: *mut CallFrame,
+    pub(crate) current: *mut CallFrame,
 }
 
 pub const STACK_SIZE: usize = 16 * 1024;
@@ -28,7 +23,6 @@ impl Stack {
             end: unsafe { map.as_mut_ptr().cast::<JsValue>().add(STACK_SIZE) },
             cursor: map.as_mut_ptr().cast(),
             current: null_mut(),
-            size: STACK_SIZE,
             map,
         }
     }
@@ -48,6 +42,7 @@ impl Stack {
                 env: JsValue::encode_empty_value(),
                 this: JsValue::encode_empty_value(),
                 sp: self.cursor,
+                limit: self.cursor,
                 code_block: None,
                 callee: JsValue::encode_undefined_value(),
                 ip: null_mut(),

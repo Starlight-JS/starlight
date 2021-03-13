@@ -1,7 +1,7 @@
+#![allow(unused_variables)]
 use vm::function::JsFunction;
 use wtf_rs::{segmented_vec::SegmentedVec, unwrap_unchecked};
 
-use super::serializer::Serializable;
 use crate::{
     bytecode::TypeFeedBack,
     heap::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
@@ -10,7 +10,6 @@ use crate::{
         self,
         arguments::JsArguments,
         array_storage::ArrayStorage,
-        attributes::AttrSafe,
         code_block::CodeBlock,
         function::{FuncType, JsBoundFunction, JsNativeFunction, JsVMFunction},
         global::JsGlobal,
@@ -18,14 +17,13 @@ use crate::{
         interpreter::SpreadValue,
         object::{object_size_with_tag, JsObject, ObjectTag},
         property_descriptor::{Accessor, StoredSlot},
-        slot::*,
         string::JsString,
         structure::{
             DeletedEntry, DeletedEntryHolder, MapEntry, Structure, TargetTable, Transition,
             TransitionKey, TransitionsTable,
         },
         symbol_table::*,
-        symbol_table::{symbol_table, JsSymbol, Symbol, SymbolID},
+        symbol_table::{JsSymbol, Symbol, SymbolID},
         value::*,
         Runtime, *,
     },
@@ -34,18 +32,16 @@ use std::{
     collections::HashMap,
     hash::Hash,
     hint::unreachable_unchecked,
-    io::{Cursor, Read},
     mem::size_of,
     mem::{transmute, ManuallyDrop},
-    str::from_utf8_unchecked,
 };
-
+use vec_collections::VecMap1;
 pub struct Deserializer<'a> {
     rt: *mut Runtime,
     reader: &'a [u8],
     pc: usize,
-    reference_map: HashMap<u32, usize>,
-    symbol_map: HashMap<u32, Symbol>,
+    reference_map: Vec<usize>,
+    symbol_map: Vec<Symbol>,
     log_deser: bool,
 }
 
@@ -95,27 +91,30 @@ impl<'a> Deserializer<'a> {
 
     pub fn get_reference(&mut self) -> *const u8 {
         let index = self.get_u32();
-        unwrap_unchecked(self.reference_map.get(&index).copied()) as *const u8
+        unsafe { (*self.reference_map.get_unchecked(index as usize)) as *const u8 }
+        //  unwrap_unchecked(self.reference_map.get(&index).copied()) as *const u8
     }
 
-    fn build_reference_map(&mut self, rt: &mut Runtime) {
+    unsafe fn build_reference_map(&mut self, rt: &mut Runtime) {
         VM_NATIVE_REFERENCES
             .iter()
             .enumerate()
             .for_each(|(index, reference)| {
-                self.reference_map.insert(index as _, *reference);
+                *self.reference_map.get_unchecked_mut(index as usize) = *reference;
             });
 
         if let Some(ref references) = rt.external_references {
             for reference in references.iter() {
                 let ix = self.reference_map.len();
-                self.reference_map.insert(ix as u32, *reference);
+                *self.reference_map.get_unchecked_mut(ix as usize) = *reference;
+                //self.reference_map.insert(ix as u32, *reference);
             }
         }
     }
 
     unsafe fn build_symbol_table(&mut self) {
         let count = self.get_u32();
+        self.symbol_map = vec![DUMMY_SYMBOL; count as usize];
         for _ in 0..count {
             let index = self.get_u32();
             let len = self.get_u32();
@@ -127,7 +126,7 @@ impl<'a> Deserializer<'a> {
             let sym = std::str::from_utf8_unchecked(&self.reader[self.pc..self.pc + len as usize])
                 .intern();
             self.pc += len as usize;
-            self.symbol_map.insert(index, sym);
+            *self.symbol_map.get_unchecked_mut(index as usize) = sym;
         }
     }
 
@@ -151,7 +150,7 @@ impl<'a> Deserializer<'a> {
                 ptr
             );
             self.pc = offset as usize;
-            self.reference_map.insert(ref_id, ptr as usize);
+            *self.reference_map.get_unchecked_mut(ref_id as usize) = ptr as usize;
         }
 
         let weak_count = self.get_u32();
@@ -168,14 +167,14 @@ impl<'a> Deserializer<'a> {
 
             logln_if!(self.log_deser, "make weak #{} {:p}", index, ptr);
             let slot = rt.heap().make_weak_slot(ptr as *mut _);
-            self.reference_map.insert(index, slot as _);
+            *self.reference_map.get_unchecked_mut(index as usize) = slot as usize;
         }
         let last_stop = self.pc;
         self.pc = heap_at;
 
         for _ in 0..count {
             let ref_id = self.get_u32();
-            let base = unwrap_unchecked(self.reference_map.get(&ref_id).copied());
+            let base = *self.reference_map.get_unchecked_mut(ref_id as usize);
             logln_if!(
                 self.log_deser,
                 "deserialize #{}:0x{:x} '{}'",
@@ -244,6 +243,9 @@ impl<'a> Deserializer<'a> {
         };
         runtime.heap().defer();
         unsafe {
+            let ref_count = this.get_u32();
+
+            this.reference_map = vec![0; ref_count as usize];
             this.build_reference_map(&mut runtime);
             this.build_symbol_table();
             this.deserialize_internal(&mut runtime);
@@ -401,7 +403,7 @@ impl Deserializable for Symbol {
             0x2f => {
                 let ix = deser.get_u32();
                 at.cast::<Symbol>()
-                    .write(deser.symbol_map.get(&ix).copied().unwrap());
+                    .write(*deser.symbol_map.get_unchecked(ix as usize));
             }
             _ => unreachable_unchecked(),
         }
@@ -413,7 +415,7 @@ impl Deserializable for Symbol {
             0x1f => Symbol::Key(SymbolID(deser.get_u32())),
             0x2f => {
                 let ix = deser.get_u32();
-                deser.symbol_map.get(&ix).copied().unwrap()
+                *deser.symbol_map.get_unchecked(ix as usize)
             }
             _ => unreachable_unchecked(),
         }
