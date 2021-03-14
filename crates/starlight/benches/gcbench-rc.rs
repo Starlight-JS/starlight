@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::vm::value::JsValue;
 use std::{

@@ -55,30 +55,32 @@
 //! - There's no API for proper precise marking.
 //!
 #![allow(dead_code)]
-use crossbeam::queue::SegQueue;
+use crate::vm::GcParams;
+use cell::vtable_of;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     mem::size_of,
     mem::transmute,
     ptr::{null_mut, NonNull},
-    sync::atomic::{AtomicBool, AtomicU8},
 };
 
 use self::cell::{
     GcCell, GcPointer, GcPointerBase, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
     POSSIBLY_BLACK, POSSIBLY_GREY,
 };
-use crate::utils::ordered_set::OrderedSet;
+
 use libmimalloc_sys::{
     mi_free, mi_good_size, mi_heap_area_t, mi_heap_check_owned, mi_heap_collect,
     mi_heap_contains_block, mi_heap_destroy, mi_heap_t, mi_heap_visit_blocks,
 };
 use wtf_rs::keep_on_stack;
+#[macro_use]
 pub mod cell;
+pub mod pmarking;
 pub mod snapshot;
 /// Visits garbage collected objects
 pub struct SlotVisitor {
-    queue: VecDeque<*mut GcPointerBase>,
+    queue: Vec<*mut GcPointerBase>,
 
     bytes_visited: usize,
     sp: usize,
@@ -92,7 +94,8 @@ impl SlotVisitor {
         if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
             return;
         }
-        self.queue.push_back(base);
+        self.bytes_visited += 1;
+        self.queue.push(base);
     }
     /// Visit a reference to the specified value
     pub fn visit<T: GcCell + ?Sized>(&mut self, value: &GcPointer<T>) {
@@ -101,7 +104,8 @@ impl SlotVisitor {
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
                 return;
             }
-            self.queue.push_back(base);
+            self.bytes_visited += 1;
+            self.queue.push(base);
         }
     }
     /// Add pointer range for scanning for GC objects.
@@ -154,22 +158,17 @@ pub const GC_SWEEP: u8 = 4;
 
 /// Garbage collected heap.
 pub struct Heap {
-    list: *mut GcPointerBase,
     #[allow(dead_code)]
-    large: OrderedSet<*mut GcPointerBase>,
     pub(crate) weak_slots: std::collections::LinkedList<WeakSlot>,
     constraints: Vec<Box<dyn MarkingConstraint>>,
     sp: usize,
     defers: usize,
     allocated: usize,
-    should_stop: AtomicBool,
+    threadpool: Option<scoped_threadpool::Pool>,
     max_heap_size: usize,
     track_allocations: bool,
     allocations: HashMap<*mut GcPointerBase, String>,
     pub(crate) mi_heap: *mut libmimalloc_sys::mi_heap_t,
-    write_queue: SegQueue<usize>,
-    gc_state: AtomicU8,
-    needs_to_stop: AtomicBool,
 }
 
 impl Heap {
@@ -201,7 +200,7 @@ impl Heap {
             );
         }
     }
-    #[deprecated(since = "0.0.0", note = "Write barrier is not used anywhere for now")]
+    /*#[deprecated(since = "0.0.0", note = "Write barrier is not used anywhere for now")]
     pub fn write_barrier<T: GcCell, U: GcCell>(&self, object: GcPointer<T>, field: GcPointer<U>) {
         unsafe {
             let object_base = &mut *object.base.as_ptr();
@@ -215,7 +214,7 @@ impl Heap {
     fn add_to_remembered_set(&self, object: &mut GcPointerBase) {
         object.force_set_state(POSSIBLY_GREY);
         self.write_queue.push(object as *mut _ as usize);
-    }
+    }*/
     /// Create null WeakRef. This weak will always return None on [WeakRef::upgrade](WeakRef::upgrade).  
     pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
         let slot = WeakSlot {
@@ -257,23 +256,23 @@ impl Heap {
             self.weak_slots.back_mut().unwrap() as *mut _
         }
     }
-    pub fn new(track_allocations: bool) -> Self {
+    pub fn new(gc_params: GcParams) -> Self {
         let mut this = Self {
             allocations: HashMap::new(),
-            should_stop: AtomicBool::new(false),
-            track_allocations,
-            gc_state: AtomicU8::new(0),
-            list: null_mut(),
-            large: OrderedSet::new(),
+            track_allocations: gc_params.track_allocations,
+            threadpool: if gc_params.parallel_marking {
+                Some(scoped_threadpool::Pool::new(gc_params.nmarkers))
+            } else {
+                None
+            },
             weak_slots: Default::default(),
             constraints: vec![],
             sp: 0,
             defers: 0,
-            write_queue: SegQueue::new(),
+
             allocated: 0,
             max_heap_size: 100 * 1024,
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
-            needs_to_stop: AtomicBool::new(false),
         };
 
         this.add_constraint(SimpleMarkingConstraint::new("thread roots", |visitor| {
@@ -305,12 +304,13 @@ impl Heap {
             }
             .cast::<GcPointerBase>();
             pointer.write(GcPointerBase::new(vtable as _));
+            (*pointer).set_allocated();
             std::ptr::copy_nonoverlapping(&0u8, (*pointer).data(), size);
             self.allocated += mi_good_size(real_size);
             return pointer;
         }
     }
-    /// Allocate `value` in GC heap.
+    /// Allocate `value` on GC heap.
     ///
     ///
     /// Returns value allocated on GC heap. Note that this function might trigger GC cycle but in most cases
@@ -329,8 +329,9 @@ impl Heap {
                 libmimalloc_sys::mi_heap_malloc_aligned(self.mi_heap, real_size, 16)
             }
             .cast::<GcPointerBase>();
-            let vtable = std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn GcCell).vtable;
+            let vtable = vtable_of(&value);
             pointer.write(GcPointerBase::new(vtable as _));
+            (*pointer).set_allocated();
             (*pointer).data::<T>().write(value);
             self.allocated += mi_good_size(real_size);
             #[cold]
@@ -410,7 +411,7 @@ impl Heap {
             bytes_visited: 0,
 
             cons_roots: vec![],
-            queue: VecDeque::new(),
+            queue: Vec::new(),
             sp: self.sp,
         };
 
@@ -423,7 +424,11 @@ impl Heap {
             }
             self.process_roots(&mut visitor);
             drop(registers);
-            self.process_worklist(&mut visitor);
+            if let Some(ref mut pool) = self.threadpool {
+                pmarking::start(&visitor.queue, pool);
+            } else {
+                self.process_worklist(&mut visitor);
+            }
             self.update_weak_references();
             self.reset_weak_references();
             #[cfg(feature = "enable-gc-tracking")]
@@ -571,7 +576,7 @@ impl Heap {
     /// ```
     ///
     fn process_worklist(&mut self, visitor: &mut SlotVisitor) {
-        while let Some(ptr) = visitor.queue.pop_front() {
+        while let Some(ptr) = visitor.queue.pop() {
             unsafe {
                 (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
                 (*ptr).get_dyn().trace(visitor);
@@ -592,7 +597,9 @@ impl Heap {
     ) {
         if mi_heap_check_owned(self.mi_heap, ptr.cast()) {
             if mi_heap_contains_block(self.mi_heap, ptr.cast()) {
-                f(self, ptr.cast());
+                if (*ptr.cast::<GcPointerBase>()).is_allocated() {
+                    f(self, ptr.cast());
+                }
             }
         }
     }
@@ -623,7 +630,7 @@ unsafe extern "C" fn sweep(
     let ptr = block.cast::<GcPointerBase>();
     if (*ptr).state() == DEFINETELY_WHITE {
         std::ptr::drop_in_place((*ptr).get_dyn());
-
+        (*ptr).deallocate();
         mi_free(ptr.cast());
     } else {
         heap.allocated += block_sz;

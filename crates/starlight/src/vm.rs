@@ -29,12 +29,51 @@ use attributes::*;
 use object::*;
 use property_descriptor::*;
 use value::*;
+
+pub struct GcParams {
+    pub(crate) nmarkers: u32,
+    pub(crate) track_allocations: bool,
+    pub(crate) parallel_marking: bool,
+}
+
+impl Default for GcParams {
+    fn default() -> Self {
+        Self {
+            track_allocations: false,
+            parallel_marking: true,
+            nmarkers: 4,
+        }
+    }
+}
+
+impl GcParams {
+    pub fn with_marker_threads(mut self, n: u32) -> Self {
+        assert!(self.parallel_marking, "Enable parallel marking first");
+        self.nmarkers = n;
+        if n == 0 {
+            panic!("Can't set zero marker threads");
+        }
+        self
+    }
+
+    pub fn with_parallel_marking(mut self, cond: bool) -> Self {
+        self.parallel_marking = cond;
+        self.nmarkers = 4;
+        self
+    }
+
+    pub fn with_track_allocations(mut self, cond: bool) -> Self {
+        self.track_allocations = cond;
+        self
+    }
+}
+
 pub struct Runtime {
     pub(crate) heap: Box<Heap>,
     pub(crate) stack: Stack,
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
-    pub(crate) external_references: Option<Box<[usize]>>,
+    pub(crate) external_references: Option<&'static [usize]>,
 }
 
 impl Runtime {
@@ -48,10 +87,10 @@ impl Runtime {
         &mut self.heap
     }
     pub(crate) fn new_empty(
-        track_allocations: bool,
-        external_references: Option<Box<[usize]>>,
+        gc_params: GcParams,
+        external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
-        let heap = Box::new(Heap::new(track_allocations));
+        let heap = Box::new(Heap::new(gc_params));
         let mut this = Box::new(Self {
             heap,
             stack: Stack::new(),
@@ -71,8 +110,8 @@ impl Runtime {
 
         this
     }
-    pub fn new(track_allocations: bool, external_references: Option<Box<[usize]>>) -> Box<Runtime> {
-        let heap = Box::new(Heap::new(track_allocations));
+    pub fn new(gc_params: GcParams, external_references: Option<&'static [usize]>) -> Box<Runtime> {
+        let heap = Box::new(Heap::new(gc_params));
         let mut this = Box::new(Self {
             heap,
             stack: Stack::new(),

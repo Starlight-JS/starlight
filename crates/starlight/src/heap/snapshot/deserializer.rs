@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 use vm::function::JsFunction;
-use wtf_rs::{segmented_vec::SegmentedVec, unwrap_unchecked};
+use wtf_rs::segmented_vec::SegmentedVec;
 
 use crate::{
     bytecode::TypeFeedBack,
@@ -35,7 +35,7 @@ use std::{
     mem::size_of,
     mem::{transmute, ManuallyDrop},
 };
-use vec_collections::VecMap1;
+
 pub struct Deserializer<'a> {
     rt: *mut Runtime,
     reader: &'a [u8],
@@ -133,7 +133,7 @@ impl<'a> Deserializer<'a> {
     unsafe fn deserialize_internal(&mut self, rt: &mut Runtime) {
         let count = self.get_u32();
         let heap_at = self.pc;
-
+        logln_if!(self.log_deser, "- Object pre-allocation started -");
         for _ in 0..count {
             let ref_id = self.get_u32();
             let _deser = self.get_reference();
@@ -152,9 +152,9 @@ impl<'a> Deserializer<'a> {
             self.pc = offset as usize;
             *self.reference_map.get_unchecked_mut(ref_id as usize) = ptr as usize;
         }
-
+        logln_if!(self.log_deser, "- Object pre-allocated completed -");
         let weak_count = self.get_u32();
-
+        logln_if!(self.log_deser, "- Weak slot deserialization started -");
         for _ in 0..weak_count {
             let is_null = self.get_u8() == 0x0;
             let ptr = if is_null {
@@ -169,9 +169,10 @@ impl<'a> Deserializer<'a> {
             let slot = rt.heap().make_weak_slot(ptr as *mut _);
             *self.reference_map.get_unchecked_mut(index as usize) = slot as usize;
         }
+        logln_if!(self.log_deser, "- Weak slot deserialization completed -");
         let last_stop = self.pc;
         self.pc = heap_at;
-
+        logln_if!(self.log_deser, "- Object deserialization started -");
         for _ in 0..count {
             let ref_id = self.get_u32();
             let base = *self.reference_map.get_unchecked_mut(ref_id as usize);
@@ -188,6 +189,7 @@ impl<'a> Deserializer<'a> {
             let data = (*(base as *mut GcPointerBase)).data::<u8>();
             _deser(data, self);
         }
+        logln_if!(self.log_deser, "- Object deserialization completed -");
         self.pc = last_stop;
 
         rt.global_data = self.deserialize_global_data();
@@ -227,12 +229,31 @@ impl<'a> Deserializer<'a> {
             eval_error_structure: self.read_opt_gc(),
         }
     }
+    /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
+    /// was used in snapshot it should be there too.
+    /// ```rust,ignore
+    ///
+    /// fn my_native_fun(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {...}
+    /// fn another_native_fun(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {...}
+    ///
+    /// let native_refs = Box::leak(Box::new([my_naive_fun as usize,another_native_fun as usize]));
+    /// let mut rt = Runtime::new(false,Some(native_refs));
+    ///
+    /// let snapshot = Snapshot::take(&mut rt);
+    ///
+    /// // Note that native references should be passed in the same order as in serialized runtime instance, otherwise
+    /// // this will lead to UB or segfault or wrong function ordering.
+    /// let rt2 = Deserializer::deserialize(false,&snapshot.buffer,Some(native_refs));
+    ///
+    ///
+    /// ```
     pub fn deserialize(
         log_deser: bool,
         snapshot: &'a [u8],
-        external_refs: Option<Box<[usize]>>,
+        gc_params: GcParams,
+        external_refs: Option<&'static [usize]>,
     ) -> Box<Runtime> {
-        let mut runtime = Runtime::new_empty(false, external_refs);
+        let mut runtime = Runtime::new_empty(gc_params, external_refs);
         let mut this = Self {
             reader: snapshot,
             pc: 0,
@@ -250,7 +271,7 @@ impl<'a> Deserializer<'a> {
             this.build_symbol_table();
             this.deserialize_internal(&mut runtime);
         }
-
+        runtime.heap().undefer();
         runtime
     }
 }
@@ -1307,6 +1328,7 @@ impl GcCell for TypeFeedBack {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }
 
 impl Deserializable for TypeFeedBack {

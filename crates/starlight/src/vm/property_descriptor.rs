@@ -128,6 +128,7 @@ impl GcCell for StoredSlot {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }
 impl StoredSlot {
     pub fn value(&self) -> JsValue {
@@ -530,6 +531,7 @@ impl GcCell for Accessor {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }
 
 unsafe impl Trace for Accessor {

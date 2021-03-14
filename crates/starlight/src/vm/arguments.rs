@@ -70,6 +70,7 @@ impl GcCell for Arguments {
     fn deser_pair(&self) -> (usize, usize) {
         panic!("unserializable")
     }
+    vtable_impl!();
 }
 unsafe impl Trace for Arguments {
     fn trace(&self, tracer: &mut SlotVisitor) {

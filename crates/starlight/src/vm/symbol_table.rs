@@ -73,6 +73,7 @@ impl GcCell for Symbol {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }
 unsafe impl Trace for Symbol {}
 
@@ -138,4 +139,5 @@ impl GcCell for JsSymbol {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }

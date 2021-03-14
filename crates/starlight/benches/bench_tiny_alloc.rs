@@ -1,8 +1,12 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use starlight::heap::{
-    cell::{GcCell, Trace},
-    snapshot::serializer::{Serializable, SnapshotSerializer},
-    usable_size, Heap,
+use starlight::{
+    heap::{
+        cell::{GcCell, Trace},
+        snapshot::serializer::{Serializable, SnapshotSerializer},
+        usable_size, Heap,
+    },
+    vm::GcParams,
+    vtable_impl,
 };
 use wtf_rs::keep_on_stack;
 struct Large([u8; 8192]);
@@ -11,6 +15,7 @@ impl GcCell for Large {
     fn deser_pair(&self) -> (usize, usize) {
         (0, 0)
     }
+    vtable_impl!();
 }
 
 impl Serializable for Large {
@@ -18,7 +23,7 @@ impl Serializable for Large {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut heap = Heap::new(false);
+    let mut heap = Heap::new(GcParams::default());
     //heap.defer();
     c.bench_function("bench-alloc-f64", |b| {
         b.iter(|| {

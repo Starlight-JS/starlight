@@ -1,5 +1,5 @@
 use std::{
-    any::type_name,
+    any::TypeId,
     collections::HashMap,
     marker::PhantomData,
     mem::size_of,
@@ -52,6 +52,28 @@ pub unsafe trait Trace {
     }
 }
 
+/*
+#[repr(C)]
+pub struct VTable {
+    pub compute_size: fn(VRef<VTable>) -> usize,
+    pub type_name: fn(VRef<VTable>) -> &'static str,
+    pub deser_pair: fn(VRef<VTable>) -> (usize, usize),
+    pub trace: fn(VRef<VTable>, &mut SlotVisitor),
+}*/
+
+/// Implement `vtable(&self) -> &'static VTable` method for GcCell automatically.
+#[macro_export]
+macro_rules! vtable_impl {
+    ($this: ty) => {
+        /*fn vtable(&self) -> *const u8 {
+            $crate::heap::cell::vtable_of_type::<Self>() as _
+        }*/
+    };
+    () => {
+        vtable_impl!(Self);
+    };
+}
+
 /// `GcCell` is a type that can be allocated in GC heap and passed to JavaScript environment.
 ///
 ///
@@ -75,7 +97,7 @@ mopafy!(GcCell);
 
 #[repr(C)]
 pub struct GcPointerBase {
-    vtable: u64,
+    vtable: usize,
     cell_state: AtomicU8, //pub next: *mut Self,
 }
 
@@ -86,7 +108,7 @@ pub const DEFINETELY_WHITE: u8 = 1;
 impl GcPointerBase {
     pub fn new(vtable: usize) -> Self {
         Self {
-            vtable: (vtable as u64 | 0),
+            vtable: vtable,
             cell_state: AtomicU8::new(DEFINETELY_WHITE),
             //  next: null_mut(),
             //mark: false,
@@ -94,13 +116,15 @@ impl GcPointerBase {
         }
     }
 
-    pub fn test_and_set_marked(&mut self) -> bool {
-        let prev = self.vtable & (1 << 0);
+    pub fn set_allocated(&mut self) {
         self.vtable |= 1 << 0;
-        prev == 0
     }
 
-    pub fn unmark(&mut self) {
+    pub fn is_allocated(&self) -> bool {
+        (self.vtable >> 0) & 1 != 0
+    }
+
+    pub fn deallocate(&mut self) {
         self.vtable &= !(1 << 0);
     }
 
@@ -110,7 +134,7 @@ impl GcPointerBase {
 
     pub fn set_state(&self, from: u8, to: u8) -> bool {
         self.cell_state
-            .compare_exchange(from, to, Ordering::AcqRel, Ordering::Relaxed)
+            .compare_exchange_weak(from, to, Ordering::AcqRel, Ordering::Relaxed)
             == Ok(from)
     }
     pub fn force_set_state(&self, to: u8) {
@@ -123,7 +147,7 @@ impl GcPointerBase {
                 .cast()
         }
     }
-    pub fn raw(&self) -> u64 {
+    pub fn raw(&self) -> usize {
         self.vtable
     }
 
@@ -138,10 +162,6 @@ impl GcPointerBase {
 
     pub fn vtable(&self) -> usize {
         (self.vtable & !(1 << 0)) as usize
-    }
-
-    pub fn is_marked(&self) -> bool {
-        (self.vtable & (1 << 0)) != 0
     }
 }
 pub fn vtable_of<T: GcCell>(x: *const T) -> usize {
@@ -181,7 +201,7 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
 impl<T: GcCell + ?Sized> GcPointer<T> {
     #[inline]
     pub fn is<U: GcCell>(self) -> bool {
-        unsafe { (*self.base.as_ptr()).vtable() == vtable_of_type::<U>() }
+        unsafe { (*self.base.as_ptr()).get_dyn().type_id() == TypeId::of::<U>() }
     }
 
     #[inline]
@@ -205,6 +225,15 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
     #[inline]
     pub fn downcast<U: GcCell>(self) -> Option<GcPointer<U>> {
         if !self.is::<U>() {
+            unsafe {
+                println!(
+                    "{:x}({}) != {:x}({})",
+                    (*self.base.as_ptr()).vtable(),
+                    self.get_dyn().type_name(),
+                    vtable_of_type::<U>(),
+                    std::any::type_name::<U>()
+                );
+            }
             None
         } else {
             Some(unsafe { self.downcast_unchecked() })
@@ -253,6 +282,7 @@ macro_rules! impl_prim {
                 fn deser_pair(&self) -> (usize,usize) {
                     (Self::deserialize as usize,Self::allocate as usize)
                 }
+                vtable_impl!($t);
             }
         )*
     };
@@ -313,6 +343,7 @@ impl<T: GcCell> GcCell for WeakRef<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!(WeakRef<T>);
 }
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
     fn trace(&self, visitor: &mut SlotVisitor) {
@@ -337,6 +368,7 @@ impl<
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!(HashMap<K,V>);
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
@@ -352,15 +384,18 @@ impl<T: GcCell + Serializable + 'static + Deserializable> GcCell for Vec<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as usize, Self::allocate as usize)
     }
+    vtable_impl!();
 }
 impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!(Self);
 }
 
 impl<T: GcCell + Serializable + Deserializable + 'static> GcCell for Option<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }

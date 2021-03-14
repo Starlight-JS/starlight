@@ -7,11 +7,13 @@
     const_raw_ptr_to_usize_cast
 )]
 use std::sync::atomic::AtomicBool;
-use vm::{value::JsValue, Runtime};
+use vm::{value::JsValue, GcParams, Runtime};
+
 #[macro_use]
 pub mod utils;
-pub mod bytecode;
+#[macro_use]
 pub mod heap;
+pub mod bytecode;
 pub mod jsrt;
 pub mod vm;
 pub fn val_add(x: JsValue, y: JsValue, slowpath: fn(JsValue, JsValue) -> JsValue) -> JsValue {
@@ -37,10 +39,10 @@ impl Platform {
     }
 
     pub fn new_runtime(
-        track_allocations: bool,
-        external_references: Option<Box<[usize]>>,
+        gc_params: GcParams,
+        external_references: Option<&'static [usize]>,
     ) -> Box<Runtime> {
         Self::initialize();
-        vm::Runtime::new(track_allocations, external_references)
+        vm::Runtime::new(gc_params, external_references)
     }
 }

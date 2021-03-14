@@ -94,7 +94,7 @@ impl Runtime {
         }
     }
 }
-
+#[inline(never)]
 unsafe fn eval_internal(
     rt: &mut Runtime,
     code: GcPointer<CodeBlock>,
@@ -949,6 +949,7 @@ impl GcCell for SpreadValue {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }
 unsafe impl Trace for SpreadValue {
     fn trace(&self, visitor: &mut SlotVisitor) {

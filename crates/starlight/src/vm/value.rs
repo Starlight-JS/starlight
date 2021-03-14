@@ -966,4 +966,5 @@ impl GcCell for JsValue {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
+    vtable_impl!();
 }

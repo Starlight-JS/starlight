@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::{
     heap::{
@@ -5,14 +6,19 @@ use starlight::{
         snapshot::serializer::{Serializable, SnapshotSerializer},
         Heap, SlotVisitor,
     },
-    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
-    Platform,
+    vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime},
+    vtable_impl, Platform,
 };
 use wtf_rs::keep_on_stack;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let mut rrt = Runtime::new(false, None);
+    let mut rrt = Runtime::new(
+        GcParams::default()
+            .with_parallel_marking(true)
+            .with_marker_threads(4),
+        None,
+    );
     let mut rt = rrt.heap();
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
@@ -142,6 +148,7 @@ impl GcCell for Node {
     fn deser_pair(&self) -> (usize, usize) {
         (0, 0)
     }
+    vtable_impl!();
 }
 impl Serializable for Node {
     fn serialize(&self, _serializer: &mut SnapshotSerializer) {}
