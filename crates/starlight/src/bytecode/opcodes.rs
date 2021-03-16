@@ -3,6 +3,7 @@
 #[allow(non_camel_case_types)]
 pub enum Opcode {
     OP_NOP = 0,
+    OP_SWAP,
     OP_PUSH_LITERAL,
     OP_PUSH_INT,
     OP_PUSH_TRUE,
@@ -10,6 +11,7 @@ pub enum Opcode {
     OP_PUSH_UNDEF,
     OP_PUSH_NULL,
     OP_PUSH_NAN,
+    OP_GET_FUNCTION,
 
     OP_LOOPHINT,
     OP_CALL,
@@ -45,10 +47,11 @@ pub enum Opcode {
 
     OP_TYPEOF,
     OP_NOT,
+    OP_LOGICAL_NOT,
     OP_POS,
     OP_NEG,
     OP_BNOT,
-
+    OP_THROW,
     OP_PUSH_CATCH,
     OP_POP_CATCH,
 
@@ -64,7 +67,7 @@ pub enum Opcode {
     OP_SET_VAR,
     OP_DECL_LET,
     OP_DECL_CONST,
-
+    OP_PUSH_THIS,
     OP_YIELD,
     OP_NEWGENERATOR,
 

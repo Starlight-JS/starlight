@@ -1,7 +1,19 @@
+use std::ops::{Deref, DerefMut};
+
+use super::codegen::*;
 use crate::{
     heap::{cell::GcPointer, cell::Trace, Heap, SimpleMarkingConstraint, SlotVisitor},
     jsrt::object::{object_constructor, object_to_string},
 };
+use arguments::Arguments;
+use function::JsVMFunction;
+use std::{fmt::Display, io::Write, sync::RwLock};
+use swc_common::{
+    errors::{DiagnosticBuilder, Emitter, Handler},
+    sync::Lrc,
+};
+use swc_common::{FileName, SourceMap};
+use swc_ecmascript::parser::*;
 #[macro_use]
 pub mod class;
 #[macro_use]
@@ -34,6 +46,17 @@ pub struct GcParams {
     pub(crate) nmarkers: u32,
     pub(crate) track_allocations: bool,
     pub(crate) parallel_marking: bool,
+}
+
+#[derive(Default)]
+pub struct RuntimeParams {
+    pub(crate) dump_bytecode: bool,
+}
+impl RuntimeParams {
+    pub fn with_dump_bytecode(mut self, enabled: bool) -> Self {
+        self.dump_bytecode = enabled;
+        self
+    }
 }
 
 impl Default for GcParams {
@@ -74,9 +97,57 @@ pub struct Runtime {
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
     pub(crate) external_references: Option<&'static [usize]>,
+    pub(crate) options: RuntimeParams,
 }
 
 impl Runtime {
+    pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
+        let res = {
+            let cm: Lrc<SourceMap> = Default::default();
+            let e = BufferedError::default();
+
+            let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+
+            let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
+
+            let mut parser = Parser::new(
+                Syntax::Es(Default::default()),
+                StringInput::from(&*fm),
+                None,
+            );
+
+            for e in parser.take_errors() {
+                e.into_diagnostic(&handler).emit();
+            }
+
+            let script = match parser.parse_script() {
+                Ok(script) => script,
+                Err(e) => {
+                    todo!("throw error");
+                }
+            };
+            let mut vmref = RuntimeRef(self);
+            let mut code = Compiler::compile_script(&mut *vmref, &script);
+            code.strict = code.strict || force_strict;
+            //code.display_to(&mut OutBuf).unwrap();
+
+            let envs = Structure::new_indexed(self, Some(self.global_object()), false);
+            let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
+            let mut fun = JsVMFunction::new(self, code, env);
+
+            let mut args = Arguments::new(self, JsValue::encode_undefined_value(), 0);
+            keep_on_stack!(&fun, &args);
+            fun.as_function_mut().call(self, &mut args)
+        };
+        res
+    }
+    /// Get global variable, on error returns `None`
+    pub fn get_global(&mut self, name: impl AsRef<str>) -> Option<JsValue> {
+        match self.global_object().get(self, name.as_ref().intern()) {
+            Ok(var) => Some(var),
+            Err(_) => None,
+        }
+    }
     pub fn description(&self, sym: Symbol) -> String {
         match sym {
             Symbol::Key(key) => symbol_table::symbol_table().description(key).to_owned(),
@@ -88,11 +159,13 @@ impl Runtime {
     }
     pub(crate) fn new_empty(
         gc_params: GcParams,
+        options: RuntimeParams,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
         let heap = Box::new(Heap::new(gc_params));
         let mut this = Box::new(Self {
             heap,
+            options,
             stack: Stack::new(),
             global_object: None,
             global_data: GlobalData::default(),
@@ -110,10 +183,15 @@ impl Runtime {
 
         this
     }
-    pub fn new(gc_params: GcParams, external_references: Option<&'static [usize]>) -> Box<Runtime> {
+    pub fn new(
+        options: RuntimeParams,
+        gc_params: GcParams,
+        external_references: Option<&'static [usize]>,
+    ) -> Box<Runtime> {
         let heap = Box::new(Heap::new(gc_params));
         let mut this = Box::new(Self {
             heap,
+            options,
             stack: Stack::new(),
             global_object: None,
             global_data: GlobalData::default(),
@@ -250,5 +328,61 @@ impl GlobalData {
 
     pub fn get_object_prototype(&self) -> GcPointer<JsObject> {
         unwrap_unchecked(self.object_prototype.clone())
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct RuntimeRef(pub(crate) *mut Runtime);
+
+impl Deref for RuntimeRef {
+    type Target = Runtime;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for RuntimeRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.0 }
+    }
+}
+#[derive(Clone, Default)]
+pub(crate) struct BufferedError(std::sync::Arc<RwLock<String>>);
+
+impl Write for BufferedError {
+    fn write(&mut self, d: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .write()
+            .unwrap()
+            .push_str(&String::from_utf8_lossy(d));
+
+        Ok(d.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Display for BufferedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Display::fmt(&self.0.read().unwrap(), f)
+    }
+}
+#[derive(Clone, Default)]
+struct MyEmiter(BufferedError);
+impl Emitter for MyEmiter {
+    fn emit(&mut self, db: &DiagnosticBuilder<'_>) {
+        let z = &(self.0).0;
+        for msg in &db.message {
+            z.write().unwrap().push_str(&msg.0);
+        }
+    }
+}
+struct OutBuf;
+
+impl std::fmt::Write for OutBuf {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        print!("{}", s);
+        Ok(())
     }
 }

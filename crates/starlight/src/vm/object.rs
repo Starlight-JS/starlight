@@ -1299,7 +1299,7 @@ impl Env {
         strict: bool,
     ) -> Result<(GcPointer<JsObject>, Slot), JsValue> {
         if self.record.has_own_property(vm, name) {
-            if !self.is_mutable(vm, name) && strict {
+            if !self.is_mutable(vm, name) {
                 let msg = JsString::new(vm, "Assignment to constant variable");
                 return Err(JsValue::encode_object_value(JsTypeError::new(
                     vm, msg, None,
@@ -1313,7 +1313,7 @@ impl Env {
             while let Some(mut cur) = current {
                 if cur.has_own_property(vm, name) {
                     let prop = cur.get_property(vm, name);
-                    if !(prop.is_writable() && prop.raw != NONE) && strict {
+                    if !(prop.is_writable() && prop.raw != NONE) {
                         let msg = JsString::new(vm, "Assignment to constant variable");
                         return Err(JsValue::encode_object_value(JsTypeError::new(
                             vm, msg, None,

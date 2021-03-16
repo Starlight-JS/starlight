@@ -1,4 +1,4 @@
-use self::frame::CallFrame;
+use self::{frame::CallFrame, stack::Stack};
 use super::{
     arguments::*, array::*, array_storage::ArrayStorage, attributes::*, code_block::CodeBlock,
     error::JsTypeError, error::*, function::JsVMFunction, object::*, property_descriptor::*,
@@ -38,6 +38,7 @@ impl Runtime {
             let _ = nscope
                 .put(self, *p, args_.at(i), false)
                 .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
+
             i += 1;
         }
 
@@ -129,6 +130,7 @@ unsafe fn eval_internal(
                     (*frame).push(e);
                     continue;
                 }
+                return Err(e);
             }
         }
     }
@@ -201,12 +203,16 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         Ok(())
     };*/
     let mut frame: &'static mut CallFrame = &mut *frame;
+    let stack = &mut rt.stack as *mut Stack;
+    let stack = &mut *stack;
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
 
+        stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_NOP => {}
+
             Opcode::OP_JMP => {
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
@@ -233,6 +239,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
             Opcode::OP_PUSH_INT => {
                 let int = ip.cast::<i32>().read();
+
                 ip = ip.add(4);
                 frame.push(JsValue::encode_f64_value(int as f64));
             }
@@ -303,6 +310,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(JsValue::encode_f64_value(
                         lhs.get_number() - rhs.get_number(),
                     ));
+
                     continue;
                 }
                 // profile.observe_lhs_and_rhs(lhs, rhs);
@@ -338,6 +346,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //  profile.lhs_saw_number();
                     //  profile.rhs_saw_number();
+
                     frame.push(JsValue::encode_f64_value(
                         lhs.get_number() * rhs.get_number(),
                     ));
@@ -396,6 +405,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_LESS => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                //    println!("{} {}", lhs.get_number(), rhs.get_number());
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_TRUE,
                 ));
@@ -459,7 +469,30 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     rhs.get_jsobject().has_property(rt, sym),
                 ));
             }
-
+            Opcode::OP_THROW => {
+                let val = frame.pop();
+                return Err(val);
+            }
+            Opcode::OP_DUP => {
+                let v1 = frame.pop();
+                frame.push(v1);
+                frame.push(v1);
+            }
+            Opcode::OP_SWAP => {
+                let v1 = frame.pop();
+                let v2 = frame.pop();
+                frame.push(v1);
+                frame.push(v2);
+            }
+            Opcode::OP_NEG => {
+                let v1 = frame.pop();
+                if v1.is_number() {
+                    frame.push(JsValue::encode_f64_value(-v1.get_number()));
+                } else {
+                    let n = v1.to_number(rt)?;
+                    frame.push(JsValue::encode_f64_value(-n));
+                }
+            }
             Opcode::OP_EQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
@@ -512,6 +545,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     .names
                     .get_unchecked(name as usize);
                 let value = get_var(rt, name, frame, fdbk)?;
+
                 frame.push(value);
             }
             Opcode::OP_SET_VAR => {
@@ -624,6 +658,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
                 }
             }
+            Opcode::OP_NEWOBJECT => {
+                let obj = JsObject::new_empty(rt);
+                frame.push(JsValue::encode_object_value(obj));
+            }
             Opcode::OP_PUT_BY_VAL => {
                 let object = frame.pop();
                 let key = frame.pop().to_symbol(rt)?;
@@ -646,7 +684,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let mut args = ArrayStorage::new(rt.heap(), argc);
-
+                let func = frame.pop();
+                let this = frame.pop();
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
@@ -656,12 +695,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             args.push_back(rt.heap(), real_arg);
                         }
                     } else {
-                        frame.push(arg);
+                        args.push_back(rt.heap(), arg);
                     }
                 }
-                let this = frame.pop();
-                let func = frame.pop();
+
                 if !func.is_callable() {
+                    panic!();
                     let msg = JsString::new(rt, "not a callable object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,
@@ -752,6 +791,20 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     env.prototype().copied().expect("no environments left"),
                 );
             }
+            Opcode::OP_LOGICAL_NOT => {
+                let val = frame.pop();
+                frame.push(JsValue::encode_bool_value(!val.to_boolean()));
+            }
+            Opcode::OP_NOT => {
+                let v1 = frame.pop();
+                if v1.is_number() {
+                    let n = v1.get_number() as i32;
+                    frame.push(JsValue::encode_f64_value((!n) as _));
+                } else {
+                    let n = v1.to_number(rt)? as i32;
+                    frame.push(JsValue::encode_f64_value((!n) as _));
+                }
+            }
             Opcode::OP_POS => {
                 let value = frame.pop();
                 if value.is_number() {
@@ -764,7 +817,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_DECL_CONST => {
                 let val = frame.pop();
                 let name = ip.cast::<u32>().read();
-                ip = ip.add(4);
+                ip = ip.add(8);
                 let name = unwrap_unchecked(frame.code_block).names[name as usize];
                 Env {
                     record: frame.env.get_jsobject(),
@@ -774,7 +827,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_DECL_LET => {
                 let val = frame.pop();
                 let name = ip.cast::<u32>().read();
-                ip = ip.add(4);
+                ip = ip.add(8);
                 let name = unwrap_unchecked(frame.code_block).names[name as usize];
                 Env {
                     record: frame.env.get_jsobject(),
@@ -796,7 +849,20 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     }
                 }
             }
+            Opcode::OP_GET_FUNCTION => {
+                //vm.space().defer_gc();
+                let ix = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let func = JsVMFunction::new(
+                    rt,
+                    unwrap_unchecked(frame.code_block).codes[ix as usize],
+                    (*frame).env.get_jsobject(),
+                );
+                assert!(func.is_callable());
 
+                frame.push(JsValue::encode_object_value(func));
+                // vm.space().undefer_gc();
+            }
             Opcode::OP_RET => {
                 let mut value = if frame.sp <= frame.limit {
                     JsValue::encode_undefined_value()
@@ -807,7 +873,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if frame.ctor && !value.is_jsobject() {
                     value = frame.this;
                 }
-
+                if value.is_number() {
+                    //  println!("ret {}", value.get_number());
+                }
                 if frame.exit_on_return {
                     return Ok(value);
                 }
@@ -815,8 +883,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame = &mut *rt.stack.current;
                 ip = frame.ip;
             }
-
-            _ => unreachable_unchecked(),
+            Opcode::OP_PUSH_UNDEF => {
+                frame.push(JsValue::encode_undefined_value());
+            }
+            x => panic!("{:?}", x),
         }
     }
 }
@@ -858,14 +928,17 @@ unsafe fn get_var(
 
     let mut slot = Slot::new();
     if likely(env.get_own_property_slot(rt, name, &mut slot)) {
-        *unwrap_unchecked(frame.code_block)
-            .feedback
-            .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-            structure: rt.heap().make_weak(env.structure()),
-            offset: slot.offset(),
-        };
+        if slot.is_load_cacheable() {
+            *unwrap_unchecked(frame.code_block)
+                .feedback
+                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                structure: rt.heap().make_weak(env.structure()),
+                offset: slot.offset(),
+            };
+        }
 
         let value = slot.value();
+        // println!("{}", value.is_callable());
         return Ok(value);
     };
     let msg = JsString::new(
@@ -910,14 +983,24 @@ unsafe fn set_var(
     }
 
     let mut slot = Slot::new();
+    if GcPointer::ptr_eq(&env, &rt.global_object()) {
+        env.put(rt, name, val, unwrap_unchecked(frame.code_block).strict)?;
+        return Ok(());
+    }
     assert!(env.get_own_property_slot(rt, name, &mut slot));
+    let slot = Env { record: env }.set_variable(
+        rt,
+        name,
+        val,
+        unwrap_unchecked(frame.code_block).strict,
+    )?;
     *unwrap_unchecked(frame.code_block)
         .feedback
         .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-        structure: rt.heap().make_weak(env.structure()),
-        offset: slot.offset(),
+        structure: rt.heap().make_weak(slot.0.structure()),
+        offset: slot.1.offset(),
     };
-    *env.direct_mut(slot.offset() as usize) = val;
+    //*env.direct_mut(slot.1.offset() as usize) = val;
     Ok(())
 }
 

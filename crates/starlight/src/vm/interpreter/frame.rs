@@ -28,6 +28,9 @@ pub struct CallFrame {
 impl CallFrame {
     #[inline(always)]
     pub unsafe fn pop(&mut self) -> JsValue {
+        if self.sp <= self.limit {
+            //panic!("stack underflow");
+        }
         self.sp = self.sp.sub(1);
         self.sp.read()
     }

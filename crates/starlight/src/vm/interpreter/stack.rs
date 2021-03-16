@@ -7,7 +7,7 @@ use std::{intrinsics::unlikely, ptr::null_mut};
 pub struct Stack {
     map: MmapMut,
     start: *mut JsValue,
-    cursor: *mut JsValue,
+    pub(crate) cursor: *mut JsValue,
     end: *mut JsValue,
     pub(crate) current: *mut CallFrame,
 }
@@ -32,9 +32,7 @@ impl Stack {
                 return None;
             }
 
-            let value = self.cursor.cast::<CallFrame>();
-            self.cursor = self.cursor.add(FRAME_SIZE);
-            value.write(CallFrame {
+            let frame = Box::into_raw(Box::new(CallFrame {
                 exit_on_return: false,
                 ctor: false,
                 prev: self.current,
@@ -46,25 +44,27 @@ impl Stack {
                 code_block: None,
                 callee: JsValue::encode_undefined_value(),
                 ip: null_mut(),
-            });
-            self.current = value;
-            Some(value)
+            }));
+            self.current = frame;
+
+            Some(frame)
         }
     }
 
-    pub fn pop_frame(&mut self) -> Option<CallFrame> {
+    pub fn pop_frame(&mut self) -> Option<Box<CallFrame>> {
         if self.current.is_null() {
             return None;
         }
 
         unsafe {
-            let frame = self.current.read();
+            let frame = Box::from_raw(self.current);
             self.current = frame.prev;
             self.cursor = if frame.prev.is_null() {
                 self.start
             } else {
-                (*frame.prev).sp
+                (*frame.prev).limit
             };
+
             Some(frame)
         }
     }
@@ -82,7 +82,7 @@ impl Stack {
     #[inline]
     pub fn pop(&mut self) -> JsValue {
         if unlikely(self.cursor == self.start) {
-            panic!("Stack underflow");
+            //    panic!("Stack underflow");
         }
 
         unsafe {

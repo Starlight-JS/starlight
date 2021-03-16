@@ -968,3 +968,19 @@ impl GcCell for JsValue {
     }
     vtable_impl!();
 }
+
+pub fn print_value(x: JsValue) {
+    if x.is_number() {
+        print!("{}", x.get_number())
+    } else if x.is_bool() {
+        print!("{}", x.get_bool())
+    } else if x.is_undefined() {
+        print!("undefined");
+    } else if x.is_null() {
+        print!("null")
+    } else if x.is_object() {
+        print!("object");
+    } else {
+        print!("<>");
+    }
+}

@@ -250,10 +250,11 @@ impl<'a> Deserializer<'a> {
     pub fn deserialize(
         log_deser: bool,
         snapshot: &'a [u8],
+        options: RuntimeParams,
         gc_params: GcParams,
         external_refs: Option<&'static [usize]>,
     ) -> Box<Runtime> {
-        let mut runtime = Runtime::new_empty(gc_params, external_refs);
+        let mut runtime = Runtime::new_empty(gc_params, options, external_refs);
         let mut this = Self {
             reader: snapshot,
             pc: 0,
@@ -1288,6 +1289,7 @@ impl Deserializable for CodeBlock {
         let literals = Vec::<JsValue>::deserialize_inplace(deser);
         let rest_param = Option::<Symbol>::deserialize_inplace(deser);
         let params = Vec::<Symbol>::deserialize_inplace(deser);
+        let codes = Vec::<GcPointer<Self>>::deserialize_inplace(deser);
         Self {
             name,
             names,
@@ -1298,6 +1300,7 @@ impl Deserializable for CodeBlock {
             literals,
             rest_param,
             params,
+            codes,
         }
     }
 

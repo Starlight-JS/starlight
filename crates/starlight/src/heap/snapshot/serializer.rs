@@ -444,6 +444,7 @@ impl Serializable for CodeBlock {
         self.literals.serialize(serializer);
         self.rest_param.serialize(serializer);
         self.params.serialize(serializer);
+        self.codes.serialize(serializer);
     }
 }
 

@@ -407,6 +407,7 @@ impl Heap {
         if self.defers > 0 {
             return;
         }
+
         let mut visitor = SlotVisitor {
             bytes_visited: 0,
 
