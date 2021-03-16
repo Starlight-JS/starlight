@@ -44,10 +44,16 @@ impl Runtime {
 
         if let Some(rest) = func.code.rest_param {
             let mut args_arr = JsArray::new(self, args_.size() as u32 - i as u32);
-            let mut ix = 0;
-            for _ in i..args_.size() {
-                args_arr.put_indexed_slot(self, ix, args_.at(ix as _), &mut Slot::new(), false)?;
-                ix += 1;
+            let mut ai = 0;
+            for ix in i..args_.size() {
+                args_arr.put_indexed_slot(
+                    self,
+                    ai as _,
+                    args_.at(ix as _),
+                    &mut Slot::new(),
+                    false,
+                )?;
+                ai += 1;
             }
             nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
@@ -700,7 +706,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
 
                 if !func.is_callable() {
-                    panic!();
                     let msg = JsString::new(rt, "not a callable object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,

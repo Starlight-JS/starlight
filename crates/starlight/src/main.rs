@@ -4,11 +4,8 @@ use starlight::{
     Platform,
 };
 const SRC: &'static str = r#"
-let xx = 0
-for (let i = 0;i < 10000;i+=1) {
-    xx = i
-}
-x = xx
+const add = (x,y) => x + y
+x = add(1,2)
 "#;
 fn main() {
     Platform::initialize();
