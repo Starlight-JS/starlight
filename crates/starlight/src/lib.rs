@@ -6,8 +6,11 @@
     destructuring_assignment,
     const_raw_ptr_to_usize_cast
 )]
+use heap::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
-use vm::{value::JsValue, GcParams, Runtime, RuntimeParams};
+use vm::{
+    arguments::Arguments, object::JsObject, value::JsValue, GcParams, Runtime, RuntimeParams,
+};
 
 #[macro_use]
 pub mod utils;
@@ -46,5 +49,47 @@ impl Platform {
     ) -> Box<Runtime> {
         Self::initialize();
         vm::Runtime::new(options, gc_params, external_references)
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn platform_initialize() {
+    Platform::initialize();
+}
+use heap::snapshot::deserializer::Deserializable;
+#[no_mangle]
+pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
+    let mut function = None;
+    let mut rt = Deserializer::deserialize(
+        false,
+        std::slice::from_raw_parts(array, size),
+        RuntimeParams::default(),
+        GcParams::default(),
+        None,
+        |deser, _rt| {
+            function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));
+        },
+    );
+
+    let mut function = function.expect("No function");
+    assert!(function.is_callable(), "Not a callable function");
+    let global = rt.global_object();
+    let mut args = Arguments::new(&mut rt, JsValue::encode_object_value(global), 0);
+    match function.as_function_mut().call(&mut rt, &mut args) {
+        Ok(x) => {
+            if x.is_number() {
+                drop(rt);
+                std::process::exit(x.get_number().floor() as i32);
+            }
+        }
+        Err(e) => {
+            let str = e.to_string(&mut rt);
+            match str {
+                Err(_) => panic!("Failed to get error"),
+                Ok(str) => {
+                    eprintln!("Uncaught exception: {}", str);
+                }
+            }
+        }
     }
 }

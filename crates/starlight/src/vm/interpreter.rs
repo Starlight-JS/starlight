@@ -243,6 +243,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_POP => {
                 frame.pop();
             }
+            Opcode::OP_PUSH_THIS => {
+                frame.push(frame.this);
+            }
             Opcode::OP_PUSH_INT => {
                 let int = ip.cast::<i32>().read();
 
@@ -890,6 +893,15 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
             Opcode::OP_PUSH_UNDEF => {
                 frame.push(JsValue::encode_undefined_value());
+            }
+            Opcode::OP_NEWARRAY => {
+                let arr = JsObject::new(
+                    rt,
+                    rt.global_data().array_structure.unwrap(),
+                    JsArray::get_class(),
+                    ObjectTag::Array,
+                );
+                frame.push(JsValue::encode_object_value(arr));
             }
             x => panic!("{:?}", x),
         }

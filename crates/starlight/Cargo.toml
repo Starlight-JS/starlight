@@ -24,6 +24,8 @@ libc = "0.2"
 libmimalloc-sys = { version = "0.1", features = ["extended"] }
 starlight-derive = { path = "../starlight-derive" }
 threadpool = "1.8.*"
+cc = "1.0"
+structopt = "0.3"
 backtrace = "0.3"
 crossbeam = "0.8"
 [features]
@@ -63,3 +65,11 @@ harness = false
 [[bench]]
 name = "bench_snapshot"
 harness = false
+
+
+[[bin]]
+name = "starlight-bundle"
+path = "src/bin/bundle.rs"
+
+[lib]
+crate-type = ["rlib", "cdylib"]

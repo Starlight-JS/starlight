@@ -100,6 +100,7 @@ impl<'a> Deserializer<'a> {
             .iter()
             .enumerate()
             .for_each(|(index, reference)| {
+                //let index = self.reference_map.len();
                 *self.reference_map.get_unchecked_mut(index as usize) = *reference;
             });
 
@@ -253,6 +254,7 @@ impl<'a> Deserializer<'a> {
         options: RuntimeParams,
         gc_params: GcParams,
         external_refs: Option<&'static [usize]>,
+        callback: impl FnOnce(&mut Self, &mut Runtime),
     ) -> Box<Runtime> {
         let mut runtime = Runtime::new_empty(gc_params, options, external_refs);
         let mut this = Self {
@@ -271,6 +273,7 @@ impl<'a> Deserializer<'a> {
             this.build_reference_map(&mut runtime);
             this.build_symbol_table();
             this.deserialize_internal(&mut runtime);
+            callback(&mut this, &mut runtime);
         }
         runtime.heap().undefer();
         runtime
