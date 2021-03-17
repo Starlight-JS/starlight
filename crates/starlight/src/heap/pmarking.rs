@@ -229,7 +229,7 @@ impl<'a> MarkingTask<'a> {
                     self.injector.push(val as usize);
                 }
             }
-            self.marked = 0;
+            self.visitor.bytes_visited = 0;
         }
     }
 }

@@ -898,10 +898,15 @@ impl Compiler {
                             if used {
                                 self.builder.emit(Opcode::OP_DUP, &[], false);
                             }
-                            let name = if let Expr::Ident(id) = &*member.prop {
-                                let s: &str = &id.sym;
-                                let name = s.intern();
-                                Some(self.builder.get_sym(name))
+                            let name = if !member.computed {
+                                if let Expr::Ident(id) = &*member.prop {
+                                    let s: &str = &id.sym;
+                                    let name = s.intern();
+                                    Some(self.builder.get_sym(name))
+                                } else {
+                                    self.emit(&member.prop, true);
+                                    None
+                                }
                             } else {
                                 self.emit(&member.prop, true);
                                 None
@@ -1088,10 +1093,15 @@ impl Compiler {
                 self.builder.emit(Opcode::OP_SET_VAR, &[ix], true);
             }
             Expr::Member(member) => {
-                let name = if let Expr::Ident(id) = &*member.prop {
-                    let s: &str = &id.sym;
-                    let name = s.intern();
-                    Some(self.builder.get_sym(name))
+                let name = if !member.computed {
+                    if let Expr::Ident(id) = &*member.prop {
+                        let s: &str = &id.sym;
+                        let name = s.intern();
+                        Some(self.builder.get_sym(name))
+                    } else {
+                        self.emit(&member.prop, true);
+                        None
+                    }
                 } else {
                     self.emit(&member.prop, true);
                     None
@@ -1144,7 +1154,7 @@ impl Compiler {
                     Some(ref arg) => self.emit(&**arg, true),
                     None => self.builder.emit(Opcode::OP_PUSH_UNDEF, &[], false),
                 }
-                self.builder.emit(Opcode::OP_POP_ENV, &[], false);
+                // self.builder.emit(Opcode::OP_POP_ENV, &[], false);
                 self.builder.emit(Opcode::OP_RET, &[], false);
             }
             Stmt::Break(_) => {
@@ -1323,10 +1333,15 @@ impl Compiler {
             }
             Pat::Expr(e) => match &**e {
                 Expr::Member(member) => {
-                    let name = if let Expr::Ident(id) = &*member.prop {
-                        let s: &str = &id.sym;
-                        let name = s.intern();
-                        Some(self.builder.get_sym(name))
+                    let name = if !member.computed {
+                        if let Expr::Ident(id) = &*member.prop {
+                            let s: &str = &id.sym;
+                            let name = s.intern();
+                            Some(self.builder.get_sym(name))
+                        } else {
+                            self.emit(&member.prop, true);
+                            None
+                        }
                     } else {
                         self.emit(&member.prop, true);
                         None

@@ -488,7 +488,7 @@ impl JsValue {
 
 unsafe impl Trace for JsValue {
     fn trace(&self, visitor: &mut SlotVisitor) {
-        if self.is_pointer() && !self.is_empty() {
+        if self.is_object() && !self.is_empty() {
             self.get_object().trace(visitor);
         }
     }

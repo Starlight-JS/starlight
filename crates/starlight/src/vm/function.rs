@@ -28,6 +28,15 @@ pub enum FuncType {
 
 #[allow(non_snake_case)]
 impl JsFunction {
+    pub fn is_native(&self) -> bool {
+        matches!(self.ty, FuncType::Native(_))
+    }
+    pub fn is_vm(&self) -> bool {
+        matches!(self.ty, FuncType::User(_))
+    }
+    pub fn is_bound(&self) -> bool {
+        matches!(self.ty, FuncType::Bound(_))
+    }
     pub fn has_instance(
         &self,
         this: GcPointer<JsObject>,
@@ -65,13 +74,6 @@ impl JsFunction {
         }
     }
 
-    pub fn is_bound(&self) -> bool {
-        if let FuncType::Bound(_) = self.ty {
-            true
-        } else {
-            false
-        }
-    }
     pub fn as_native(&self) -> &JsNativeFunction {
         match self.ty {
             FuncType::Native(ref x) => x,

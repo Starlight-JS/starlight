@@ -50,11 +50,23 @@ pub struct GcParams {
     pub(crate) parallel_marking: bool,
 }
 
-#[derive(Default)]
 pub struct RuntimeParams {
     pub(crate) dump_bytecode: bool,
+    pub(crate) inline_caches: bool,
+}
+impl Default for RuntimeParams {
+    fn default() -> Self {
+        Self {
+            dump_bytecode: false,
+            inline_caches: true,
+        }
+    }
 }
 impl RuntimeParams {
+    pub fn with_inline_caching(mut self, enabled: bool) -> Self {
+        self.inline_caches = enabled;
+        self
+    }
     pub fn with_dump_bytecode(mut self, enabled: bool) -> Self {
         self.dump_bytecode = enabled;
         self
@@ -220,6 +232,7 @@ impl Runtime {
                 let rt = unsafe { &mut *vm };
                 rt.global_object.trace(visitor);
                 rt.global_data.trace(visitor);
+                rt.stack.trace(visitor);
             },
         ));
 
@@ -247,6 +260,7 @@ impl Runtime {
                 let rt = unsafe { &mut *vm };
                 rt.global_object.trace(visitor);
                 rt.global_data.trace(visitor);
+                rt.stack.trace(visitor);
             },
         ));
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));

@@ -144,7 +144,7 @@ unsafe fn eval_internal(
 
 pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
     let mut ip = (*frame).ip;
-    /*let setup_frame = |rt: &mut Runtime,
+    let setup_frame = |rt: &mut Runtime,
                        frame: &mut CallFrame,
                        func: &JsVMFunction,
                        env: JsValue,
@@ -207,7 +207,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         frame.env = JsValue::encode_object_value(nscope);
 
         Ok(())
-    };*/
+    };
     let mut frame: &'static mut CallFrame = &mut *frame;
     let stack = &mut rt.stack as *mut Stack;
     let stack = &mut *stack;
@@ -586,21 +586,26 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let object = frame.pop();
                 if likely(object.is_jsobject()) {
                     let obj = object.get_jsobject();
-                    if let TypeFeedBack::PropertyCache { structure, offset } =
-                        unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked(fdbk as usize)
-                    {
-                        if let Some(structure) = structure.upgrade() {
-                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                frame.push(*obj.direct(*offset as _));
-                                continue;
+                    if likely(rt.options.inline_caches) {
+                        if let TypeFeedBack::PropertyCache { structure, offset } =
+                            unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked(fdbk as usize)
+                        {
+                            if let Some(structure) = structure.upgrade() {
+                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                    frame.push(*obj.direct(*offset as _));
+                                    continue;
+                                }
                             }
                         }
                     }
 
                     let mut slot = Slot::new();
-                    if obj.get_property_slot(rt, name, &mut slot) && slot.is_load_cacheable() {
+                    if rt.options.inline_caches
+                        && obj.get_property_slot(rt, name, &mut slot)
+                        && slot.is_load_cacheable()
+                    {
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
@@ -641,15 +646,17 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let value = frame.pop();
                 if likely(object.is_jsobject()) {
                     let mut obj = object.get_jsobject();
-                    if let TypeFeedBack::PropertyCache { structure, offset } =
-                        unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked(fdbk as usize)
-                    {
-                        if let Some(structure) = structure.upgrade() {
-                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                *obj.direct_mut(*offset as usize) = value;
-                                continue;
+                    if rt.options.inline_caches {
+                        if let TypeFeedBack::PropertyCache { structure, offset } =
+                            unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked(fdbk as usize)
+                        {
+                            if let Some(structure) = structure.upgrade() {
+                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                    *obj.direct_mut(*offset as usize) = value;
+                                    continue;
+                                }
                             }
                         }
                     }
@@ -662,7 +669,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         &mut slot,
                         unwrap_unchecked(frame.code_block).strict,
                     )?;
-                    if slot.is_put_cacheable() {
+                    if rt.options.inline_caches && slot.is_put_cacheable() {
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
@@ -748,6 +755,49 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.ip = ip;
                     frame = &mut *new_frame;
                 } else {*/
+                /* let mut next = ip.cast::<Opcode>().read();
+                match next {
+                    Opcode::OP_POP_ENV => {
+                        next = ip.add(1).cast::<Opcode>().read();
+                    }
+                    _ => (),
+                }
+                match next {
+                    Opcode::OP_RET => {
+                        if func.is_native() {
+                            if !frame.prev.is_null() {
+                                stack.pop_frame();
+                                let mut args_ = Arguments::from_array_storage(rt, this, args);
+                                let native = func.as_native();
+                                return (native.func)(rt, &mut args_);
+                            }
+                        } else if func.is_vm() {
+                            if !frame.prev.is_null() {
+                                stack.pop_frame();
+
+                                let vm_function = func.as_vm();
+                                let new_frame = stack.new_frame().unwrap();
+
+                                (*new_frame).code_block = Some(vm_function.code);
+                                (*new_frame).ctor = false;
+                                (*new_frame).exit_on_return = true;
+                                (*new_frame).ip = &vm_function.code.code[0] as *const u8 as *mut u8;
+                                setup_frame(
+                                    rt,
+                                    &mut *new_frame,
+                                    vm_function,
+                                    JsValue::encode_object_value(vm_function.scope),
+                                    this,
+                                    args,
+                                )?;
+
+                                frame = &mut *new_frame;
+                                ip = (*new_frame).ip;
+                            }
+                        }
+                    }
+                    _ => (),
+                }*/
                 let mut args_ = Arguments::from_array_storage(rt, this, args);
                 let result = func.call(rt, &mut args_)?;
                 frame.push(result);
@@ -892,23 +942,37 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if value.is_number() {
                     //  println!("ret {}", value.get_number());
                 }
-                if frame.exit_on_return {
+                /* if frame.exit_on_return {
                     return Ok(value);
                 }
                 let _ = rt.stack.pop_frame().unwrap();
                 frame = &mut *rt.stack.current;
-                ip = frame.ip;
+                ip = frame.ip;*/
+                return Ok(value);
             }
             Opcode::OP_PUSH_UNDEF => {
                 frame.push(JsValue::encode_undefined_value());
             }
             Opcode::OP_NEWARRAY => {
-                let arr = JsObject::new(
-                    rt,
-                    rt.global_data().array_structure.unwrap(),
-                    JsArray::get_class(),
-                    ObjectTag::Array,
-                );
+                let count = ip.cast::<u32>().read_unaligned();
+
+                ip = ip.add(4);
+                let mut arr = JsArray::new(rt, count);
+                let mut index = 0;
+                while index < count {
+                    let value = frame.pop();
+                    if unlikely(value.is_object() && value.get_object().is::<SpreadValue>()) {
+                        let spread = value.get_object().downcast_unchecked::<SpreadValue>();
+                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
+                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
+                            arr.put(rt, Symbol::Index(index), real_arg, false)?;
+                            index += 1;
+                        }
+                    } else {
+                        arr.put(rt, Symbol::Index(index), value, false)?;
+                        index += 1;
+                    }
+                }
                 frame.push(JsValue::encode_object_value(arr));
             }
             x => panic!("{:?}", x),
