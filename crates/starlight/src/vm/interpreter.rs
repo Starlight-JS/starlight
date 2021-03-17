@@ -243,6 +243,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_POP => {
                 frame.pop();
             }
+            Opcode::OP_PUSH_LITERAL => {
+                let ix = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let constant = unwrap_unchecked(frame.code_block).literals[ix as usize];
+                assert!(constant.is_js_string());
+                frame.push(constant);
+            }
             Opcode::OP_PUSH_THIS => {
                 frame.push(frame.this);
             }
@@ -749,6 +756,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let mut args = ArrayStorage::new(rt.heap(), argc);
+                let func = frame.pop();
+                let this = frame.pop();
 
                 for _ in 0..argc {
                     let arg = frame.pop();
@@ -759,11 +768,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             args.push_back(rt.heap(), real_arg);
                         }
                     } else {
-                        frame.push(arg);
+                        args.push_back(rt.heap(), arg);
                     }
                 }
-                let this = frame.pop();
-                let func = frame.pop();
+
                 if !func.is_callable() {
                     let msg = JsString::new(rt, "not a callable object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(

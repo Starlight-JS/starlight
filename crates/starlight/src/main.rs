@@ -3,9 +3,15 @@ use starlight::{
     Platform,
 };
 const SRC: &'static str = r#"
-const add = (x,y) => x + y
-print(add(3,4))
-x= 0
+function factorial(x) {
+    if (x < 2) {
+        return x;
+    } else {
+        return factorial(x - 1) * x;
+    }
+}
+
+throw new TypeError("Error");
 "#;
 fn main() {
     Platform::initialize();
@@ -17,8 +23,10 @@ fn main() {
 
     match rt.eval(false, SRC) {
         Ok(_) => {}
-        Err(_) => {
-            panic!("eval failed");
+        Err(e) => {
+            let e = e.to_string(&mut rt).unwrap_or_else(|_| panic!());
+            eprintln!("{}", e);
+            return;
         }
     }
     println!("{}", rt.get_global("x").unwrap().get_number());

@@ -225,15 +225,6 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
     #[inline]
     pub fn downcast<U: GcCell>(self) -> Option<GcPointer<U>> {
         if !self.is::<U>() {
-            unsafe {
-                println!(
-                    "{:x}({}) != {:x}({})",
-                    (*self.base.as_ptr()).vtable(),
-                    self.get_dyn().type_name(),
-                    vtable_of_type::<U>(),
-                    std::any::type_name::<U>()
-                );
-            }
             None
         } else {
             Some(unsafe { self.downcast_unchecked() })
