@@ -1,11 +1,11 @@
 use starlight::{
-    heap::snapshot::{deserializer, Snapshot},
     vm::{GcParams, Runtime, RuntimeParams},
     Platform,
 };
 const SRC: &'static str = r#"
 const add = (x,y) => x + y
-x = add(1,2)
+print(add(3,4))
+x= 0
 "#;
 fn main() {
     Platform::initialize();

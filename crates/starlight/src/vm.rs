@@ -6,8 +6,10 @@ use crate::{
     jsrt::object::{object_constructor, object_to_string},
 };
 use arguments::Arguments;
+use error::JsSyntaxError;
 use function::JsVMFunction;
 use std::{fmt::Display, io::Write, sync::RwLock};
+use string::JsString;
 use swc_common::{
     errors::{DiagnosticBuilder, Emitter, Handler},
     sync::Lrc,
@@ -101,10 +103,47 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    pub fn compile(&mut self, name: &str, script: &str) -> Result<JsValue, JsValue> {
+        let cm: Lrc<SourceMap> = Default::default();
+        let _e = BufferedError::default();
+
+        let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+
+        let fm = cm.new_source_file(FileName::Custom(name.into()), script.into());
+
+        let mut parser = Parser::new(
+            Syntax::Es(Default::default()),
+            StringInput::from(&*fm),
+            None,
+        );
+
+        for e in parser.take_errors() {
+            e.into_diagnostic(&handler).emit();
+        }
+
+        let script = match parser.parse_script() {
+            Ok(script) => script,
+            Err(e) => {
+                let msg = JsString::new(self, e.kind().msg());
+                return Err(JsValue::encode_object_value(JsSyntaxError::new(
+                    self, msg, None,
+                )));
+            }
+        };
+        let mut vmref = RuntimeRef(self);
+        let code = Compiler::compile_script(&mut *vmref, &script);
+
+        //code.display_to(&mut OutBuf).unwrap();
+
+        let envs = Structure::new_indexed(self, Some(self.global_object()), false);
+        let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
+        let fun = JsVMFunction::new(self, code, env);
+        return Ok(JsValue::encode_object_value(fun));
+    }
     pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
         let res = {
             let cm: Lrc<SourceMap> = Default::default();
-            let e = BufferedError::default();
+            let _e = BufferedError::default();
 
             let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
 
@@ -123,7 +162,10 @@ impl Runtime {
             let script = match parser.parse_script() {
                 Ok(script) => script,
                 Err(e) => {
-                    todo!("throw error");
+                    let msg = JsString::new(self, e.kind().msg());
+                    return Err(JsValue::encode_object_value(JsSyntaxError::new(
+                        self, msg, None,
+                    )));
                 }
             };
             let mut vmref = RuntimeRef(self);
@@ -263,7 +305,7 @@ impl Runtime {
         this.init_array(proto.clone());
         keep_on_stack!(&mut proto);
         this.init_func(proto);
-
+        this.init_builtin();
         this.heap.undefer();
 
         this

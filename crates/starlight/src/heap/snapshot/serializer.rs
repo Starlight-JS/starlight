@@ -49,7 +49,8 @@ impl SnapshotSerializer {
         VM_NATIVE_REFERENCES
             .iter()
             .enumerate()
-            .for_each(|(index, reference)| {
+            .for_each(|(_index, reference)| {
+                let index = self.reference_map.len();
                 self.reference_map.insert(*reference, index as u32);
             });
 

@@ -6,7 +6,7 @@ use starlight::{
         snapshot::serializer::{Serializable, SnapshotSerializer},
         Heap, SlotVisitor,
     },
-    vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime},
+    vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime, RuntimeParams},
     vtable_impl, Platform,
 };
 use wtf_rs::keep_on_stack;
@@ -14,6 +14,7 @@ use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
     let mut rrt = Runtime::new(
+        RuntimeParams::default(),
         GcParams::default()
             .with_parallel_marking(true)
             .with_marker_threads(4),
