@@ -12,6 +12,10 @@ pub struct Options {
     input: PathBuf,
     #[structopt(parse(from_os_str), help = "Output file for bundle")]
     output: PathBuf,
+    #[structopt(long = "use-musl", help = "Use musl-clang for linking")]
+    use_musl: bool,
+    #[structopt(long = "output-c", help = "Output bundle as raw C file")]
+    output_c: bool,
 }
 
 fn main() {
@@ -75,26 +79,32 @@ static const uint8_t snapshot[{}] = {{
     "#,
         snapshot.buffer.len()
     ));
-    std::fs::write(format!("{}.temp.c", opts.input.display()), c_src).unwrap();
+    if opts.output_c {
+        std::fs::write(format!("{}.c", opts.output.display()), c_src).unwrap();
+    } else {
+        std::fs::write(format!("{}.temp.c", opts.input.display()), c_src).unwrap();
+        let cmd = if opts.use_musl { "musl-gcc" } else { "cc" };
+        assert!(std::process::Command::new(cmd)
+            .arg(format!("{}.temp.c", opts.input.display()))
+            .arg("-static")
+            .arg("-rdynamic")
+            .arg("-lstarlight")
+            .arg("-lpthread")
+            .arg("-ldl")
+            .arg("-lm")
+            .arg("-std=c99")
+            .arg("-pedantic")
+            .arg("-Wall")
+            .arg("-Wextra")
+            .arg("-L/usr/lib")
+            .arg("-L/usr/local/lib")
+            .arg(format!("-o{}", opts.output.display()))
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success());
 
-    assert!(std::process::Command::new("cc")
-        .arg(format!("{}.temp.c", opts.input.display()))
-        .arg("-static")
-        .arg("-rdynamic")
-        .arg("-lstarlight")
-        .arg("-lpthread")
-        .arg("-ldl")
-        .arg("-lm")
-        .arg("-std=c99")
-        .arg("-pedantic")
-        .arg("-Wall")
-        .arg("-Wextra")
-        .arg(format!("-o{}", opts.output.display()))
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap()
-        .success());
-
-    std::fs::remove_file(format!("{}.temp.c", opts.input.display())).unwrap();
+        std::fs::remove_file(format!("{}.temp.c", opts.input.display())).unwrap();
+    }
 }

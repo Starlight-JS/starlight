@@ -14,6 +14,7 @@ pub mod array;
 pub mod error;
 pub mod function;
 pub mod object;
+pub mod string;
 
 use array::*;
 use error::*;
@@ -41,6 +42,8 @@ impl Runtime {
                 false,
             )
             .unwrap_or_else(|_| unreachable!());
+
+        string::initialize(self, self.global_data().object_prototype.unwrap());
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -169,6 +172,14 @@ impl Runtime {
             self,
             name,
             &*DataDescriptor::new(JsValue::from(pop), W | C | E),
+            false,
+        );
+        let name = "reduce".intern();
+        let reduce = JsNativeFunction::new(self, name, array_reduce, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(reduce), W | C | E),
             false,
         );
         self.global_data.array_prototype = Some(proto);
@@ -644,6 +655,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array::array_of as usize,
         array::array_pop as usize,
         array::array_push as usize,
+        array::array_reduce as usize,
         array::array_to_string as usize,
         error::error_constructor as usize,
         error::error_to_string as usize,
@@ -653,6 +665,12 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         error::syntax_error_constructor as usize,
         error::type_error_constructor as usize,
         print as usize,
+        string::string_concat as _,
+        string::string_split as _,
+        string::string_constructor as _,
+        string::string_to_string as _,
+        string::string_value_of as _,
+        JsStringObject::get_class() as *const _ as usize,
     ];
     // refs.sort_unstable();
     // refs.dedup();

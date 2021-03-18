@@ -381,6 +381,9 @@ impl Serializable for JsObject {
             ObjectTag::Function => {
                 self.as_function().serialize(serializer);
             }
+            ObjectTag::String => {
+                self.as_string_object().serialize(serializer);
+            }
             _ => (),
         }
     }

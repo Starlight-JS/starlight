@@ -848,7 +848,7 @@ impl JsValue {
     pub fn get_primitive_proto(self, vm: &mut Runtime) -> GcPointer<JsObject> {
         assert!(!self.is_empty());
         assert!(self.is_primitive());
-        if self.is_string() {
+        if self.is_js_string() {
             return vm.global_data().string_prototype.clone().unwrap();
         } else if self.is_number() {
             return vm.global_data().number_prototype.clone().unwrap();
@@ -937,6 +937,15 @@ impl JsValue {
         } else {
             return true;
         }
+    }
+    pub fn check_object_coercible(self, rt: &mut Runtime) -> Result<(), Self> {
+        if self.is_null() || self.is_undefined() {
+            let msg = JsString::new(rt, "null or undefined has no properties");
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                rt, msg, None,
+            )));
+        }
+        Ok(())
     }
 }
 

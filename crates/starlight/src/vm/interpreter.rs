@@ -247,7 +247,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let ix = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let constant = unwrap_unchecked(frame.code_block).literals[ix as usize];
-                assert!(constant.is_js_string());
+                //assert!(constant.is_js_string());
                 frame.push(constant);
             }
             Opcode::OP_PUSH_THIS => {

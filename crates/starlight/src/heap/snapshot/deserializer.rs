@@ -21,7 +21,7 @@ use crate::{
         interpreter::SpreadValue,
         object::{object_size_with_tag, JsObject, ObjectTag},
         property_descriptor::{Accessor, StoredSlot},
-        string::JsString,
+        string::{JsString, JsStringObject},
         structure::{
             DeletedEntry, DeletedEntryHolder, MapEntry, Structure, TargetTable, Transition,
             TransitionKey, TransitionsTable,
@@ -789,6 +789,12 @@ impl Deserializable for JsObject {
                         variables,
                     },
                 )
+            }
+            ObjectTag::String => {
+                let str = GcPointer::<JsString>::deserialize_inplace(deser);
+
+                ((*object).data::<JsStringObject>() as *mut ManuallyDrop<_> as *mut JsStringObject)
+                    .write(JsStringObject { value: str })
             }
 
             _ => (),

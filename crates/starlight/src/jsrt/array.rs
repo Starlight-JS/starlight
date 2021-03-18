@@ -1,4 +1,4 @@
-use super::object::object_to_string;
+use super::{get_length, object::object_to_string};
 use crate::{
     vm::Runtime,
     vm::{
@@ -196,4 +196,70 @@ pub fn array_pop(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
         )?;
         Ok(element)
     }
+}
+
+pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let obj = args.this.to_object(rt)?;
+    let len = get_length(rt, obj)?;
+    let arg_count = args.size();
+    if arg_count == 0 || !args.at(0).is_callable() {
+        let msg = JsString::new(
+            rt,
+            "Array.prototype.reduce requires callable object as 1st argument",
+        );
+        return Err(JsValue::encode_object_value(JsTypeError::new(
+            rt, msg, None,
+        )));
+    }
+
+    let mut callback = args.at(0).get_jsobject();
+    let callback = callback.as_function_mut();
+    if len == 0 && arg_count <= 1 {
+        let msg = JsString::new(
+            rt,
+            "Array.prototype.reduce with empty array requires initial value as 2nd argumentt",
+        );
+        return Err(JsValue::encode_object_value(JsTypeError::new(
+            rt, msg, None,
+        )));
+    }
+    let mut k = 0;
+    let mut acc = JsValue::encode_undefined_value();
+    if arg_count > 1 {
+        acc = args.at(1);
+    } else {
+        let mut k_present = false;
+        while k < len {
+            if obj.has_property(rt, Symbol::Index(k)) {
+                k_present = true;
+                acc = obj.get(rt, Symbol::Index(k))?;
+                k += 1;
+                break;
+            }
+            k += 1;
+        }
+
+        if !k_present {
+            let msg = JsString::new(
+                rt,
+                "Array.prototype.reduce with empty array requires initial value",
+            );
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                rt, msg, None,
+            )));
+        }
+    }
+
+    while k < len {
+        if obj.has_property(rt, Symbol::Index(k)) {
+            let mut args = Arguments::new(rt, JsValue::encode_undefined_value(), 4);
+            *args.at_mut(0) = acc;
+            *args.at_mut(1) = obj.get(rt, Symbol::Index(k))?;
+            *args.at_mut(2) = JsValue::encode_f64_value(k as _);
+            *args.at_mut(3) = JsValue::encode_object_value(obj);
+            acc = callback.call(rt, &mut args)?;
+        }
+        k += 1;
+    }
+    Ok(acc)
 }

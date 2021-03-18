@@ -124,6 +124,15 @@ impl JsObject {
         &mut *self.data::<JsFunction>()
     }
 
+    pub fn as_string_object(&self) -> &JsStringObject {
+        assert_eq!(self.tag, ObjectTag::String);
+        &*self.data::<JsStringObject>()
+    }
+    pub fn as_string_object_mut(&mut self) -> &mut JsStringObject {
+        assert_eq!(self.tag, ObjectTag::String);
+
+        &mut *self.data::<JsStringObject>()
+    }
     pub fn as_global(&self) -> &JsGlobal {
         assert_eq!(self.tag, ObjectTag::Global);
         &*self.data::<JsGlobal>()
@@ -153,7 +162,7 @@ unsafe impl Trace for JsObject {
             }
             ObjectTag::NormalArguments => self.as_arguments().trace(visitor),
             ObjectTag::Function => self.as_function().trace(visitor),
-
+            ObjectTag::String => self.as_string_object().value.trace(visitor),
             _ => (),
         }
     }
@@ -186,6 +195,7 @@ pub fn object_size_with_tag(tag: ObjectTag) -> usize {
         ObjectTag::Global => size + size_of::<JsGlobal>(),
         ObjectTag::Function => size + size_of::<JsFunction>(),
         ObjectTag::NormalArguments => size + size_of::<JsArguments>(),
+        ObjectTag::String => size + size_of::<JsStringObject>(),
         _ => size,
     }
 }
