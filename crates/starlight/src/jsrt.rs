@@ -568,7 +568,7 @@ use crate::heap::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
 pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
-    Box::leak(Box::new([
+    let refs = [
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
         // but they should be the same for all types that is allocated in GC heap.
@@ -585,11 +585,11 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         TargetTable::deserialize as _,
         TargetTable::allocate as _,
         SpreadValue::deserialize as _,
+        SpreadValue::allocate as _,
         Structure::deserialize as _,
         Structure::allocate as _,
         crate::vm::structure::Table::deserialize as _,
         crate::vm::structure::Table::allocate as _,
-        SpreadValue::allocate as _,
         ArrayStorage::deserialize as _,
         ArrayStorage::allocate as _,
         DeletedEntry::deserialize as _,
@@ -653,7 +653,10 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         error::syntax_error_constructor as usize,
         error::type_error_constructor as usize,
         print as usize,
-    ]))
+    ];
+    // refs.sort_unstable();
+    // refs.dedup();
+    Box::leak(Box::new(refs))
 });
 
 pub fn get_length(rt: &mut Runtime, val: GcPointer<JsObject>) -> Result<u32, JsValue> {

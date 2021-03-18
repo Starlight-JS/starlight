@@ -73,6 +73,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
 
     let mut function = function.expect("No function");
     assert!(function.is_callable(), "Not a callable function");
+    wtf_rs::keep_on_stack!(&mut function);
     let global = rt.global_object();
     let mut args = Arguments::new(&mut rt, JsValue::encode_object_value(global), 0);
     match function.as_function_mut().call(&mut rt, &mut args) {

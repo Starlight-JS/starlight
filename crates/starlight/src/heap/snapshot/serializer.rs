@@ -30,7 +30,7 @@ use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
 use std::{collections::HashMap, io::Write};
 
 pub struct SnapshotSerializer {
-    pub(crate) reference_map: HashMap<usize, u32>,
+    pub(crate) reference_map: Vec<usize>,
     pub(super) output: Vec<u8>,
     symbol_map: HashMap<Symbol, u32>,
     log: bool,
@@ -40,30 +40,50 @@ impl SnapshotSerializer {
     pub(super) fn new(log: bool) -> Self {
         Self {
             log,
-            reference_map: HashMap::new(),
+            reference_map: Vec::new(),
             output: vec![],
             symbol_map: HashMap::new(),
         }
     }
     pub(crate) fn build_reference_map(&mut self, rt: &mut Runtime) {
+        let mut indexx = 0;
         VM_NATIVE_REFERENCES
             .iter()
             .enumerate()
             .for_each(|(_index, reference)| {
-                let index = self.reference_map.len();
-                self.reference_map.insert(*reference, index as u32);
+                /*match self.reference_map.insert(*reference, indexx) {
+                    Some(p) => {
+                        backtrace::resolve(*reference as *mut _, |sym| {
+                            if let Some(name) = sym.name() {
+                                panic!(
+                                    "duplicate reference #{}: {:x} '{}'",
+                                    _index,
+                                    *reference,
+                                    name.as_str().unwrap()
+                                );
+                            } else {
+                                panic!("duplicate reference #{}: {:x}", _index, *reference);
+                            }
+                        });
+                        panic!("duplicate {:x} at {}({})", *reference, _index, p);
+                    }
+                    _ => (),
+                }*/
+                self.reference_map.push(*reference);
+                indexx += 1;
             });
 
         if let Some(ref references) = rt.external_references {
             for (_index, reference) in references.iter().enumerate() {
-                let ix = self.reference_map.len() as u32;
-                let result = self.reference_map.insert(*reference, ix);
+                /* let result = self.reference_map.insert(*reference, indexx);
+                indexx += 1;
                 match result {
                     Some(_) => {
                         panic!("Reference 0x{:x}", reference);
                     }
                     _ => (),
-                }
+                }*/
+                self.reference_map.push(*reference);
             }
         }
     }
@@ -94,16 +114,17 @@ impl SnapshotSerializer {
         let heap = rt.heap();
 
         Heap::walk(heap.mi_heap, |object, _| {
-            let ix = self.reference_map.len() as u32;
-
-            self.reference_map.insert(object as usize, ix);
+            //let ix = self.reference_map.len() as u32;
+            self.reference_map.push(object);
+            //self.reference_map.insert(object as usize, ix);
             true
         });
 
         for weak_slot in heap.weak_slots.iter() {
             let addr = weak_slot as *const _ as usize;
-            let ix = self.reference_map.len() as u32;
-            self.reference_map.insert(addr, ix);
+            let _ix = self.reference_map.len() as u32;
+            self.reference_map.push(addr);
+            //self.reference_map.insert(addr, ix);
         }
     }
 
@@ -120,7 +141,12 @@ impl SnapshotSerializer {
                 "serialize reference {:p} '{}' at index {}",
                 base,
                 base.get_dyn().type_name(),
-                self.reference_map.get(&(object)).unwrap()
+                self.reference_map
+                    .iter()
+                    .enumerate()
+                    .find(|x| *x.1 == object)
+                    .unwrap()
+                    .0,
             );
             self.try_write_reference(base.get_dyn().deser_pair().0 as *const u8)
                 .unwrap_or_else(|| {
@@ -168,10 +194,12 @@ impl SnapshotSerializer {
     }
 
     pub fn get_gcpointer<T: GcCell + ?Sized>(&self, at: GcPointer<T>) -> u32 {
-        *self
-            .reference_map
-            .get(&(at.base.as_ptr() as usize))
+        self.reference_map
+            .iter()
+            .enumerate()
+            .find(|x| x.1 == &(at.base.as_ptr() as usize))
             .unwrap()
+            .0 as u32
     }
     pub fn write_symbol(&mut self, sym: Symbol) {
         match sym {
@@ -193,7 +221,13 @@ impl SnapshotSerializer {
     }
     pub fn write_weakref<T: GcCell + Sized>(&mut self, weak_ref: WeakRef<T>) {
         let key = weak_ref.inner.as_ptr() as usize;
-        let ix = *self.reference_map.get(&key).unwrap();
+        let ix = self
+            .reference_map
+            .iter()
+            .enumerate()
+            .find(|x| x.1 == &(key as usize))
+            .unwrap()
+            .0 as u32;
         self.write_u32(ix);
     }
     pub fn write_gcpointer<T: GcCell + ?Sized>(&mut self, at: GcPointer<T>) {
@@ -218,40 +252,31 @@ impl SnapshotSerializer {
     }
 
     pub fn write_reference<T>(&mut self, ref_: *const T) {
-        let ix = self.reference_map.get(&(ref_ as usize)).copied().unwrap();
+        let ix = self
+            .reference_map
+            .iter()
+            .enumerate()
+            .find(|x| x.1 == &(ref_ as usize))
+            .unwrap()
+            .0 as u32;
         self.write_u32(ix);
     }
 
     pub fn try_write_reference<T>(&mut self, ref_: *const T) -> Option<()> {
-        let ix = self.reference_map.get(&(ref_ as usize)).copied()?;
+        let ix = self
+            .reference_map
+            .iter()
+            .enumerate()
+            .find(|x| x.1 == &(ref_ as usize))?
+            .0 as u32;
         self.write_u32(ix);
         Some(())
     }
 }
 
-use libmimalloc_sys::*;
 use wtf_rs::segmented_vec::SegmentedVec;
 
 use super::deserializer::Deserializable;
-
-unsafe extern "C" fn build_reference_map(
-    _heap: *const mi_heap_t,
-    _area: *const mi_heap_area_t,
-    block: *mut libc::c_void,
-    _: usize,
-    arg: *mut libc::c_void,
-) -> bool {
-    if block.is_null() {
-        return true;
-    }
-    let arg: &mut (*mut Heap, *mut SnapshotSerializer) =
-        &mut *(arg.cast::<(*mut Heap, *mut SnapshotSerializer)>());
-    let _heap = &mut *arg.0;
-    let serializer = &mut *arg.1;
-    let ix = serializer.reference_map.len() as u32;
-    serializer.reference_map.insert(block as usize, ix);
-    true
-}
 
 pub trait Serializable {
     fn serialize(&self, serializer: &mut SnapshotSerializer);

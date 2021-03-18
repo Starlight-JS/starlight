@@ -1,7 +1,11 @@
 #![allow(unused_variables)]
 use vm::function::JsFunction;
 use wtf_rs::segmented_vec::SegmentedVec;
-
+macro_rules! unique {
+    () => {
+        static SINK: usize = 0;
+    };
+}
 use crate::{
     bytecode::TypeFeedBack,
     heap::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
@@ -96,18 +100,20 @@ impl<'a> Deserializer<'a> {
     }
 
     unsafe fn build_reference_map(&mut self, rt: &mut Runtime) {
+        let mut ix = 0;
         VM_NATIVE_REFERENCES
             .iter()
             .enumerate()
             .for_each(|(index, reference)| {
                 //let index = self.reference_map.len();
-                *self.reference_map.get_unchecked_mut(index as usize) = *reference;
+                *self.reference_map.get_mut(ix).unwrap() = *reference;
+                ix += 1;
             });
 
         if let Some(ref references) = rt.external_references {
             for reference in references.iter() {
-                let ix = self.reference_map.len();
-                *self.reference_map.get_unchecked_mut(ix as usize) = *reference;
+                *self.reference_map.get_mut(ix as usize).unwrap() = *reference;
+                ix += 1;
                 //self.reference_map.insert(ix as u32, *reference);
             }
         }
@@ -127,7 +133,7 @@ impl<'a> Deserializer<'a> {
             let sym = std::str::from_utf8_unchecked(&self.reader[self.pc..self.pc + len as usize])
                 .intern();
             self.pc += len as usize;
-            *self.symbol_map.get_unchecked_mut(index as usize) = sym;
+            *self.symbol_map.get_mut(index as usize).unwrap() = sym;
         }
     }
 
@@ -151,7 +157,7 @@ impl<'a> Deserializer<'a> {
                 ptr
             );
             self.pc = offset as usize;
-            *self.reference_map.get_unchecked_mut(ref_id as usize) = ptr as usize;
+            *self.reference_map.get_mut(ref_id as usize).unwrap() = ptr as usize;
         }
         logln_if!(self.log_deser, "- Object pre-allocated completed -");
         let weak_count = self.get_u32();
@@ -168,7 +174,7 @@ impl<'a> Deserializer<'a> {
 
             logln_if!(self.log_deser, "make weak #{} {:p}", index, ptr);
             let slot = rt.heap().make_weak_slot(ptr as *mut _);
-            *self.reference_map.get_unchecked_mut(index as usize) = slot as usize;
+            *self.reference_map.get_mut(index as usize).unwrap() = slot as usize;
         }
         logln_if!(self.log_deser, "- Weak slot deserialization completed -");
         let last_stop = self.pc;
@@ -176,7 +182,7 @@ impl<'a> Deserializer<'a> {
         logln_if!(self.log_deser, "- Object deserialization started -");
         for _ in 0..count {
             let ref_id = self.get_u32();
-            let base = *self.reference_map.get_unchecked_mut(ref_id as usize);
+            let base = *self.reference_map.get_mut(ref_id as usize).unwrap();
             logln_if!(
                 self.log_deser,
                 "deserialize #{}:0x{:x} '{}'",
@@ -479,12 +485,12 @@ impl<T: Deserializable + GcCell> Deserializable for Vec<T> {
     }
 
     unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
-        let len = deser.get_u64();
-        deser.get_u64();
-        for _ in 0..len {
-            T::dummy_read(deser);
-        }
-
+        /*      let len = deser.get_u64();
+                deser.get_u64();
+                for _ in 0..len {
+                    T::dummy_read(deser);
+                }
+        */
         rt.heap()
             .allocate_raw(vtable_of_type::<Self>() as _, size_of::<Self>())
     }
@@ -1062,6 +1068,7 @@ impl<T: GcCell> Deserializable for WeakRef<T> {
     }
 
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
+        unique!();
         at.cast::<Self>().write(Self::deserialize_inplace(deser));
     }
 
