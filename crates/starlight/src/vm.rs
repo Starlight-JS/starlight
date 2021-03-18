@@ -38,6 +38,7 @@ pub mod string;
 pub mod structure;
 pub mod symbol_table;
 pub mod thread;
+pub mod tracingjit;
 pub mod value;
 use attributes::*;
 use object::*;

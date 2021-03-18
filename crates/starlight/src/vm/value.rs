@@ -78,7 +78,8 @@ impl JsValue {
         ((a & Self::TAG_MASK) << Self::TAG_WIDTH) | (b & Self::TAG_MASK)
     }
     #[inline]
-    const fn new(val: u64, tag: TagKind) -> Self {
+     const fn new(val: u64, tag: TagKind) -> Self {
+
         Self(val | ((tag as u64) << Self::NUM_DATA_BITS))
     }
     #[inline]
@@ -194,7 +195,7 @@ impl JsValue {
 
     #[inline]
     pub fn is_pointer(&self) -> bool {
-        self.0 >= ((FIRST_TAG as u64) << Self::NUM_DATA_BITS as u64)
+        self.0 >= ((FIRST_PTR_TAG as u64) << Self::NUM_DATA_BITS as u64)
     }
 
     #[inline]
@@ -414,7 +415,7 @@ impl JsValue {
 
     #[inline]
     pub fn is_pointer(&self) -> bool {
-        self.0.to_bits() >= ((FIRST_TAG as u64) << Self::NUM_DATA_BITS as u64)
+        self.0.to_bits() >= ((FIRST_PTR_TAG as u64) << Self::NUM_DATA_BITS as u64)
     }
 
     #[inline]
@@ -711,7 +712,7 @@ impl JsValue {
             return Ok(Self::number_compare(px.get_number(), py.get_number()));
         }
         if likely(px.is_js_string() && py.is_js_string()) {
-            if px.get_string().as_str() < py.get_string().as_str() {
+            if px.get_string().as_str().len() < py.get_string().as_str().len() {
                 Ok(CMP_TRUE)
             } else {
                 Ok(CMP_FALSE)

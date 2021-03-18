@@ -1,8 +1,14 @@
 use crate::{
     vm::Runtime,
     vm::{
-        arguments::Arguments, array_storage::ArrayStorage, error::JsTypeError, function::*,
-        slot::*, string::JsString, symbol_table::Internable, value::JsValue,
+        arguments::Arguments,
+        array_storage::ArrayStorage,
+        error::JsTypeError,
+        function::*,
+        slot::*,
+        string::JsString,
+        symbol_table::{Internable, Symbol},
+        value::JsValue,
     },
 };
 
@@ -75,4 +81,69 @@ pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
     return Err(JsValue::encode_object_value(JsTypeError::new(
         vm, msg, None,
     )));
+}
+
+pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let this = args.this;
+    if this.is_callable() {
+        let mut obj = this.get_jsobject();
+        let func = obj.as_function_mut();
+
+        let args_size = args.size();
+        let arg_array = args.at(1);
+        if args_size == 1 || arg_array.is_null() || arg_array.is_undefined() {
+            let mut args = Arguments::new(rt, args.at(0), 0);
+            return func.call(rt, &mut args);
+        }
+
+        if !arg_array.is_jsobject() {
+            let msg = JsString::new(
+                rt,
+                "Function.prototype.apply requires array-like as 2nd argument",
+            );
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                rt, msg, None,
+            )));
+        }
+
+        let arg_array = arg_array.get_jsobject();
+        let len = super::get_length(rt, arg_array)?;
+        let mut args_ = Arguments::new(rt, args.at(0), len as _);
+        for i in 0..len {
+            *args_.at_mut(i as _) = arg_array.get(rt, Symbol::Index(i))?;
+        }
+        return func.call(rt, &mut args_);
+    }
+
+    let msg = JsString::new(rt, "Function.prototype.apply is not a generic function");
+    Err(JsValue::encode_object_value(JsTypeError::new(
+        rt, msg, None,
+    )))
+}
+
+pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let this = args.this;
+    if this.is_callable() {
+        let mut obj = this.get_jsobject();
+        let func = obj.as_function_mut();
+
+        let args_size = args.size();
+        let mut args_ = Arguments::new(
+            rt,
+            args.at(0),
+            if args_size > 1 { args_size - 1 } else { 0 },
+        );
+        if args_size > 1 {
+            for i in 0..args_size - 1 {
+                *args_.at_mut(i) = args.at(i + 1);
+            }
+        }
+
+        return func.call(rt, &mut args_);
+    }
+
+    let msg = JsString::new(rt, "Function.prototype.call is not a generic function");
+    Err(JsValue::encode_object_value(JsTypeError::new(
+        rt, msg, None,
+    )))
 }

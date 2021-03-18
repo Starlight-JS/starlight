@@ -144,12 +144,12 @@ unsafe fn eval_internal(
 
 pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
     let mut ip = (*frame).ip;
-    let setup_frame = |rt: &mut Runtime,
-                       frame: &mut CallFrame,
-                       func: &JsVMFunction,
-                       env: JsValue,
-                       this: JsValue,
-                       args_: GcPointer<ArrayStorage>|
+    let _setup_frame = |rt: &mut Runtime,
+                        frame: &mut CallFrame,
+                        func: &JsVMFunction,
+                        env: JsValue,
+                        this: JsValue,
+                        args_: GcPointer<ArrayStorage>|
      -> Result<(), JsValue> {
         let scope = env.get_object().downcast_unchecked::<JsObject>();
         let structure = Structure::new_indexed(rt, Some(scope), false);
@@ -294,7 +294,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = lhs.to_primitive(rt, JsHint::None)?;
                 let rhs = rhs.to_primitive(rt, JsHint::None)?;
 
-                if lhs.is_string() || rhs.is_string() {
+                if lhs.is_js_string() || rhs.is_js_string() {
                     #[inline(never)]
                     fn concat(
                         rt: &mut Runtime,
@@ -306,6 +306,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         let string = format!("{}{}", lhs, rhs);
                         Ok(JsValue::encode_object_value(JsString::new(rt, string)))
                     }
+
                     let result = concat(rt, lhs, rhs)?;
                     frame.push(result);
                 } else {

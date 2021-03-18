@@ -65,6 +65,8 @@ pub enum Opcode {
     OP_GET_ENV,
     OP_GET_VAR,
     OP_SET_VAR,
+    OP_SET_GLOBAL,
+    OP_GET_GLOBAL,
     OP_DECL_LET,
     OP_DECL_CONST,
     OP_PUSH_THIS,

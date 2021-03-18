@@ -112,6 +112,21 @@ impl CodeBlock {
                         pc = pc.add(4);
                         writeln!(output, "set_var @{}, fdbk @{}", name, feedback)?;
                     }
+
+                    Opcode::OP_GET_GLOBAL => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let feedback = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "get_global @{}, fdbk @{}", name, feedback)?;
+                    }
+                    Opcode::OP_SET_GLOBAL => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let feedback = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "set_global @{}, fdbk @{}", name, feedback)?;
+                    }
                     Opcode::OP_NEWOBJECT => {
                         writeln!(output, "newobject")?;
                     }

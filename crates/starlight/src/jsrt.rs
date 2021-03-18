@@ -67,8 +67,24 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(func_ctor), W | C),
             false,
         );
-        let f = JsNativeFunction::new(self, "toString".intern(), function_bind, 0);
+        let f = JsNativeFunction::new(self, "bind".intern(), function_bind, 0);
         let name = "bind".intern();
+        let _ = func_proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(f), W | C),
+            false,
+        );
+        let f = JsNativeFunction::new(self, "apply".intern(), function_apply, 0);
+        let name = "apply".intern();
+        let _ = func_proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(f), W | C),
+            false,
+        );
+        let f = JsNativeFunction::new(self, "call".intern(), function_call, 0);
+        let name = "call".intern();
         let _ = func_proto.define_own_property(
             self,
             name,
@@ -616,6 +632,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         function::function_bind as usize,
         function::function_prototype as usize,
         function::function_to_string as usize,
+        function::function_apply as usize,
+        function::function_call as usize,
         object::object_constructor as usize,
         object::object_create as usize,
         object::object_to_string as usize,
@@ -637,3 +655,11 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         print as usize,
     ]))
 });
+
+pub fn get_length(rt: &mut Runtime, val: GcPointer<JsObject>) -> Result<u32, JsValue> {
+    if val.class() as *const _ == JsArray::get_class() as *const _ {
+        return Ok(val.indexed.length());
+    }
+    let len = val.get(rt, "length".intern())?;
+    len.to_uint32(rt)
+}
