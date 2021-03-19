@@ -13,6 +13,7 @@ use crate::{
 pub mod array;
 pub mod error;
 pub mod function;
+pub mod global;
 pub mod object;
 pub mod string;
 
@@ -44,6 +45,39 @@ impl Runtime {
             .unwrap_or_else(|_| unreachable!());
 
         string::initialize(self, self.global_data().object_prototype.unwrap());
+
+        let mut global = self.global_object();
+        let func = JsNativeFunction::new(self, "isFinite".intern(), global::is_finite, 1);
+        let _ = global.put(
+            self,
+            "isFinite".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
+
+        let func = JsNativeFunction::new(self, "isNaN".intern(), global::is_nan, 1);
+        let _ = global.put(
+            self,
+            "isNaN".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
+
+        let func = JsNativeFunction::new(self, "parseInt".intern(), global::parse_int, 1);
+        let _ = global.put(
+            self,
+            "parseInt".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
+
+        let func = JsNativeFunction::new(self, "parseFloat".intern(), global::parse_float, 1);
+        let _ = global.put(
+            self,
+            "parseFloat".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -674,6 +708,10 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         error::syntax_error_constructor as usize,
         error::type_error_constructor as usize,
         print as usize,
+        global::is_finite as _,
+        global::is_nan as _,
+        global::parse_float as _,
+        global::parse_int as _,
         string::string_concat as _,
         string::string_split as _,
         string::string_constructor as _,

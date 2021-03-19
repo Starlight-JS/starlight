@@ -55,6 +55,10 @@
 //! - There's no API for proper precise marking.
 //!
 #![allow(dead_code)]
+use self::cell::{
+    GcCell, GcPointer, GcPointerBase, Tracer, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
+    POSSIBLY_BLACK, POSSIBLY_GREY,
+};
 use crate::vm::GcParams;
 use cell::vtable_of;
 use std::{
@@ -63,11 +67,7 @@ use std::{
     mem::transmute,
     ptr::{null_mut, NonNull},
 };
-
-use self::cell::{
-    GcCell, GcPointer, GcPointerBase, Tracer, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
-    POSSIBLY_BLACK, POSSIBLY_GREY,
-};
+use yastl::Pool;
 
 use libmimalloc_sys::{
     mi_free, mi_good_size, mi_heap_area_t, mi_heap_check_owned, mi_heap_collect,
@@ -207,7 +207,8 @@ pub struct Heap {
     sp: usize,
     defers: usize,
     allocated: usize,
-    threadpool: Option<scoped_threadpool::Pool>,
+    threadpool: Option<Pool>,
+    n_workers: u32,
     max_heap_size: usize,
     track_allocations: bool,
     allocations: HashMap<*mut GcPointerBase, String>,
@@ -302,9 +303,10 @@ impl Heap {
     pub fn new(gc_params: GcParams) -> Self {
         let mut this = Self {
             allocations: HashMap::new(),
+            n_workers: gc_params.nmarkers as _,
             track_allocations: gc_params.track_allocations,
             threadpool: if gc_params.parallel_marking {
-                Some(scoped_threadpool::Pool::new(gc_params.nmarkers))
+                Some(Pool::new(gc_params.nmarkers as _))
             } else {
                 None
             },
@@ -469,7 +471,7 @@ impl Heap {
             self.process_roots(&mut visitor);
             drop(registers);
             if let Some(ref mut pool) = self.threadpool {
-                pmarking::start(&visitor.queue, pool);
+                pmarking::start(&visitor.queue, self.n_workers as _, pool);
             } else {
                 self.process_worklist(&mut visitor);
             }

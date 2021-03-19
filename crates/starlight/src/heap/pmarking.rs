@@ -5,13 +5,13 @@ use super::{
 use crossbeam::deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
-use scoped_threadpool::Pool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
+use yastl::Pool;
 
-pub fn start(rootset: &[*mut GcPointerBase], threadpool: &mut Pool) {
-    let number_workers = threadpool.thread_count() as usize;
+pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut Pool) {
+    let number_workers = n_workers;
     let mut workers = Vec::with_capacity(number_workers);
     let mut stealers = Vec::with_capacity(number_workers);
     let injector = Injector::new();

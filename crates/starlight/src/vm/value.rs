@@ -741,6 +741,7 @@ impl JsValue {
         }
         Ok(number.floor() as u32)
     }
+
     pub fn to_number(self, rt: &mut Runtime) -> Result<f64, JsValue> {
         if likely(self.is_double()) {
             Ok(self.get_double())
