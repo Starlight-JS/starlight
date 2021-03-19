@@ -65,8 +65,8 @@ use std::{
 };
 
 use self::cell::{
-    GcCell, GcPointer, GcPointerBase, Trace, Tracer, WeakRef, WeakSlot, WeakState,
-    DEFINETELY_WHITE, POSSIBLY_BLACK, POSSIBLY_GREY,
+    GcCell, GcPointer, GcPointerBase, Tracer, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
+    POSSIBLY_BLACK, POSSIBLY_GREY,
 };
 
 use libmimalloc_sys::{

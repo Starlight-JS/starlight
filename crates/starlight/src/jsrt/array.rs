@@ -149,13 +149,13 @@ pub fn array_push(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
             vm, msg, None,
         )));
     };
-
+    // let p = n;
     let max = 0x100000000u64;
     let mut it = 0;
     let last = args.size();
     if (n + args.size() as u64) <= max {
         while it != last {
-            obj.put(vm, Symbol::Index(it as _), args.at(it), false)?;
+            obj.put(vm, Symbol::Index(n as _), args.at(it), false)?;
             it += 1;
             n += 1;
         }
@@ -262,4 +262,45 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         k += 1;
     }
     Ok(acc)
+}
+
+pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() == 0 {
+        return Ok(args.this);
+    }
+
+    let mut ix = 0;
+    if !args.this.is_jsobject() {
+        let msg = JsString::new(rt, "Array.prototype.concat requires array-like object");
+        return Err(JsValue::encode_object_value(JsTypeError::new(
+            rt, msg, None,
+        )));
+    }
+    let this_length = super::get_length(rt, args.this.get_jsobject())?;
+    let this = args.this.get_jsobject();
+    let mut new_values = JsArray::new(rt, this_length);
+    for n in 0..this_length {
+        let val = this.get(rt, Symbol::Index(n))?;
+        new_values.put(rt, Symbol::Index(ix), val, false)?;
+        ix += 1;
+    }
+
+    for ai in 0..args.size() {
+        let arg = args.at(ai);
+        if !arg.is_jsobject() {
+            let msg = JsString::new(rt, "Array.prototype.concat requires array-like arguments");
+            return Err(JsValue::encode_object_value(JsTypeError::new(
+                rt, msg, None,
+            )));
+        }
+        let arg = arg.get_jsobject();
+        let len = super::get_length(rt, arg)?;
+        for n in 0..len {
+            let val = arg.get(rt, Symbol::Index(n))?;
+            new_values.put(rt, Symbol::Index(ix), val, false)?;
+            ix += 1;
+        }
+    }
+
+    Ok(JsValue::encode_object_value(new_values))
 }

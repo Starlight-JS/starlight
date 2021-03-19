@@ -1306,9 +1306,11 @@ impl Deserializable for CodeBlock {
         let rest_param = Option::<Symbol>::deserialize_inplace(deser);
         let params = Vec::<Symbol>::deserialize_inplace(deser);
         let codes = Vec::<GcPointer<Self>>::deserialize_inplace(deser);
+        let top_level = bool::deserialize_inplace(deser);
         Self {
             name,
             names,
+            top_level,
             strict,
             variables,
             code,

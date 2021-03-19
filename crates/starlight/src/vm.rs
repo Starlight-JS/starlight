@@ -321,6 +321,13 @@ impl Runtime {
         keep_on_stack!(&mut proto);
         this.init_func(proto);
         this.init_builtin();
+        let global = this.global_object();
+        let _ = this.global_object().put(
+            &mut this,
+            "globalThis".intern(),
+            JsValue::encode_object_value(global),
+            false,
+        );
         this.heap.undefer();
 
         this

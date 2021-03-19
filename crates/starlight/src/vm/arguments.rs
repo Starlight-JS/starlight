@@ -13,10 +13,7 @@ use super::{
     value::*,
     Runtime,
 };
-use crate::heap::{
-    cell::{GcCell, GcPointer, Trace, Tracer},
-    SlotVisitor,
-};
+use crate::heap::cell::{GcCell, GcPointer, Trace, Tracer};
 
 pub struct Arguments {
     pub this: JsValue,

@@ -56,13 +56,13 @@ impl Runtime {
             }
             nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
+        let mut vscope = if func.code.top_level {
+            self.global_object()
+        } else {
+            nscope
+        };
         for val in func.code.variables.iter() {
-            nscope.define_own_property(
-                self,
-                *val,
-                &*DataDescriptor::new(JsValue::encode_undefined_value(), W | C | E),
-                false,
-            )?;
+            vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
         }
 
         let mut args = JsArguments::new(self, nscope.clone(), &func.code.params, args_.size() as _);
@@ -574,6 +574,33 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     .names
                     .get_unchecked(name as usize);
                 set_var(rt, frame, name, fdbk, val)?;
+            }
+            Opcode::OP_SET_GLOBAL => {
+                let val = frame.pop();
+                let name = ip.cast::<u32>().read_unaligned();
+
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+
+                rt.global_object()
+                    .put(rt, name, val, unwrap_unchecked(frame.code_block).strict)?;
+            }
+            Opcode::OP_GET_GLOBAL => {
+                let name = ip.cast::<u32>().read_unaligned();
+
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+
+                let val = rt.global_object().get(rt, name)?;
+                frame.push(val);
+            }
+            Opcode::OP_GLOBALTHIS => {
+                let global = rt.global_object();
+                frame.push(JsValue::encode_object_value(global));
             }
             Opcode::OP_GET_BY_ID => {
                 let name = ip.cast::<u32>().read_unaligned();

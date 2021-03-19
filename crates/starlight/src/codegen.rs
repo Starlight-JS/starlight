@@ -1,9 +1,6 @@
 use crate::{
     bytecode::{opcodes::Opcode, TypeFeedBack},
-    heap::{
-        cell::{GcPointer, Trace, Tracer},
-        SlotVisitor,
-    },
+    heap::cell::{GcPointer, Trace, Tracer},
     vm::code_block::CodeBlock,
     vm::symbol_table::*,
     vm::{string::JsString, symbol_table::Symbol, value::*, Runtime, RuntimeRef},
@@ -26,6 +23,7 @@ pub struct LoopControlInfo {
 pub struct Compiler {
     builder: ByteCodeBuilder,
     vm: RuntimeRef,
+    top_level: bool,
     lci: Vec<LoopControlInfo>,
     fmap: HashMap<Symbol, u32>,
 }
@@ -437,6 +435,7 @@ impl Compiler {
 
         let mut compiler = Compiler {
             lci: Vec::new(),
+            top_level: true,
             builder: ByteCodeBuilder {
                 code: code,
                 val_map: Default::default(),
@@ -450,6 +449,7 @@ impl Compiler {
             Some(ref body) => body.is_use_strict(),
             None => false,
         };
+        code.top_level = true;
         code.strict = is_strict;
         compiler.compile(&p.body);
         // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
@@ -504,9 +504,11 @@ impl Compiler {
                     lci: Vec::new(),
                     builder: ByteCodeBuilder {
                         code: code,
+
                         val_map: Default::default(),
                         name_map: Default::default(),
                     },
+                    top_level: false,
                     fmap: Default::default(),
                     vm: RuntimeRef(&mut *self.vm),
                 };
@@ -518,8 +520,11 @@ impl Compiler {
                 let nix = self.builder.get_sym(name);
                 self.builder
                     .emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
-
-                self.builder.emit(Opcode::OP_SET_VAR, &[nix as _], true);
+                if self.top_level {
+                    self.builder.emit(Opcode::OP_SET_GLOBAL, &[nix as _], false);
+                } else {
+                    self.builder.emit(Opcode::OP_SET_VAR, &[nix as _], true);
+                }
             }
         });
         let scope = Scope::analyze_stmts(body);
@@ -566,6 +571,7 @@ impl Compiler {
 
                 let mut compiler = Compiler {
                     lci: Vec::new(),
+                    top_level: false,
                     builder: ByteCodeBuilder {
                         code: code,
                         val_map: Default::default(),
@@ -635,6 +641,7 @@ impl Compiler {
                 code.rest_param = rest;
                 let mut compiler = Compiler {
                     lci: Vec::new(),
+                    top_level: false,
                     builder: ByteCodeBuilder {
                         code: code,
                         val_map: Default::default(),
@@ -1468,7 +1475,11 @@ impl Compiler {
                                 self.builder.emit(Opcode::OP_DECL_CONST, &[ix], true)
                             }
                             VarDeclKind::Var => {
-                                self.builder.emit(Opcode::OP_SET_VAR, &[ix], true);
+                                if self.top_level {
+                                    self.builder.emit(Opcode::OP_SET_GLOBAL, &[ix], false);
+                                } else {
+                                    self.builder.emit(Opcode::OP_SET_VAR, &[ix], true);
+                                }
                             }
                         }
                     }
@@ -1478,9 +1489,13 @@ impl Compiler {
                         let ix = self.builder.get_sym(name);
                         self.builder.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                         match var.kind {
-                            VarDeclKind::Let => self.builder.emit(Opcode::OP_DECL_LET, &[ix], true),
+                            VarDeclKind::Let => {
+                                self.builder.emit(Opcode::OP_DECL_LET, &[ix], true);
+                                return;
+                            }
                             VarDeclKind::Const => {
-                                self.builder.emit(Opcode::OP_DECL_CONST, &[ix], true)
+                                self.builder.emit(Opcode::OP_DECL_CONST, &[ix], true);
+                                return;
                             }
                             VarDeclKind::Var => {}
                         }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::heap::{cell::Trace, SlotVisitor};
+use crate::heap::cell::Trace;
 use frame::*;
 use memmap2::MmapMut;
 use std::{intrinsics::unlikely, ptr::null_mut};

@@ -182,6 +182,14 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(reduce), W | C | E),
             false,
         );
+        let name = "concat".intern();
+        let concat = JsNativeFunction::new(self, name, array_concat, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(concat), W | C | E),
+            false,
+        );
         self.global_data.array_prototype = Some(proto);
         let arr = "Array".intern();
         let _ = self.global_object().define_own_property(
@@ -657,6 +665,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array::array_push as usize,
         array::array_reduce as usize,
         array::array_to_string as usize,
+        array::array_concat as usize,
         error::error_constructor as usize,
         error::error_to_string as usize,
         error::eval_error_constructor as usize,

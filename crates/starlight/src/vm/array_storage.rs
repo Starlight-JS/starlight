@@ -4,7 +4,7 @@ use super::value::JsValue;
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
-    Heap, SlotVisitor,
+    Heap,
 };
 /// A GC-managed resizable vector of values. It is used for storage of property
 /// values in objects and also indexed property values in arrays. It supports

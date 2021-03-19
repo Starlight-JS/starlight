@@ -1,9 +1,6 @@
 use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
+use crate::heap::cell::{GcCell, GcPointer, Trace};
 use crate::heap::{cell::Tracer, snapshot::deserializer::Deserializable};
-use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
-    SlotVisitor,
-};
 use std::ops::{Deref, DerefMut};
 #[derive(Clone, Copy)]
 pub union PropertyLayout {

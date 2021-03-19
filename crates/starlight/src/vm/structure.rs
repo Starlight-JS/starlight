@@ -4,11 +4,8 @@ use wtf_rs::unwrap_unchecked;
 
 use super::{attributes::*, object::JsObject};
 use super::{symbol_table::*, Runtime};
+use crate::heap::cell::{GcCell, GcPointer, Trace, WeakRef};
 use crate::heap::{cell::Tracer, snapshot::deserializer::Deserializable};
-use crate::heap::{
-    cell::{GcCell, GcPointer, Trace, WeakRef},
-    SlotVisitor,
-};
 /// In JavaScript programs, it's common to have multiple objects with the same property keys. Such objects
 /// have the same *shape*.
 /// ```js

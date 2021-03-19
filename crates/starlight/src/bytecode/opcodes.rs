@@ -81,4 +81,5 @@ pub enum Opcode {
     OP_DELETE_VAR,
     OP_DELETE_BY_ID,
     OP_DELETE_BY_VAL,
+    OP_GLOBALTHIS,
 }

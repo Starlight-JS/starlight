@@ -1343,8 +1343,9 @@ impl Env {
                 )));
             } else {
                 let mut slot = Slot::new();
+                vm.global_object().put(vm, name, val, false)?;
                 vm.global_object()
-                    .put_slot(vm, name, val, &mut slot, false)?;
+                    .get_own_property_slot(vm, name, &mut slot);
                 return Ok((vm.global_object(), slot));
             }
         }

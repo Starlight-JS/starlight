@@ -3,10 +3,7 @@ use std::mem::size_of;
 use wtf_rs::round_up;
 
 use crate::{
-    heap::{
-        cell::{GcPointer, Trace, Tracer},
-        SlotVisitor,
-    },
+    heap::cell::{GcPointer, Trace, Tracer},
     vm::{code_block::CodeBlock, value::JsValue},
 };
 

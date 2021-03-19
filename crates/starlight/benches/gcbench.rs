@@ -4,7 +4,7 @@ use starlight::{
     heap::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
-        Heap, SlotVisitor,
+        Heap,
     },
     vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime, RuntimeParams},
     vtable_impl, Platform,

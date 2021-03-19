@@ -17,6 +17,7 @@ pub struct CodeBlock {
     pub params: Vec<Symbol>,
     pub names: Vec<Symbol>,
     pub code: Vec<u8>,
+    pub top_level: bool,
     pub codes: Vec<GcPointer<Self>>,
     pub literals: Vec<JsValue>,
     pub feedback: Vec<TypeFeedBack>,
@@ -116,16 +117,14 @@ impl CodeBlock {
                     Opcode::OP_GET_GLOBAL => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        let feedback = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "get_global @{}, fdbk @{}", name, feedback)?;
+
+                        writeln!(output, "get_global @{}", name)?;
                     }
                     Opcode::OP_SET_GLOBAL => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        let feedback = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "set_global @{}, fdbk @{}", name, feedback)?;
+
+                        writeln!(output, "set_global @{}", name)?;
                     }
                     Opcode::OP_NEWOBJECT => {
                         writeln!(output, "newobject")?;
@@ -297,6 +296,7 @@ impl CodeBlock {
             name,
             strict,
             codes: vec![],
+            top_level: false,
             variables: vec![],
             rest_param: None,
             params: vec![],

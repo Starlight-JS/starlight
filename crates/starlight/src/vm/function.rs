@@ -9,10 +9,7 @@ use super::{arguments::*, code_block::CodeBlock};
 use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
 use super::{error::JsTypeError, method_table::*};
-use crate::heap::{
-    cell::{GcPointer, Trace, Tracer},
-    SlotVisitor,
-};
+use crate::heap::cell::{GcPointer, Trace, Tracer};
 use std::mem::ManuallyDrop;
 
 pub struct JsFunction {

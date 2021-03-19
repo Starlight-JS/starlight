@@ -7,10 +7,11 @@ Starlight is a JS engine in Rust which focuses on performance rather than ensuri
 - Bytecode interpreter
 - Mostly-precise GC without overhead for tracking GC objects
 - Polymorphic inline caches for objects and variable lookups
-- Small memory footprint, only around ~10KB of memory is used for a single runtime instance. 
+- Small memory footprint, only around ~40KB of memory is used for a single runtime instance. 
     **NOTE**: memory consumption will be larger in the future when more of JS builtins will be implemented but it should not exceed 100KB I believe.
 
 - Startup snapshots
+- Executable JS bundles
 
 # Why?
 
@@ -26,8 +27,20 @@ The ES specification includes lots and lots of builtin objects. Every new single
 To solve this problems V8-like startup snapshots were implemented. Startup snapshots just deserialize previously serialized heap state which might reduce load times singnificantly (not much difference right now since not that many builtins is implemented). Custom JS functions and objects could be added to global state and then serialized into binary file and deserialized later which removes overhead of initializing objects, parsing source code and compiling it to bytecode to just simple deserialization of raw bytes. Think of it like AOT compilation but simpler and smaller.
 
 
+# Build and install instructions (Linux,*BSD,macOS)
+Executing these two commands will result in building starlight and installing libraries to necessary folders: 
+```sh
+git clone https://github.com/starlight-js/starlight
+./build.sh # use build-debug.sh for debug build
+```
+
+NOTE: macOS and FreeBSD do not use `*.so` file format so `.dynlib` files from target/release should be installed manually.
+
+# Bundles
+
+Starlight supports creating executable JavaScript bundles. To create one `starlight-bundle` could be used: just run it on one of JS files like `starlight-bundle file.js file-bundle` and it will produce statically linked executable file `file-bundle` which can be run. Internally bundle is just heap snapshot after JS file was compiled and simple call to execute code from this snapshot.
+
+***NOTE*** `starlight-bundle` might panic when run on platform that does have `cc` available in `PATH` so `--output-c` option should be used and C file should be compiled and linked manually.
 # TODO
-- Complete support for full ES5.1 and some part of ES6 (we already support spread,const and let).
-- Document startup snapshots
-- Parallel GC marking
-- Bytecode compiler
+- Precise GC
+- ES support
