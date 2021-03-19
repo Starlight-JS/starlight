@@ -24,6 +24,9 @@ struct Options {
     disable_ic: bool,
 }
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() {
     Platform::initialize();
     let options = Options::from_args();

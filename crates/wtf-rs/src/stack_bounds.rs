@@ -66,7 +66,6 @@ impl StackBounds {
 impl StackBounds {
     pub unsafe fn current_thread_stack_bounds_internal() -> Self {
         use winapi::um::memoryapi::*;
-        use winapi::um::sysinfoapi::*;
         use winapi::um::winnt::*;
         let mut stack_origin: MEMORY_BASIC_INFORMATION =
             core::mem::MaybeUninit::zeroed().assume_init();

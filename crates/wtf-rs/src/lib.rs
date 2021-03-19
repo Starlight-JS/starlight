@@ -1,5 +1,6 @@
 pub mod segmented_vec;
 pub mod stack_bounds;
+#[allow(dead_code)]
 pub(crate) fn thread_self() -> u64 {
     #[cfg(windows)]
     unsafe {

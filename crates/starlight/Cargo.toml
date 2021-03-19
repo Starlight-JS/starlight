@@ -24,6 +24,7 @@ libmimalloc-sys = { version = "0.1", features = ["extended"] }
 starlight-derive = { path = "../starlight-derive" }
 structopt = "0.3"
 backtrace = "0.3"
+mimalloc = "0.1.25"
 crossbeam = "0.8"
 yastl = "0.1.2"
 num = "0.3.1"

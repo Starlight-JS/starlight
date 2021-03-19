@@ -19,10 +19,7 @@ pub struct Options {
 }
 
 fn main() {
-    if cfg!(windows) {
-        eprintln!("JS executable bundles is not supported on Windows");
-        return;
-    }
+    
     let opts = Options::from_args();
     Platform::initialize();
     let string = std::fs::read_to_string(&opts.input).unwrap_or_else(|error| {
