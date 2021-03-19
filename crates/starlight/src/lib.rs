@@ -18,6 +18,7 @@ pub mod utils;
 pub mod heap;
 pub mod bytecode;
 pub mod codegen;
+pub mod gc;
 pub mod jsrt;
 pub mod vm;
 pub fn val_add(x: JsValue, y: JsValue, slowpath: fn(JsValue, JsValue) -> JsValue) -> JsValue {

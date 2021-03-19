@@ -14,7 +14,7 @@ use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
     snapshot::serializer::{Serializable, SnapshotSerializer},
 };
-use std::mem::{size_of, ManuallyDrop};
+use std::mem::size_of;
 
 #[repr(C)]
 pub struct JsString {

@@ -4,15 +4,14 @@ use super::{
     error::JsTypeError, error::*, function::JsVMFunction, object::*, property_descriptor::*,
     slot::*, string::JsString, structure::*, symbol_table::*, value::*, Runtime,
 };
-use crate::bytecode::*;
 use crate::{
     bytecode::opcodes::Opcode,
     heap::{
         cell::{GcCell, GcPointer, Trace},
         snapshot::deserializer::Deserializable,
-        SlotVisitor,
     },
 };
+use crate::{bytecode::*, heap::cell::Tracer};
 use std::{
     hint::unreachable_unchecked,
     intrinsics::{likely, unlikely},
@@ -663,13 +662,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     }
 
                     let mut slot = Slot::new();
-                    obj.put_slot(
-                        rt,
-                        name,
-                        value,
-                        &mut slot,
-                        unwrap_unchecked(frame.code_block).strict,
-                    )?;
+
+                    obj.put(rt, name, value, unwrap_unchecked(frame.code_block).strict)?;
+                    obj.get_own_property_slot(rt, name, &mut slot);
                     if rt.options.inline_caches && slot.is_put_cacheable() {
                         *unwrap_unchecked(frame.code_block)
                             .feedback
@@ -1125,7 +1120,7 @@ impl GcCell for SpreadValue {
     vtable_impl!();
 }
 unsafe impl Trace for SpreadValue {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.array.trace(visitor);
     }
 }

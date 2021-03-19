@@ -4,7 +4,7 @@ use wtf_rs::round_up;
 
 use crate::{
     heap::{
-        cell::{GcPointer, Trace},
+        cell::{GcPointer, Trace, Tracer},
         SlotVisitor,
     },
     vm::{code_block::CodeBlock, value::JsValue},
@@ -41,12 +41,12 @@ impl CallFrame {
     }
 }
 unsafe impl Trace for CallFrame {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.callee.trace(visitor);
         self.code_block.trace(visitor);
         self.this.trace(visitor);
         self.env.trace(visitor);
-        for (env, _) in self.try_stack.iter() {
+        for (env, _) in self.try_stack.iter_mut() {
             env.trace(visitor);
         }
     }

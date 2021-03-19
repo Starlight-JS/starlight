@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use super::codegen::*;
 use crate::{
-    heap::{cell::GcPointer, cell::Trace, Heap, SimpleMarkingConstraint, SlotVisitor},
+    heap::{cell::GcPointer, cell::Trace, cell::Tracer, Heap, SimpleMarkingConstraint},
     jsrt::object::{object_constructor, object_to_string},
 };
 use arguments::Arguments;

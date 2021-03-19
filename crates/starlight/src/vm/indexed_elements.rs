@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
+    cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
-    SlotVisitor,
 };
 
 use super::{
@@ -97,7 +96,7 @@ impl IndexedElements {
 }
 
 unsafe impl Trace for IndexedElements {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.vector.trace(visitor);
         self.map.trace(visitor);
     }

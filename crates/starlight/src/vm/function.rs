@@ -10,7 +10,7 @@ use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
 use super::{error::JsTypeError, method_table::*};
 use crate::heap::{
-    cell::{GcPointer, Trace},
+    cell::{GcPointer, Trace, Tracer},
     SlotVisitor,
 };
 use std::mem::ManuallyDrop;
@@ -406,12 +406,17 @@ impl JsNativeFunction {
 }
 
 unsafe impl Trace for JsFunction {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.construct_struct.trace(tracer);
         match self.ty {
-            FuncType::User(ref x) => {
+            FuncType::User(ref mut x) => {
                 x.code.trace(tracer);
                 x.scope.trace(tracer);
+            }
+            FuncType::Bound(ref mut x) => {
+                x.this.trace(tracer);
+                x.args.trace(tracer);
+                x.target.trace(tracer);
             }
             _ => (),
         }

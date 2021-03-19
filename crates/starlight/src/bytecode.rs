@@ -1,8 +1,5 @@
 use crate::{
-    heap::{
-        cell::{Trace, WeakRef},
-        SlotVisitor,
-    },
+    heap::cell::{Trace, Tracer, WeakRef},
     vm::structure::Structure,
 };
 
@@ -22,7 +19,7 @@ pub enum TypeFeedBack {
 }
 
 unsafe impl Trace for TypeFeedBack {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         match self {
             Self::PropertyCache { structure, .. } => structure.trace(visitor),
             _ => (),

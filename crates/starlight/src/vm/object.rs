@@ -18,9 +18,8 @@ use super::{
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
+    cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
-    SlotVisitor,
 };
 use std::{
     collections::hash_map::Entry,
@@ -152,17 +151,17 @@ impl JsObject {
     }
 }
 unsafe impl Trace for JsObject {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.structure.trace(visitor);
         self.slots.trace(visitor);
         self.indexed.trace(visitor);
         match self.tag {
             ObjectTag::Global => {
-                self.as_global().trace(visitor);
+                self.as_global_mut().trace(visitor);
             }
-            ObjectTag::NormalArguments => self.as_arguments().trace(visitor),
-            ObjectTag::Function => self.as_function().trace(visitor),
-            ObjectTag::String => self.as_string_object().value.trace(visitor),
+            ObjectTag::NormalArguments => self.as_arguments_mut().trace(visitor),
+            ObjectTag::Function => self.as_function_mut().trace(visitor),
+            ObjectTag::String => self.as_string_object_mut().value.trace(visitor),
             _ => (),
         }
     }

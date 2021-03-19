@@ -1,5 +1,5 @@
 use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
-use crate::heap::snapshot::deserializer::Deserializable;
+use crate::heap::{cell::Tracer, snapshot::deserializer::Deserializable};
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace},
     SlotVisitor,
@@ -119,7 +119,7 @@ pub struct StoredSlot {
     pub(crate) attributes: AttrSafe,
 }
 unsafe impl Trace for StoredSlot {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.value.trace(visitor);
     }
 }
@@ -535,7 +535,7 @@ impl GcCell for Accessor {
 }
 
 unsafe impl Trace for Accessor {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.setter.trace(tracer);
         self.getter.trace(tracer);
     }

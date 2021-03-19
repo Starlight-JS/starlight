@@ -4,7 +4,7 @@ use wtf_rs::unwrap_unchecked;
 
 use super::{attributes::*, object::JsObject};
 use super::{symbol_table::*, Runtime};
-use crate::heap::snapshot::deserializer::Deserializable;
+use crate::heap::{cell::Tracer, snapshot::deserializer::Deserializable};
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace, WeakRef},
     SlotVisitor,
@@ -184,10 +184,10 @@ impl TransitionsTable {
 pub type Table = HashMap<TransitionKey, WeakRef<Structure>>;
 
 unsafe impl Trace for TransitionsTable {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         match self.var {
-            Transition::Pair(_, ref x) => x.trace(tracer),
-            Transition::Table(ref table) => {
+            Transition::Pair(_, ref mut x) => x.trace(tracer),
+            Transition::Table(ref mut table) => {
                 table.trace(tracer);
             }
             _ => (),
@@ -201,12 +201,12 @@ impl GcCell for Structure {
     vtable_impl!();
 }
 unsafe impl Trace for Structure {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.transitions.trace(tracer);
         self.table.trace(tracer);
         self.prototype.trace(tracer);
         self.deleted.entry.trace(tracer);
-        match self.previous.as_ref() {
+        match self.previous.as_mut() {
             Some(x) => {
                 x.trace(tracer);
             }
@@ -266,12 +266,12 @@ pub struct DeletedEntry {
 }
 
 unsafe impl Trace for DeletedEntry {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.prev.trace(tracer)
     }
 }
 unsafe impl Trace for DeletedEntryHolder {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.entry.trace(visitor);
     }
 }

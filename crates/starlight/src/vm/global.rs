@@ -8,10 +8,7 @@ use super::{
     value::JsValue,
 };
 use super::{method_table::*, symbol_table::Internable};
-use crate::heap::{
-    cell::{GcPointer, Trace},
-    SlotVisitor,
-};
+use crate::heap::cell::{GcPointer, Trace, Tracer};
 use wtf_rs::segmented_vec::SegmentedVec;
 
 use super::{
@@ -29,8 +26,8 @@ pub struct JsGlobal {
 }
 
 unsafe impl Trace for JsGlobal {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        self.variables.iter().for_each(|var| var.trace(visitor));
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.variables.iter_mut().for_each(|var| var.trace(visitor));
     }
 }
 

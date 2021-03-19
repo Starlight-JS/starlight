@@ -1,7 +1,7 @@
 use super::value::JsValue;
 use super::{symbol_table::Symbol, Runtime};
 use crate::bytecode::opcodes::*;
-use crate::heap::{cell::GcPointer, SlotVisitor};
+use crate::heap::{cell::GcPointer, cell::Tracer};
 use crate::{
     bytecode::TypeFeedBack,
     heap::cell::{GcCell, Trace},

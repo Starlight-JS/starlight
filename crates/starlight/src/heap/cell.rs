@@ -3,15 +3,21 @@ use std::{
     collections::HashMap,
     marker::PhantomData,
     mem::size_of,
+    mem::transmute,
     ops::{Deref, DerefMut},
     ptr::NonNull,
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use super::{
-    snapshot::deserializer::Deserializable, snapshot::serializer::Serializable, SlotVisitor,
-};
+use super::{snapshot::deserializer::Deserializable, snapshot::serializer::Serializable};
 use mopa::mopafy;
+
+pub trait Tracer {
+    fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell>;
+    fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell>;
+    fn add_conservative(&mut self, from: usize, to: usize);
+    fn visit_weak(&mut self, at: *const WeakSlot);
+}
 
 /// Indicates that a type can be traced by a garbage collector.
 ///
@@ -47,7 +53,7 @@ pub unsafe trait Trace {
     ///       and it'll always be completely sufficient for safe code (aside from destructors).
     ///     - With an automatically derived implementation you will never miss a field
     /// - Invoking this function directly.
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         let _ = visitor;
     }
 }
@@ -280,16 +286,16 @@ macro_rules! impl_prim {
 
 impl_prim!(String bool f32 f64 u8 i8 u16 i16 u32 i32 u64 i64 );
 unsafe impl<T: Trace> Trace for Vec<T> {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        for val in self.iter() {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        for val in self.iter_mut() {
             val.trace(visitor);
         }
     }
 }
 
 unsafe impl<T: GcCell + ?Sized> Trace for GcPointer<T> {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        visitor.visit(self);
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        visitor.visit(unsafe { transmute(self) });
     }
 }
 
@@ -336,15 +342,22 @@ impl<T: GcCell> GcCell for WeakRef<T> {
     vtable_impl!(WeakRef<T>);
 }
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        visitor.visit_weak(self);
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        visitor.visit_weak(self.inner.as_ptr());
     }
 }
 
+#[allow(mutable_transmutes)]
 unsafe impl<K: Trace, V: Trace> Trace for HashMap<K, V> {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        for (key, value) in self.iter() {
-            key.trace(visitor);
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        for (key, value) in self.iter_mut() {
+            unsafe {
+                // TODO: This is really  unsafe. We transmute reference to mutable reference for tracing which is
+                // very unsafe, we should find better alternative to this.
+                let km = std::mem::transmute::<_, &mut K>(key);
+                km.trace(visitor);
+            }
+            //key.trace(visitor);
             value.trace(visitor);
         }
     }
@@ -362,7 +375,7 @@ impl<
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         match self {
             Some(val) => val.trace(visitor),
             _ => (),

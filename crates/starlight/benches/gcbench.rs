@@ -2,7 +2,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::{
     heap::{
-        cell::{GcCell, GcPointer, Trace},
+        cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
         Heap, SlotVisitor,
     },
@@ -155,7 +155,7 @@ impl Serializable for Node {
     fn serialize(&self, _serializer: &mut SnapshotSerializer) {}
 }
 unsafe impl Trace for Node {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.left.trace(visitor);
         self.right.trace(visitor);
     }

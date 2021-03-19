@@ -65,8 +65,8 @@ use std::{
 };
 
 use self::cell::{
-    GcCell, GcPointer, GcPointerBase, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
-    POSSIBLY_BLACK, POSSIBLY_GREY,
+    GcCell, GcPointer, GcPointerBase, Trace, Tracer, WeakRef, WeakSlot, WeakState,
+    DEFINETELY_WHITE, POSSIBLY_BLACK, POSSIBLY_GREY,
 };
 
 use libmimalloc_sys::{
@@ -118,6 +118,49 @@ impl SlotVisitor {
             let inner = &mut *slot.inner.as_ptr();
             inner.state = WeakState::Mark;
         }
+    }
+}
+
+impl Tracer for SlotVisitor {
+    fn visit_weak(&mut self, slot: *const WeakSlot) {
+        unsafe {
+            let inner = &mut *(slot as *mut WeakSlot);
+            inner.state = WeakState::Mark;
+        }
+    }
+
+    fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
+        let base = *cell;
+        unsafe {
+            if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
+                return GcPointer {
+                    base: NonNull::new_unchecked(base as *mut _),
+                    marker: Default::default(),
+                };
+            }
+            self.bytes_visited += 1;
+            self.queue.push(base as *mut _);
+            GcPointer {
+                base: NonNull::new_unchecked(base as *mut _),
+                marker: Default::default(),
+            }
+        }
+    }
+
+    fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell> {
+        unsafe {
+            let base = cell.base.as_ptr();
+            if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
+                return *cell;
+            }
+            self.bytes_visited += 1;
+            self.queue.push(base);
+            *cell
+        }
+    }
+
+    fn add_conservative(&mut self, from: usize, to: usize) {
+        self.cons_roots.push((from, to));
     }
 }
 

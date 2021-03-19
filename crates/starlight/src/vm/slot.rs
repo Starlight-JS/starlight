@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
+    cell::{GcCell, GcPointer, Trace, Tracer},
     SlotVisitor,
 };
 
@@ -155,8 +155,8 @@ impl GcCell for Slot {
     vtable_impl!();
 }
 unsafe impl Trace for Slot {
-    fn trace(&self, tracer: &mut SlotVisitor) {
-        if let Some(ref obj) = self.base {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
+        if let Some(ref mut obj) = self.base {
             obj.trace(tracer);
         }
         self.value.trace(tracer);

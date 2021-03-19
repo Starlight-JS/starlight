@@ -14,7 +14,7 @@ use super::{
     Runtime,
 };
 use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
+    cell::{GcCell, GcPointer, Trace, Tracer},
     SlotVisitor,
 };
 
@@ -73,7 +73,7 @@ impl GcCell for Arguments {
     vtable_impl!();
 }
 unsafe impl Trace for Arguments {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.this.trace(tracer);
         self.values.trace(tracer);
     }
@@ -362,7 +362,7 @@ impl JsArguments {
 }
 
 unsafe impl Trace for JsArguments {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.env.trace(tracer);
     }
 }

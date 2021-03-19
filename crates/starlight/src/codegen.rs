@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{opcodes::Opcode, TypeFeedBack},
     heap::{
-        cell::{GcPointer, Trace},
+        cell::{GcPointer, Trace, Tracer},
         SlotVisitor,
     },
     vm::code_block::CodeBlock,
@@ -100,7 +100,7 @@ impl ByteCodeBuilder {
     }
 }
 unsafe impl Trace for ByteCodeBuilder {
-    fn trace(&self, tracer: &mut SlotVisitor) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.code.trace(tracer);
     }
 }

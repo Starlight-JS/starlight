@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use super::value::JsValue;
 use crate::heap::{
-    cell::{GcCell, GcPointer, Trace},
+    cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
     Heap, SlotVisitor,
 };
@@ -221,8 +221,8 @@ impl ArrayStorage {
 }
 
 unsafe impl Trace for ArrayStorage {
-    fn trace(&self, visitor: &mut SlotVisitor) {
-        self.as_slice().iter().for_each(|value| {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.as_slice_mut().iter_mut().for_each(|value| {
             value.trace(visitor);
         });
     }

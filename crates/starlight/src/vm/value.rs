@@ -1,4 +1,4 @@
-use crate::heap::{cell::*, SlotVisitor};
+use crate::heap::cell::*;
 use cfg_if::cfg_if;
 use std::{
     hint::unreachable_unchecked,
@@ -488,9 +488,9 @@ impl JsValue {
 );
 
 unsafe impl Trace for JsValue {
-    fn trace(&self, visitor: &mut SlotVisitor) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
         if self.is_object() && !self.is_empty() {
-            self.get_object().trace(visitor);
+            *self = JsValue::encode_object_value(visitor.visit(&mut self.get_object()));
         }
     }
 }
