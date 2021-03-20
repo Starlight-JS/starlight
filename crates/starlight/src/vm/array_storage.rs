@@ -1,6 +1,6 @@
 use std::mem::size_of;
 
-use super::value::JsValue;
+use super::{value::JsValue, Runtime};
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
@@ -183,10 +183,11 @@ impl ArrayStorage {
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
-    pub fn with_size(rt: &mut Heap, size: u32, capacity: u32) -> GcPointer<Self> {
-        let mut this = Self::new(rt, capacity);
-        this.resize_within_capacity(rt, size);
-        this
+    pub fn with_size(rt: &mut Runtime, size: u32, capacity: u32) -> GcPointer<Self> {
+        let stack = rt.shadowstack();
+        crate::root!(this = stack, Self::new(rt.heap(), capacity));
+        this.resize_within_capacity(rt.heap(), size);
+        *this
     }
     pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {
         let cell = rt.allocate(Self {

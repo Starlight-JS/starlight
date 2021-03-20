@@ -33,7 +33,7 @@ impl Stack {
             }
 
             let frame = Box::into_raw(Box::new(CallFrame {
-                exit_on_return: false,
+                exit_on_return: true,
                 ctor: false,
                 prev: self.current,
                 try_stack: vec![],

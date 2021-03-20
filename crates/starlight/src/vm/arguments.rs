@@ -37,13 +37,17 @@ impl Arguments {
         self.values.size() as _
     }
     pub fn new(vm: &mut Runtime, this: JsValue, size: usize) -> Self {
-        let mut arr = ArrayStorage::with_size(vm.heap(), size as _, size as _);
+        let stack = vm.shadowstack();
+        crate::root!(
+            arr = stack,
+            ArrayStorage::with_size(vm, size as _, size as _)
+        );
         for i in 0..size {
             *arr.at_mut(i as _) = JsValue::encode_undefined_value();
         }
         Self {
             this,
-            values: arr,
+            values: *arr,
             ctor_call: false,
         }
     }

@@ -820,7 +820,7 @@ impl JsObject {
         let init = IndexedElements::new(vm);
         let indexed = vm.heap().allocate(init);
         let storage = ArrayStorage::with_size(
-            vm.heap(),
+            vm,
             structure.get_slots_size() as _,
             structure.get_slots_size() as _,
         );

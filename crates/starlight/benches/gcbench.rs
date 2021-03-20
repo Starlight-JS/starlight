@@ -28,7 +28,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
     populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, long_lived);
-    let arr = ArrayStorage::with_size(&mut rt, ARRAY_SIZE as _, ARRAY_SIZE as _);
+    let arr = ArrayStorage::with_size(&mut rrt, ARRAY_SIZE as _, ARRAY_SIZE as _);
+    let mut rt = rrt.heap();
     let mut array = rt.allocate(arr);
     for i in 0..(ARRAY_SIZE / 2) {
         *array.at_mut(i as _) = JsValue::encode_f64_value(1.0 / i as f64);

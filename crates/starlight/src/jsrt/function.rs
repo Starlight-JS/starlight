@@ -50,7 +50,7 @@ pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
 
     if obj.is_callable() {
         let mut vals = ArrayStorage::with_size(
-            vm.heap(),
+            vm,
             if args.size() == 0 {
                 0
             } else {

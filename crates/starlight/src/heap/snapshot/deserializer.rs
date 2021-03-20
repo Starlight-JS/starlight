@@ -1182,12 +1182,12 @@ impl Deserializable for Transition {
         match ty {
             0x0 => Self::None,
             0x1 => {
-                let table = Option::<GcPointer<HashMap<TransitionKey,WeakRef<Structure>>>>::deserialize_inplace(deser);
+                let table = Option::<GcPointer<HashMap<TransitionKey,GcPointer<Structure>>>>::deserialize_inplace(deser);
                 Self::Table(table)
             }
             0x2 => {
                 let key = TransitionKey::deserialize_inplace(deser);
-                let structure = WeakRef::<Structure>::deserialize_inplace(deser);
+                let structure = GcPointer::<Structure>::deserialize_inplace(deser);
                 Self::Pair(key, structure)
             }
             _ => unreachable!(),

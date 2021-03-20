@@ -105,6 +105,7 @@ impl Slot {
     ) {
         self.set(value, attributes);
         self.make_used();
+
         self.base = obj;
         self.offset = offset;
     }
