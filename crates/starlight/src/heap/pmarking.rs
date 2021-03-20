@@ -40,6 +40,7 @@ pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut 
                     visitor: SlotVisitor {
                         cons_roots: vec![],
                         queue: vec![],
+
                         bytes_visited: 0,
                         sp: 0 as _,
                     },

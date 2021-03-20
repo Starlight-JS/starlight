@@ -56,8 +56,8 @@
 //!
 #![allow(dead_code)]
 use self::cell::{
-    GcCell, GcPointer, GcPointerBase, Tracer, WeakRef, WeakSlot, WeakState, DEFINETELY_WHITE,
-    POSSIBLY_BLACK, POSSIBLY_GREY,
+    GcCell, GcPointer, GcPointerBase, Trace, Tracer, WeakRef, WeakSlot, WeakState,
+    DEFINETELY_WHITE, POSSIBLY_BLACK, POSSIBLY_GREY,
 };
 use crate::vm::GcParams;
 use cell::vtable_of;
@@ -95,6 +95,7 @@ impl SlotVisitor {
             return;
         }
         self.bytes_visited += 1;
+
         self.queue.push(base);
     }
     /// Visit a reference to the specified value
@@ -105,6 +106,7 @@ impl SlotVisitor {
                 return;
             }
             self.bytes_visited += 1;
+
             self.queue.push(base);
         }
     }
@@ -139,6 +141,7 @@ impl Tracer for SlotVisitor {
                 };
             }
             self.bytes_visited += 1;
+
             self.queue.push(base as *mut _);
             GcPointer {
                 base: NonNull::new_unchecked(base as *mut _),
@@ -154,6 +157,7 @@ impl Tracer for SlotVisitor {
                 return *cell;
             }
             self.bytes_visited += 1;
+
             self.queue.push(base);
             *cell
         }
@@ -365,7 +369,6 @@ impl Heap {
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
         self.collect_if_necessary();
-
         let real_size = value.compute_size() + size_of::<GcPointerBase>();
         unsafe {
             let pointer = if real_size <= libmimalloc_sys::MI_SMALL_SIZE_MAX {
@@ -691,4 +694,16 @@ impl<T: GcCell> Clone for WeakRef<T> {
     fn clone(&self) -> Self {
         *self
     }
+}
+#[repr(C)]
+struct RawRoot {
+    next: *mut Self,
+    prev: *mut Self,
+}
+
+#[repr(C)]
+pub struct Root<T: Trace> {
+    prev: *mut RawRoot,
+    next: *mut RawRoot,
+    value: T,
 }

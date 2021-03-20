@@ -6,6 +6,8 @@
     destructuring_assignment,
     const_raw_ptr_to_usize_cast
 )]
+#![allow(unused_unsafe)]
+
 use heap::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
 use vm::{
@@ -16,9 +18,10 @@ use vm::{
 pub mod utils;
 #[macro_use]
 pub mod heap;
+#[macro_use]
+pub mod gc;
 pub mod bytecode;
 pub mod codegen;
-pub mod gc;
 pub mod jsrt;
 pub mod vm;
 pub fn val_add(x: JsValue, y: JsValue, slowpath: fn(JsValue, JsValue) -> JsValue) -> JsValue {

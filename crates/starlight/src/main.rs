@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use starlight::{
+    root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
 };
@@ -24,9 +25,6 @@ struct Options {
     disable_ic: bool,
 }
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
@@ -44,29 +42,37 @@ fn main() {
         gc,
         None,
     );
+    let gcstack = rt.shadowstack();
 
     let string = std::fs::read_to_string(&options.file);
     match string {
         Ok(source) => {
-            let mut function = match rt.compile(options.file.as_os_str().to_str().unwrap(), &source)
-            {
-                Ok(function) => function.get_jsobject(),
-                Err(e) => {
-                    let string = e.to_string(&mut rt);
-                    match string {
-                        Ok(val) => {
-                            eprintln!("Compilation failed: {}", val);
-                            std::process::exit(1);
-                        }
-                        Err(_e) => {
-                            eprintln!("Failed to get error as string");
-                            std::process::exit(1);
+            root!(
+                function = gcstack,
+                match rt.compile(options.file.as_os_str().to_str().unwrap(), &source) {
+                    Ok(function) => function.get_jsobject(),
+                    Err(e) => {
+                        let string = e.to_string(&mut rt);
+                        match string {
+                            Ok(val) => {
+                                eprintln!("Compilation failed: {}", val);
+                                std::process::exit(1);
+                            }
+                            Err(_e) => {
+                                eprintln!("Failed to get error as string");
+                                std::process::exit(1);
+                            }
                         }
                     }
                 }
-            };
+            );
             let global = rt.global_object();
-            let mut args = Arguments::new(&mut rt, JsValue::encode_object_value(global), 0);
+
+            root!(
+                args = gcstack,
+                Arguments::new(&mut rt, JsValue::encode_object_value(global), 0)
+            );
+            wtf_rs::keep_on_stack!(&mut args, &mut function);
             let start = std::time::Instant::now();
             match function.as_function_mut().call(&mut rt, &mut args) {
                 Ok(_) => {

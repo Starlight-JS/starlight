@@ -45,7 +45,7 @@ macro_rules! keep_on_stack {
     }};
 }
 
-pub fn unwrap_unchecked<T>(value: Option<T>) -> T {
+pub fn unwrap_unchecked<T: Sized>(value: Option<T>) -> T {
     match value {
         Some(value) => value,
         None => unsafe { std::hint::unreachable_unchecked() },

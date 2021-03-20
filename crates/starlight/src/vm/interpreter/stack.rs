@@ -96,7 +96,13 @@ unsafe impl Trace for Stack {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         if !self.current.is_null() {
             unsafe {
-                visitor.add_conservative(self.start as _, (*self.current).sp as _);
+                let end = (*self.current).sp;
+                let mut scan = self.start;
+                while scan < end {
+                    (&mut *scan).trace(visitor);
+                    scan = scan.add(1);
+                }
+
                 let mut frame = self.current;
                 while !frame.is_null() {
                     (*frame).trace(visitor);

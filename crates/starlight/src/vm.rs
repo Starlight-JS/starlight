@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use super::codegen::*;
 use crate::{
+    gc::shadowstack::ShadowStack,
     heap::{cell::GcPointer, cell::Trace, cell::Tracer, Heap, SimpleMarkingConstraint},
     jsrt::object::{object_constructor, object_to_string},
 };
@@ -113,6 +114,7 @@ pub struct Runtime {
     pub(crate) global_object: Option<GcPointer<JsObject>>,
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: RuntimeParams,
+    pub(crate) shadowstack: ShadowStack,
 }
 
 impl Runtime {
@@ -225,6 +227,7 @@ impl Runtime {
             global_object: None,
             global_data: GlobalData::default(),
             external_references,
+            shadowstack: ShadowStack::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.heap.add_constraint(SimpleMarkingConstraint::new(
@@ -234,6 +237,7 @@ impl Runtime {
                 rt.global_object.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
+                rt.shadowstack.trace(visitor);
             },
         ));
 
@@ -252,6 +256,7 @@ impl Runtime {
             global_object: None,
             global_data: GlobalData::default(),
             external_references,
+            shadowstack: ShadowStack::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.heap.defer();
@@ -262,6 +267,7 @@ impl Runtime {
                 rt.global_object.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
+                rt.shadowstack.trace(visitor);
             },
         ));
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
@@ -339,6 +345,10 @@ impl Runtime {
 
     pub fn global_data(&self) -> &GlobalData {
         &self.global_data
+    }
+    /// Returns shadow stack for GC rooting that will be usable in current scope.
+    pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
+        unsafe { std::mem::transmute(&self.shadowstack) }
     }
 }
 

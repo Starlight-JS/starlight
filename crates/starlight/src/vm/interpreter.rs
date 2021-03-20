@@ -4,6 +4,7 @@ use super::{
     error::JsTypeError, error::*, function::JsVMFunction, object::*, property_descriptor::*,
     slot::*, string::JsString, structure::*, symbol_table::*, value::*, Runtime,
 };
+use crate::root;
 use crate::{
     bytecode::opcodes::Opcode,
     heap::{
@@ -16,7 +17,7 @@ use std::{
     hint::unreachable_unchecked,
     intrinsics::{likely, unlikely},
 };
-use wtf_rs::unwrap_unchecked;
+use wtf_rs::{keep_on_stack, unwrap_unchecked};
 pub mod frame;
 pub mod stack;
 
@@ -142,6 +143,7 @@ unsafe fn eval_internal(
 }
 
 pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
+    rt.heap().collect_if_necessary();
     let mut ip = (*frame).ip;
     let _setup_frame = |rt: &mut Runtime,
                         frame: &mut CallFrame,
@@ -210,6 +212,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
     let mut frame: &'static mut CallFrame = &mut *frame;
     let stack = &mut rt.stack as *mut Stack;
     let stack = &mut *stack;
+    let gcstack = rt.shadowstack();
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
@@ -219,6 +222,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_NOP => {}
 
             Opcode::OP_JMP => {
+                rt.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
                 ip = ip.offset(offset as isize);
@@ -727,11 +731,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(value);
             }
             Opcode::OP_CALL => {
+                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
-                let mut args = ArrayStorage::new(rt.heap(), argc);
-                let func = frame.pop();
-                let this = frame.pop();
+                root!(args = gcstack, ArrayStorage::new(rt.heap(), argc));
+
+                let mut func = frame.pop();
+                let mut this = frame.pop();
+                keep_on_stack!(&mut func, &mut this, &mut args);
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
@@ -821,17 +828,23 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     }
                     _ => (),
                 }*/
-                let mut args_ = Arguments::from_array_storage(rt, this, args);
+                root!(
+                    args_ = gcstack,
+                    Arguments::from_array_storage(rt, this, *args)
+                );
+
+                keep_on_stack!(&mut this, &mut args, &mut args_);
                 let result = func.call(rt, &mut args_)?;
                 frame.push(result);
             }
             Opcode::OP_NEW => {
+                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let mut args = ArrayStorage::new(rt.heap(), argc);
-                let func = frame.pop();
-                let this = frame.pop();
-
+                let mut func = frame.pop();
+                let mut this = frame.pop();
+                keep_on_stack!(&mut this, &mut args, &mut func);
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
@@ -854,8 +867,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut func_object = func.get_jsobject();
                 let map = func_object.func_construct_map(rt)?;
                 let func = func_object.as_function_mut();
-                let mut args_ = Arguments::from_array_storage(rt, this, args);
+                root!(
+                    args_ = gcstack,
+                    Arguments::from_array_storage(rt, this, args)
+                );
                 args_.ctor_call = true;
+                keep_on_stack!(&mut this, &mut args, &mut args_);
                 let result = func.construct(rt, &mut args_, Some(map))?;
                 frame.push(result);
             }
@@ -997,6 +1014,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     }
                 }
                 frame.push(JsValue::encode_object_value(arr));
+            }
+            Opcode::OP_PUSH_TRUE => {
+                frame.push(JsValue::encode_bool_value(true));
             }
             x => panic!("{:?}", x),
         }
