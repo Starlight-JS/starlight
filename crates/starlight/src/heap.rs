@@ -172,15 +172,15 @@ pub trait MarkingConstraint {
     fn name(&self) -> &str {
         "<anonymous name>"
     }
-    fn execute(&mut self, marking: &mut SlotVisitor);
+    fn execute(&mut self, marking: &mut dyn Tracer);
 }
 
 pub struct SimpleMarkingConstraint {
     name: String,
-    exec: Box<dyn FnMut(&mut SlotVisitor)>,
+    exec: Box<dyn FnMut(&mut dyn Tracer)>,
 }
 impl SimpleMarkingConstraint {
-    pub fn new(name: &str, exec: impl FnMut(&mut SlotVisitor) + 'static) -> Self {
+    pub fn new(name: &str, exec: impl FnMut(&mut dyn Tracer) + 'static) -> Self {
         Self {
             name: name.to_owned(),
             exec: Box::new(exec),
@@ -192,7 +192,7 @@ impl MarkingConstraint for SimpleMarkingConstraint {
         &self.name
     }
 
-    fn execute(&mut self, marking: &mut SlotVisitor) {
+    fn execute(&mut self, marking: &mut dyn Tracer) {
         (self.exec)(marking);
     }
 }
@@ -324,12 +324,12 @@ impl Heap {
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
         };
 
-        this.add_constraint(SimpleMarkingConstraint::new("thread roots", |visitor| {
-            visitor.add_conservative_roots(
+        /*  this.add_constraint(SimpleMarkingConstraint::new("thread roots", |visitor| {
+            visitor.add_conservative(
                 visitor.sp,
                 crate::vm::thread::THREAD.with(|th| th.bounds.origin as usize),
             );
-        }));
+        }));*/
 
         this
     }
@@ -352,7 +352,7 @@ impl Heap {
                 libmimalloc_sys::mi_heap_malloc_aligned(self.mi_heap, real_size, 16)
             }
             .cast::<GcPointerBase>();
-            pointer.write(GcPointerBase::new(vtable as _));
+            pointer.write(GcPointerBase::new(vtable as _, real_size as _));
             (*pointer).set_allocated();
             std::ptr::copy_nonoverlapping(&0u8, (*pointer).data(), size);
             self.allocated += mi_good_size(real_size);
@@ -377,7 +377,7 @@ impl Heap {
             }
             .cast::<GcPointerBase>();
             let vtable = vtable_of(&value);
-            pointer.write(GcPointerBase::new(vtable as _));
+            pointer.write(GcPointerBase::new(vtable as _, real_size as _));
             (*pointer).set_allocated();
             (*pointer).data::<T>().write(value);
             self.allocated += mi_good_size(real_size);

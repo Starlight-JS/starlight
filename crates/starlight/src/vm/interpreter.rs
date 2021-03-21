@@ -228,7 +228,40 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_NOP => {}
+            Opcode::OP_GET_VAR => {
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                let value = get_var(rt, name, frame, fdbk)?;
 
+                frame.push(value);
+            }
+            Opcode::OP_SET_VAR => {
+                let val = frame.pop();
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                set_var(rt, frame, name, fdbk, val)?;
+            }
+            Opcode::OP_PUSH_ENV => {
+                let map = Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
+                let env = JsObject::new(rt, map, JsObject::get_class(), ObjectTag::Ordinary);
+                frame.env = JsValue::encode_object_value(env);
+            }
+            Opcode::OP_POP_ENV => {
+                let env = frame.env.get_jsobject();
+                frame.env = JsValue::encode_object_value(
+                    env.prototype().copied().expect("no environments left"),
+                );
+            }
             Opcode::OP_JMP => {
                 rt.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
@@ -251,6 +284,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     ip = ip.offset(offset as _);
                 }
             }
+
             Opcode::OP_POP => {
                 frame.pop();
             }
@@ -276,16 +310,25 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_PUSH_NULL => {
                 frame.push(JsValue::encode_null_value());
             }
-            Opcode::OP_SPREAD => {
-                /*
-                    This opcode creates internal interpreter only value that is used to indicate that some argument is spread value
-                    and if interpreter sees it then it tried to use `array` value from `SpreadValue`.
-                    User code can't get access to this value, if it does this should be reported.
+            Opcode::OP_RET => {
+                rt.heap().collect_if_necessary();
+                let mut value = if frame.sp <= frame.limit {
+                    JsValue::encode_undefined_value()
+                } else {
+                    frame.pop()
+                };
 
-                */
-                let value = frame.pop();
-                let spread = SpreadValue::new(rt, value)?;
-                frame.push(JsValue::encode_object_value(spread));
+                if frame.ctor && !value.is_jsobject() {
+                    value = frame.this;
+                }
+
+                //if frame.exit_on_return || frame.prev.is_null() {
+                return Ok(value);
+                /*}
+                let _ = rt.stack.pop_frame().unwrap();
+                frame = &mut *rt.stack.current;
+                ip = frame.ip;
+                frame.push(value);*/
             }
             Opcode::OP_ADD => {
                 // let profile = &mut *ip.cast::<ArithProfile>();
@@ -460,7 +503,91 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
             }
+            Opcode::OP_CALL => {
+                rt.heap().collect_if_necessary();
+                let argc = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                root!(args = gcstack, ArrayStorage::new(rt.heap(), argc));
 
+                let mut func = frame.pop();
+                let mut this = frame.pop();
+                keep_on_stack!(&mut func, &mut this, &mut args);
+                for _ in 0..argc {
+                    let arg = frame.pop();
+                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
+                        root!(
+                            spread = gcstack,
+                            arg.get_object().downcast_unchecked::<SpreadValue>()
+                        );
+                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
+                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
+                            args.push_back(rt.heap(), real_arg);
+                        }
+                    } else {
+                        args.push_back(rt.heap(), arg);
+                    }
+                }
+
+                if !func.is_callable() {
+                    let msg = JsString::new(rt, "not a callable object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+                root!(func_object = gcstack, func.get_jsobject());
+                let func = func_object.as_function_mut();
+
+                root!(
+                    args_ = gcstack,
+                    Arguments::from_array_storage(rt, this, *args)
+                );
+
+                keep_on_stack!(&mut this, &mut args, &mut args_);
+                let result = func.call(rt, &mut args_)?;
+                frame.push(result);
+            }
+            Opcode::OP_NEW => {
+                rt.heap().collect_if_necessary();
+                let argc = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                root!(args = gcstack, ArrayStorage::new(rt.heap(), argc));
+                let mut func = frame.pop();
+                let mut this = frame.pop();
+
+                for _ in 0..argc {
+                    let arg = frame.pop();
+                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
+                        root!(
+                            spread = gcstack,
+                            arg.get_object().downcast_unchecked::<SpreadValue>()
+                        );
+                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
+                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
+                            args.push_back(rt.heap(), real_arg);
+                        }
+                    } else {
+                        args.push_back(rt.heap(), arg);
+                    }
+                }
+
+                if !func.is_callable() {
+                    let msg = JsString::new(rt, "not a callable object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+
+                root!(func_object = gcstack, func.get_jsobject());
+                let map = func_object.func_construct_map(rt)?;
+                let func = func_object.as_function_mut();
+                root!(
+                    args_ = gcstack,
+                    Arguments::from_array_storage(rt, this, *args)
+                );
+                args_.ctor_call = true;
+                let result = func.construct(rt, &mut args_, Some(map))?;
+                frame.push(result);
+            }
             Opcode::OP_INSTANCEOF => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
@@ -521,99 +648,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let n = v1.to_number(rt)?;
                     frame.push(JsValue::encode_f64_value(-n));
                 }
-            }
-            Opcode::OP_EQ => {
-                let lhs = frame.pop();
-                let rhs = frame.pop();
-                frame.push(JsValue::encode_bool_value(lhs.abstract_equal(rhs, rt)?));
-            }
-            Opcode::OP_STRICTEQ => {
-                let lhs = frame.pop();
-                let rhs = frame.pop();
-                frame.push(JsValue::encode_bool_value(lhs.strict_equal(rhs)));
-            }
-            Opcode::OP_NEQ => {
-                let lhs = frame.pop();
-                let rhs = frame.pop();
-                frame.push(JsValue::encode_bool_value(!lhs.abstract_equal(rhs, rt)?));
-            }
-            Opcode::OP_NSTRICTEQ => {
-                let lhs = frame.pop();
-                let rhs = frame.pop();
-                frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
-            }
-            Opcode::OP_GET_ENV => {
-                let name = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                let result = 'search: loop {
-                    let mut current = Some((*frame).env.get_jsobject());
-                    while let Some(env) = current {
-                        if (Env { record: env }).has_own_variable(rt, name) {
-                            break 'search Some(env);
-                        }
-                        current = env.prototype().copied();
-                    }
-                    break 'search None;
-                };
-
-                match result {
-                    Some(env) => frame.push(JsValue::encode_object_value(env)),
-                    None => frame.push(JsValue::encode_undefined_value()),
-                }
-            }
-
-            Opcode::OP_GET_VAR => {
-                let name = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                let value = get_var(rt, name, frame, fdbk)?;
-
-                frame.push(value);
-            }
-            Opcode::OP_SET_VAR => {
-                let val = frame.pop();
-                let name = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                set_var(rt, frame, name, fdbk, val)?;
-            }
-            Opcode::OP_SET_GLOBAL => {
-                let val = frame.pop();
-                let name = ip.cast::<u32>().read_unaligned();
-
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-
-                rt.global_object()
-                    .put(rt, name, val, unwrap_unchecked(frame.code_block).strict)?;
-            }
-            Opcode::OP_GET_GLOBAL => {
-                let name = ip.cast::<u32>().read_unaligned();
-
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-
-                let val = rt.global_object().get(rt, name)?;
-                frame.push(val);
-            }
-            Opcode::OP_GLOBALTHIS => {
-                let global = rt.global_object();
-                frame.push(JsValue::encode_object_value(global));
             }
             Opcode::OP_GET_BY_ID => {
                 let name = ip.cast::<u32>().read_unaligned();
@@ -724,6 +758,77 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
                 }
             }
+            Opcode::OP_EQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(lhs.abstract_equal(rhs, rt)?));
+            }
+            Opcode::OP_STRICTEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(lhs.strict_equal(rhs)));
+            }
+            Opcode::OP_NEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(!lhs.abstract_equal(rhs, rt)?));
+            }
+            Opcode::OP_NSTRICTEQ => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
+            }
+            Opcode::OP_GET_ENV => {
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                let result = 'search: loop {
+                    let mut current = Some((*frame).env.get_jsobject());
+                    while let Some(env) = current {
+                        if (Env { record: env }).has_own_variable(rt, name) {
+                            break 'search Some(env);
+                        }
+                        current = env.prototype().copied();
+                    }
+                    break 'search None;
+                };
+
+                match result {
+                    Some(env) => frame.push(JsValue::encode_object_value(env)),
+                    None => frame.push(JsValue::encode_undefined_value()),
+                }
+            }
+
+            Opcode::OP_SET_GLOBAL => {
+                let val = frame.pop();
+                let name = ip.cast::<u32>().read_unaligned();
+
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+
+                rt.global_object()
+                    .put(rt, name, val, unwrap_unchecked(frame.code_block).strict)?;
+            }
+            Opcode::OP_GET_GLOBAL => {
+                let name = ip.cast::<u32>().read_unaligned();
+
+                ip = ip.add(4);
+                let name = *unwrap_unchecked((*frame).code_block)
+                    .names
+                    .get_unchecked(name as usize);
+
+                let val = rt.global_object().get(rt, name)?;
+                frame.push(val);
+            }
+            Opcode::OP_GLOBALTHIS => {
+                let global = rt.global_object();
+                frame.push(JsValue::encode_object_value(global));
+            }
+
             Opcode::OP_NEWOBJECT => {
                 let obj = JsObject::new_empty(rt);
                 frame.push(JsValue::encode_object_value(obj));
@@ -746,118 +851,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let value = object.get_slot(rt, key, &mut slot)?;
                 frame.push(value);
             }
-            Opcode::OP_CALL => {
-                rt.heap().collect_if_necessary();
-                let argc = ip.cast::<u32>().read();
-                ip = ip.add(4);
-                root!(args = gcstack, ArrayStorage::new(rt.heap(), argc));
 
-                let mut func = frame.pop();
-                let mut this = frame.pop();
-                keep_on_stack!(&mut func, &mut this, &mut args);
-                for _ in 0..argc {
-                    let arg = frame.pop();
-                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        root!(
-                            spread = gcstack,
-                            arg.get_object().downcast_unchecked::<SpreadValue>()
-                        );
-                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
-                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
-                            args.push_back(rt.heap(), real_arg);
-                        }
-                    } else {
-                        args.push_back(rt.heap(), arg);
-                    }
-                }
-
-                if !func.is_callable() {
-                    let msg = JsString::new(rt, "not a callable object");
-                    return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
-                    )));
-                }
-                root!(func_object = gcstack, func.get_jsobject());
-                let func = func_object.as_function_mut();
-                /* if let super::function::FuncType::User(ref vm_function) = func.ty {
-                    let new_frame = rt.stack.new_frame();
-                    if new_frame.is_none() {
-                        let msg = JsString::new(rt, "stack overflow");
-                        return Err(JsValue::encode_object_value(JsRangeError::new(
-                            rt, msg, None,
-                        )));
-                    }
-
-                    let new_frame = unwrap_unchecked(new_frame);
-                    (*new_frame).code_block = Some(vm_function.code);
-                    (*new_frame).ctor = false;
-                    (*new_frame).exit_on_return = false;
-                    (*new_frame).ip = &vm_function.code.code[0] as *const u8 as *mut u8;
-                    _setup_frame(
-                        rt,
-                        &mut *new_frame,
-                        vm_function,
-                        JsValue::encode_object_value(vm_function.scope),
-                        this,
-                        *args,
-                    )?;
-                    frame.ip = ip;
-                    frame = &mut *new_frame;
-                    ip = frame.ip;
-                    drop(args);
-                    continue;
-                }*/
-                root!(
-                    args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, *args)
-                );
-
-                keep_on_stack!(&mut this, &mut args, &mut args_);
-                let result = func.call(rt, &mut args_)?;
-                frame.push(result);
-            }
-            Opcode::OP_NEW => {
-                rt.heap().collect_if_necessary();
-                let argc = ip.cast::<u32>().read();
-                ip = ip.add(4);
-                root!(args = gcstack, ArrayStorage::new(rt.heap(), argc));
-                let mut func = frame.pop();
-                let mut this = frame.pop();
-
-                for _ in 0..argc {
-                    let arg = frame.pop();
-                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        root!(
-                            spread = gcstack,
-                            arg.get_object().downcast_unchecked::<SpreadValue>()
-                        );
-                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
-                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
-                            args.push_back(rt.heap(), real_arg);
-                        }
-                    } else {
-                        args.push_back(rt.heap(), arg);
-                    }
-                }
-
-                if !func.is_callable() {
-                    let msg = JsString::new(rt, "not a callable object");
-                    return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
-                    )));
-                }
-
-                root!(func_object = gcstack, func.get_jsobject());
-                let map = func_object.func_construct_map(rt)?;
-                let func = func_object.as_function_mut();
-                root!(
-                    args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, *args)
-                );
-                args_.ctor_call = true;
-                let result = func.construct(rt, &mut args_, Some(map))?;
-                frame.push(result);
-            }
             Opcode::OP_PUSH_CATCH => {
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
@@ -868,17 +862,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_POP_CATCH => {
                 frame.try_stack.pop();
             }
-            Opcode::OP_PUSH_ENV => {
-                let map = Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
-                let env = JsObject::new(rt, map, JsObject::get_class(), ObjectTag::Ordinary);
-                frame.env = JsValue::encode_object_value(env);
-            }
-            Opcode::OP_POP_ENV => {
-                let env = frame.env.get_jsobject();
-                frame.env = JsValue::encode_object_value(
-                    env.prototype().copied().expect("no environments left"),
-                );
-            }
+
             Opcode::OP_LOGICAL_NOT => {
                 let val = frame.pop();
                 frame.push(JsValue::encode_bool_value(!val.to_boolean()));
@@ -951,26 +935,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::encode_object_value(func));
                 // vm.space().undefer_gc();
             }
-            Opcode::OP_RET => {
-                rt.heap().collect_if_necessary();
-                let mut value = if frame.sp <= frame.limit {
-                    JsValue::encode_undefined_value()
-                } else {
-                    frame.pop()
-                };
 
-                if frame.ctor && !value.is_jsobject() {
-                    value = frame.this;
-                }
-
-                if frame.exit_on_return || frame.prev.is_null() {
-                    return Ok(value);
-                }
-                let _ = rt.stack.pop_frame().unwrap();
-                frame = &mut *rt.stack.current;
-                ip = frame.ip;
-                frame.push(value);
-            }
             Opcode::OP_PUSH_UNDEF => {
                 frame.push(JsValue::encode_undefined_value());
             }
@@ -1002,6 +967,17 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_PUSH_TRUE => {
                 frame.push(JsValue::encode_bool_value(true));
             }
+            Opcode::OP_SPREAD => {
+                /*
+                    This opcode creates internal interpreter only value that is used to indicate that some argument is spread value
+                    and if interpreter sees it then it tried to use `array` value from `SpreadValue`.
+                    User code can't get access to this value, if it does this should be reported.
+
+                */
+                let value = frame.pop();
+                let spread = SpreadValue::new(rt, value)?;
+                frame.push(JsValue::encode_object_value(spread));
+            }
             x => panic!("{:?}", x),
         }
     }
@@ -1018,7 +994,7 @@ fn get_env(rt: &mut Runtime, frame: &mut CallFrame, name: Symbol) -> Option<GcPo
         break 'search None;
     }
 }
-
+#[inline(never)]
 unsafe fn get_var(
     rt: &mut Runtime,
     name: Symbol,
@@ -1069,7 +1045,7 @@ unsafe fn get_var(
         rt, msg, None,
     )))
 }
-
+#[inline(never)]
 unsafe fn set_var(
     rt: &mut Runtime,
     frame: &mut CallFrame,

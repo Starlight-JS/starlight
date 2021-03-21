@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::{intrinsics::unlikely, marker::PhantomData, ptr::NonNull};
 
 use super::{bump::BumpAllocator, mem::align_usize, *};
 
@@ -18,9 +18,47 @@ pub struct MarkCopyGC {
     alloc: BumpAllocator,
 }
 
-pub struct CopyingVisitor {
+pub struct CopyingVisitor<'a> {
     queue: Vec<*mut GcPointerBase>,
     bytes_visited: usize,
+    from_space: Region,
+    heap: &'a mut MarkCopyGC,
+    top: &'a mut Address,
+}
+
+impl<'a> Tracer for CopyingVisitor<'a> {
+    fn add_conservative(&mut self, _from: usize, _to: usize) {}
+
+    fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell> {
+        self.visit_raw(&mut unsafe { std::mem::transmute(cell.base) })
+    }
+
+    fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
+        if self.from_space.contains(Address::from_ptr(*cell)) {
+            let new_addr = self.heap.copy(Address::from_ptr(*cell), self.top);
+
+            unsafe {
+                *cell = new_addr.to_mut_ptr();
+                GcPointer {
+                    base: NonNull::new_unchecked(new_addr.to_mut_ptr()),
+                    marker: PhantomData::default(),
+                }
+            }
+        } else {
+            unsafe {
+                GcPointer {
+                    base: NonNull::new_unchecked(*cell),
+                    marker: PhantomData::default(),
+                }
+            }
+        }
+    }
+    fn visit_weak(&mut self, at: *const WeakSlot) {
+        unsafe {
+            let at = at as *mut WeakSlot;
+            (*at).state = WeakState::Mark;
+        }
+    }
 }
 
 impl MarkCopyGC {
@@ -67,11 +105,50 @@ impl MarkCopyGC {
     }
 
     unsafe fn collect_internal(&mut self) {
-        let mut constraints = std::mem::replace(&mut self.constraints, vec![]);
-        for _constraint in constraints.iter_mut() {
-            //     constraint.execute(visitor);
+        // empty to-space
+        let to_space = self.to_space();
+        let from_space = self.from_space();
+
+        // determine size of heap before collection
+        let old_size = self.alloc.top().offset_from(from_space.start);
+        let allocated = self.allocated_region();
+        let mut top = to_space.start;
+        let mut scan = top;
+        let mut visitor = CopyingVisitor {
+            top: &mut top,
+            heap: self,
+            bytes_visited: 0,
+            queue: vec![],
+            from_space,
+        };
+        let mut constraints = std::mem::replace(&mut visitor.heap.constraints, vec![]);
+        for constraint in constraints.iter_mut() {
+            constraint.execute(&mut visitor);
         }
-        std::mem::swap(&mut self.constraints, &mut constraints);
+        std::mem::swap(&mut visitor.heap.constraints, &mut constraints);
+
+        while scan < *visitor.top {
+            let object: &mut GcPointerBase = &mut *scan.to_mut_ptr();
+            object.get_dyn().trace(&mut visitor);
+            scan = scan.offset(object.size as _);
+        }
+        scan = allocated.start;
+        while scan < allocated.end {
+            let object: &mut GcPointerBase = &mut *scan.to_mut_ptr();
+            let sz = object.size;
+            if !object.is_allocated() {
+                self.allocated -= sz as usize;
+                std::ptr::drop_in_place(object);
+            }
+            scan = scan.offset(sz as _);
+        }
+
+        os::protect(
+            from_space.start,
+            from_space.size(),
+            os::MemoryPermission::None,
+        );
+        self.alloc.reset(top, to_space.end);
     }
 }
 
@@ -85,19 +162,26 @@ impl GarbageCollector for MarkCopyGC {
     }
 
     fn allocate(&mut self, size: usize, vtable: usize) -> Option<NonNull<GcPointerBase>> {
-        let p = self.alloc.bump_alloc(align_usize(size, 16));
+        let p = self.alloc.bump_alloc(size);
+        self.allocated += size;
+        // max object size is 4GB
+        if unlikely(size > u32::MAX as usize) {
+            panic!("Maximum allocation size exceeded");
+        }
         unsafe {
             if p.is_null() {
                 panic!("out of memory");
             }
             let base = p.to_mut_ptr::<GcPointerBase>();
-            base.write(GcPointerBase::new(vtable));
+            base.write(GcPointerBase::new(vtable, size as _));
             Some(NonNull::new_unchecked(base))
         }
     }
 
     fn gc(&mut self) {
-        todo!()
+        unsafe {
+            self.collect_internal();
+        }
     }
 
     fn collect_if_necessary(&mut self) {
@@ -126,9 +210,9 @@ impl GarbageCollector for MarkCopyGC {
             let addr = scan.to_usize();
             let p = addr as *mut GcPointerBase;
             unsafe {
-                let sz = (*p).get_dyn().compute_size() + size_of::<GcPointerBase>();
-                callback(p, sz);
-                scan = scan.offset(align_usize(sz, 16));
+                let sz = (*p).size;
+                callback(p, sz as _);
+                scan = scan.offset(sz as usize);
             }
         }
     }

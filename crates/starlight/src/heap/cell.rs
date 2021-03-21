@@ -105,6 +105,7 @@ mopafy!(GcCell);
 pub struct GcPointerBase {
     pub vtable: usize,
     pub cell_state: AtomicU8, //pub next: *mut Self,
+    pub size: u32,
 }
 
 pub const POSSIBLY_BLACK: u8 = 0;
@@ -112,9 +113,10 @@ pub const POSSIBLY_GREY: u8 = 2;
 pub const DEFINETELY_WHITE: u8 = 1;
 
 impl GcPointerBase {
-    pub fn new(vtable: usize) -> Self {
+    pub fn new(vtable: usize,size: u32) -> Self {
         Self {
             vtable: vtable,
+            size,
             cell_state: AtomicU8::new(DEFINETELY_WHITE),
             //  next: null_mut(),
             //mark: false,
@@ -188,7 +190,7 @@ pub fn vtable_of_type<T: GcCell + Sized>() -> usize {
 /// and not some arbitrary bits that you've decided to heap allocate.
 pub struct GcPointer<T: ?Sized> {
     pub(crate) base: NonNull<GcPointerBase>,
-    pub(super) marker: PhantomData<T>,
+    pub(crate) marker: PhantomData<T>,
 }
 
 impl<T: GcCell + ?Sized> GcPointer<T> {
