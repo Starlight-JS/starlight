@@ -63,6 +63,7 @@ use crate::vm::GcParams;
 use cell::vtable_of;
 use std::{
     collections::HashMap,
+    intrinsics::{prefetch_read_data, prefetch_write_data},
     mem::size_of,
     mem::transmute,
     ptr::{null_mut, NonNull},
@@ -141,7 +142,7 @@ impl Tracer for SlotVisitor {
                 };
             }
             self.bytes_visited += 1;
-
+            //prefetch_read_data(base, 1);
             self.queue.push(base as *mut _);
             GcPointer {
                 base: NonNull::new_unchecked(base as *mut _),
@@ -157,7 +158,7 @@ impl Tracer for SlotVisitor {
                 return *cell;
             }
             self.bytes_visited += 1;
-
+            // prefetch_read_data(base, 1);
             self.queue.push(base);
             *cell
         }
@@ -459,7 +460,7 @@ impl Heap {
             bytes_visited: 0,
 
             cons_roots: vec![],
-            queue: Vec::new(),
+            queue: Vec::with_capacity(256),
             sp: self.sp,
         };
 
@@ -627,6 +628,8 @@ impl Heap {
     fn process_worklist(&mut self, visitor: &mut SlotVisitor) {
         while let Some(ptr) = visitor.queue.pop() {
             unsafe {
+                prefetch_read_data(ptr, 1);
+                prefetch_write_data(ptr, 1);
                 (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
                 (*ptr).get_dyn().trace(visitor);
             }

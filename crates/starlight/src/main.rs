@@ -6,7 +6,8 @@ use starlight::{
     Platform,
 };
 use structopt::*;
-
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[derive(Debug, StructOpt)]
 struct Options {
     #[structopt(

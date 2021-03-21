@@ -6,7 +6,7 @@ default-members = ["crates/starlight"]
 [profile.release]
 lto = true
 opt-level = 3
-debug = false
+debug = true
 codegen-units = 1
 panic = "abort"
 [profile.bench]

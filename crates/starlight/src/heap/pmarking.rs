@@ -5,9 +5,12 @@ use super::{
 use crossbeam::deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
+use std::{
+    intrinsics::{prefetch_read_data, prefetch_write_data},
+    sync::atomic::{AtomicUsize, Ordering},
+};
 use yastl::Pool;
 
 pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut Pool) {
@@ -39,7 +42,7 @@ pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut 
                     task_id,
                     visitor: SlotVisitor {
                         cons_roots: vec![],
-                        queue: vec![],
+                        queue: Vec::with_capacity(256),
 
                         bytes_visited: 0,
                         sp: 0 as _,
@@ -207,6 +210,7 @@ impl<'a> MarkingTask<'a> {
 
             unsafe {
                 let object = &mut *object_addr;
+
                 if object.set_state(POSSIBLY_GREY, POSSIBLY_BLACK) {
                     object.get_dyn().trace(&mut self.visitor);
 
@@ -222,7 +226,7 @@ impl<'a> MarkingTask<'a> {
     }
 
     fn maybe_push_to_injector(&mut self) {
-        if self.visitor.bytes_visited > 256 {
+        if self.visitor.bytes_visited > 100 {
             if self.visitor.queue.len() > 4 {
                 let target_len = self.visitor.queue.len() / 2;
                 while self.visitor.queue.len() > target_len {

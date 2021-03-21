@@ -27,6 +27,7 @@ backtrace = "0.3"
 crossbeam = "0.8"
 yastl = "0.1.2"
 num = "0.3.1"
+mimalloc = "0.1.25"
 [features]
 val-as-f64 = []
 val-as-u64 = []
