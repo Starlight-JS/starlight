@@ -72,3 +72,14 @@ path = "src/bin/bundle.rs"
 
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "memoryapi",
+    "winnt",
+    "sysinfoapi",
+    "minwinbase",
+    "errhandlingapi",
+    "excpt",
+    "minwindef",
+    "wincrypt",
+] }

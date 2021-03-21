@@ -15,6 +15,17 @@ function makeTree(depth) {
     return new Node(n1, n2);
 }
 
-let tree = makeTree(1);
+function populate(depth, node) {
 
-print("Created ", nNodes, " nodes");
+    if (depth <= 0) {
+        return;
+    }
+    depth = depth - 1;
+
+    node.left = new Node(null, null);
+    node.right = new Node(null, null);
+    populate(depth, node.left);
+    populate(depth, node.right);
+}
+
+makeTree(14)

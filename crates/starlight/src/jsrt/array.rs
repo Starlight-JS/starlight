@@ -68,7 +68,7 @@ pub fn array_of(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> 
 
 pub fn array_from(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
-    root!(arg1 =stack, args.at(0).to_object(vm)?);
+    root!(arg1 = stack, args.at(0).to_object(vm)?);
     let len = arg1.get(vm, "length".intern())?;
     let len = if len.is_number() {
         let n = len.to_number(vm)?;
@@ -92,7 +92,7 @@ pub fn array_from(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
 }
 pub fn array_join(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
-    root!( obj = stack,args.this.to_object(vm)?);
+    root!(obj = stack, args.this.to_object(vm)?);
     let len = obj.get(vm, "length".intern())?.to_number(vm)?;
     let len = if len as u32 as f64 == len {
         len as u32
@@ -286,9 +286,9 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
     let stack = rt.shadowstack();
-    root!( this = stack,args.this.get_jsobject());
+    root!(this = stack, args.this.get_jsobject());
     let this_length = super::get_length(rt, &mut this)?;
-    
+
     let mut new_values = JsArray::new(rt, this_length);
     for n in 0..this_length {
         let val = this.get(rt, Symbol::Index(n))?;
@@ -304,7 +304,7 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
                 rt, msg, None,
             )));
         }
-        root!(arg = stack,arg.get_jsobject());
+        root!(arg = stack, arg.get_jsobject());
         let len = super::get_length(rt, &mut arg)?;
         for n in 0..len {
             let val = arg.get(rt, Symbol::Index(n))?;

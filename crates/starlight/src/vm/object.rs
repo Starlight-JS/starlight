@@ -601,7 +601,7 @@ impl JsObject {
         Ok(JsValue::encode_undefined_value())
     }
     pub fn GetIndexedSlotMethod(
-        obj:&mut  GcPointer<Self>,
+        obj: &mut GcPointer<Self>,
         vm: &mut Runtime,
         index: u32,
         slot: &mut Slot,
@@ -733,10 +733,10 @@ impl JsObject {
         mode: EnumerationMode,
     ) {
         obj.get_own_property_names(vm, collector, mode);
-        let mut obj = unsafe {obj.prototype_mut()};
+        let mut obj = unsafe { obj.prototype_mut() };
         while let Some(proto) = obj {
             proto.get_own_property_names(vm, collector, mode);
-            obj = unsafe {proto.prototype_mut()};
+            obj = unsafe { proto.prototype_mut() };
         }
     }
     #[allow(unused_variables)]
@@ -782,7 +782,11 @@ impl JsObject {
         vm: &mut Runtime,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        let mut args = Arguments::new(vm, JsValue::encode_object_value(obj.clone()), 0);
+        let stack = vm.shadowstack();
+        root!(
+            args = stack,
+            Arguments::new(vm, JsValue::encode_object_value(obj.clone()), 0)
+        );
 
         macro_rules! try_ {
             ($sym: expr) => {
@@ -965,7 +969,12 @@ impl GcPointer<JsObject> {
     ) -> bool {
         (self.class.method_table.GetNonIndexedPropertySlot)(self, vm, name, slot)
     }
-    pub fn get_indexed_property_slot(&mut self, vm: &mut Runtime, index: u32, slot: &mut Slot) -> bool {
+    pub fn get_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        index: u32,
+        slot: &mut Slot,
+    ) -> bool {
         (self.class.method_table.GetIndexedPropertySlot)(self, vm, index, slot)
     }
 
@@ -1101,7 +1110,12 @@ impl GcPointer<JsObject> {
             self, vm, index, desc, slot, throwable,
         )
     }
-    pub fn get_own_property_slot(&mut self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
+    pub fn get_own_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
         if let Symbol::Index(index) = name {
             self.get_own_indexed_property_slot(vm, index, slot)
         } else {
@@ -1373,12 +1387,12 @@ impl Env {
         if self.record.get_own_property_slot(vm, name, slot) {
             return Ok(slot.value());
         } else {
-            let mut current = unsafe {self.record.prototype_mut()};
+            let mut current = unsafe { self.record.prototype_mut() };
             while let Some(cur) = current {
                 if cur.get_own_property_slot(vm, name, slot) {
                     return Ok(slot.value());
                 }
-                current = unsafe { cur.prototype_mut()};
+                current = unsafe { cur.prototype_mut() };
             }
 
             if !vm.global_object().has_property(vm, name) {

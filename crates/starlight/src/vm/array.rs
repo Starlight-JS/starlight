@@ -77,7 +77,7 @@ impl JsArray {
         JsObject::PutNonIndexedSlotMethod(obj, vm, name, val, slot, throwable)
     }
     pub fn GetOwnPropertyNamesMethod(
-        obj:&mut GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,

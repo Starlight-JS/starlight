@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use starlight::root;
 use starlight::{
     heap::{
         cell::{GcCell, GcPointer, Trace, Tracer},
@@ -10,7 +11,6 @@ use starlight::{
     vtable_impl, Platform,
 };
 use wtf_rs::keep_on_stack;
-use starlight::root;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
     let mut rrt = Runtime::new(
@@ -19,19 +19,20 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             .with_parallel_marking(true)
             .with_marker_threads(4),
         None,
-    ); let stack = rrt.shadowstack();
+    );
+    let stack = rrt.shadowstack();
     let mut rt = rrt.heap();
-   
+
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
-    root!(long_lived = stack,rt.allocate(Node::new(None, None)));
+    root!(long_lived = stack, rt.allocate(Node::new(None, None)));
     long_lived.j = 0xdead;
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
     populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, *long_lived);
     let arr = ArrayStorage::with_size(&mut rrt, ARRAY_SIZE as _, ARRAY_SIZE as _);
     let mut rt = rrt.heap();
-    root!(array =stack, rt.allocate(arr));
+    root!(array = stack, rt.allocate(arr));
     for i in 0..(ARRAY_SIZE / 2) {
         *array.at_mut(i as _) = JsValue::encode_f64_value(1.0 / i as f64);
     }
@@ -55,7 +56,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 b.iter_batched(
                     || {},
                     |_data| {
-                        root!( temp_tree = stack,rt.allocate(Node::new(None, None)));
+                        root!(temp_tree = stack, rt.allocate(Node::new(None, None)));
                         keep_on_stack!(&mut temp_tree);
                         populate(&mut rt, depth as _, *temp_tree);
                         rt.collect_if_necessary();

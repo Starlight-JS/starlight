@@ -57,7 +57,9 @@ pub fn error_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
     let obj = args.this;
     let stack = vm.shadowstack();
     if obj.is_jsobject() {
-        root!( obj = stack,unsafe { obj.get_object().downcast_unchecked::<JsObject>() });
+        root!(obj = stack, unsafe {
+            obj.get_object().downcast_unchecked::<JsObject>()
+        });
         let name;
         {
             let mut slot = Slot::new();

@@ -947,6 +947,7 @@ impl Compiler {
                         self.builder.emit(Opcode::OP_DUP, &[], false);
                     }
                     self.emit(&assign.right, true);
+                    self.builder.emit(Opcode::OP_SWAP, &[], false);
                     let op = match op {
                         AssignOp::AddAssign => Opcode::OP_ADD,
                         AssignOp::SubAssign => Opcode::OP_SUB,

@@ -103,8 +103,8 @@ mopafy!(GcCell);
 
 #[repr(C)]
 pub struct GcPointerBase {
-    vtable: usize,
-    cell_state: AtomicU8, //pub next: *mut Self,
+    pub vtable: usize,
+    pub cell_state: AtomicU8, //pub next: *mut Self,
 }
 
 pub const POSSIBLY_BLACK: u8 = 0;
@@ -245,13 +245,13 @@ pub enum WeakState {
     Mark,
 }
 pub struct WeakSlot {
-    pub(super) state: WeakState,
-    pub(super) value: *mut GcPointerBase,
+    pub state: WeakState,
+    pub value: *mut GcPointerBase,
 }
 
 pub struct WeakRef<T: GcCell> {
     pub(crate) inner: NonNull<WeakSlot>,
-    pub(super) marker: PhantomData<T>,
+    pub(crate) marker: PhantomData<T>,
 }
 
 impl<T: GcCell> WeakRef<T> {

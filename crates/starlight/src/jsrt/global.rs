@@ -144,3 +144,9 @@ pub fn is_finite(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     }
     Ok(JsValue::encode_bool_value(false))
 }
+
+pub fn gc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    rt.heap().gc();
+    let _ = args;
+    Ok(JsValue::encode_undefined_value())
+}

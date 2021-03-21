@@ -471,8 +471,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )));
                 }
 
-                root!(robj = gcstack,rhs.get_jsobject());
-                root!(robj2 = gcstack,*robj);
+                root!(robj = gcstack, rhs.get_jsobject());
+                root!(robj2 = gcstack, *robj);
                 if unlikely(!robj.is_callable()) {
                     let msg = JsString::new(rt, "'instanceof' requires constructor");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -758,7 +758,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        root!(spread = gcstack,arg.get_object().downcast_unchecked::<SpreadValue>());
+                        root!(
+                            spread = gcstack,
+                            arg.get_object().downcast_unchecked::<SpreadValue>()
+                        );
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
                             args.push_back(rt.heap(), real_arg);
@@ -774,7 +777,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt, msg, None,
                     )));
                 }
-                let mut func_object = func.get_jsobject();
+                root!(func_object = gcstack, func.get_jsobject());
                 let func = func_object.as_function_mut();
                 /* if let super::function::FuncType::User(ref vm_function) = func.ty {
                     let new_frame = rt.stack.new_frame();
@@ -820,11 +823,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 root!(args = gcstack, ArrayStorage::new(rt.heap(), argc));
                 let mut func = frame.pop();
                 let mut this = frame.pop();
-                keep_on_stack!(&mut this, &mut args, &mut func);
+
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        root!( spread = gcstack,arg.get_object().downcast_unchecked::<SpreadValue>());
+                        root!(
+                            spread = gcstack,
+                            arg.get_object().downcast_unchecked::<SpreadValue>()
+                        );
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
                             args.push_back(rt.heap(), real_arg);
@@ -840,7 +846,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt, msg, None,
                     )));
                 }
-                let mut func_object = func.get_jsobject();
+
+                root!(func_object = gcstack, func.get_jsobject());
                 let map = func_object.func_construct_map(rt)?;
                 let func = func_object.as_function_mut();
                 root!(
@@ -848,7 +855,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     Arguments::from_array_storage(rt, this, *args)
                 );
                 args_.ctor_call = true;
-                keep_on_stack!(&mut this, &mut args, &mut args_);
                 let result = func.construct(rt, &mut args_, Some(map))?;
                 frame.push(result);
             }
@@ -946,6 +952,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 // vm.space().undefer_gc();
             }
             Opcode::OP_RET => {
+                rt.heap().collect_if_necessary();
                 let mut value = if frame.sp <= frame.limit {
                     JsValue::encode_undefined_value()
                 } else {
@@ -976,7 +983,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 while index < count {
                     let value = frame.pop();
                     if unlikely(value.is_object() && value.get_object().is::<SpreadValue>()) {
-                        root!(spread = gcstack,value.get_object().downcast_unchecked::<SpreadValue>());
+                        root!(
+                            spread = gcstack,
+                            value.get_object().downcast_unchecked::<SpreadValue>()
+                        );
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
                             arr.put(rt, Symbol::Index(index), real_arg, false)?;
@@ -1017,10 +1027,13 @@ unsafe fn get_var(
 ) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
     let env = get_env(rt, frame, name);
-    root!(env = stack,match env {
-        Some(env) => env,
-        None => rt.global_object(),
-    });
+    root!(
+        env = stack,
+        match env {
+            Some(env) => env,
+            None => rt.global_object(),
+        }
+    );
 
     if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
         .feedback
@@ -1064,20 +1077,24 @@ unsafe fn set_var(
     fdbk: u32,
     val: JsValue,
 ) -> Result<(), JsValue> {
+    let stack = rt.shadowstack();
     let env = get_env(rt, frame, name);
-    let mut env = match env {
-        Some(env) => env,
-        None if !unwrap_unchecked(frame.code_block).strict => rt.global_object(),
-        _ => {
-            let msg = JsString::new(
-                rt,
-                format!("Unresolved reference '{}'", rt.description(name)),
-            );
-            return Err(JsValue::encode_object_value(JsReferenceError::new(
-                rt, msg, None,
-            )));
+    root!(
+        env = stack,
+        match env {
+            Some(env) => env,
+            None if !unwrap_unchecked(frame.code_block).strict => rt.global_object(),
+            _ => {
+                let msg = JsString::new(
+                    rt,
+                    format!("Unresolved reference '{}'", rt.description(name)),
+                );
+                return Err(JsValue::encode_object_value(JsReferenceError::new(
+                    rt, msg, None,
+                )));
+            }
         }
-    };
+    );
     if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
         .feedback
         .get_unchecked(fdbk as usize)
@@ -1095,7 +1112,7 @@ unsafe fn set_var(
         return Ok(());
     }
     assert!(env.get_own_property_slot(rt, name, &mut slot));
-    let slot = Env { record: env }.set_variable(
+    let slot = Env { record: *env }.set_variable(
         rt,
         name,
         val,

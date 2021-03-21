@@ -78,6 +78,14 @@ impl Runtime {
             JsValue::encode_object_value(func),
             false,
         );
+
+        let func = JsNativeFunction::new(self, "gc".intern(), global::gc, 1);
+        let _ = global.put(
+            self,
+            "gc".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -712,6 +720,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         global::is_nan as _,
         global::parse_float as _,
         global::parse_int as _,
+        global::gc as _,
         string::string_concat as _,
         string::string_split as _,
         string::string_constructor as _,

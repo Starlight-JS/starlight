@@ -132,11 +132,15 @@ impl JsFunction {
                 vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args)
             }
             FuncType::Bound(ref x) => {
-                let mut args = Arguments {
-                    values: x.args.clone(),
-                    this: x.this,
-                    ctor_call: args.ctor_call,
-                };
+                let stack = vm.shadowstack();
+                root!(
+                    args = stack,
+                    Arguments {
+                        values: x.args.clone(),
+                        this: x.this,
+                        ctor_call: args.ctor_call,
+                    }
+                );
                 let mut target = x.target.clone();
                 target.as_function_mut().call(vm, &mut args)
             }
@@ -471,7 +475,7 @@ impl GcPointer<JsObject> {
         vm: &mut Runtime,
     ) -> Result<GcPointer<Structure>, JsValue> {
         let stack = vm.shadowstack();
-        root!(obj = stack,*self);
+        root!(obj = stack, *self);
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
 
