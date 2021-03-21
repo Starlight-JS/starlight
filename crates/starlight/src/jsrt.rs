@@ -724,7 +724,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
     Box::leak(Box::new(refs))
 });
 
-pub fn get_length(rt: &mut Runtime, val: GcPointer<JsObject>) -> Result<u32, JsValue> {
+pub fn get_length(rt: &mut Runtime, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
     if val.class() as *const _ == JsArray::get_class() as *const _ {
         return Ok(val.indexed.length());
     }

@@ -89,7 +89,7 @@ pub struct JsArguments {
 impl JsArguments {
     define_jsclass!(JsArguments, Arguments);
     pub fn GetPropertyNamesMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
@@ -97,14 +97,14 @@ impl JsArguments {
         JsObject::GetPropertyNamesMethod(obj, vm, collector, mode)
     }
     pub fn DefaultValueMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         JsObject::DefaultValueMethod(obj, vm, hint)
     }
     pub fn DefineOwnIndexedPropertySlotMethod(
-        mut obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         index: u32,
         desc: &PropertyDescriptor,
@@ -156,15 +156,15 @@ impl JsArguments {
         }
     }
     pub fn GetOwnIndexedPropertySlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        if !JsObject::GetOwnIndexedPropertySlotMethod(obj.clone(), vm, index, slot) {
+        if !JsObject::GetOwnIndexedPropertySlotMethod(obj, vm, index, slot) {
             return false;
         }
-        let arg = obj.as_arguments();
+        let arg = obj.as_arguments_mut();
 
         if arg.mapping.len() > index as usize {
             let mapped = arg.mapping[index as usize];
@@ -181,7 +181,7 @@ impl JsArguments {
         true
     }
     pub fn PutIndexedSlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         index: u32,
         val: JsValue,
@@ -191,7 +191,7 @@ impl JsArguments {
         JsObject::PutIndexedSlotMethod(obj, vm, index, val, slot, throwable)
     }
     pub fn PutNonIndexedSlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         val: JsValue,
@@ -201,7 +201,7 @@ impl JsArguments {
         JsObject::PutNonIndexedSlotMethod(obj, vm, name, val, slot, throwable)
     }
     pub fn GetOwnPropertyNamesMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
@@ -210,7 +210,7 @@ impl JsArguments {
     }
 
     pub fn DeleteNonIndexedMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         throwable: bool,
@@ -219,7 +219,7 @@ impl JsArguments {
     }
 
     pub fn DeleteIndexedMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         index: u32,
         throwable: bool,
@@ -228,7 +228,7 @@ impl JsArguments {
     }
 
     pub fn GetNonIndexedSlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         slot: &mut Slot,
@@ -257,7 +257,7 @@ impl JsArguments {
     }
 
     pub fn GetIndexedSlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         index: u32,
         slot: &mut Slot,
@@ -266,7 +266,7 @@ impl JsArguments {
         JsObject::GetIndexedSlotMethod(obj, vm, index, slot)
     }
     pub fn GetNonIndexedPropertySlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         slot: &mut Slot,
@@ -275,7 +275,7 @@ impl JsArguments {
     }
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         slot: &mut Slot,
@@ -284,7 +284,7 @@ impl JsArguments {
     }
 
     pub fn GetNonIndexedPropertySlot(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         slot: &mut Slot,
@@ -293,7 +293,7 @@ impl JsArguments {
     }
 
     pub fn DefineOwnNonIndexedPropertySlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         name: Symbol,
         desc: &PropertyDescriptor,
@@ -304,7 +304,7 @@ impl JsArguments {
     }
 
     pub fn GetIndexedPropertySlotMethod(
-        obj: GcPointer<JsObject>,
+        obj: &mut GcPointer<JsObject>,
         vm: &mut Runtime,
         index: u32,
         slot: &mut Slot,

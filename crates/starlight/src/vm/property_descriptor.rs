@@ -510,7 +510,8 @@ impl Accessor {
         this_binding: JsValue,
     ) -> Result<JsValue, JsValue> {
         if self.getter().is_callable() {
-            let mut args = Arguments::new(vm, this_binding, 0);
+            let stack = vm.shadowstack();
+            crate::root!(args = stack, Arguments::new(vm, this_binding, 0));
 
             self.getter()
                 .get_object()

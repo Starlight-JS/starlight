@@ -520,6 +520,10 @@ impl GcPointer<Structure> {
         self.prototype.as_ref()
     }
 
+    pub unsafe fn prototype_mut(&mut self) -> Option<&mut GcPointer<JsObject>> {
+        self.prototype.as_mut()
+    }
+
     pub fn flatten(&mut self) {
         if self.is_unique() {
             self.transitions.enable_unique_transition();

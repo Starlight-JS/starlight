@@ -6,7 +6,7 @@
     destructuring_assignment,
     const_raw_ptr_to_usize_cast
 )]
-#![allow(unused_unsafe)]
+#![allow(unused_unsafe, unused_mut)]
 
 use heap::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
@@ -74,12 +74,16 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
             function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));
         },
     );
+    let stack = rt.shadowstack();
 
-    let mut function = function.expect("No function");
+    root!(function = stack, function.expect("No function"));
     assert!(function.is_callable(), "Not a callable function");
-    wtf_rs::keep_on_stack!(&mut function);
+
     let global = rt.global_object();
-    let mut args = Arguments::new(&mut rt, JsValue::encode_object_value(global), 0);
+    root!(
+        args = stack,
+        Arguments::new(&mut rt, JsValue::encode_object_value(global), 0)
+    );
     match function.as_function_mut().call(&mut rt, &mut args) {
         Ok(x) => {
             if x.is_number() {

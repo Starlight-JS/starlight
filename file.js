@@ -2,9 +2,10 @@ function Node(left, right) {
     this.left = left;
     this.right = right;
 }
-
+let nNodes = 0;
 function makeTree(depth) {
 
+    nNodes += 1;
     if (depth == 0) {
 
         return new Node(undefined, undefined);
@@ -14,4 +15,6 @@ function makeTree(depth) {
     return new Node(n1, n2);
 }
 
-let n = makeTree(14);
+let tree = makeTree(1);
+
+print("Created ", nNodes, " nodes");

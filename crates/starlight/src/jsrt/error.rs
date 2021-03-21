@@ -55,9 +55,9 @@ pub fn range_error_constructor(vm: &mut Runtime, args: &Arguments) -> Result<JsV
 /// section 15.11.4.4 Error.prototype.toString()
 pub fn error_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
-
+    let stack = vm.shadowstack();
     if obj.is_jsobject() {
-        let obj = unsafe { obj.get_object().downcast_unchecked::<JsObject>() };
+        root!( obj = stack,unsafe { obj.get_object().downcast_unchecked::<JsObject>() });
         let name;
         {
             let mut slot = Slot::new();

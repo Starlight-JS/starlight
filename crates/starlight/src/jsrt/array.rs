@@ -67,7 +67,8 @@ pub fn array_of(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> 
 }
 
 pub fn array_from(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let arg1 = args.at(0).to_object(vm)?;
+    let stack = vm.shadowstack();
+    root!(arg1 =stack, args.at(0).to_object(vm)?);
     let len = arg1.get(vm, "length".intern())?;
     let len = if len.is_number() {
         let n = len.to_number(vm)?;
@@ -90,7 +91,8 @@ pub fn array_from(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
     Ok(JsValue::encode_object_value(target))
 }
 pub fn array_join(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let obj = args.this.to_object(vm)?;
+    let stack = vm.shadowstack();
+    root!( obj = stack,args.this.to_object(vm)?);
     let len = obj.get(vm, "length".intern())?.to_number(vm)?;
     let len = if len as u32 as f64 == len {
         len as u32
@@ -125,15 +127,18 @@ pub fn array_join(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
     Ok(JsValue::encode_object_value(JsString::new(vm, fmt)))
 }
 pub fn array_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let this = args.this.to_object(vm)?;
+    let stack = vm.shadowstack();
+    root!(this = stack, args.this.to_object(vm)?);
     let m = this.get_property(vm, "join".intern());
     if m.value().is_callable() {
-        let mut f = unsafe { m.value().get_object().downcast_unchecked::<JsObject>() };
+        root!(f = stack, unsafe {
+            m.value().get_object().downcast_unchecked::<JsObject>()
+        });
         let f = f.as_function_mut();
-        let mut args = Arguments::new(vm, args.this, 0);
+        root!(args = stack, Arguments::new(vm, args.this, 0));
         return f.call(vm, &mut args);
     }
-    let mut args = Arguments::new(vm, args.this, 0);
+    root!(args = stack, Arguments::new(vm, args.this, 0));
     object_to_string(vm, &mut args)
 }
 
@@ -199,8 +204,9 @@ pub fn array_pop(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
 }
 
 pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let obj = args.this.to_object(rt)?;
-    let len = get_length(rt, obj)?;
+    let stack = rt.shadowstack();
+    root!(obj = stack, args.this.to_object(rt)?);
+    let len = get_length(rt, &mut obj)?;
     let arg_count = args.size();
     if arg_count == 0 || !args.at(0).is_callable() {
         let msg = JsString::new(
@@ -212,7 +218,7 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
 
-    let mut callback = args.at(0).get_jsobject();
+    root!(callback = stack, args.at(0).get_jsobject());
     let callback = callback.as_function_mut();
     if len == 0 && arg_count <= 1 {
         let msg = JsString::new(
@@ -224,15 +230,15 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
     let mut k = 0;
-    let mut acc = JsValue::encode_undefined_value();
+    root!(acc = stack, JsValue::encode_undefined_value());
     if arg_count > 1 {
-        acc = args.at(1);
+        *acc = args.at(1);
     } else {
         let mut k_present = false;
         while k < len {
             if obj.has_property(rt, Symbol::Index(k)) {
                 k_present = true;
-                acc = obj.get(rt, Symbol::Index(k))?;
+                *acc = obj.get(rt, Symbol::Index(k))?;
                 k += 1;
                 break;
             }
@@ -252,16 +258,19 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
 
     while k < len {
         if obj.has_property(rt, Symbol::Index(k)) {
-            let mut args = Arguments::new(rt, JsValue::encode_undefined_value(), 4);
-            *args.at_mut(0) = acc;
+            root!(
+                args = stack,
+                Arguments::new(rt, JsValue::encode_undefined_value(), 4)
+            );
+            *args.at_mut(0) = *acc;
             *args.at_mut(1) = obj.get(rt, Symbol::Index(k))?;
             *args.at_mut(2) = JsValue::encode_f64_value(k as _);
-            *args.at_mut(3) = JsValue::encode_object_value(obj);
-            acc = callback.call(rt, &mut args)?;
+            *args.at_mut(3) = JsValue::encode_object_value(*obj);
+            *acc = callback.call(rt, &mut args)?;
         }
         k += 1;
     }
-    Ok(acc)
+    Ok(*acc)
 }
 
 pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -276,8 +285,10 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
             rt, msg, None,
         )));
     }
-    let this_length = super::get_length(rt, args.this.get_jsobject())?;
-    let this = args.this.get_jsobject();
+    let stack = rt.shadowstack();
+    root!( this = stack,args.this.get_jsobject());
+    let this_length = super::get_length(rt, &mut this)?;
+    
     let mut new_values = JsArray::new(rt, this_length);
     for n in 0..this_length {
         let val = this.get(rt, Symbol::Index(n))?;
@@ -293,8 +304,8 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
                 rt, msg, None,
             )));
         }
-        let arg = arg.get_jsobject();
-        let len = super::get_length(rt, arg)?;
+        root!(arg = stack,arg.get_jsobject());
+        let len = super::get_length(rt, &mut arg)?;
         for n in 0..len {
             let val = arg.get(rt, Symbol::Index(n))?;
             new_values.put(rt, Symbol::Index(ix), val, false)?;

@@ -1,8 +1,8 @@
 use self::{frame::CallFrame, stack::Stack};
 use super::{
-    arguments::*, array::*, array_storage::ArrayStorage, attributes::*, code_block::CodeBlock,
-    error::JsTypeError, error::*, function::JsVMFunction, object::*, property_descriptor::*,
-    slot::*, string::JsString, structure::*, symbol_table::*, value::*, Runtime,
+    arguments::*, array::*, array_storage::ArrayStorage, code_block::CodeBlock, error::JsTypeError,
+    error::*, function::JsVMFunction, object::*, slot::*, string::JsString, structure::*,
+    symbol_table::*, value::*, Runtime,
 };
 use crate::root;
 use crate::{
@@ -471,7 +471,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )));
                 }
 
-                let robj = rhs.get_jsobject();
+                root!(robj = gcstack,rhs.get_jsobject());
+                root!(robj2 = gcstack,*robj);
                 if unlikely(!robj.is_callable()) {
                     let msg = JsString::new(rt, "'instanceof' requires constructor");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -480,7 +481,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
 
                 frame.push(JsValue::encode_bool_value(
-                    robj.as_function().has_instance(robj, rt, lhs)?,
+                    robj.as_function().has_instance(&mut robj2, rt, lhs)?,
                 ));
             }
             Opcode::OP_IN => {
@@ -624,7 +625,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let object = frame.pop();
                 if likely(object.is_jsobject()) {
-                    let obj = object.get_jsobject();
+                    root!(obj = gcstack, object.get_jsobject());
                     if likely(rt.options.inline_caches) {
                         if let TypeFeedBack::PropertyCache { structure, offset } =
                             unwrap_unchecked(frame.code_block)
@@ -757,7 +758,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        let spread = arg.get_object().downcast_unchecked::<SpreadValue>();
+                        root!(spread = gcstack,arg.get_object().downcast_unchecked::<SpreadValue>());
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
                             args.push_back(rt.heap(), real_arg);
@@ -823,7 +824,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        let spread = arg.get_object().downcast_unchecked::<SpreadValue>();
+                        root!( spread = gcstack,arg.get_object().downcast_unchecked::<SpreadValue>());
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
                             args.push_back(rt.heap(), real_arg);
@@ -970,12 +971,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let count = ip.cast::<u32>().read_unaligned();
 
                 ip = ip.add(4);
-                let mut arr = JsArray::new(rt, count);
+                root!(arr = gcstack, JsArray::new(rt, count));
                 let mut index = 0;
                 while index < count {
                     let value = frame.pop();
                     if unlikely(value.is_object() && value.get_object().is::<SpreadValue>()) {
-                        let spread = value.get_object().downcast_unchecked::<SpreadValue>();
+                        root!(spread = gcstack,value.get_object().downcast_unchecked::<SpreadValue>());
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
                             arr.put(rt, Symbol::Index(index), real_arg, false)?;
@@ -986,7 +987,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         index += 1;
                     }
                 }
-                frame.push(JsValue::encode_object_value(arr));
+                frame.push(JsValue::encode_object_value(*arr));
             }
             Opcode::OP_PUSH_TRUE => {
                 frame.push(JsValue::encode_bool_value(true));
@@ -1014,11 +1015,12 @@ unsafe fn get_var(
     frame: &mut CallFrame,
     fdbk: u32,
 ) -> Result<JsValue, JsValue> {
+    let stack = rt.shadowstack();
     let env = get_env(rt, frame, name);
-    let env = match env {
+    root!(env = stack,match env {
         Some(env) => env,
         None => rt.global_object(),
-    };
+    });
 
     if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
         .feedback

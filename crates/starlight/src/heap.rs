@@ -368,7 +368,6 @@ impl Heap {
     ///
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
-        self.collect_if_necessary();
         let real_size = value.compute_size() + size_of::<GcPointerBase>();
         unsafe {
             let pointer = if real_size <= libmimalloc_sys::MI_SMALL_SIZE_MAX {

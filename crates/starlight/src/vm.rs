@@ -187,13 +187,22 @@ impl Runtime {
             let mut code = Compiler::compile_script(&mut *vmref, &script);
             code.strict = code.strict || force_strict;
             //code.display_to(&mut OutBuf).unwrap();
+            let stack = self.shadowstack();
+            root!(
+                envs = stack,
+                Structure::new_indexed(self, Some(self.global_object()), false)
+            );
+            root!(
+                env = stack,
+                JsObject::new(self, *envs, JsObject::get_class(), ObjectTag::Ordinary)
+            );
+            root!(fun = stack, JsVMFunction::new(self, code, *env));
 
-            let envs = Structure::new_indexed(self, Some(self.global_object()), false);
-            let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
-            let mut fun = JsVMFunction::new(self, code, env);
+            root!(
+                args = stack,
+                Arguments::new(self, JsValue::encode_undefined_value(), 0)
+            );
 
-            let mut args = Arguments::new(self, JsValue::encode_undefined_value(), 0);
-            keep_on_stack!(&fun, &args);
             fun.as_function_mut().call(self, &mut args)
         };
         res
