@@ -1,11 +1,12 @@
 use std::mem::size_of;
 
 use super::{value::JsValue, Runtime};
+use crate::gc::Heap;
 use crate::heap::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
-    Heap,
 };
+///
 /// A GC-managed resizable vector of values. It is used for storage of property
 /// values in objects and also indexed property values in arrays. It supports
 /// resizing on both ends which is necessary for the simplest implementation of

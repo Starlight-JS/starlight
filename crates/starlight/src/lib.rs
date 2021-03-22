@@ -68,7 +68,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
         false,
         std::slice::from_raw_parts(array, size),
         RuntimeParams::default(),
-        GcParams::default().with_parallel_marking(true),
+        gc::default_heap(GcParams::default().with_parallel_marking(true)),
         None,
         |deser, _rt| {
             function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));

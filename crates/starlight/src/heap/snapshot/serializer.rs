@@ -113,19 +113,24 @@ impl SnapshotSerializer {
     pub(crate) fn build_heap_reference_map(&mut self, rt: &mut Runtime) {
         let heap = rt.heap();
 
-        Heap::walk(heap.mi_heap, |object, _| {
+        /*Heap::walk(heap.mi_heap, |object, _| {
             //let ix = self.reference_map.len() as u32;
             self.reference_map.push(object);
             //self.reference_map.insert(object as usize, ix);
             true
+        });*/
+        heap.walk(&mut |object, _| {
+            self.reference_map.push(object as _);
+            true
         });
 
-        for weak_slot in heap.weak_slots.iter() {
+        heap.weak_slots(&mut |weak_slot| {
+            //for weak_slot in heap.weak_slots.iter() {
             let addr = weak_slot as *const _ as usize;
             let _ix = self.reference_map.len() as u32;
             self.reference_map.push(addr);
             //self.reference_map.insert(addr, ix);
-        }
+        });
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
@@ -133,7 +138,9 @@ impl SnapshotSerializer {
         let patch_at = self.output.len();
         self.write_u32(0);
         let mut count: u32 = 0;
-        Heap::walk(heap.mi_heap, |object, _| unsafe {
+        heap.walk(&mut |object, _| unsafe {
+            let object = object as usize;
+            //Heap::walk(heap.mi_heap, |object, _| unsafe {
             let base = &mut *(object as *mut GcPointerBase);
             self.write_reference(object as *const u8);
             logln_if!(
@@ -172,19 +179,19 @@ impl SnapshotSerializer {
         let mut count: u32 = 0;
         let patch_at = self.output.len();
         self.write_u32(0);
-
-        for weak_slot in heap.weak_slots.iter() {
-            if weak_slot.value.is_null() {
+        heap.weak_slots(&mut |weak_slot| unsafe {
+            //for weak_slot in heap.weak_slots.iter() {
+            if (*weak_slot).value.is_null() {
                 self.write_u8(0x0);
             } else {
                 self.write_u8(0x1);
-                self.write_reference(weak_slot.value);
+                self.write_reference((*weak_slot).value);
             }
 
             self.write_reference(weak_slot);
 
             count += 1;
-        }
+        });
         let buf = count.to_le_bytes();
         self.output[patch_at] = buf[0];
         self.output[patch_at + 1] = buf[1];

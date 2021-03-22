@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use starlight::{
-    gc::mem::align_usize,
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,

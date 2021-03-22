@@ -2,10 +2,10 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::root;
 use starlight::{
+    gc::Heap,
     heap::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
-        Heap,
     },
     vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime, RuntimeParams},
     vtable_impl, Platform,

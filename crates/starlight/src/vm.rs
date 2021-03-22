@@ -2,8 +2,10 @@ use std::ops::{Deref, DerefMut};
 
 use super::codegen::*;
 use crate::{
+    gc::default_heap,
     gc::shadowstack::ShadowStack,
-    heap::{cell::GcPointer, cell::Trace, cell::Tracer, Heap, SimpleMarkingConstraint},
+    gc::Heap,
+    heap::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
     jsrt::object::{object_constructor, object_to_string},
 };
 use arguments::Arguments;
@@ -48,6 +50,7 @@ use value::*;
 
 pub struct GcParams {
     pub(crate) nmarkers: u32,
+    pub(crate) conservative_marking: bool,
     pub(crate) track_allocations: bool,
     pub(crate) parallel_marking: bool,
 }
@@ -78,6 +81,7 @@ impl RuntimeParams {
 impl Default for GcParams {
     fn default() -> Self {
         Self {
+            conservative_marking: false,
             track_allocations: false,
             parallel_marking: true,
             nmarkers: 4,
@@ -86,6 +90,10 @@ impl Default for GcParams {
 }
 
 impl GcParams {
+    pub fn with_conservative_marking(mut self, enabled: bool) -> Self {
+        self.conservative_marking = enabled;
+        self
+    }
     pub fn with_marker_threads(mut self, n: u32) -> Self {
         assert!(self.parallel_marking, "Enable parallel marking first");
         self.nmarkers = n;
@@ -108,7 +116,7 @@ impl GcParams {
 }
 
 pub struct Runtime {
-    pub(crate) heap: Box<Heap>,
+    pub(crate) heap: Heap,
     pub(crate) stack: Stack,
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
@@ -223,41 +231,12 @@ impl Runtime {
     pub fn heap(&mut self) -> &mut Heap {
         &mut self.heap
     }
-    pub(crate) fn new_empty(
-        gc_params: GcParams,
+
+    pub fn with_heap(
+        heap: Heap,
         options: RuntimeParams,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
-        let heap = Box::new(Heap::new(gc_params));
-        let mut this = Box::new(Self {
-            heap,
-            options,
-            stack: Stack::new(),
-            global_object: None,
-            global_data: GlobalData::default(),
-            external_references,
-            shadowstack: ShadowStack::new(),
-        });
-        let vm = &mut *this as *mut Runtime;
-        this.heap.add_constraint(SimpleMarkingConstraint::new(
-            "Mark VM roots",
-            move |visitor| {
-                let rt = unsafe { &mut *vm };
-                rt.global_object.trace(visitor);
-                rt.global_data.trace(visitor);
-                rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);
-            },
-        ));
-
-        this
-    }
-    pub fn new(
-        options: RuntimeParams,
-        gc_params: GcParams,
-        external_references: Option<&'static [usize]>,
-    ) -> Box<Runtime> {
-        let heap = Box::new(Heap::new(gc_params));
         let mut this = Box::new(Self {
             heap,
             options,
@@ -346,6 +325,41 @@ impl Runtime {
         this.heap.undefer();
 
         this
+    }
+    pub(crate) fn new_empty(
+        heap: Heap,
+        options: RuntimeParams,
+        external_references: Option<&'static [usize]>,
+    ) -> Box<Self> {
+        let mut this = Box::new(Self {
+            heap,
+            options,
+            stack: Stack::new(),
+            global_object: None,
+            global_data: GlobalData::default(),
+            external_references,
+            shadowstack: ShadowStack::new(),
+        });
+        let vm = &mut *this as *mut Runtime;
+        this.heap.add_constraint(SimpleMarkingConstraint::new(
+            "Mark VM roots",
+            move |visitor| {
+                let rt = unsafe { &mut *vm };
+                rt.global_object.trace(visitor);
+                rt.global_data.trace(visitor);
+                rt.stack.trace(visitor);
+                rt.shadowstack.trace(visitor);
+            },
+        ));
+
+        this
+    }
+    pub fn new(
+        options: RuntimeParams,
+        gc_params: GcParams,
+        external_references: Option<&'static [usize]>,
+    ) -> Box<Runtime> {
+        Self::with_heap(default_heap(gc_params), options, external_references)
     }
 
     pub fn global_object(&self) -> GcPointer<JsObject> {

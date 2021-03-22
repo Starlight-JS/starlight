@@ -8,6 +8,7 @@ macro_rules! unique {
 }
 use crate::{
     bytecode::TypeFeedBack,
+    gc::Heap,
     heap::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
     jsrt::VM_NATIVE_REFERENCES,
     vm::{
@@ -258,11 +259,11 @@ impl<'a> Deserializer<'a> {
         log_deser: bool,
         snapshot: &'a [u8],
         options: RuntimeParams,
-        gc_params: GcParams,
+        heap: Heap,
         external_refs: Option<&'static [usize]>,
         callback: impl FnOnce(&mut Self, &mut Runtime),
     ) -> Box<Runtime> {
-        let mut runtime = Runtime::new_empty(gc_params, options, external_refs);
+        let mut runtime = Runtime::new_empty(heap, options, external_refs);
         let mut this = Self {
             reader: snapshot,
             pc: 0,

@@ -1,14 +1,20 @@
-use crate::heap::{
-    cell::{GcCell, GcPointer, GcPointerBase, Trace, Tracer, WeakRef, WeakSlot, DEFINETELY_WHITE},
-    snapshot::{
-        deserializer::Deserializable,
-        deserializer::Deserializer,
-        serializer::{Serializable, SnapshotSerializer},
-    },
-    MarkingConstraint,
-};
 use crate::vm::Runtime;
-use std::{cmp::Ordering, fmt};
+use crate::{
+    heap::{
+        cell::{
+            vtable_of, GcCell, GcPointer, GcPointerBase, Trace, Tracer, WeakRef, WeakSlot,
+            DEFINETELY_WHITE,
+        },
+        snapshot::{
+            deserializer::Deserializable,
+            deserializer::Deserializer,
+            serializer::{Serializable, SnapshotSerializer},
+        },
+        MarkingConstraint,
+    },
+    vm::GcParams,
+};
+use std::{cmp::Ordering, fmt, marker::PhantomData};
 use std::{
     mem::size_of,
     ptr::{null_mut, NonNull},
@@ -18,8 +24,8 @@ pub const K: usize = 1024;
 pub mod accounting;
 pub mod bump;
 pub mod freelist;
-pub mod mark_copy;
 pub mod mem;
+pub mod migc;
 pub mod os;
 pub mod safepoint;
 #[macro_use]
@@ -38,21 +44,76 @@ pub struct GcStats {
     pub threshold: usize,
 }
 
+/// Trait that defines garbage collector API.
+///
+/// # Implementation notes
+/// - GC implementation *must* not trigger GC inside [GarbageCollector::allocate](GarbageCollector::allocate) routine.
+/// - [GarbageCollector::walk](GarbageCollector::walk) *must* pass valid objects to callback.
+///
+///
 pub trait GarbageCollector {
+    /// Allocate `size` bytes on GC heap and set vtable in GC object header.
+    ///
+    ///
+    /// ***NOTE*** This function must not trigger garbage collection cycle.
     fn allocate(&mut self, size: usize, vtable: usize) -> Option<NonNull<GcPointerBase>>;
     fn gc(&mut self);
     fn collect_if_necessary(&mut self);
     fn stats(&self) -> GcStats;
     fn add_constraint(&mut self, contraint: Box<dyn MarkingConstraint>);
     fn make_weak_slot(&mut self, base: *mut GcPointerBase) -> *mut WeakSlot;
-    fn walk(&mut self, callback: &mut dyn FnMut(*mut GcPointerBase, usize));
+    fn walk(&mut self, callback: &mut dyn FnMut(*mut GcPointerBase, usize) -> bool);
+    fn defer(&mut self);
+    fn undefer(&mut self);
+    fn weak_slots(&mut self, cb: &mut dyn FnMut(*mut WeakSlot));
 }
 
 pub struct Heap {
     gc: Box<dyn GarbageCollector>,
 }
 
+pub fn default_heap(params: GcParams) -> Heap {
+    Heap {
+        gc: Box::new(migc::MiGC::new(params)),
+    }
+}
+
 impl Heap {
+    pub fn undefer(&mut self) {
+        self.gc.undefer();
+    }
+
+    pub fn defer(&mut self) {
+        self.gc.defer();
+    }
+    #[inline]
+    pub fn allocate_raw(&mut self, vtable: *mut (), size: usize) -> *mut GcPointerBase {
+        let real_size = size + size_of::<GcPointerBase>();
+        let memory = self.gc.allocate(real_size, vtable as _);
+        memory.map(|x| x.as_ptr()).unwrap_or_else(|| null_mut())
+    }
+    #[inline]
+    pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
+        let size = value.compute_size();
+        let memory = self.allocate_raw(vtable_of(&value) as _, size);
+        unsafe {
+            (*memory).data::<T>().write(value);
+            GcPointer {
+                base: NonNull::new_unchecked(memory),
+                marker: PhantomData,
+            }
+        }
+    }
+
+    pub fn gc(&mut self) {
+        self.gc.gc();
+    }
+    pub fn add_constraint(&mut self, constraint: impl MarkingConstraint + 'static) {
+        self.gc.add_constraint(Box::new(constraint));
+    }
+    pub fn collect_if_necessary(&mut self) {
+        self.gc.collect_if_necessary();
+    }
     pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
         let slot = self.gc.make_weak_slot(null_mut());
         unsafe {
@@ -75,8 +136,16 @@ impl Heap {
         }
     }
 
-    pub fn make_weak_slo(&mut self, p: *mut GcPointerBase) -> *mut WeakSlot {
+    pub fn make_weak_slot(&mut self, p: *mut GcPointerBase) -> *mut WeakSlot {
         self.gc.make_weak_slot(p)
+    }
+
+    pub fn walk(&mut self, cb: &mut dyn FnMut(*mut GcPointerBase, usize) -> bool) {
+        self.gc.walk(cb)
+    }
+
+    pub fn weak_slots(&mut self, cb: &mut dyn FnMut(*mut WeakSlot)) {
+        self.gc.weak_slots(cb);
     }
 }
 
