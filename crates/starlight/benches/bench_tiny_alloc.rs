@@ -2,6 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use starlight::{
     gc::{
         cell::{GcCell, Trace},
+        default_heap,
         snapshot::serializer::{Serializable, SnapshotSerializer},
         Heap,
     },
@@ -23,7 +24,7 @@ impl Serializable for Large {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut gc = Heap::new(GcParams::default());
+    let mut gc = default_heap(GcParams::default());
     //gc.defer();
     c.bench_function("bench-alloc-f64", |b| {
         b.iter(|| {

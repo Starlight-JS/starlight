@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use starlight::{
+    gc::Address,
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,

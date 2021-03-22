@@ -50,6 +50,7 @@ use value::*;
 
 pub struct GcParams {
     pub(crate) nmarkers: u32,
+    pub(crate) heap_size: usize,
     pub(crate) conservative_marking: bool,
     pub(crate) track_allocations: bool,
     pub(crate) parallel_marking: bool,
@@ -81,6 +82,7 @@ impl RuntimeParams {
 impl Default for GcParams {
     fn default() -> Self {
         Self {
+            heap_size: 1 * 1024 * 1024 * 1024,
             conservative_marking: false,
             track_allocations: false,
             parallel_marking: true,
@@ -90,6 +92,13 @@ impl Default for GcParams {
 }
 
 impl GcParams {
+    pub fn with_heap_size(mut self, mut size: usize) -> Self {
+        if size < 256 * 1024 {
+            size = 256 * 1024
+        };
+        self.heap_size = size;
+        self
+    }
     pub fn with_conservative_marking(mut self, enabled: bool) -> Self {
         self.conservative_marking = enabled;
         self

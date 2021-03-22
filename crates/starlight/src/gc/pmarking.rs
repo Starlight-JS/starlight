@@ -47,8 +47,6 @@ pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut 
                     injector,
                     stealers,
                     terminator,
-
-                    marked: 0,
                 };
 
                 task.run();
@@ -124,8 +122,6 @@ struct MarkingTask<'a> {
     injector: &'a Injector<Address>,
     stealers: &'a [Stealer<Address>],
     terminator: &'a Terminator,
-
-    marked: usize,
     visitor: SlotVisitor,
 }
 

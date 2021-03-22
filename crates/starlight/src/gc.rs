@@ -18,6 +18,7 @@ pub mod cell;
 pub mod snapshot;
 pub const K: usize = 1024;
 pub mod accounting;
+pub mod bitmap_ms;
 pub mod bump;
 pub mod freelist;
 pub mod mem;
@@ -104,6 +105,9 @@ pub fn default_heap(params: GcParams) -> Heap {
 }
 
 impl Heap {
+    pub fn new(gc: impl GarbageCollector + 'static) -> Self {
+        Self { gc: Box::new(gc) }
+    }
     pub fn undefer(&mut self) {
         self.gc.undefer();
     }

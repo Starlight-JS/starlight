@@ -5,7 +5,7 @@ use std::mem::transmute;
 /// Visits garbage collected objects
 pub struct SlotVisitor {
     pub(super) queue: Vec<*mut GcPointerBase>,
-    cons_roots: Vec<(usize, usize)>,
+    pub(super) cons_roots: Vec<(usize, usize)>,
     pub(super) bytes_visited: usize,
 }
 

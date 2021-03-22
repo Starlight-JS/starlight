@@ -125,7 +125,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                 } {}
                 if cur_pointer >= pointer_end {
                     callback(
-                        cur_pointer as usize - pointer_buf.as_ptr() as usize,
+                        cur_pointer as usize - &pointer_buf[0] as *const _ as usize,
                         pointer_buf.as_ptr() as usize,
                     );
                     cur_pointer = pointer_buf.as_ptr() as *mut _;
@@ -139,6 +139,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                 pointer_buf.as_ptr() as usize,
             );
         }
+        drop(pointer_buf);
     }
     #[inline]
     pub fn atomic_test_and_set(&self, object: usize) -> bool {
@@ -369,7 +370,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
 
     #[allow(unused_braces)]
     #[inline]
-    pub fn set(&self, obj: usize) {
-        self.modify::<{ true }>(obj);
+    pub fn set(&self, obj: usize) -> bool {
+        self.modify::<{ true }>(obj)
     }
 }
