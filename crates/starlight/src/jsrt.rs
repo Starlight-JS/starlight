@@ -148,7 +148,7 @@ impl Runtime {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
         self.global_data
             .array_structure
             .unwrap()
@@ -250,7 +250,7 @@ impl Runtime {
         self.global_data.type_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.syntax_error_structure = Some(Structure::new_indexed(self, None, false));
         let structure = Structure::new_unique_with_proto(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, structure, JsError::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &structure, JsError::get_class(), ObjectTag::Ordinary);
         self.global_data.error = Some(proto);
         let e = "Error".intern();
         let mut ctor = JsNativeFunction::new(self, e, error_constructor, 1);
@@ -304,7 +304,7 @@ impl Runtime {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
             let mut sub_proto = JsObject::new(
                 self,
-                structure,
+                &structure,
                 JsEvalError::get_class(),
                 ObjectTag::Ordinary,
             );
@@ -366,7 +366,7 @@ impl Runtime {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
             let mut sub_proto = JsObject::new(
                 self,
-                structure,
+                &structure,
                 JsTypeError::get_class(),
                 ObjectTag::Ordinary,
             );
@@ -433,7 +433,7 @@ impl Runtime {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
             let mut sub_proto = JsObject::new(
                 self,
-                structure,
+                &structure,
                 JsSyntaxError::get_class(),
                 ObjectTag::Ordinary,
             );
@@ -501,7 +501,7 @@ impl Runtime {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
             let mut sub_proto = JsObject::new(
                 self,
-                structure,
+                &structure,
                 JsReferenceError::get_class(),
                 ObjectTag::Ordinary,
             );
@@ -565,7 +565,7 @@ impl Runtime {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
             let mut sub_proto = JsObject::new(
                 self,
-                structure,
+                &structure,
                 JsReferenceError::get_class(),
                 ObjectTag::Ordinary,
             );

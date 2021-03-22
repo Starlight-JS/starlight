@@ -118,8 +118,12 @@ impl JsFunction {
         args: &mut Arguments,
         structure: Option<GcPointer<Structure>>,
     ) -> Result<JsValue, JsValue> {
-        let structure = structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false));
-        let obj = JsObject::new(vm, structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let stack = vm.shadowstack();
+        root!(
+            structure = stack,
+            structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false))
+        );
+        let obj = JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
         args.ctor_call = true;
         args.this = JsValue::encode_object_value(obj);
         self.call(vm, args)
@@ -149,7 +153,7 @@ impl JsFunction {
     pub fn new(vm: &mut Runtime, ty: FuncType, _strict: bool) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,
-            vm.global_data().get_function_struct(),
+            &vm.global_data().get_function_struct(),
             JsFunction::get_class(),
             ObjectTag::Function,
         );
@@ -165,7 +169,7 @@ impl JsFunction {
     }
     pub fn new_with_struct(
         vm: &mut Runtime,
-        structure: GcPointer<Structure>,
+        structure: &GcPointer<Structure>,
         ty: FuncType,
         _strict: bool,
     ) -> GcPointer<JsObject> {
@@ -377,17 +381,21 @@ impl JsNativeFunction {
     #[allow(clippy::many_single_char_names)]
     pub fn new_with_struct(
         vm: &mut Runtime,
-        s: GcPointer<Structure>,
+        s: &GcPointer<Structure>,
         name: Symbol,
         f: JsAPI,
         n: u32,
     ) -> GcPointer<JsObject> {
         let vm = vm;
-        let mut func = JsFunction::new_with_struct(
-            vm,
-            s,
-            FuncType::Native(JsNativeFunction { func: f }),
-            false,
+        let stack = vm.shadowstack();
+        root!(
+            func = stack,
+            JsFunction::new_with_struct(
+                vm,
+                s,
+                FuncType::Native(JsNativeFunction { func: f }),
+                false,
+            )
         );
         let l = "length".intern();
 
@@ -402,7 +410,7 @@ impl JsNativeFunction {
         let name = JsValue::encode_object_value(JsString::new(vm, &k));
         let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
 
-        func
+        *func
     }
 }
 
@@ -424,6 +432,13 @@ unsafe impl Trace for JsFunction {
     }
 }
 
+unsafe impl Trace for JsVMFunction {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.code.trace(visitor);
+        self.scope.trace(visitor);
+    }
+}
+
 #[derive(Clone)]
 pub struct JsVMFunction {
     pub code: GcPointer<CodeBlock>,
@@ -436,16 +451,20 @@ impl JsVMFunction {
         env: GcPointer<JsObject>,
     ) -> GcPointer<JsObject> {
         // let vm = vm.space().new_local_context();
-        let envs = Structure::new_indexed(vm, Some(env), false);
-        let scope = JsObject::new(vm, envs, JsObject::get_class(), ObjectTag::Ordinary);
+        let stack = vm.shadowstack();
+        root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
+        root!(
+            scope = stack,
+            JsObject::new(vm, &envs, JsObject::get_class(), ObjectTag::Ordinary)
+        );
         let f = JsVMFunction {
             code: code.clone(),
-            scope: scope,
+            scope: *scope,
         };
-
-        let mut this = JsFunction::new(vm, FuncType::User(f), false);
-        let mut proto = JsObject::new_empty(vm);
-
+        vm.heap().defer();
+        root!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
+        root!(proto = stack, JsObject::new_empty(vm));
+        vm.heap().undefer();
         let _ = proto.define_own_property(
             vm,
             "constructor".intern(),
@@ -453,20 +472,20 @@ impl JsVMFunction {
             false,
         );
         let desc = vm.description(code.name);
-        let s = JsString::new(vm, desc);
+        root!(s = stack, JsString::new(vm, desc));
         let _ = this.define_own_property(
             vm,
             "prototype".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(proto), W),
+            &*DataDescriptor::new(JsValue::encode_object_value(*proto), W),
             false,
         );
         let _ = this.define_own_property(
             vm,
             "name".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(s), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(*s), W | C),
             false,
         );
-        this
+        *this
     }
 }
 impl GcPointer<JsObject> {

@@ -107,7 +107,7 @@ pub fn string_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
 pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
     rt.global_data.string_structure = Some(Structure::new_indexed(rt, None, true));
     let map = Structure::new_unique_with_proto(rt, Some(obj_proto), false);
-    let mut proto = JsStringObject::new_plain(rt, map);
+    let mut proto = JsStringObject::new_plain(rt, &map);
 
     rt.global_data()
         .string_structure

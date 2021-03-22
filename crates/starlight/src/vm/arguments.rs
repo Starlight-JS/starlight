@@ -317,10 +317,13 @@ impl JsArguments {
         params: &[Symbol],
         len: u32,
     ) -> GcPointer<JsObject> {
-        let struct_ = vm.global_data().normal_arguments_structure.clone().unwrap();
+        root!(
+            struct_ = vm.shadowstack(),
+            vm.global_data().normal_arguments_structure.clone().unwrap()
+        );
         let mut obj = JsObject::new(
             vm,
-            struct_,
+            &struct_,
             JsArguments::get_class(),
             ObjectTag::NormalArguments,
         );

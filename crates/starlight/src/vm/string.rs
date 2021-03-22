@@ -64,7 +64,7 @@ impl JsStringObject {
     pub fn new(rt: &mut Runtime, s: GcPointer<JsString>) -> GcPointer<JsObject> {
         let obj = JsObject::new(
             rt,
-            rt.global_data().string_structure.unwrap(),
+            &rt.global_data().string_structure.unwrap(),
             Self::get_class(),
             ObjectTag::String,
         );
@@ -74,7 +74,7 @@ impl JsStringObject {
         obj
     }
 
-    pub fn new_plain(rt: &mut Runtime, map: GcPointer<Structure>) -> GcPointer<JsObject> {
+    pub fn new_plain(rt: &mut Runtime, map: &GcPointer<Structure>) -> GcPointer<JsObject> {
         let obj = JsObject::new(rt, map, Self::get_class(), ObjectTag::String);
         unsafe {
             (obj.data::<Self>() as *mut _ as *mut Self).write(Self {

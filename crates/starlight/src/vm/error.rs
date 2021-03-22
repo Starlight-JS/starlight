@@ -17,12 +17,12 @@ impl JsError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(
-            vm,
-            structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap()),
-            Self::get_class(),
-            ObjectTag::Ordinary,
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap())
         );
+        let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
 
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
@@ -44,12 +44,12 @@ impl JsEvalError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(
-            vm,
-            structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap()),
-            Self::get_class(),
-            ObjectTag::Ordinary,
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap())
         );
+        let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
 
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
@@ -71,12 +71,12 @@ impl JsRangeError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(
-            vm,
-            structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap()),
-            Self::get_class(),
-            ObjectTag::Ordinary,
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap())
         );
+        let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
 
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
@@ -98,13 +98,16 @@ impl JsReferenceError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(
-            vm,
-            structure
-                .unwrap_or_else(|| vm.global_data().reference_error_structure.clone().unwrap()),
-            Self::get_class(),
-            ObjectTag::Ordinary,
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            structure.unwrap_or_else(|| vm
+                .global_data()
+                .reference_error_structure
+                .clone()
+                .unwrap())
         );
+        let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
 
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
@@ -126,12 +129,12 @@ impl JsSyntaxError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(
-            vm,
-            structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap()),
-            Self::get_class(),
-            ObjectTag::Ordinary,
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap())
         );
+        let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
 
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
@@ -153,12 +156,12 @@ impl JsTypeError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(
-            vm,
-            structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap()),
-            Self::get_class(),
-            ObjectTag::Ordinary,
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap())
         );
+        let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
 
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(

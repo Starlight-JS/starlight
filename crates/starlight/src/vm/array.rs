@@ -15,7 +15,7 @@ impl JsArray {
     pub fn new(vm: &mut Runtime, n: u32) -> GcPointer<JsObject> {
         let mut arr = JsObject::new(
             vm,
-            vm.global_data().array_structure.clone().unwrap(),
+            &vm.global_data().array_structure.clone().unwrap(),
             Self::get_class(),
             ObjectTag::Array,
         );

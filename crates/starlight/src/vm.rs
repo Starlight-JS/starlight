@@ -151,7 +151,7 @@ impl Runtime {
         //code.display_to(&mut OutBuf).unwrap();
 
         let envs = Structure::new_indexed(self, Some(self.global_object()), false);
-        let env = JsObject::new(self, envs, JsObject::get_class(), ObjectTag::Ordinary);
+        let env = JsObject::new(self, &envs, JsObject::get_class(), ObjectTag::Ordinary);
         let fun = JsVMFunction::new(self, code, env);
         return Ok(JsValue::encode_object_value(fun));
     }
@@ -194,7 +194,7 @@ impl Runtime {
             );
             root!(
                 env = stack,
-                JsObject::new(self, *envs, JsObject::get_class(), ObjectTag::Ordinary)
+                JsObject::new(self, &*envs, JsObject::get_class(), ObjectTag::Ordinary)
             );
             root!(fun = stack, JsVMFunction::new(self, code, *env));
 
@@ -281,7 +281,7 @@ impl Runtime {
         ));
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
         let s = Structure::new_unique_indexed(&mut this, None, false);
-        let mut proto = JsObject::new(&mut this, s, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(&mut this, &s, JsObject::get_class(), ObjectTag::Ordinary);
         this.global_data.object_prototype = Some(proto.clone());
         this.global_data.function_struct = Some(Structure::new_indexed(&mut this, None, false));
         this.global_data.normal_arguments_structure =

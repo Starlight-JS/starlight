@@ -827,29 +827,37 @@ impl JsObject {
 
     define_jsclass!(JsObject, Object);
     pub fn new_empty(vm: &mut Runtime) -> GcPointer<Self> {
-        let structure = vm.global_data().empty_object_struct.clone().unwrap();
-        Self::new(vm, structure, Self::get_class(), ObjectTag::Ordinary)
+        let stack = vm.shadowstack();
+        root!(
+            structure = stack,
+            vm.global_data().empty_object_struct.clone().unwrap()
+        );
+        Self::new(vm, &structure, Self::get_class(), ObjectTag::Ordinary)
     }
     pub fn new(
         vm: &mut Runtime,
-        structure: GcPointer<Structure>,
+        structure: &GcPointer<Structure>,
         class: &'static Class,
         tag: ObjectTag,
     ) -> GcPointer<Self> {
+        let stack = vm.shadowstack();
         let init = IndexedElements::new(vm);
-        let indexed = vm.heap().allocate(init);
-        let storage = ArrayStorage::with_size(
-            vm,
-            structure.get_slots_size() as _,
-            structure.get_slots_size() as _,
+        root!(indexed = stack, vm.heap().allocate(init));
+        root!(
+            storage = stack,
+            ArrayStorage::with_size(
+                vm,
+                structure.get_slots_size() as _,
+                structure.get_slots_size() as _,
+            )
         );
         let this = Self {
-            structure,
+            structure: *structure,
             class,
 
-            slots: storage,
+            slots: *storage,
             object_data_start: 0,
-            indexed,
+            indexed: *indexed,
             flags: OBJ_FLAG_EXTENSIBLE,
             tag,
         };

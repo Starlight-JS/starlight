@@ -32,15 +32,22 @@ pub fn object_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
 
 pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
+        let stack = vm.shadowstack();
         let first = args.at(0);
         if first.is_object() || first.is_null() {
-            let prototype = if first.is_jsobject() {
-                Some(unsafe { first.get_object().downcast_unchecked::<JsObject>() })
-            } else {
-                None
-            };
-            let structure = Structure::new_unique_indexed(vm, prototype, false);
-            let res = JsObject::new(vm, structure, JsObject::get_class(), ObjectTag::Ordinary);
+            root!(
+                prototype = stack,
+                if first.is_jsobject() {
+                    Some(unsafe { first.get_object().downcast_unchecked::<JsObject>() })
+                } else {
+                    None
+                }
+            );
+            root!(
+                structure = stack,
+                Structure::new_unique_indexed(vm, *prototype, false)
+            );
+            let res = JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
             if !args.at(1).is_undefined() {
                 todo!("define properties");
             }

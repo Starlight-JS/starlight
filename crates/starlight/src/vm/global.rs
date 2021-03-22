@@ -34,8 +34,12 @@ unsafe impl Trace for JsGlobal {
 #[allow(non_snake_case)]
 impl JsGlobal {
     pub fn new(vm: &mut Runtime) -> GcPointer<JsObject> {
-        let shape = Structure::new_unique_with_proto(vm, None, false);
-        let js_object = JsObject::new(vm, shape, Self::get_class(), ObjectTag::Global);
+        let stack = vm.shadowstack();
+        root!(
+            shape = stack,
+            Structure::new_unique_with_proto(vm, None, false)
+        );
+        let js_object = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Global);
         {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),
