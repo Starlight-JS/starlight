@@ -577,37 +577,38 @@ impl Heap {
                 constraint.execute(visitor);
             }
             std::mem::swap(&mut self.constraints, &mut constraints);
-
-            while let Some((from, to)) = visitor.cons_roots.pop() {
-                let mut scan = from as *mut *mut u8;
-                let mut to = to as *mut *mut u8;
-                if scan > to {
-                    std::mem::swap(&mut scan, &mut to);
-                }
-                if false {
-                    while scan < to {
-                        let ptr = *scan;
-                        if ptr.is_null() {
-                            scan = scan.add(1);
-                            continue;
-                        }
-                        let mut found = false;
-                        self.find_gc_object_pointer_for_marking(ptr, |_, ptr| {
-                            visitor.visit_raw(ptr);
-                            found = true;
-                        });
-                        if !found {
-                            let value = transmute::<_, crate::vm::value::JsValue>(ptr);
-                            if value.is_object() {
-                                self.find_gc_object_pointer_for_marking(
-                                    value.get_pointer().cast(),
-                                    |_, ptr| {
-                                        visitor.visit_raw(ptr);
-                                    },
-                                );
+            if false {
+                while let Some((from, to)) = visitor.cons_roots.pop() {
+                    let mut scan = from as *mut *mut u8;
+                    let mut to = to as *mut *mut u8;
+                    if scan > to {
+                        std::mem::swap(&mut scan, &mut to);
+                    }
+                    if false {
+                        while scan < to {
+                            let ptr = *scan;
+                            if ptr.is_null() {
+                                scan = scan.add(1);
+                                continue;
                             }
+                            let mut found = false;
+                            self.find_gc_object_pointer_for_marking(ptr, |_, ptr| {
+                                visitor.visit_raw(ptr);
+                                found = true;
+                            });
+                            if !found {
+                                let value = transmute::<_, crate::vm::value::JsValue>(ptr);
+                                if value.is_object() {
+                                    self.find_gc_object_pointer_for_marking(
+                                        value.get_pointer().cast(),
+                                        |_, ptr| {
+                                            visitor.visit_raw(ptr);
+                                        },
+                                    );
+                                }
+                            }
+                            scan = scan.add(1);
                         }
-                        scan = scan.add(1);
                     }
                 }
             }

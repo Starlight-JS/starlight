@@ -5,12 +5,9 @@ use super::{
 use crossbeam::deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
-use std::{
-    intrinsics::{prefetch_read_data, prefetch_write_data},
-    sync::atomic::{AtomicUsize, Ordering},
-};
 use yastl::Pool;
 
 pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut Pool) {

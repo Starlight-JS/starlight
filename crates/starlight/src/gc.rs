@@ -15,6 +15,7 @@ use std::{
 };
 
 pub const K: usize = 1024;
+pub mod accounting;
 pub mod bump;
 pub mod freelist;
 pub mod mark_copy;
@@ -23,6 +24,14 @@ pub mod os;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;
+
+pub const fn round_down(x: u64, n: u64) -> u64 {
+    x & !n
+}
+
+pub const fn round_up(x: u64, n: u64) -> u64 {
+    round_down(x + n - 1, n)
+}
 
 pub struct GcStats {
     pub allocated: usize,
