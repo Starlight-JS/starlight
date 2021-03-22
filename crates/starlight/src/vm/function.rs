@@ -9,7 +9,7 @@ use super::{arguments::*, code_block::CodeBlock};
 use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
 use super::{error::JsTypeError, method_table::*};
-use crate::heap::cell::{GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcPointer, Trace, Tracer};
 use std::mem::ManuallyDrop;
 
 pub struct JsFunction {
@@ -461,10 +461,10 @@ impl JsVMFunction {
             code: code.clone(),
             scope: *scope,
         };
-        vm.heap().defer();
+        vm.gc().defer();
         root!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
         root!(proto = stack, JsObject::new_empty(vm));
-        vm.heap().undefer();
+        vm.gc().undefer();
         let _ = proto.define_own_property(
             vm,
             "constructor".intern(),

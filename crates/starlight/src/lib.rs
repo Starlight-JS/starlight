@@ -8,7 +8,7 @@
 )]
 #![allow(unused_unsafe, unused_mut)]
 
-use heap::{cell::GcPointer, snapshot::deserializer::Deserializer};
+use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
 use vm::{
     arguments::Arguments, object::JsObject, value::JsValue, GcParams, Runtime, RuntimeParams,
@@ -16,8 +16,6 @@ use vm::{
 
 #[macro_use]
 pub mod utils;
-#[macro_use]
-pub mod heap;
 #[macro_use]
 pub mod gc;
 pub mod bytecode;
@@ -60,7 +58,7 @@ impl Platform {
 pub extern "C" fn platform_initialize() {
     Platform::initialize();
 }
-use heap::snapshot::deserializer::Deserializable;
+use gc::snapshot::deserializer::Deserializable;
 #[no_mangle]
 pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     let mut function = None;

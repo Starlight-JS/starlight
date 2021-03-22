@@ -1,4 +1,4 @@
-use crate::heap::cell::*;
+use crate::gc::cell::*;
 
 /// TracingJIT trace.
 ///

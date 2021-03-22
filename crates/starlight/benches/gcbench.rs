@@ -3,7 +3,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::root;
 use starlight::{
     gc::Heap,
-    heap::{
+    gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
     },
@@ -21,7 +21,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         None,
     );
     let stack = rrt.shadowstack();
-    let mut rt = rrt.heap();
+    let mut rt = rrt.gc();
 
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
@@ -31,7 +31,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     keep_on_stack!(&long_lived);
     populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, *long_lived);
     let arr = ArrayStorage::with_size(&mut rrt, ARRAY_SIZE as _, ARRAY_SIZE as _);
-    let mut rt = rrt.heap();
+    let mut rt = rrt.gc();
     root!(array = stack, rt.allocate(arr));
     for i in 0..(ARRAY_SIZE / 2) {
         *array.at_mut(i as _) = JsValue::encode_f64_value(1.0 / i as f64);
@@ -116,28 +116,28 @@ const fn num_iters(i: usize) -> usize {
     2 * tree_size(STRETCH_TREE_DEPTH) / tree_size(i)
 }
 
-fn populate(heap: &mut Heap, mut idepth: i32, mut this_node: GcPointer<Node>) {
+fn populate(gc: &mut Heap, mut idepth: i32, mut this_node: GcPointer<Node>) {
     keep_on_stack!(&mut this_node);
     if idepth <= 0 {
         return;
     }
     idepth -= 1;
-    this_node.left = Some(heap.allocate(Node::new(None, None)));
-    this_node.right = Some(heap.allocate(Node::new(None, None)));
-    populate(heap, idepth, this_node.left.unwrap());
-    populate(heap, idepth, this_node.right.unwrap());
+    this_node.left = Some(gc.allocate(Node::new(None, None)));
+    this_node.right = Some(gc.allocate(Node::new(None, None)));
+    populate(gc, idepth, this_node.left.unwrap());
+    populate(gc, idepth, this_node.right.unwrap());
 }
 
-fn make_tree(heap: &mut Heap, idepth: i32) -> GcPointer<Node> {
+fn make_tree(gc: &mut Heap, idepth: i32) -> GcPointer<Node> {
     if idepth <= 0 {
-        return heap.allocate(Node::new(None, None));
+        return gc.allocate(Node::new(None, None));
     }
 
-    let n1 = make_tree(heap, idepth - 1);
+    let n1 = make_tree(gc, idepth - 1);
     keep_on_stack!(&n1);
-    let n2 = make_tree(heap, idepth - 1);
+    let n2 = make_tree(gc, idepth - 1);
     keep_on_stack!(&n2);
-    heap.allocate(Node::new(Some(n1), Some(n2)))
+    gc.allocate(Node::new(Some(n1), Some(n2)))
 }
 
 impl Node {

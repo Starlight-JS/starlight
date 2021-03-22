@@ -1,16 +1,10 @@
 use crate::vm::Runtime;
 use crate::{
-    heap::{
-        cell::{
-            vtable_of, GcCell, GcPointer, GcPointerBase, Trace, Tracer, WeakRef, WeakSlot,
-            DEFINETELY_WHITE,
-        },
-        snapshot::{
-            deserializer::Deserializable,
-            deserializer::Deserializer,
-            serializer::{Serializable, SnapshotSerializer},
-        },
-        MarkingConstraint,
+    gc::cell::*,
+    gc::snapshot::{
+        deserializer::Deserializable,
+        deserializer::Deserializer,
+        serializer::{Serializable, SnapshotSerializer},
     },
     vm::GcParams,
 };
@@ -19,7 +13,9 @@ use std::{
     mem::size_of,
     ptr::{null_mut, NonNull},
 };
-
+#[macro_use]
+pub mod cell;
+pub mod snapshot;
 pub const K: usize = 1024;
 pub mod accounting;
 pub mod bump;
@@ -27,9 +23,38 @@ pub mod freelist;
 pub mod mem;
 pub mod migc;
 pub mod os;
+pub mod pmarking;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;
+pub trait MarkingConstraint {
+    fn name(&self) -> &str {
+        "<anonymous name>"
+    }
+    fn execute(&mut self, marking: &mut dyn Tracer);
+}
+
+pub struct SimpleMarkingConstraint {
+    name: String,
+    exec: Box<dyn FnMut(&mut dyn Tracer)>,
+}
+impl SimpleMarkingConstraint {
+    pub fn new(name: &str, exec: impl FnMut(&mut dyn Tracer) + 'static) -> Self {
+        Self {
+            name: name.to_owned(),
+            exec: Box::new(exec),
+        }
+    }
+}
+impl MarkingConstraint for SimpleMarkingConstraint {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn execute(&mut self, marking: &mut dyn Tracer) {
+        (self.exec)(marking);
+    }
+}
 
 pub const fn round_down(x: u64, n: u64) -> u64 {
     x & !n
@@ -52,7 +77,7 @@ pub struct GcStats {
 ///
 ///
 pub trait GarbageCollector {
-    /// Allocate `size` bytes on GC heap and set vtable in GC object header.
+    /// Allocate `size` bytes on GC gc and set vtable in GC object header.
     ///
     ///
     /// ***NOTE*** This function must not trigger garbage collection cycle.

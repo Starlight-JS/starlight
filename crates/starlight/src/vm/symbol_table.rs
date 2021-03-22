@@ -1,6 +1,6 @@
 use super::Runtime;
-use crate::heap::cell::{GcCell, GcPointer, Trace};
-use crate::heap::snapshot::deserializer::Deserializable;
+use crate::gc::cell::{GcCell, GcPointer, Trace};
+use crate::gc::snapshot::deserializer::Deserializable;
 use dashmap::DashMap;
 use std::sync::atomic::Ordering;
 use std::{mem::MaybeUninit, sync::atomic::AtomicU32};
@@ -53,7 +53,7 @@ impl SymbolID {
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Symbol {
     /// Represents index value, this variant is used when you can definetely put array
-    /// index inside u32 so it does not take space in interner heap.
+    /// index inside u32 so it does not take space in interner gc.
     Key(SymbolID),
     Index(u32),
 }
@@ -126,7 +126,7 @@ pub struct JsSymbol {
 
 impl JsSymbol {
     pub fn new(rt: &mut Runtime, sym: Symbol) -> GcPointer<Self> {
-        rt.heap().allocate(Self { sym })
+        rt.gc().allocate(Self { sym })
     }
 
     pub fn symbol(&self) -> Symbol {

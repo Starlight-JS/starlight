@@ -1,9 +1,6 @@
 use crate::{
     bytecode::TypeFeedBack,
-    heap::{
-        cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
-        Heap,
-    },
+    gc::cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
     vm::{
         arguments::{Arguments, JsArguments},
         array_storage::ArrayStorage,
@@ -111,21 +108,21 @@ impl SnapshotSerializer {
         self.output[patch_at + 3] = count[3];
     }
     pub(crate) fn build_heap_reference_map(&mut self, rt: &mut Runtime) {
-        let heap = rt.heap();
+        let gc = rt.gc();
 
-        /*Heap::walk(heap.mi_heap, |object, _| {
+        /*Heap::walk(gc.mi_heap, |object, _| {
             //let ix = self.reference_map.len() as u32;
             self.reference_map.push(object);
             //self.reference_map.insert(object as usize, ix);
             true
         });*/
-        heap.walk(&mut |object, _| {
+        gc.walk(&mut |object, _| {
             self.reference_map.push(object as _);
             true
         });
 
-        heap.weak_slots(&mut |weak_slot| {
-            //for weak_slot in heap.weak_slots.iter() {
+        gc.weak_slots(&mut |weak_slot| {
+            //for weak_slot in gc.weak_slots.iter() {
             let addr = weak_slot as *const _ as usize;
             let _ix = self.reference_map.len() as u32;
             self.reference_map.push(addr);
@@ -134,13 +131,13 @@ impl SnapshotSerializer {
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
-        let heap = rt.heap();
+        let gc = rt.gc();
         let patch_at = self.output.len();
         self.write_u32(0);
         let mut count: u32 = 0;
-        heap.walk(&mut |object, _| unsafe {
+        gc.walk(&mut |object, _| unsafe {
             let object = object as usize;
-            //Heap::walk(heap.mi_heap, |object, _| unsafe {
+            //Heap::walk(gc.mi_heap, |object, _| unsafe {
             let base = &mut *(object as *mut GcPointerBase);
             self.write_reference(object as *const u8);
             logln_if!(
@@ -179,8 +176,8 @@ impl SnapshotSerializer {
         let mut count: u32 = 0;
         let patch_at = self.output.len();
         self.write_u32(0);
-        heap.weak_slots(&mut |weak_slot| unsafe {
-            //for weak_slot in heap.weak_slots.iter() {
+        gc.weak_slots(&mut |weak_slot| unsafe {
+            //for weak_slot in gc.weak_slots.iter() {
             if (*weak_slot).value.is_null() {
                 self.write_u8(0x0);
             } else {

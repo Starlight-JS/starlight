@@ -5,7 +5,7 @@ use crate::{
     gc::default_heap,
     gc::shadowstack::ShadowStack,
     gc::Heap,
-    heap::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
+    gc::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
     jsrt::object::{object_constructor, object_to_string},
 };
 use arguments::Arguments;
@@ -116,7 +116,7 @@ impl GcParams {
 }
 
 pub struct Runtime {
-    pub(crate) heap: Heap,
+    pub(crate) gc: Heap,
     pub(crate) stack: Stack,
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
@@ -228,17 +228,17 @@ impl Runtime {
             Symbol::Index(x) => x.to_string(),
         }
     }
-    pub fn heap(&mut self) -> &mut Heap {
-        &mut self.heap
+    pub fn gc(&mut self) -> &mut Heap {
+        &mut self.gc
     }
 
     pub fn with_heap(
-        heap: Heap,
+        gc: Heap,
         options: RuntimeParams,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
         let mut this = Box::new(Self {
-            heap,
+            gc,
             options,
             stack: Stack::new(),
             global_object: None,
@@ -247,8 +247,8 @@ impl Runtime {
             shadowstack: ShadowStack::new(),
         });
         let vm = &mut *this as *mut Runtime;
-        this.heap.defer();
-        this.heap.add_constraint(SimpleMarkingConstraint::new(
+        this.gc.defer();
+        this.gc.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",
             move |visitor| {
                 let rt = unsafe { &mut *vm };
@@ -322,17 +322,17 @@ impl Runtime {
             JsValue::encode_object_value(global),
             false,
         );
-        this.heap.undefer();
+        this.gc.undefer();
 
         this
     }
     pub(crate) fn new_empty(
-        heap: Heap,
+        gc: Heap,
         options: RuntimeParams,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
         let mut this = Box::new(Self {
-            heap,
+            gc,
             options,
             stack: Stack::new(),
             global_object: None,
@@ -341,7 +341,7 @@ impl Runtime {
             shadowstack: ShadowStack::new(),
         });
         let vm = &mut *this as *mut Runtime;
-        this.heap.add_constraint(SimpleMarkingConstraint::new(
+        this.gc.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",
             move |visitor| {
                 let rt = unsafe { &mut *vm };

@@ -17,7 +17,7 @@ use super::{
     Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
-use crate::heap::{
+use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
 };
@@ -516,7 +516,7 @@ impl JsObject {
                             let s = &obj.structure;
                             let sz = s.get_slots_size();
                             //   println!("resize to {} from {}", s.get_slots_size(), obj.slots.size());
-                            obj.slots.resize(vm.heap(), sz as _);
+                            obj.slots.resize(vm.gc(), sz as _);
 
                             *obj.direct_mut(offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
@@ -547,7 +547,7 @@ impl JsObject {
 
         let s = &obj.structure;
         let sz = s.get_slots_size();
-        obj.slots.resize(vm.heap(), sz as _);
+        obj.slots.resize(vm.gc(), sz as _);
 
         assert!(stored.value() == desc.value());
         *obj.direct_mut(offset as _) = stored.value();
@@ -842,7 +842,7 @@ impl JsObject {
     ) -> GcPointer<Self> {
         let stack = vm.shadowstack();
         let init = IndexedElements::new(vm);
-        root!(indexed = stack, vm.heap().allocate(init));
+        root!(indexed = stack, vm.gc().allocate(init));
         root!(
             storage = stack,
             ArrayStorage::with_size(
@@ -861,7 +861,7 @@ impl JsObject {
             flags: OBJ_FLAG_EXTENSIBLE,
             tag,
         };
-        vm.heap().allocate(this)
+        vm.gc().allocate(this)
     }
 
     pub fn tag(&self) -> ObjectTag {
@@ -1193,7 +1193,7 @@ impl GcPointer<JsObject> {
                 self.structure = s;
             }
 
-            self.indexed.vector.resize(vm.heap(), index + 1);
+            self.indexed.vector.resize(vm.gc(), index + 1);
 
             if !absent {
                 *self.indexed.vector.at_mut(index) = val;

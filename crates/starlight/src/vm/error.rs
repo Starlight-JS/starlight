@@ -2,7 +2,7 @@ use super::{
     attributes::*, method_table::*, object::*, property_descriptor::*, string::JsString,
     structure::*, symbol_table::*, value::JsValue, Runtime,
 };
-use crate::heap::cell::GcPointer;
+use crate::gc::cell::GcPointer;
 
 pub struct JsError;
 pub struct JsEvalError;

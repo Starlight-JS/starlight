@@ -9,7 +9,7 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use super::{snapshot::deserializer::Deserializable, snapshot::serializer::Serializable};
+use crate::gc::snapshot::{deserializer::Deserializable, serializer::Serializable};
 use mopa::mopafy;
 
 pub trait Tracer {
@@ -72,7 +72,7 @@ pub struct VTable {
 macro_rules! vtable_impl {
     ($this: ty) => {
         /*fn vtable(&self) -> *const u8 {
-            $crate::heap::cell::vtable_of_type::<Self>() as _
+            $crate::gc::cell::vtable_of_type::<Self>() as _
         }*/
     };
     () => {
@@ -80,7 +80,7 @@ macro_rules! vtable_impl {
     };
 }
 
-/// `GcCell` is a type that can be allocated in GC heap and passed to JavaScript environment.
+/// `GcCell` is a type that can be allocated in GC gc and passed to JavaScript environment.
 ///
 ///
 /// All cells that is not part of `src/vm` treatened as dummy objects and property accesses
@@ -113,7 +113,7 @@ pub const POSSIBLY_GREY: u8 = 2;
 pub const DEFINETELY_WHITE: u8 = 1;
 
 impl GcPointerBase {
-    pub fn new(vtable: usize,size: u32) -> Self {
+    pub fn new(vtable: usize, size: u32) -> Self {
         Self {
             vtable: vtable,
             size,
@@ -187,7 +187,7 @@ pub fn vtable_of_type<T: GcCell + Sized>() -> usize {
 ///
 /// The smart pointer is simply a guarantee to the garbage collector
 /// that this points to a garbage collected object with the correct header,
-/// and not some arbitrary bits that you've decided to heap allocate.
+/// and not some arbitrary bits that you've decided to gc allocate.
 pub struct GcPointer<T: ?Sized> {
     pub(crate) base: NonNull<GcPointerBase>,
     pub(crate) marker: PhantomData<T>,
@@ -403,4 +403,11 @@ impl<T: GcCell + Serializable + Deserializable + 'static> GcCell for Option<T> {
         (Self::deserialize as _, Self::allocate as _)
     }
     vtable_impl!();
+}
+
+impl<T: GcCell> Copy for WeakRef<T> {}
+impl<T: GcCell> Clone for WeakRef<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }

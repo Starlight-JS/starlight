@@ -1,5 +1,5 @@
 use crate::{
-    heap::cell::GcPointer,
+    gc::cell::GcPointer,
     vm::{
         arguments::Arguments,
         array::JsArray,

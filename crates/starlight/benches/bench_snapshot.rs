@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use starlight::{
     gc::default_heap,
-    heap::snapshot::{deserializer::Deserializer, Snapshot},
+    gc::snapshot::{deserializer::Deserializer, Snapshot},
     vm::{GcParams, Runtime, RuntimeParams},
     Platform,
 };

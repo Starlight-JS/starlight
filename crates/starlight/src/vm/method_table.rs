@@ -6,7 +6,7 @@ use super::{
     value::JsValue,
     Runtime,
 };
-use crate::heap::cell::GcPointer;
+use crate::gc::cell::GcPointer;
 
 pub type GetNonIndexedSlotType = fn(
     obj: &mut GcPointer<JsObject>,

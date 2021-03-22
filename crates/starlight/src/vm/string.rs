@@ -9,8 +9,8 @@ use super::{
     value::*,
     Runtime,
 };
-use crate::heap::snapshot::deserializer::Deserializable;
-use crate::heap::{
+use crate::gc::snapshot::deserializer::Deserializable;
+use crate::gc::{
     cell::{GcCell, GcPointer, Trace},
     snapshot::serializer::{Serializable, SnapshotSerializer},
 };
@@ -30,7 +30,7 @@ impl JsString {
         let proto = Self {
             string: str.to_owned(),
         };
-        let cell = vm.heap().allocate(proto);
+        let cell = vm.gc().allocate(proto);
 
         cell
     }

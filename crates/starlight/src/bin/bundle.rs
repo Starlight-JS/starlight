@@ -1,5 +1,5 @@
 use starlight::{
-    heap::snapshot::Snapshot,
+    gc::snapshot::Snapshot,
     vm::{GcParams, Runtime, RuntimeParams},
     Platform,
 };
@@ -27,7 +27,7 @@ fn main() {
     });
 
     let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
-    rt.heap().defer();
+    rt.gc().defer();
     let func = rt
         .compile(opts.input.as_os_str().to_str().unwrap(), &string)
         .unwrap_or_else(|error| match error.to_string(&mut rt) {
@@ -43,7 +43,7 @@ fn main() {
     let snapshot = Snapshot::take(false, &mut rt, |ser, _rt| {
         ser.write_gcpointer(func.get_object())
     });
-    rt.heap().undefer();
+    rt.gc().undefer();
     let mut c_src = String::with_capacity(snapshot.buffer.len() + 128);
     c_src.push_str(&format!(
         r#"

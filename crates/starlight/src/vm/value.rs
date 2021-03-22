@@ -1,4 +1,4 @@
-use crate::heap::cell::*;
+use crate::gc::cell::*;
 use cfg_if::cfg_if;
 use std::{
     hint::unreachable_unchecked,
@@ -978,7 +978,7 @@ impl<T: GcCell + ?Sized> From<GcPointer<T>> for JsValue {
         Self::encode_object_value(x)
     }
 }
-use crate::heap::snapshot::deserializer::Deserializable;
+use crate::gc::snapshot::deserializer::Deserializable;
 impl GcCell for JsValue {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    heap::cell::{GcPointer, WeakRef},
+    gc::cell::{GcPointer, WeakRef},
     vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_storage::ArrayStorage,
         attributes::*, code_block::CodeBlock, error::*, function::*, global::JsGlobal,
@@ -625,16 +625,16 @@ impl Runtime {
         }
     }
 }
-use crate::heap::snapshot::deserializer::*;
+use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
 pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
     let refs = [
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
-        // but they should be the same for all types that is allocated in GC heap.
-        Vec::<crate::heap::cell::GcPointer<crate::vm::structure::Structure>>::deserialize as _,
-        Vec::<crate::heap::cell::GcPointer<crate::vm::structure::Structure>>::allocate as _,
+        // but they should be the same for all types that is allocated in GC gc.
+        Vec::<crate::gc::cell::GcPointer<crate::vm::structure::Structure>>::deserialize as _,
+        Vec::<crate::gc::cell::GcPointer<crate::vm::structure::Structure>>::allocate as _,
         GcPointer::<u8>::deserialize as _,
         GcPointer::<u8>::allocate as _,
         WeakRef::<u8>::deserialize as _,

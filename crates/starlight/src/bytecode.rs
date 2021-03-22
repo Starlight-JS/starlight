@@ -1,5 +1,5 @@
 use crate::{
-    heap::cell::{Trace, Tracer, WeakRef},
+    gc::cell::{Trace, Tracer, WeakRef},
     vm::structure::Structure,
 };
 

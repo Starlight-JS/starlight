@@ -8,7 +8,7 @@ use super::{
     symbol_table::{Internable, Symbol},
 };
 use super::{property_descriptor::PropertyDescriptor, slot::*, value::*};
-use crate::heap::cell::GcPointer;
+use crate::gc::cell::GcPointer;
 pub struct JsArray;
 #[allow(non_snake_case)]
 impl JsArray {
@@ -343,7 +343,7 @@ impl GcPointer<JsObject> {
             } else {
                 self.indexed.make_dense();
                 if self.indexed.vector.size() > len {
-                    self.indexed.vector.resize(ctx.heap(), len as _);
+                    self.indexed.vector.resize(ctx.gc(), len as _);
                 }
             }
             self.indexed.set_length(len);

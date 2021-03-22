@@ -84,7 +84,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
     /// Sweep walk through space between `sweep_begin` and `sweep_end`.
     ///
     /// # Safety
-    /// sweep_begin and sweep_end should be part of heap where bitmap is intended to use.
+    /// sweep_begin and sweep_end should be part of gc where bitmap is intended to use.
     pub unsafe fn sweep_walk(
         live_bitmap: &Self,
         mark_bitmap: &Self,

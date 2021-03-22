@@ -1,6 +1,6 @@
 use crate::{
     bytecode::{opcodes::Opcode, TypeFeedBack},
-    heap::cell::{GcPointer, Trace, Tracer},
+    gc::cell::{GcPointer, Trace, Tracer},
     vm::code_block::CodeBlock,
     vm::symbol_table::*,
     vm::{string::JsString, symbol_table::Symbol, value::*, Runtime, RuntimeRef},

@@ -1,6 +1,6 @@
 use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
-use crate::heap::cell::{GcCell, GcPointer, Trace};
-use crate::heap::{cell::Tracer, snapshot::deserializer::Deserializable};
+use crate::gc::cell::{GcCell, GcPointer, Trace};
+use crate::gc::{cell::Tracer, snapshot::deserializer::Deserializable};
 use std::ops::{Deref, DerefMut};
 #[derive(Clone, Copy)]
 pub union PropertyLayout {
@@ -501,7 +501,7 @@ impl Accessor {
     }
     pub fn new(vm: &mut Runtime, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
         let this = Self { getter, setter };
-        vm.heap().allocate(this)
+        vm.gc().allocate(this)
     }
 
     pub fn invoke_getter(

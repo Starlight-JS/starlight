@@ -39,9 +39,6 @@ default = ["val-as-f64"]
 
 [dev-dependencies]
 criterion = "0.3"
-gc = "0.4"
-gc_derive = "0.4"
-
 
 [[bench]]
 name = "bench_tiny_alloc"
@@ -59,9 +56,7 @@ harness = false
 [[bench]]
 name = "gcbench-rc"
 harness = false
-[[bench]]
-name = "gcbench-gc"
-harness = false
+
 
 [[bench]]
 name = "bench_snapshot"

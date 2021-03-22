@@ -1,11 +1,11 @@
 use super::value::JsValue;
 use super::{symbol_table::Symbol, Runtime};
 use crate::bytecode::opcodes::*;
-use crate::heap::{cell::GcPointer, cell::Tracer};
+use crate::gc::{cell::GcPointer, cell::Tracer};
 use crate::{
     bytecode::TypeFeedBack,
-    heap::cell::{GcCell, Trace},
-    heap::snapshot::deserializer::Deserializable,
+    gc::cell::{GcCell, Trace},
+    gc::snapshot::deserializer::Deserializable,
 };
 use starlight_derive::GcTrace;
 use std::fmt::Write;
@@ -306,7 +306,7 @@ impl CodeBlock {
             feedback: vec![],
         };
 
-        rt.heap().allocate(this)
+        rt.gc().allocate(this)
     }
 }
 

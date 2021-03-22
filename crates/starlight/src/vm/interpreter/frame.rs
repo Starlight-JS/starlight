@@ -3,7 +3,7 @@ use std::mem::size_of;
 use wtf_rs::round_up;
 
 use crate::{
-    heap::cell::{GcPointer, Trace, Tracer},
+    gc::cell::{GcPointer, Trace, Tracer},
     vm::{code_block::CodeBlock, value::JsValue},
 };
 

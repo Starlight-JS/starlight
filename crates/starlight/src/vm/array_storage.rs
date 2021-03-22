@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use super::{value::JsValue, Runtime};
 use crate::gc::Heap;
-use crate::heap::{
+use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
 };
@@ -11,7 +11,7 @@ use crate::heap::{
 /// values in objects and also indexed property values in arrays. It supports
 /// resizing on both ends which is necessary for the simplest implementation of
 /// JavaScript arrays (using a base offset and length).
-/// Note: ArrayStorage does not support direct serialization as a heap object.
+/// Note: ArrayStorage does not support direct serialization as a gc object.
 /// However a convenience method is provided to serialize an ArrayStorage, as
 /// part of the record of its owning object. In this case the ArrayStorage must
 /// not contain any native pointers.
@@ -186,8 +186,8 @@ impl ArrayStorage {
     }
     pub fn with_size(rt: &mut Runtime, size: u32, capacity: u32) -> GcPointer<Self> {
         let stack = rt.shadowstack();
-        crate::root!(this = stack, Self::new(rt.heap(), capacity));
-        this.resize_within_capacity(rt.heap(), size);
+        crate::root!(this = stack, Self::new(rt.gc(), capacity));
+        this.resize_within_capacity(rt.gc(), size);
         *this
     }
     pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {

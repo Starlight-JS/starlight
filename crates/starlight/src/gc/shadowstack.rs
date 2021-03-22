@@ -1,4 +1,4 @@
-use crate::heap::cell::{Trace, Tracer};
+use crate::gc::cell::{Trace, Tracer};
 use std::ops::{Deref, DerefMut};
 use std::{cell::Cell, ptr::null_mut};
 
@@ -71,10 +71,8 @@ macro_rules! root {
             stack: stack as *mut _,
             prev: stack.head,
             vtable: unsafe {
-                std::mem::transmute::<_, mopa::TraitObject>(
-                    &value as &dyn $crate::heap::cell::Trace,
-                )
-                .vtable as usize
+                std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn $crate::gc::cell::Trace)
+                    .vtable as usize
             },
             value,
         };
@@ -93,10 +91,8 @@ macro_rules! root {
             prev: stack.head.get(),
             stack,
             vtable: unsafe {
-                std::mem::transmute::<_, mopa::TraitObject>(
-                    &value as &dyn $crate::heap::cell::Trace,
-                )
-                .vtable as usize
+                std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn $crate::gc::cell::Trace)
+                    .vtable as usize
             },
             value,
         };

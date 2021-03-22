@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::heap::cell::{GcCell, GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcCell, GcPointer, Trace, Tracer};
 
 use super::{attributes::*, object::JsObject, property_descriptor::StoredSlot, value::*};
 pub struct Slot {

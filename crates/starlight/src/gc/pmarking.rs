@@ -1,6 +1,6 @@
 use super::{
     cell::{GcPointerBase, POSSIBLY_BLACK, POSSIBLY_GREY},
-    SlotVisitor,
+    migc::SlotVisitor,
 };
 use crossbeam::deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
@@ -42,7 +42,6 @@ pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut 
                         queue: Vec::with_capacity(256),
 
                         bytes_visited: 0,
-                        sp: 0 as _,
                     },
                     worker,
                     injector,

@@ -8,7 +8,7 @@ use super::{
     value::JsValue,
 };
 use super::{method_table::*, symbol_table::Internable};
-use crate::heap::cell::{GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcPointer, Trace, Tracer};
 use wtf_rs::segmented_vec::SegmentedVec;
 
 use super::{

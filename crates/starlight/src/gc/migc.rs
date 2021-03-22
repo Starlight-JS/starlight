@@ -1,12 +1,12 @@
-use crate::{gc::*, heap::cell::*, vm::GcParams};
+use crate::{gc::cell::*, gc::*, vm::GcParams};
 use std::collections::LinkedList;
 use std::mem::transmute;
 
 /// Visits garbage collected objects
 pub struct SlotVisitor {
-    queue: Vec<*mut GcPointerBase>,
+    pub(super) queue: Vec<*mut GcPointerBase>,
     cons_roots: Vec<(usize, usize)>,
-    bytes_visited: usize,
+    pub(super) bytes_visited: usize,
 }
 
 impl Tracer for SlotVisitor {
@@ -129,7 +129,7 @@ impl MiGC {
             self.process_roots(&mut visitor);
             drop(registers);
             if let Some(ref mut pool) = self.threadpool {
-                crate::heap::pmarking::start(&visitor.queue, self.n_workers as _, pool);
+                crate::gc::pmarking::start(&visitor.queue, self.n_workers as _, pool);
             } else {
                 self.process_worklist(&mut visitor);
             }
@@ -292,7 +292,7 @@ impl MiGC {
     /// Tried to find GC object for marking at `ptr`.
     ///
     ///
-    /// TODO: Interior pointers. Right now this function just checks if `ptr` is a block allocated inside mimalloc heap.
+    /// TODO: Interior pointers. Right now this function just checks if `ptr` is a block allocated inside mimalloc gc.
     ///
     ///
     ///
@@ -415,14 +415,14 @@ unsafe extern "C" fn sweep(
     if block.is_null() {
         return true;
     }
-    let heap = &mut *(arg.cast::<MiGC>());
+    let gc = &mut *(arg.cast::<MiGC>());
     let ptr = block.cast::<GcPointerBase>();
     if (*ptr).state() == DEFINETELY_WHITE {
         std::ptr::drop_in_place((*ptr).get_dyn());
         (*ptr).deallocate();
         libmimalloc_sys::mi_free(ptr.cast());
     } else {
-        heap.allocated += block_sz;
+        gc.allocated += block_sz;
         assert!((*ptr).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
     }
 
