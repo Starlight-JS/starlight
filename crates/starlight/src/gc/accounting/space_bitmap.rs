@@ -364,8 +364,8 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
 
     #[allow(unused_braces)]
     #[inline]
-    pub fn clear(&self, obj: usize) {
-        self.modify::<{ false }>(obj);
+    pub fn clear(&self, obj: usize) -> bool {
+        self.modify::<{ false }>(obj)
     }
 
     #[allow(unused_braces)]

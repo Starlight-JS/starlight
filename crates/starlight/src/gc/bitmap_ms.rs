@@ -108,15 +108,31 @@ impl MarkAndSweep {
             let mut allocated = self.allocated;
             let mut freelist = std::mem::replace(&mut self.freelist, FreeList::new());
             let live: &mut SpaceBitmap<8> = &mut *(&mut self.live_bitmap as *mut _);
+            let mark: &mut SpaceBitmap<8> = &mut *(&mut self.mark_bitmap as *mut _);
+            let mut garbage_start = Address::null();
+            let mut add_freelist = |start: Address, end: Address| {
+                if start.is_null() {
+                    return;
+                }
+                let size = end.offset_from(start);
+                freelist.add(start, size);
+            };
             self.live_bitmap
                 .visit_marked_range(sweep_begin, sweep_end, |object| {
                     let object = object as *mut GcPointerBase;
-                    if (*object).state() == DEFINETELY_WHITE {
+                    if !mark.test(object as _) {
                         live.clear(object as usize);
+                        allocated -= (*object).size as usize;
                         core::ptr::drop_in_place((*object).get_dyn());
                         freelist.add(Address::from_ptr(object), (*object).size as _);
+                        /*if garbage_start.is_null() {
+                            garbage_start = Address::from_ptr(object);
+                        }*/
                     } else {
-                        assert!((*object).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
+                        mark.clear(object as _);
+                        // add_freelist(garbage_start, Address::from_ptr(object));
+                        //garbage_start = Address::null();
+                        //assert!((*object).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
                     }
                 });
 
@@ -225,7 +241,7 @@ impl<'a> Collector<'a> {
     fn process_worklist(&mut self) {
         while let Some(ptr) = self.queue.pop() {
             unsafe {
-                (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
+                //   (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
                 (*ptr).get_dyn().trace(self);
             }
         }
@@ -260,9 +276,9 @@ impl<'a> Collector<'a> {
                     }
 
                     unsafe {
-                        let cell = &*slot.value;
+                        //     let cell = &*slot.value;
 
-                        if cell.state() == DEFINETELY_WHITE {
+                        if !self.gc.mark_bitmap.test(slot.value as _) {
                             slot.value = null_mut();
                         }
                     }
@@ -289,7 +305,7 @@ impl Tracer for Collector<'_> {
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
         unsafe {
             let p = *cell;
-            if (*p).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
+            if !self.gc.mark_bitmap.set(p as _) {
                 self.queue.push(p);
             }
 

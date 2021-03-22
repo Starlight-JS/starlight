@@ -44,7 +44,7 @@ fn main() {
         gc,
         None,
     );
-    /* let mut rt = Runtime::with_heap(
+    /*let mut rt = Runtime::with_heap(
         Heap::new(MarkAndSweep::new(GcParams::default())),
         RuntimeParams::default()
             .with_dump_bytecode(options.dump_bytecode)
