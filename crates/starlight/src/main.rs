@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use starlight::{
-    gc::Address,
+    gc::{bitmap_ms::MarkAndSweep, Address, Heap},
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
@@ -44,6 +44,13 @@ fn main() {
         gc,
         None,
     );
+    /* let mut rt = Runtime::with_heap(
+        Heap::new(MarkAndSweep::new(GcParams::default())),
+        RuntimeParams::default()
+            .with_dump_bytecode(options.dump_bytecode)
+            .with_inline_caching(!options.disable_ic),
+        None,
+    );*/
     let gcstack = rt.shadowstack();
 
     let string = std::fs::read_to_string(&options.file);

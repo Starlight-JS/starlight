@@ -234,7 +234,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                 right_edge = left_edge;
             }
 
-            right_edge &= (1 << bit_end) - 1;
+            right_edge &= (1usize.wrapping_shl(bit_end as u32)) - 1;
 
             if right_edge != 0 {
                 let ptr_base = Self::index_to_offset(index_end) as usize + self.heap_begin;

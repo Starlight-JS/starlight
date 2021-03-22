@@ -25,7 +25,7 @@ impl MarkAndSweep {
         let p = self.freelist.alloc_and_coalesce(size);
         assert!(!p.is_null());
         self.live_bitmap.set(p.to_usize());
-        println!("alloc {} (allocated {})", p, formatted_size(self.allocated));
+
         p
     }
 
@@ -65,8 +65,8 @@ impl MarkAndSweep {
 
         let sweep_begin = self.heap_begin;
         let sweep_end = sweep_begin + self.heap_size;
-        let mut freelist = std::mem::replace(&mut self.freelist, FreeList::new());
-        unsafe {
+
+        /*unsafe {
             let mut allocated = self.allocated;
             SpaceBitmap::<8>::sweep_walk(
                 &self.live_bitmap,
@@ -95,6 +95,31 @@ impl MarkAndSweep {
                     }
                 },
             );
+            self.allocated = allocated;
+            self.freelist = freelist;
+            if self.allocated >= self.threshold {
+                self.threshold = (self.allocated as f64 * 1.5) as usize;
+                if self.threshold > self.heap_size {
+                    self.threshold = self.heap_size;
+                }
+            }
+        }*/
+        unsafe {
+            let mut allocated = self.allocated;
+            let mut freelist = std::mem::replace(&mut self.freelist, FreeList::new());
+            let live: &mut SpaceBitmap<8> = &mut *(&mut self.live_bitmap as *mut _);
+            self.live_bitmap
+                .visit_marked_range(sweep_begin, sweep_end, |object| {
+                    let object = object as *mut GcPointerBase;
+                    if (*object).state() == DEFINETELY_WHITE {
+                        live.clear(object as usize);
+                        core::ptr::drop_in_place((*object).get_dyn());
+                        freelist.add(Address::from_ptr(object), (*object).size as _);
+                    } else {
+                        assert!((*object).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
+                    }
+                });
+
             self.allocated = allocated;
             self.freelist = freelist;
             if self.allocated >= self.threshold {
@@ -135,7 +160,10 @@ impl GarbageCollector for MarkAndSweep {
         let ptr = self.malloc(size).to_mut_ptr::<GcPointerBase>();
         unsafe {
             ptr.write(GcPointerBase::new(vtable, size as _));
-            (*ptr).set_allocated();
+            (*ptr)
+                .cell_state
+                .store(DEFINETELY_WHITE, atomic::Ordering::Relaxed);
+            //(*ptr).set_allocated();
             Some(NonNull::new_unchecked(ptr))
         }
     }
@@ -197,6 +225,7 @@ impl<'a> Collector<'a> {
     fn process_worklist(&mut self) {
         while let Some(ptr) = self.queue.pop() {
             unsafe {
+                (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
                 (*ptr).get_dyn().trace(self);
             }
         }
@@ -260,14 +289,10 @@ impl Tracer for Collector<'_> {
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
         unsafe {
             let p = *cell;
-            if p.cast::<u8>() < self.gc.mmap.as_mut_ptr()
-                || p.cast::<u8>() > self.gc.mmap.as_mut_ptr().add(self.gc.heap_size)
-            {
-                panic!("wtf");
-            }
-            if !self.gc.mark_bitmap.set(p as usize) {
+            if (*p).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
                 self.queue.push(p);
             }
+
             GcPointer {
                 base: NonNull::new_unchecked(p),
                 marker: Default::default(),
