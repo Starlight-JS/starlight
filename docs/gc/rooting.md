@@ -24,7 +24,7 @@ All GC thing pointers on the stack (i.e local variables and paramters to functio
 
 ### `GcPointer<T>`,`WeakRef<T>`
 
-GC thing pointers on the gc must be wrapped in a `GcPointer<T>` or in `WeakRef<T>`. `GcPointer<T>` and `WeakRef<T>` pointers must also continue to be traced in the normal way, which is covered below.
+GC thing pointers on the heap must be wrapped in a `GcPointer<T>` or in `WeakRef<T>`. `GcPointer<T>` and `WeakRef<T>` pointers must also continue to be traced in the normal way, which is covered below.
 
 ## Tracing
 
