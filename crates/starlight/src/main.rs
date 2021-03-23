@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 
 use starlight::{
+    gc::{malloc_gc::MallocGC, migc::MiGC, Heap},
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
 };
-use structopt::*;
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+use structopt::*; /*
+                  #[global_allocator]
+                  static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;*/
 #[derive(Debug, StructOpt)]
 struct Options {
     #[structopt(
@@ -24,6 +25,11 @@ struct Options {
     dump_bytecode: bool,
     #[structopt(long = "disable-ic", help = "Disable inline caching")]
     disable_ic: bool,
+    #[structopt(
+        long = "enable-malloc-gc",
+        help = "Enable MallocGC, use this GC only for debugging purposes!"
+    )]
+    use_malloc_gc: bool,
 }
 
 fn main() {
@@ -36,11 +42,16 @@ fn main() {
     } else {
         GcParams::default().with_parallel_marking(false)
     };
-    let mut rt = Runtime::new(
+    let heap = if options.use_malloc_gc {
+        Heap::new(MallocGC::new(gc))
+    } else {
+        Heap::new(MiGC::new(gc))
+    };
+    let mut rt = Runtime::with_heap(
+        heap,
         RuntimeParams::default()
             .with_dump_bytecode(options.dump_bytecode)
             .with_inline_caching(!options.disable_ic),
-        gc,
         None,
     );
     /*let mut rt = Runtime::with_heap(
@@ -101,4 +112,5 @@ fn main() {
             std::process::exit(1);
         }
     }
+    drop(rt);
 }

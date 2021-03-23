@@ -28,6 +28,7 @@ pub mod array;
 pub mod array_storage;
 pub mod attributes;
 pub mod bigint;
+pub mod builtins;
 pub mod code_block;
 pub mod error;
 pub mod function;
@@ -52,6 +53,7 @@ pub struct GcParams {
     pub(crate) nmarkers: u32,
     pub(crate) heap_size: usize,
     pub(crate) conservative_marking: bool,
+    #[allow(dead_code)]
     pub(crate) track_allocations: bool,
     pub(crate) parallel_marking: bool,
 }

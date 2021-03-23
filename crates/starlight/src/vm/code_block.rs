@@ -9,7 +9,7 @@ use crate::{
 };
 use starlight_derive::GcTrace;
 use std::fmt::Write;
-#[derive(GcTrace)]
+//#[derive(GcTrace)]
 pub struct CodeBlock {
     pub name: Symbol,
     pub variables: Vec<Symbol>,
@@ -24,7 +24,14 @@ pub struct CodeBlock {
     pub strict: bool,
     pub use_arguments: bool,
 }
-
+use super::symbol_table::symbol_table;
+unsafe impl Trace for CodeBlock {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.codes.trace(visitor);
+        self.literals.trace(visitor);
+        self.feedback.trace(visitor);
+    }
+}
 impl CodeBlock {
     pub fn display_to<T: Write>(&self, output: &mut T) -> std::fmt::Result {
         unsafe {

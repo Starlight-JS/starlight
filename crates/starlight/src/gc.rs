@@ -21,6 +21,7 @@ pub mod accounting;
 pub mod bitmap_ms;
 pub mod bump;
 pub mod freelist;
+pub mod malloc_gc;
 pub mod mem;
 pub mod migc;
 pub mod os;

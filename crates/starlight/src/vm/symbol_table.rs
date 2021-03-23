@@ -9,7 +9,18 @@ pub struct SymbolTable {
     pub(crate) ids: DashMap<u32, &'static str>,
     key: AtomicU32,
 }
-
+impl Drop for SymbolTable {
+    fn drop(&mut self) {
+        for entry in self.ids.iter_mut() {
+            let key = entry.value();
+            unsafe {
+                let _ = Box::from_raw((*key) as *const _ as *mut str);
+            }
+        }
+        self.symbols.clear();
+        self.ids.clear();
+    }
+}
 impl SymbolTable {
     pub fn new() -> Self {
         Self {

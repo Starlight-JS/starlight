@@ -271,7 +271,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if frame.ctor && !value.is_jsobject() {
                     value = frame.this;
                 }
-
+                rt.stack.pop_frame().unwrap();
                 //if frame.exit_on_return || frame.prev.is_null() {
                 return Ok(value);
                 /*}
