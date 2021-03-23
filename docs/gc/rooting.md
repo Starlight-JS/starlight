@@ -9,6 +9,8 @@ This guide explains the basics of interacting with Starlight's GC as a Starlight
 - `JsValue`
 - `Rooted<T>`
 - `WeakRef<T>`
+
+
 Note that JsValue can contain pointers internallly even though they are not pointer types.
 
 If you use these types directly, or create structs or arrays that contain them, you must follow the rules set out in this guide. If you do not your program will not work correctly - if it works at all.
