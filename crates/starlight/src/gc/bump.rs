@@ -23,7 +23,7 @@ impl BumpAllocator {
     pub fn reset_limit(&self, limit: Address) {
         self.limit.store(limit.to_usize(), Ordering::Relaxed);
     }
-    
+
     pub fn top(&self) -> Address {
         self.top.load(Ordering::Relaxed).into()
     }
