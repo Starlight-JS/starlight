@@ -304,9 +304,10 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 root!(ac = stack, slot.accessor());
+                let mut tmp = [JsValue::encode_undefined_value()];
                 root!(
                     args = stack,
-                    Arguments::new(vm, JsValue::encode_object_value(*obj), 1)
+                    Arguments::new(JsValue::encode_object_value(*obj), &mut tmp)
                 );
 
                 *args.at_mut(0) = val;
@@ -408,9 +409,10 @@ impl JsObject {
 
             if slot.attributes().is_accessor() {
                 root!(ac = stack, slot.accessor());
+                let mut tmp = [JsValue::encode_undefined_value()];
                 root!(
                     args = stack,
-                    Arguments::new(vm, JsValue::encode_object_value(*obj), 1)
+                    Arguments::new(JsValue::encode_object_value(*obj), &mut tmp,)
                 );
 
                 *args.at_mut(0) = val;
@@ -785,7 +787,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         root!(
             args = stack,
-            Arguments::new(vm, JsValue::encode_object_value(obj.clone()), 0)
+            Arguments::new(JsValue::encode_object_value(obj.clone()), &mut [])
         );
 
         macro_rules! try_ {
@@ -912,9 +914,10 @@ impl GcPointer<JsObject> {
                     val.get_object().downcast_unchecked::<JsObject>()
                 });
                 let f = func.as_function_mut();
+                let mut tmp = [JsValue::encode_undefined_value()];
                 root!(
                     args = stack,
-                    Arguments::new(vm, JsValue::encode_object_value(*obj), 1)
+                    Arguments::new(JsValue::encode_object_value(*obj), &mut tmp,)
                 );
 
                 *args.at_mut(0) = match hint {

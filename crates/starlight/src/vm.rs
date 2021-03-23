@@ -217,7 +217,7 @@ impl Runtime {
 
             root!(
                 args = stack,
-                Arguments::new(self, JsValue::encode_undefined_value(), 0)
+                Arguments::new(JsValue::encode_undefined_value(), &mut [])
             );
 
             fun.as_function_mut().call(self, &mut args)

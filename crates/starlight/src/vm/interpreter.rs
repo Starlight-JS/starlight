@@ -1,8 +1,8 @@
 use self::{frame::CallFrame, stack::Stack};
 use super::{
-    arguments::*, array::*, array_storage::ArrayStorage, code_block::CodeBlock, error::JsTypeError,
-    error::*, function::JsVMFunction, object::*, slot::*, string::JsString, structure::*,
-    symbol_table::*, value::*, Runtime,
+    arguments::*, array::*, code_block::CodeBlock, error::JsTypeError, error::*,
+    function::JsVMFunction, object::*, slot::*, string::JsString, structure::*, symbol_table::*,
+    value::*, Runtime,
 };
 use crate::root;
 use crate::{
@@ -17,7 +17,7 @@ use std::{
     hint::unreachable_unchecked,
     intrinsics::{likely, unlikely},
 };
-use wtf_rs::{keep_on_stack, unwrap_unchecked};
+use wtf_rs::unwrap_unchecked;
 pub mod frame;
 pub mod stack;
 
@@ -77,20 +77,26 @@ impl Runtime {
         for val in func.code.variables.iter() {
             vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
         }
+        if func.code.use_arguments {
+            let mut args = JsArguments::new(
+                self,
+                nscope.clone(),
+                &func.code.params,
+                args_.size() as _,
+                args_.values,
+            );
 
-        let mut args = JsArguments::new(self, nscope.clone(), &func.code.params, args_.size() as _);
+            for k in i..args_.size() {
+                args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
+            }
 
-        for k in i..args_.size() {
-            args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
+            let _ = nscope.put(
+                self,
+                "arguments".intern(),
+                JsValue::encode_object_value(args),
+                false,
+            )?;
         }
-
-        let _ = nscope.put(
-            self,
-            "arguments".intern(),
-            JsValue::encode_object_value(args),
-            false,
-        )?;
-
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
         } else {
@@ -451,11 +457,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 rt.gc().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
-                root!(args = gcstack, ArrayStorage::new(rt.gc(), argc));
-
                 let mut func = frame.pop();
                 let mut this = frame.pop();
-                keep_on_stack!(&mut func, &mut this, &mut args);
+                let mut args = Vec::with_capacity(argc as usize);
                 for _ in 0..argc {
                     let arg = frame.pop();
                     if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
@@ -465,10 +469,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         );
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
-                            args.push_back(rt.gc(), real_arg);
+                            args.push(real_arg);
                         }
                     } else {
-                        args.push_back(rt.gc(), arg);
+                        args.push(arg);
                     }
                 }
 
@@ -483,10 +487,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 root!(
                     args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, *args)
+                    Arguments::from_array_storage(rt, this, &mut args)
                 );
 
-                keep_on_stack!(&mut this, &mut args, &mut args_);
                 let result = func.call(rt, &mut args_)?;
                 frame.push(result);
             }
@@ -494,7 +497,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 rt.gc().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
-                root!(args = gcstack, ArrayStorage::new(rt.gc(), argc));
+                let mut args = Vec::with_capacity(argc as usize);
                 let mut func = frame.pop();
                 let mut this = frame.pop();
 
@@ -507,10 +510,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         );
                         for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
                             let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
-                            args.push_back(rt.gc(), real_arg);
+                            args.push(real_arg);
                         }
                     } else {
-                        args.push_back(rt.gc(), arg);
+                        args.push(arg);
                     }
                 }
 
@@ -526,7 +529,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let func = func_object.as_function_mut();
                 root!(
                     args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, *args)
+                    Arguments::from_array_storage(rt, this, &mut args)
                 );
                 args_.ctor_call = true;
                 let result = func.construct(rt, &mut args_, Some(map))?;

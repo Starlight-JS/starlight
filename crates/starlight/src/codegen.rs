@@ -8,13 +8,13 @@ use crate::{
 use std::collections::HashMap;
 use swc_atoms::JsWord;
 use swc_common::DUMMY_SP;
-use swc_ecmascript::ast::*;
 use swc_ecmascript::utils::find_ids;
 use swc_ecmascript::utils::ident::IdentLike;
 use swc_ecmascript::utils::Id;
 use swc_ecmascript::visit::Node;
 use swc_ecmascript::visit::Visit;
 use swc_ecmascript::visit::VisitWith;
+use swc_ecmascript::{ast::*, visit::noop_visit_type};
 
 pub struct LoopControlInfo {
     breaks: Vec<Box<dyn FnOnce(&mut Compiler)>>,
@@ -527,6 +527,13 @@ impl Compiler {
                 }
             }
         });
+        for stmt in body.iter() {
+            if contains_ident(stmt, "arguments") {
+                self.builder.code.use_arguments = true;
+                break;
+            }
+        }
+        // self.builder.code.use_argumnets = contains_ident(body, "arguments");
         let scope = Scope::analyze_stmts(body);
 
         for var in scope.vars.iter() {
@@ -1529,5 +1536,36 @@ pub trait IsDirective {
 impl IsDirective for Stmt {
     fn as_ref(&self) -> Option<&Stmt> {
         Some(self)
+    }
+}
+
+pub fn contains_ident<'a, N>(body: &N, ident: &'a str) -> bool
+where
+    N: VisitWith<IdentFinder<'a>>,
+{
+    let mut visitor = IdentFinder {
+        found: false,
+        ident,
+    };
+    body.visit_with(&Invalid { span: DUMMY_SP } as _, &mut visitor);
+    visitor.found
+}
+pub struct IdentFinder<'a> {
+    ident: &'a str,
+    found: bool,
+}
+
+impl Visit for IdentFinder<'_> {
+    noop_visit_type!();
+
+    fn visit_expr(&mut self, e: &Expr, _: &dyn Node) {
+        e.visit_children_with(self);
+
+        match *e {
+            Expr::Ident(ref i) if &i.sym == self.ident => {
+                self.found = true;
+            }
+            _ => {}
+        }
     }
 }

@@ -479,6 +479,7 @@ impl Serializable for CodeBlock {
         self.params.serialize(serializer);
         self.codes.serialize(serializer);
         self.top_level.serialize(serializer);
+        self.use_arguments.serialize(serializer);
     }
 }
 
@@ -654,7 +655,7 @@ impl Serializable for u64 {
         serializer.write_u64(*self);
     }
 }
-
+/*
 impl Serializable for Arguments {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.ctor_call.serialize(serializer);
@@ -662,7 +663,7 @@ impl Serializable for Arguments {
         self.values.serialize(serializer);
     }
 }
-
+*/
 impl Serializable for Accessor {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.getter.serialize(serializer);

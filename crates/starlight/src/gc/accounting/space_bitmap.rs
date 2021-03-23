@@ -123,7 +123,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                     cur_pointer = cur_pointer.offset(1);
                     garbage != 0
                 } {}
-                if cur_pointer >= pointer_end {
+                if cur_pointer >= &mut pointer_buf[buffer_size - (size_of::<usize>() * 8)] {
                     callback(
                         cur_pointer as usize - &pointer_buf[0] as *const _ as usize,
                         pointer_buf.as_ptr() as usize,

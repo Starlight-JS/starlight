@@ -135,10 +135,10 @@ pub fn array_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
             m.value().get_object().downcast_unchecked::<JsObject>()
         });
         let f = f.as_function_mut();
-        root!(args = stack, Arguments::new(vm, args.this, 0));
+        root!(args = stack, Arguments::new(args.this, &mut []));
         return f.call(vm, &mut args);
     }
-    root!(args = stack, Arguments::new(vm, args.this, 0));
+    root!(args = stack, Arguments::new(args.this, &mut []));
     object_to_string(vm, &mut args)
 }
 
@@ -258,9 +258,10 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
 
     while k < len {
         if obj.has_property(rt, Symbol::Index(k)) {
+            let mut tmp = [JsValue::encode_undefined_value(); 4];
             root!(
                 args = stack,
-                Arguments::new(rt, JsValue::encode_undefined_value(), 4)
+                Arguments::new(JsValue::encode_undefined_value(), &mut tmp)
             );
             *args.at_mut(0) = *acc;
             *args.at_mut(1) = obj.get(rt, Symbol::Index(k))?;

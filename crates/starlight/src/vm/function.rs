@@ -135,14 +135,14 @@ impl JsFunction {
             FuncType::User(ref x) => {
                 vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args)
             }
-            FuncType::Bound(ref x) => {
+            FuncType::Bound(ref mut x) => {
                 let stack = vm.shadowstack();
                 root!(
                     args = stack,
                     Arguments {
-                        values: x.args.clone(),
                         this: x.this,
                         ctor_call: args.ctor_call,
+                        values: x.args.as_slice_mut(),
                     }
                 );
                 let mut target = x.target.clone();

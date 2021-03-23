@@ -99,7 +99,7 @@ pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
         let args_size = args.size();
         let arg_array = args.at(1);
         if args_size == 1 || arg_array.is_null() || arg_array.is_undefined() {
-            root!(args = stack, Arguments::new(rt, args.at(0), 0));
+            root!(args = stack, Arguments::new(args.at(0), &mut []));
             return func.call(rt, &mut args);
         }
 
@@ -115,10 +115,12 @@ pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
 
         root!(arg_array = stack, arg_array.get_jsobject());
         let len = super::get_length(rt, &mut arg_array)?;
-        crate::root!(args_ = stack, Arguments::new(rt, args.at(0), len as _));
+        let mut argsv = Vec::with_capacity(len as usize);
+
         for i in 0..len {
-            *args_.at_mut(i as _) = arg_array.get(rt, Symbol::Index(i))?;
+            argsv.push(arg_array.get(rt, Symbol::Index(i))?);
         }
+        crate::root!(args_ = stack, Arguments::new(args.at(0), &mut argsv));
         return func.call(rt, &mut args_);
     }
 
@@ -136,19 +138,14 @@ pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
         let func = obj.as_function_mut();
 
         let args_size = args.size();
-        root!(
-            args_ = stack,
-            Arguments::new(
-                rt,
-                args.at(0),
-                if args_size > 1 { args_size - 1 } else { 0 },
-            )
-        );
+        let mut argsv = vec![];
         if args_size > 1 {
             for i in 0..args_size - 1 {
-                *args_.at_mut(i) = args.at(i + 1);
+                argsv.push(args.at(i + 1));
+                //*args_.at_mut(i) = args.at(i + 1);
             }
         }
+        root!(args_ = stack, Arguments::new(args.at(0), &mut argsv,));
 
         return func.call(rt, &mut args_);
     }

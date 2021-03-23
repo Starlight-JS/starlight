@@ -22,6 +22,7 @@ pub struct CodeBlock {
     pub literals: Vec<JsValue>,
     pub feedback: Vec<TypeFeedBack>,
     pub strict: bool,
+    pub use_arguments: bool,
 }
 
 impl CodeBlock {
@@ -302,6 +303,7 @@ impl CodeBlock {
             params: vec![],
             names: vec![],
             code: vec![],
+            use_arguments: false,
             literals: vec![],
             feedback: vec![],
         };

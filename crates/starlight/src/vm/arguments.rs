@@ -1,7 +1,6 @@
 use std::mem::ManuallyDrop;
 
 use super::{
-    array_storage::ArrayStorage,
     error::JsTypeError,
     method_table::*,
     object::{EnumerationMode, Env, JsHint, JsObject, ObjectTag},
@@ -13,20 +12,16 @@ use super::{
     value::*,
     Runtime,
 };
-use crate::gc::cell::{GcCell, GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcPointer, Trace, Tracer};
 
-pub struct Arguments {
+pub struct Arguments<'a> {
     pub this: JsValue,
-    pub values: GcPointer<ArrayStorage>,
+    pub values: &'a mut [JsValue],
     pub ctor_call: bool,
 }
 
-impl Arguments {
-    pub fn from_array_storage(
-        _rt: &mut Runtime,
-        this: JsValue,
-        values: GcPointer<ArrayStorage>,
-    ) -> Self {
+impl<'a> Arguments<'a> {
+    pub fn from_array_storage(_rt: &mut Runtime, this: JsValue, values: &'a mut [JsValue]) -> Self {
         Self {
             this,
             values,
@@ -34,9 +29,9 @@ impl Arguments {
         }
     }
     pub fn size(&self) -> usize {
-        self.values.size() as _
+        self.values.len() as _
     }
-    pub fn new(vm: &mut Runtime, this: JsValue, size: usize) -> Self {
+    /* pub fn new(vm: &mut Runtime, this: JsValue, size: usize) -> Self {
         let stack = vm.shadowstack();
         crate::root!(
             arr = stack,
@@ -50,33 +45,37 @@ impl Arguments {
             values: *arr,
             ctor_call: false,
         }
+    }*/
+    pub fn new(this: JsValue, args: &'a mut [JsValue]) -> Self {
+        Self {
+            this,
+            values: args,
+            ctor_call: false,
+        }
     }
     pub fn at_mut(&mut self, x: usize) -> &mut JsValue {
         if x < self.size() {
-            self.values.at_mut(x as _)
+            &mut self.values[x]
         } else {
             panic!("Out of bounds arguments");
         }
     }
     pub fn at(&self, x: usize) -> JsValue {
         if x < self.size() {
-            *self.values.at(x as _)
+            self.values[x]
         } else {
             JsValue::encode_undefined_value()
         }
     }
 }
 
-impl GcCell for Arguments {
-    fn deser_pair(&self) -> (usize, usize) {
-        panic!("unserializable")
-    }
-    vtable_impl!();
-}
-unsafe impl Trace for Arguments {
+unsafe impl Trace for Arguments<'_> {
     fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.this.trace(tracer);
-        self.values.trace(tracer);
+        for value in self.values.iter_mut() {
+            value.trace(tracer);
+        }
+        // self.values.trace(tracer);
     }
 }
 
@@ -316,6 +315,7 @@ impl JsArguments {
         env: GcPointer<JsObject>,
         params: &[Symbol],
         len: u32,
+        init: &[JsValue],
     ) -> GcPointer<JsObject> {
         root!(
             struct_ = vm.shadowstack(),
@@ -343,7 +343,9 @@ impl JsArguments {
                 vm,
                 i as _,
                 &*DataDescriptor::new(
-                    JsValue::encode_undefined_value(),
+                    init.get(i as usize)
+                        .copied()
+                        .unwrap_or_else(|| JsValue::encode_undefined_value()),
                     create_data(AttrExternal::new(Some(W | C | E))).raw(),
                 ),
                 &mut slot,

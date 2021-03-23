@@ -80,7 +80,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     let global = rt.global_object();
     root!(
         args = stack,
-        Arguments::new(&mut rt, JsValue::encode_object_value(global), 0)
+        Arguments::new(JsValue::encode_object_value(global), &mut [])
     );
     match function.as_function_mut().call(&mut rt, &mut args) {
         Ok(x) => {

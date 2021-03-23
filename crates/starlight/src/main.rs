@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use starlight::{
-    gc::{bitmap_ms::MarkAndSweep, Address, Heap},
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
@@ -79,7 +78,7 @@ fn main() {
 
             root!(
                 args = gcstack,
-                Arguments::new(&mut rt, JsValue::encode_object_value(global), 0)
+                Arguments::new(JsValue::encode_object_value(global), &mut [])
             );
             wtf_rs::keep_on_stack!(&mut args, &mut function);
             let start = std::time::Instant::now();

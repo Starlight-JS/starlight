@@ -109,7 +109,7 @@ impl MarkAndSweep {
             let mut freelist = std::mem::replace(&mut self.freelist, FreeList::new());
             let live: &mut SpaceBitmap<8> = &mut *(&mut self.live_bitmap as *mut _);
             let mark: &mut SpaceBitmap<8> = &mut *(&mut self.mark_bitmap as *mut _);
-            let mut garbage_start = Address::null();
+            let mut garbage_start = Address::from(sweep_begin);
             let mut add_freelist = |start: Address, end: Address| {
                 if start.is_null() {
                     return;
@@ -130,7 +130,7 @@ impl MarkAndSweep {
                         }*/
                     } else {
                         mark.clear(object as _);
-                        // add_freelist(garbage_start, Address::from_ptr(object));
+                        //add_freelist(garbage_start, Address::from_ptr(object));
                         //garbage_start = Address::null();
                         //assert!((*object).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE));
                     }
