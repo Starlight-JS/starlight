@@ -79,7 +79,7 @@ pub struct GcStats {
 ///
 ///
 pub trait GarbageCollector {
-    /// Allocate `size` bytes on GC gc and set vtable in GC object header.
+    /// Allocate `size` bytes on GC heap and set vtable in GC object header.
     ///
     ///
     /// ***NOTE*** This function must not trigger garbage collection cycle.
