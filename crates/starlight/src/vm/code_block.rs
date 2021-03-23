@@ -144,6 +144,13 @@ impl CodeBlock {
                         pc = pc.add(4);
                         writeln!(output, "call <{}>", argc)?;
                     }
+                    Opcode::OP_CALL_BUILTIN => {
+                        let builtin = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let argc = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "call_builtin %{}, <{}>", builtin, argc)?;
+                    }
                     Opcode::OP_NEW => {
                         let argc = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);

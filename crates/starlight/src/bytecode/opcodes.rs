@@ -16,6 +16,7 @@ pub enum Opcode {
     OP_LOOPHINT,
     OP_CALL,
     OP_NEW,
+    OP_CALL_BUILTIN,
     OP_NEWARRAY,
     OP_NEWOBJECT,
     OP_RET,
