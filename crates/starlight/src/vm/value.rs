@@ -620,10 +620,10 @@ impl JsValue {
         }
     }
     pub fn get_string(&self) -> GcPointer<JsString> {
-        assert!(self.is_string() || self.is_js_string());
+        assert!(self.is_string() || self.is_jsstring());
         unsafe { self.get_object().downcast_unchecked() }
     }
-    pub fn is_js_string(self) -> bool {
+    pub fn is_jsstring(self) -> bool {
         self.is_object() && self.get_object().is::<JsString>()
     }
 
@@ -640,7 +640,7 @@ impl JsValue {
                 return Ok(true);
             }
 
-            if lhs.is_string() && rhs.is_string() {
+            if lhs.is_jsstring() && rhs.is_jsstring() {
                 return Ok(lhs.get_string().as_str() == rhs.get_string().as_str());
             }
 
@@ -650,7 +650,7 @@ impl JsValue {
             if lhs.is_jsobject() && rhs.is_jsobject() {
                 return Ok(lhs.get_raw() == rhs.get_raw());
             }
-            if lhs.is_number() && rhs.is_string() {
+            if lhs.is_number() && rhs.is_jsstring() {
                 rhs = JsValue::encode_f64_value(rhs.to_number(rt)?);
                 continue;
             }
@@ -665,12 +665,12 @@ impl JsValue {
                 continue;
             }
 
-            if (lhs.is_string() || lhs.is_number()) && rhs.is_object() {
+            if (lhs.is_jsstring() || lhs.is_number()) && rhs.is_object() {
                 rhs = rhs.to_primitive(rt, JsHint::None)?;
                 continue;
             }
 
-            if lhs.is_object() && (rhs.is_string() || rhs.is_number()) {
+            if lhs.is_object() && (rhs.is_jsstring() || rhs.is_number()) {
                 lhs = lhs.to_primitive(rt, JsHint::None)?;
                 continue;
             }
@@ -687,7 +687,7 @@ impl JsValue {
             return self.get_raw() == other.get_raw();
         }
 
-        if self.is_string() && other.is_string() {
+        if self.is_jsstring() && other.is_jsstring() {
             return self.get_string().as_str() == other.get_string().as_str();
         }
         self.get_raw() == other.get_raw()
@@ -711,7 +711,7 @@ impl JsValue {
         if likely(px.is_number() && py.is_number()) {
             return Ok(Self::number_compare(px.get_number(), py.get_number()));
         }
-        if likely(px.is_js_string() && py.is_js_string()) {
+        if likely(px.is_jsstring() && py.is_jsstring()) {
             if px.get_string().as_str().len() < py.get_string().as_str().len() {
                 Ok(CMP_TRUE)
             } else {
@@ -825,7 +825,7 @@ impl JsValue {
             }
             return Ok(n.to_string().intern());
         }
-        if self.is_js_string() {
+        if self.is_jsstring() {
             return Ok(self.get_string().as_str().intern());
         }
         if self.is_null() {
@@ -854,7 +854,7 @@ impl JsValue {
     pub fn get_primitive_proto(self, vm: &mut Runtime) -> GcPointer<JsObject> {
         assert!(!self.is_empty());
         assert!(self.is_primitive());
-        if self.is_js_string() {
+        if self.is_jsstring() {
             return vm.global_data().string_prototype.clone().unwrap();
         } else if self.is_number() {
             return vm.global_data().number_prototype.clone().unwrap();
@@ -870,7 +870,7 @@ impl JsValue {
         unsafe { self.get_object().downcast_unchecked() }
     }
     pub fn get_jsstring(self) -> GcPointer<JsString> {
-        assert!(self.is_js_string());
+        assert!(self.is_jsstring());
         unsafe { self.get_object().downcast_unchecked() }
     }
     pub fn get_slot(
@@ -896,7 +896,7 @@ impl JsValue {
             }
 
             assert!(self.is_primitive());
-            if self.is_js_string() {
+            if self.is_jsstring() {
                 let str = unsafe { self.get_object().downcast_unchecked::<JsString>() };
 
                 if name == "length".intern() {
@@ -935,7 +935,7 @@ impl JsValue {
         if self.is_number() {
             let num = self.get_number();
             return num != 0.0 && !num.is_nan();
-        } else if self.is_js_string() {
+        } else if self.is_jsstring() {
             return !self.get_jsstring().is_empty();
         } else if self.is_null() || self.is_undefined() {
             return false;

@@ -245,7 +245,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let ix = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let constant = unwrap_unchecked(frame.code_block).literals[ix as usize];
-                //assert!(constant.is_js_string());
+                //assert!(constant.is_jsstring());
                 frame.push(constant);
             }
             Opcode::OP_PUSH_THIS => {
@@ -301,7 +301,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = lhs.to_primitive(rt, JsHint::None)?;
                 let rhs = rhs.to_primitive(rt, JsHint::None)?;
 
-                if lhs.is_js_string() || rhs.is_js_string() {
+                if lhs.is_jsstring() || rhs.is_jsstring() {
                     #[inline(never)]
                     fn concat(
                         rt: &mut Runtime,

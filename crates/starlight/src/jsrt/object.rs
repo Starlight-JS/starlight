@@ -65,7 +65,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
 pub fn object_constructor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.ctor_call {
         let val = args.at(0);
-        if val.is_string() || val.is_number() || val.is_bool() {
+        if val.is_jsstring() || val.is_number() || val.is_bool() {
             return val.to_object(vm).map(|x| JsValue::encode_object_value(x));
         }
         return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
