@@ -78,7 +78,7 @@ impl JsValue {
         ((a & Self::TAG_MASK) << Self::TAG_WIDTH) | (b & Self::TAG_MASK)
     }
     #[inline]
-     const fn new(val: u64, tag: TagKind) -> Self {
+     const fn internal_new(val: u64, tag: TagKind) -> Self {
 
         Self(val | ((tag as u64) << Self::NUM_DATA_BITS))
     }
@@ -88,23 +88,23 @@ impl JsValue {
     }
     #[inline]
     pub const fn encode_null_ptr_object_value() -> Self {
-        Self::new(0, OBJECT_TAG)
+        Self::internal_new(0, OBJECT_TAG)
     }
     #[inline]
     pub fn encode_object_value<T: GcCell + ?Sized>(val: GcPointer<T>) -> Self {
-        Self::new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
+        Self::internal_new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
     }
     #[inline]
     pub const fn encode_native_u32(val: u32) -> Self {
-        Self::new(val as _, NATIVE_VALUE_TAG)
+        Self::internal_new(val as _, NATIVE_VALUE_TAG)
     }
     #[inline]
     pub fn encode_native_pointer(p: *const ()) -> Self {
-        Self::new(p as _, NATIVE_VALUE_TAG)
+        Self::internal_new(p as _, NATIVE_VALUE_TAG)
     }
     #[inline]
     pub const fn encode_bool_value(val: bool) -> Self {
-        Self::new(val as _, BOOL_TAG)
+        Self::internal_new(val as _, BOOL_TAG)
     }
     #[inline]
     pub const fn encode_null_value() -> Self {
@@ -112,7 +112,7 @@ impl JsValue {
     }
     #[inline]
     pub fn encode_int32(x: i32) -> Self {
-        Self::new(x as _, INT32_TAG)
+        Self::internal_new(x as _, INT32_TAG)
     }
     #[inline]
     pub const fn encode_undefined_value() -> Self {
@@ -141,7 +141,7 @@ impl JsValue {
 
     #[inline]
     pub fn update_pointer(&self, val: *const ()) -> Self {
-        Self::new(val as _, self.get_tag())
+        Self::internal_new(val as _, self.get_tag())
     }
 
     #[inline]
@@ -299,7 +299,7 @@ impl JsValue {
         ((a & Self::TAG_MASK) << Self::TAG_WIDTH) | (b & Self::TAG_MASK)
     }
     #[inline]
-    fn new(val: u64, tag: TagKind) -> Self {
+    fn internal_new(val: u64, tag: TagKind) -> Self {
         Self(f64::from_bits(val | ((tag as u64) << Self::NUM_DATA_BITS)))
     }
     #[inline]
@@ -308,23 +308,23 @@ impl JsValue {
     }
     #[inline]
     pub fn encode_null_ptr_object_value() -> Self {
-        Self::new(0, OBJECT_TAG)
+        Self::internal_new(0, OBJECT_TAG)
     }
     #[inline]
     pub fn encode_object_value<T: GcCell + ?Sized>(val: GcPointer<T>) -> Self {
-        Self::new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
+        Self::internal_new(unsafe {std::mem::transmute::<_,usize>(val)} as _, OBJECT_TAG)
     }
     #[inline]
     pub fn encode_native_u32(val: u32) -> Self {
-        Self::new(val as _, NATIVE_VALUE_TAG)
+        Self::internal_new(val as _, NATIVE_VALUE_TAG)
     }
     #[inline]
     pub fn encode_native_pointer(p: *const ()) -> Self {
-        Self::new(p as _, NATIVE_VALUE_TAG)
+        Self::internal_new(p as _, NATIVE_VALUE_TAG)
     }
     #[inline]
     pub fn encode_bool_value(val: bool) -> Self {
-        Self::new(val as _, BOOL_TAG)
+        Self::internal_new(val as _, BOOL_TAG)
     }
     #[inline]
     pub fn encode_null_value() -> Self {
@@ -332,7 +332,7 @@ impl JsValue {
     }
     #[inline]
     pub fn encode_int32(x: i32) -> Self {
-        Self::new(x as _, INT32_TAG)
+        Self::internal_new(x as _, INT32_TAG)
     }
     #[inline]
     pub fn encode_undefined_value() -> Self {
@@ -361,7 +361,7 @@ impl JsValue {
 
     #[inline]
     pub fn update_pointer(&self, val: *const ()) -> Self {
-        Self::new(val as _, self.get_tag())
+        Self::internal_new(val as _, self.get_tag())
     }
 
     #[inline]
@@ -962,22 +962,6 @@ impl From<f64> for JsValue {
     }
 }
 
-impl From<i32> for JsValue {
-    fn from(x: i32) -> Self {
-        Self::encode_f64_value(x as _)
-    }
-}
-
-impl From<u32> for JsValue {
-    fn from(x: u32) -> Self {
-        Self::encode_f64_value(x as _)
-    }
-}
-impl<T: GcCell + ?Sized> From<GcPointer<T>> for JsValue {
-    fn from(x: GcPointer<T>) -> Self {
-        Self::encode_object_value(x)
-    }
-}
 use crate::gc::snapshot::deserializer::Deserializable;
 impl GcCell for JsValue {
     fn deser_pair(&self) -> (usize, usize) {
@@ -999,5 +983,85 @@ pub fn print_value(x: JsValue) {
         print!("object");
     } else {
         print!("<>");
+    }
+}
+
+macro_rules! from_primitive {
+    ($($t: ty),*) => {$(
+        impl From<$t> for JsValue {
+            fn from(x: $t) -> Self {
+                Self::encode_f64_value(x as f64)
+            }
+        })*
+    };
+}
+
+from_primitive!(u8, i8, u16, i16, u32, i32, u64, i64);
+
+impl From<f32> for JsValue {
+    fn from(x: f32) -> Self {
+        if x.is_nan() {
+            return Self::encode_nan_value();
+        }
+        Self::encode_f64_value(x as _)
+    }
+}
+
+impl<T: GcCell + ?Sized> From<GcPointer<T>> for JsValue {
+    fn from(x: GcPointer<T>) -> Self {
+        Self::encode_object_value(x)
+    }
+}
+
+impl From<bool> for JsValue {
+    fn from(x: bool) -> Self {
+        Self::encode_bool_value(x)
+    }
+}
+
+impl From<()> for JsValue {
+    fn from(_x: ()) -> Self {
+        Self::encode_undefined_value()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Undefined;
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Null;
+
+impl From<Null> for JsValue {
+    fn from(_x: Null) -> Self {
+        Self::encode_null_value()
+    }
+}
+
+impl From<Undefined> for JsValue {
+    fn from(_x: Undefined) -> Self {
+        Self::encode_undefined_value()
+    }
+}
+
+impl JsValue {
+    pub fn new<T: Into<Self>>(x: T) -> Self {
+        T::into(x)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_new_i32() {
+        let val = JsValue::new(42);
+        assert!(val.is_number());
+        assert_eq!(val.get_number(), 42f64);
+    }
+
+    #[test]
+    fn test_new_f64() {
+        let val = JsValue::new(f64::NAN);
+        assert!(val.is_number());
+        assert!(val.get_number().is_nan());
     }
 }

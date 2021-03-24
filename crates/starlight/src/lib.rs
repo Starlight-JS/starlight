@@ -22,13 +22,6 @@ pub mod bytecode;
 pub mod codegen;
 pub mod jsrt;
 pub mod vm;
-pub fn val_add(x: JsValue, y: JsValue, slowpath: fn(JsValue, JsValue) -> JsValue) -> JsValue {
-    if x.is_double() && y.is_double() {
-        return JsValue::encode_f64_value(x.get_double() + y.get_double());
-    }
-
-    slowpath(x, y)
-}
 
 pub struct Platform;
 use std::sync::atomic::Ordering;
@@ -99,4 +92,25 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
             }
         }
     }
+}
+
+pub mod prelude {
+    pub use super::gc::{Heap, MarkingConstraint, SimpleMarkingConstraint};
+    pub use super::vm::{
+        arguments::Arguments,
+        array::JsArray,
+        attributes::*,
+        class::Class,
+        error::*,
+        function::*,
+        method_table::MethodTable,
+        object::{EnumerationMode, JsHint, JsObject, ObjectTag},
+        property_descriptor::*,
+        slot::*,
+        string::*,
+        structure::*,
+        symbol_table::*,
+        value::JsValue,
+    };
+    pub use super::vm::{GcParams, Runtime, RuntimeParams};
 }

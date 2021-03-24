@@ -1447,3 +1447,96 @@ impl Env {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        vm::{object::*, value::*, *},
+        Platform,
+    };
+
+    #[test]
+    fn test_put() {
+        Platform::initialize();
+        let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+        let stack = rt.shadowstack();
+
+        root!(object = stack, JsObject::new_empty(&mut rt));
+
+        let result = object.put(
+            &mut rt,
+            "key".intern(),
+            JsValue::encode_f64_value(42.4242),
+            false,
+        );
+        assert!(result.is_ok());
+        rt.gc().gc();
+        match object.get(&mut rt, "key".intern()) {
+            Ok(val) => {
+                assert!(val.is_number());
+                assert_eq!(val.get_number(), 42.4242);
+            }
+            Err(_) => {
+                assert!(false);
+            }
+        }
+    }
+
+    #[test]
+    fn test_indexed() {
+        Platform::initialize();
+        let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+        let stack = rt.shadowstack();
+
+        root!(object = stack, JsObject::new_empty(&mut rt));
+        for i in 0..10000u32 {
+            let result = object.put(&mut rt, Symbol::Index(i), JsValue::new(i), false);
+            assert!(result.is_ok());
+        }
+
+        rt.gc().gc();
+        for i in 0..10000u32 {
+            let result = object.get(&mut rt, Symbol::Index(i));
+            match result {
+                Ok(val) => {
+                    assert!(val.is_number());
+                    assert_eq!(val.get_number() as u32, i);
+                }
+                Err(_) => {
+                    assert!(false);
+                }
+            }
+        }
+
+        let result = object.put(
+            &mut rt,
+            Symbol::Index((1024 << 6) + 1),
+            JsValue::encode_f64_value(42.42),
+            false,
+        );
+        assert!(result.is_ok());
+        rt.gc().gc();
+        for i in 0..10000u32 {
+            let result = object.get(&mut rt, Symbol::Index(i));
+            match result {
+                Ok(val) => {
+                    assert!(val.is_number());
+                    assert_eq!(val.get_number() as u32, i);
+                }
+                Err(_) => {
+                    assert!(false);
+                }
+            }
+        }
+        let result = object.get(&mut rt, Symbol::Index((1024 << 6) + 1));
+        match result {
+            Ok(val) => {
+                assert!(val.is_number());
+                assert_eq!(val.get_number(), 42.42);
+            }
+            Err(_) => {
+                assert!(false);
+            }
+        }
+    }
+}
