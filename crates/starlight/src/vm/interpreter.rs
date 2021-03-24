@@ -238,6 +238,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_POP => {
                 frame.pop();
             }
+            Opcode::OP_PUSH_TRUE => {
+                frame.push(JsValue::encode_bool_value(true));
+            }
             Opcode::OP_PUSH_LITERAL => {
                 let ix = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -453,22 +456,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
             }
-            Opcode::OP_CALL_BUILTIN => {
-                rt.gc().collect_if_necessary();
-                let argc = ip.cast::<u32>().read();
-                ip = ip.add(4);
-                let builtin_id = ip.cast::<u32>().read();
-                ip = ip.add(4);
-                let effect = ip.cast::<u32>().read();
-                ip = ip.add(4);
-                super::builtins::BUILTINS[builtin_id as usize](
-                    rt,
-                    frame,
-                    &mut ip,
-                    argc,
-                    effect as _,
-                )?;
-            }
+
             Opcode::OP_CALL => {
                 rt.gc().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
@@ -507,7 +495,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let args_start = frame.sp.sub(argc as _);
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
 
-                if !func.is_callable() {
+                if unlikely(!func.is_callable()) {
                     let msg = JsString::new(rt, "not a callable object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,
@@ -526,47 +514,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.sp = args_start;
                 frame.push(result);
             }
-            Opcode::OP_INSTANCEOF => {
-                let lhs = frame.pop();
-                let rhs = frame.pop();
-                if unlikely(!rhs.is_jsobject()) {
-                    let msg = JsString::new(rt, "'instanceof' requires object");
-                    return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
-                    )));
-                }
 
-                root!(robj = gcstack, rhs.get_jsobject());
-                root!(robj2 = gcstack, *robj);
-                if unlikely(!robj.is_callable()) {
-                    let msg = JsString::new(rt, "'instanceof' requires constructor");
-                    return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
-                    )));
-                }
-
-                frame.push(JsValue::encode_bool_value(
-                    robj.as_function().has_instance(&mut robj2, rt, lhs)?,
-                ));
-            }
-            Opcode::OP_IN => {
-                let lhs = frame.pop();
-                let rhs = frame.pop();
-                if unlikely(!rhs.is_jsobject()) {
-                    let msg = JsString::new(rt, "'in' requires object");
-                    return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
-                    )));
-                }
-                let sym = lhs.to_symbol(rt)?;
-                frame.push(JsValue::encode_bool_value(
-                    rhs.get_jsobject().has_property(rt, sym),
-                ));
-            }
-            Opcode::OP_THROW => {
-                let val = frame.pop();
-                return Err(val);
-            }
             Opcode::OP_DUP => {
                 let v1 = frame.pop();
                 frame.push(v1);
@@ -715,6 +663,47 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = frame.pop();
                 let rhs = frame.pop();
                 frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
+            }
+            Opcode::OP_INSTANCEOF => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                if unlikely(!rhs.is_jsobject()) {
+                    let msg = JsString::new(rt, "'instanceof' requires object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+
+                root!(robj = gcstack, rhs.get_jsobject());
+                root!(robj2 = gcstack, *robj);
+                if unlikely(!robj.is_callable()) {
+                    let msg = JsString::new(rt, "'instanceof' requires constructor");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+
+                frame.push(JsValue::encode_bool_value(
+                    robj.as_function().has_instance(&mut robj2, rt, lhs)?,
+                ));
+            }
+            Opcode::OP_IN => {
+                let lhs = frame.pop();
+                let rhs = frame.pop();
+                if unlikely(!rhs.is_jsobject()) {
+                    let msg = JsString::new(rt, "'in' requires object");
+                    return Err(JsValue::encode_object_value(JsTypeError::new(
+                        rt, msg, None,
+                    )));
+                }
+                let sym = lhs.to_symbol(rt)?;
+                frame.push(JsValue::encode_bool_value(
+                    rhs.get_jsobject().has_property(rt, sym),
+                ));
+            }
+            Opcode::OP_THROW => {
+                let val = frame.pop();
+                return Err(val);
             }
             Opcode::OP_GET_ENV => {
                 let name = ip.cast::<u32>().read_unaligned();
@@ -902,8 +891,22 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 frame.push(JsValue::encode_object_value(*arr));
             }
-            Opcode::OP_PUSH_TRUE => {
-                frame.push(JsValue::encode_bool_value(true));
+
+            Opcode::OP_CALL_BUILTIN => {
+                rt.gc().collect_if_necessary();
+                let argc = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let builtin_id = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let effect = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                super::builtins::BUILTINS[builtin_id as usize](
+                    rt,
+                    frame,
+                    &mut ip,
+                    argc,
+                    effect as _,
+                )?;
             }
             Opcode::OP_SPREAD => {
                 /*

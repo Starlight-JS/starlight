@@ -825,7 +825,7 @@ impl JsValue {
             }
             return Ok(n.to_string().intern());
         }
-        if self.is_string() {
+        if self.is_js_string() {
             return Ok(self.get_string().as_str().intern());
         }
         if self.is_null() {
@@ -835,7 +835,7 @@ impl JsValue {
             return Ok(unsafe { self.get_object().downcast_unchecked::<JsSymbol>().symbol() });
         }
 
-        if self.get_bool() {
+        if self.is_bool() {
             if self.get_bool() {
                 return Ok("true".intern());
             } else {

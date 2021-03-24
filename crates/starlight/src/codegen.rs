@@ -821,10 +821,15 @@ impl Compiler {
             }
 
             Expr::Member(member) => {
-                let name = if let Expr::Ident(id) = &*member.prop {
-                    let s: &str = &id.sym;
-                    let name = s.intern();
-                    Some(self.builder.get_sym(name))
+                let name = if !member.computed {
+                    if let Expr::Ident(id) = &*member.prop {
+                        let s: &str = &id.sym;
+                        let name = s.intern();
+                        Some(self.builder.get_sym(name))
+                    } else {
+                        self.emit(&member.prop, true);
+                        None
+                    }
                 } else {
                     self.emit(&member.prop, true);
                     None
@@ -1066,7 +1071,7 @@ impl Compiler {
                     BinaryOp::Lt => self.builder.emit(Opcode::OP_LESS, &[], false),
                     BinaryOp::LtEq => self.builder.emit(Opcode::OP_LESSEQ, &[], false),
                     BinaryOp::In => self.builder.emit(Opcode::OP_IN, &[], false),
-
+                    BinaryOp::Mod => self.builder.emit(Opcode::OP_REM, &[], false),
                     _ => todo!(),
                 }
 
@@ -1097,10 +1102,15 @@ impl Compiler {
                 self.builder.emit(Opcode::OP_GET_VAR, &[ix], true);
             }
             Expr::Member(member) => {
-                let name = if let Expr::Ident(id) = &*member.prop {
-                    let s: &str = &id.sym;
-                    let name = s.intern();
-                    Some(self.builder.get_sym(name))
+                let name = if !member.computed {
+                    if let Expr::Ident(id) = &*member.prop {
+                        let s: &str = &id.sym;
+                        let name = s.intern();
+                        Some(self.builder.get_sym(name))
+                    } else {
+                        self.emit(&member.prop, true);
+                        None
+                    }
                 } else {
                     self.emit(&member.prop, true);
                     None

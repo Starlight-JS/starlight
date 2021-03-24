@@ -165,6 +165,7 @@ impl Runtime {
             }
         };
         let mut vmref = RuntimeRef(self);
+
         let code = Compiler::compile_script(&mut *vmref, &script);
 
         //code.display_to(&mut OutBuf).unwrap();
