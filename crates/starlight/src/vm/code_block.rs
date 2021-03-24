@@ -152,11 +152,17 @@ impl CodeBlock {
                         writeln!(output, "call <{}>", argc)?;
                     }
                     Opcode::OP_CALL_BUILTIN => {
-                        let builtin = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
                         let argc = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "call_builtin %{}, <{}>", builtin, argc)?;
+                        let builtin = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let effect = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(
+                            output,
+                            "call_builtin %{}, <{}> (effect %{})",
+                            builtin, argc, effect
+                        )?;
                     }
                     Opcode::OP_NEW => {
                         let argc = pc.cast::<u32>().read_unaligned();
@@ -299,6 +305,9 @@ impl CodeBlock {
                     Opcode::OP_PUSH_THIS => writeln!(output, "push_this")?,
                     Opcode::OP_IN => {
                         writeln!(output, "in")?;
+                    }
+                    Opcode::OP_NOT => {
+                        writeln!(output, "not")?;
                     }
                     _ => todo!("{:?}", op),
                 }

@@ -694,10 +694,20 @@ impl Compiler {
 
             Expr::Call(call) => {
                 // self.builder.emit(Opcode::OP_PUSH_EMPTY, &[], false);
-                for arg in call.args.iter().rev() {
-                    self.emit(&arg.expr, true);
-                    if arg.spread.is_some() {
-                        self.builder.emit(Opcode::OP_SPREAD, &[], false);
+                let has_spread = call.args.iter().any(|x| x.spread.is_some());
+                if has_spread {
+                    for arg in call.args.iter().rev() {
+                        self.emit(&arg.expr, true);
+                        if arg.spread.is_some() {
+                            self.builder.emit(Opcode::OP_SPREAD, &[], false);
+                        }
+                    }
+                    self.builder
+                        .emit(Opcode::OP_NEWARRAY, &[call.args.len() as u32], false);
+                } else {
+                    for arg in call.args.iter() {
+                        self.emit(&arg.expr, true);
+                        assert!(arg.spread.is_none());
                     }
                 }
 
@@ -730,28 +740,52 @@ impl Compiler {
                         }
                     },
                 }
-
-                self.builder
-                    .emit(Opcode::OP_CALL, &[call.args.len() as u32], false);
+                if !has_spread {
+                    self.builder
+                        .emit(Opcode::OP_CALL, &[call.args.len() as u32], false);
+                } else {
+                    self.builder.emit(
+                        Opcode::OP_CALL_BUILTIN,
+                        &[call.args.len() as _, 0, 0],
+                        false,
+                    );
+                }
                 if !used {
                     self.builder.emit(Opcode::OP_POP, &[], false);
                 }
             }
             Expr::New(call) => {
                 let argc = call.args.as_ref().map(|x| x.len() as u32).unwrap_or(0);
+                let has_spread = if let Some(ref args) = call.args {
+                    args.iter().any(|x| x.spread.is_some())
+                } else {
+                    false
+                };
                 if let Some(ref args) = call.args {
-                    for arg in args.iter().rev() {
-                        self.emit(&arg.expr, true);
-                        if arg.spread.is_some() {
-                            self.builder.emit(Opcode::OP_SPREAD, &[], false);
+                    if has_spread {
+                        for arg in args.iter().rev() {
+                            self.emit(&arg.expr, true);
+                            if arg.spread.is_some() {
+                                self.builder.emit(Opcode::OP_SPREAD, &[], false);
+                            }
+                        }
+                        self.builder.emit(Opcode::OP_NEWARRAY, &[argc], false);
+                    } else {
+                        for arg in args.iter() {
+                            self.emit(&arg.expr, true);
+                            assert!(arg.spread.is_none());
                         }
                     }
                 }
 
                 self.builder.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                 self.emit(&*call.callee, true);
-
-                self.builder.emit(Opcode::OP_NEW, &[argc], false);
+                if !has_spread {
+                    self.builder.emit(Opcode::OP_NEW, &[argc], false);
+                } else {
+                    self.builder
+                        .emit(Opcode::OP_CALL_BUILTIN, &[argc as _, 0, 1], false);
+                }
                 if !used {
                     self.builder.emit(Opcode::OP_POP, &[], false);
                 }

@@ -34,5 +34,4 @@ if (!globalThis.console) {
         log: print
     }
 }
-let n = makeTree(14);
-console.log(nNodes);
+makeTree(14);

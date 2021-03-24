@@ -453,29 +453,31 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
             }
+            Opcode::OP_CALL_BUILTIN => {
+                rt.gc().collect_if_necessary();
+                let argc = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let builtin_id = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let effect = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                super::builtins::BUILTINS[builtin_id as usize](
+                    rt,
+                    frame,
+                    &mut ip,
+                    argc,
+                    effect as _,
+                )?;
+            }
             Opcode::OP_CALL => {
                 rt.gc().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let mut func = frame.pop();
                 let mut this = frame.pop();
-                let mut args = Vec::with_capacity(argc as usize);
-                for _ in 0..argc {
-                    let arg = frame.pop();
-                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        root!(
-                            spread = gcstack,
-                            arg.get_object().downcast_unchecked::<SpreadValue>()
-                        );
-                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
-                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
-                            args.push(real_arg);
-                        }
-                    } else {
-                        args.push(arg);
-                    }
-                }
 
+                let args_start = frame.sp.sub(argc as _);
+                let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
                 if !func.is_callable() {
                     let msg = JsString::new(rt, "not a callable object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -491,31 +493,19 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 );
 
                 let result = func.call(rt, &mut args_)?;
+                frame.sp = args_start;
                 frame.push(result);
             }
             Opcode::OP_NEW => {
                 rt.gc().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
-                let mut args = Vec::with_capacity(argc as usize);
+
                 let mut func = frame.pop();
                 let mut this = frame.pop();
 
-                for _ in 0..argc {
-                    let arg = frame.pop();
-                    if unlikely(arg.is_object() && arg.get_object().is::<SpreadValue>()) {
-                        root!(
-                            spread = gcstack,
-                            arg.get_object().downcast_unchecked::<SpreadValue>()
-                        );
-                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
-                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
-                            args.push(real_arg);
-                        }
-                    } else {
-                        args.push(arg);
-                    }
-                }
+                let args_start = frame.sp.sub(argc as _);
+                let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
 
                 if !func.is_callable() {
                     let msg = JsString::new(rt, "not a callable object");
@@ -533,6 +523,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 );
                 args_.ctor_call = true;
                 let result = func.construct(rt, &mut args_, Some(map))?;
+                frame.sp = args_start;
                 frame.push(result);
             }
             Opcode::OP_INSTANCEOF => {
