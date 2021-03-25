@@ -202,11 +202,31 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 set_var(rt, frame, name, fdbk, val)?;
             }
             Opcode::OP_PUSH_ENV => {
-                root!(
-                    map = gcstack,
-                    Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false)
-                );
-                let env = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let structure = if let TypeFeedBack::StructureCache { structure } =
+                    unwrap_unchecked(frame.code_block)
+                        .feedback
+                        .get_unchecked(fdbk as usize)
+                {
+                    Some(*structure)
+                } else {
+                    None
+                };
+                let structure = if unlikely(structure.is_none()) {
+                    let structure =
+                        Structure::new_unique_indexed(rt, Some(frame.env.get_jsobject()), false);
+                    *unwrap_unchecked(frame.code_block)
+                        .feedback
+                        .get_unchecked_mut(fdbk as usize) =
+                        TypeFeedBack::StructureCache { structure };
+                    structure
+                } else {
+                    structure
+                        .unwrap()
+                        .change_prototype_with_no_transition(frame.env.get_jsobject())
+                };
+                let env = JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);
                 frame.env = JsValue::encode_object_value(env);
             }
             Opcode::OP_POP_ENV => {
@@ -555,11 +575,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                 .feedback
                                 .get_unchecked(fdbk as usize)
                         {
-                            if let Some(structure) = structure.upgrade() {
-                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                    frame.push(*obj.direct(*offset as _));
-                                    continue;
-                                }
+                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                frame.push(*obj.direct(*offset as _));
+                                continue;
                             }
                         }
                     }
@@ -572,12 +590,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.gc().make_weak(
-                                slot.base()
-                                    .unwrap()
-                                    .downcast_unchecked::<JsObject>()
-                                    .structure(),
-                            ),
+                            structure: slot
+                                .base()
+                                .unwrap()
+                                .downcast_unchecked::<JsObject>()
+                                .structure(),
+
                             offset: slot.offset(),
                         }
                     }
@@ -615,12 +633,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                 .feedback
                                 .get_unchecked(fdbk as usize)
                         {
-                            if let Some(structure) = structure.upgrade() {
-                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                    *obj.direct_mut(*offset as usize) = value;
+                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                *obj.direct_mut(*offset as usize) = value;
 
-                                    continue;
-                                }
+                                continue;
                             }
                         }
                     }
@@ -639,7 +655,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.gc().make_weak(obj.structure()),
+                            structure: obj.structure(),
                             offset: slot.offset(),
                         };
                     }
@@ -922,6 +938,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let spread = SpreadValue::new(rt, value)?;
                 frame.push(JsValue::encode_object_value(spread));
             }
+            Opcode::OP_TYPEOF => {
+                let val = frame.pop();
+                let str = JsString::new(rt, val.type_of());
+                frame.push(JsValue::new(str));
+            }
             x => panic!("{:?}", x),
         }
     }
@@ -959,10 +980,8 @@ unsafe fn get_var(
         .feedback
         .get_unchecked(fdbk as usize)
     {
-        if let Some(structure) = structure.upgrade() {
-            if GcPointer::ptr_eq(&structure, &env.structure()) {
-                return Ok(*env.direct(*offset as usize));
-            }
+        if GcPointer::ptr_eq(&structure, &env.structure()) {
+            return Ok(*env.direct(*offset as usize));
         }
     }
 
@@ -972,7 +991,7 @@ unsafe fn get_var(
             *unwrap_unchecked(frame.code_block)
                 .feedback
                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                structure: rt.gc().make_weak(env.structure()),
+                structure: env.structure(),
                 offset: slot.offset(),
             };
         }
@@ -1003,7 +1022,7 @@ unsafe fn set_var(
         env = stack,
         match env {
             Some(env) => env,
-            None if !unwrap_unchecked(frame.code_block).strict => rt.global_object(),
+            None if likely(!unwrap_unchecked(frame.code_block).strict) => rt.global_object(),
             _ => {
                 let msg = JsString::new(
                     rt,
@@ -1019,10 +1038,8 @@ unsafe fn set_var(
         .feedback
         .get_unchecked(fdbk as usize)
     {
-        if let Some(structure) = structure.upgrade() {
-            if GcPointer::ptr_eq(&structure, &env.structure()) {
-                *env.direct_mut(*offset as usize) = val;
-            }
+        if likely(GcPointer::ptr_eq(&structure, &env.structure())) {
+            *env.direct_mut(*offset as usize) = val;
         }
     }
 
@@ -1041,7 +1058,7 @@ unsafe fn set_var(
     *unwrap_unchecked(frame.code_block)
         .feedback
         .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-        structure: rt.gc().make_weak(slot.0.structure()),
+        structure: slot.0.structure(),
         offset: slot.1.offset(),
     };
     //*env.direct_mut(slot.1.offset() as usize) = val;

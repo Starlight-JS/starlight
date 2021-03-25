@@ -631,7 +631,7 @@ impl Compiler {
                     .emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             }
             Expr::Fn(fun) => {
-                self.builder.emit(Opcode::OP_PUSH_ENV, &[], false);
+                self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 let name = fun
                     .ident
                     .as_ref()
@@ -868,7 +868,7 @@ impl Compiler {
                     UnaryOp::Minus => self.builder.emit(Opcode::OP_NEG, &[], false),
                     UnaryOp::Plus => self.builder.emit(Opcode::OP_POS, &[], false),
                     UnaryOp::Tilde => self.builder.emit(Opcode::OP_NOT, &[], false),
-                    UnaryOp::Bang => self.builder.emit(Opcode::OP_NOT, &[], false),
+                    UnaryOp::Bang => self.builder.emit(Opcode::OP_LOGICAL_NOT, &[], false),
                     UnaryOp::TypeOf => self.builder.emit(Opcode::OP_TYPEOF, &[], false),
                     _ => todo!("{:?}", unary.op),
                 }
@@ -1212,7 +1212,7 @@ impl Compiler {
                 self.emit(&expr.expr, false);
             }
             Stmt::Block(block) => {
-                self.builder.emit(Opcode::OP_PUSH_ENV, &[], false);
+                self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 for stmt in block.stmts.iter() {
                     self.emit_stmt(stmt);
                 }
@@ -1237,7 +1237,7 @@ impl Compiler {
                 self.lci.last_mut().unwrap().continues.push(Box::new(j));
             }
             Stmt::For(for_stmt) => {
-                self.builder.emit(Opcode::OP_PUSH_ENV, &[], false);
+                self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 match for_stmt.init {
                     Some(ref init) => match init {
                         VarDeclOrExpr::Expr(ref e) => {
@@ -1328,7 +1328,7 @@ impl Compiler {
             Stmt::Try(try_stmt) => {
                 let try_push = self.try_();
                 if !try_stmt.block.stmts.is_empty() {
-                    self.builder.emit(Opcode::OP_PUSH_ENV, &[], false);
+                    self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 }
                 for stmt in try_stmt.block.stmts.iter() {
                     self.emit_stmt(stmt);
@@ -1341,7 +1341,7 @@ impl Compiler {
                 let jcatch_finally = match try_stmt.handler {
                     Some(ref catch) => {
                         if !catch.body.stmts.is_empty() {
-                            self.builder.emit(Opcode::OP_PUSH_ENV, &[], false);
+                            self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                         }
                         match catch.param {
                             Some(ref pat) => {
@@ -1370,7 +1370,7 @@ impl Compiler {
                 match try_stmt.finalizer {
                     Some(ref block) => {
                         if !block.stmts.is_empty() {
-                            self.builder.emit(Opcode::OP_PUSH_ENV, &[], false);
+                            self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                         }
                         for stmt in block.stmts.iter() {
                             self.emit_stmt(stmt);

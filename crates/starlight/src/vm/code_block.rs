@@ -308,6 +308,9 @@ impl CodeBlock {
                     Opcode::OP_NOT => {
                         writeln!(output, "not")?;
                     }
+                    Opcode::OP_LOGICAL_NOT => {
+                        writeln!(output, "logical_not")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }

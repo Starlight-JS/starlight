@@ -1,5 +1,5 @@
 use crate::{
-    gc::cell::{Trace, Tracer, WeakRef},
+    gc::cell::{GcPointer, Trace, Tracer, WeakRef},
     vm::structure::Structure,
 };
 
@@ -11,8 +11,11 @@ pub enum ObservedType {
 }
 
 pub enum TypeFeedBack {
+    StructureCache {
+        structure: GcPointer<Structure>,
+    },
     PropertyCache {
-        structure: WeakRef<Structure>,
+        structure: GcPointer<Structure>,
         offset: u32,
     },
     None,
@@ -22,6 +25,7 @@ unsafe impl Trace for TypeFeedBack {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         match self {
             Self::PropertyCache { structure, .. } => structure.trace(visitor),
+            Self::StructureCache { structure } => structure.trace(visitor),
             _ => (),
         }
     }

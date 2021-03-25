@@ -4,15 +4,13 @@ function Node(left, right) {
 }
 let nNodes = 0;
 function makeTree(depth) {
-    nNodes += 1;
+    //  nNodes += 1;
     if (depth == 0) {
-
         return new Node(undefined, undefined);
     }
-    let n = depth - 1;
 
-    let n1 = makeTree(n);
-    let n2 = makeTree(n);
+    let n1 = makeTree(depth - 1);
+    let n2 = makeTree(depth - 1);
     return new Node(n1, n2);
 }
 
@@ -34,4 +32,5 @@ if (!globalThis.console) {
         log: print
     }
 }
+
 makeTree(14);

@@ -873,6 +873,26 @@ impl JsValue {
         assert!(self.is_jsstring());
         unsafe { self.get_object().downcast_unchecked() }
     }
+    pub fn type_of(self) -> &'static str {
+        if self.is_jsobject() {
+            if self.is_callable() {
+                return "function";
+            }
+            return "object";
+        } else if self.is_number() {
+            return "number";
+        } else if self.is_jsstring() {
+            return "string";
+        } else if self.is_bool() {
+            return "boolean";
+        } else if self.is_undefined() {
+            return "undefined";
+        } else if self.is_null() {
+            return "object";
+        } else {
+            return "symbol";
+        }
+    }
     pub fn get_slot(
         self,
         rt: &mut Runtime,

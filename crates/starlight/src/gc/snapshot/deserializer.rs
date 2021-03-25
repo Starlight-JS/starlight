@@ -1374,6 +1374,12 @@ impl Deserializable for TypeFeedBack {
                     offset,
                 }
             }
+            0x02 => {
+                let structure = deser.get_reference();
+                Self::StructureCache {
+                    structure: transmute(structure),
+                }
+            }
             0x0 => Self::None,
             _ => unreachable!(),
         }

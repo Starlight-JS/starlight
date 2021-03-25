@@ -458,8 +458,12 @@ impl Serializable for TypeFeedBack {
         match self {
             TypeFeedBack::PropertyCache { structure, offset } => {
                 serializer.write_u8(0x01);
-                serializer.write_weakref(*structure);
+                serializer.write_gcpointer(*structure);
                 serializer.write_u32(*offset);
+            }
+            &TypeFeedBack::StructureCache { structure } => {
+                serializer.write_u8(0x02);
+                serializer.write_gcpointer(structure);
             }
             _ => {
                 // other type feedback is ignored
