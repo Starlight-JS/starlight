@@ -12,6 +12,7 @@ use crate::{
 
 pub mod array;
 pub mod error;
+pub mod ffi;
 pub mod function;
 pub mod global;
 pub mod object;

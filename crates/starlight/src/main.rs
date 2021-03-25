@@ -6,9 +6,9 @@ use starlight::{
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
 };
-use structopt::*; /*
-                  #[global_allocator]
-                  static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;*/
+use structopt::*;
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[derive(Debug, StructOpt)]
 struct Options {
     #[structopt(
@@ -30,6 +30,8 @@ struct Options {
         help = "Enable MallocGC, use this GC only for debugging purposes!"
     )]
     use_malloc_gc: bool,
+    #[structopt(long = "enable-ffi", help = "Enable FFI and CFunction objects for use")]
+    enable_ffi: bool,
 }
 
 fn main() {
@@ -54,6 +56,10 @@ fn main() {
             .with_inline_caching(!options.disable_ic),
         None,
     );
+
+    if options.enable_ffi {
+        rt.add_ffi();
+    }
     /*let mut rt = Runtime::with_heap(
         Heap::new(MarkAndSweep::new(GcParams::default())),
         RuntimeParams::default()

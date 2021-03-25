@@ -105,6 +105,10 @@ impl JsObject {
         self.class
     }
 
+    pub fn is_class(&self, cls: &Class) -> bool {
+        self.class as *const Class == cls as *const Class
+    }
+
     #[allow(clippy::mut_from_ref)]
     pub(crate) fn data<T>(&self) -> &mut ManuallyDrop<T> {
         unsafe {
@@ -164,6 +168,9 @@ unsafe impl Trace for JsObject {
             ObjectTag::String => self.as_string_object_mut().value.trace(visitor),
             _ => (),
         }
+        if let Some(trace) = self.class.trace {
+            trace(visitor, self);
+        }
     }
 }
 impl GcCell for JsObject {
@@ -171,7 +178,7 @@ impl GcCell for JsObject {
         (Self::deserialize as _, Self::allocate as _)
     }
     fn compute_size(&self) -> usize {
-        object_size_with_tag(self.tag)
+        object_size_with_tag(self.tag, self.class)
     }
     vtable_impl!();
 }
@@ -185,11 +192,19 @@ impl Drop for JsObject {
             ObjectTag::NormalArguments => unsafe { ManuallyDrop::drop(self.data::<JsArguments>()) },
             _ => (),
         }
+        if let Some(drop_fn) = self.class.drop {
+            drop_fn(self);
+        }
     }
 }
 
-pub fn object_size_with_tag(tag: ObjectTag) -> usize {
-    let size = size_of::<JsObject>();
+pub fn object_size_with_tag(tag: ObjectTag, cls: &Class) -> usize {
+    let size = size_of::<JsObject>()
+        + if let Some(sz) = cls.additional_size {
+            sz()
+        } else {
+            0
+        };
     match tag {
         ObjectTag::Global => size + size_of::<JsGlobal>(),
         ObjectTag::Function => size + size_of::<JsFunction>(),

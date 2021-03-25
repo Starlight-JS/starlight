@@ -135,6 +135,7 @@ pub struct Runtime {
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: RuntimeParams,
     pub(crate) shadowstack: ShadowStack,
+
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
 }
@@ -257,6 +258,7 @@ impl Runtime {
             options,
             stack: Stack::new(),
             global_object: None,
+
             global_data: GlobalData::default(),
             external_references,
             shadowstack: ShadowStack::new(),
@@ -353,6 +355,7 @@ impl Runtime {
             options,
             stack: Stack::new(),
             global_object: None,
+
             global_data: GlobalData::default(),
             external_references,
             shadowstack: ShadowStack::new(),
@@ -391,6 +394,10 @@ impl Runtime {
     /// Returns shadow stack for GC rooting that will be usable in current scope.
     pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
         unsafe { std::mem::transmute(&self.shadowstack) }
+    }
+
+    pub fn add_ffi(&mut self) {
+        crate::jsrt::ffi::initialize_ffi(self);
     }
 }
 

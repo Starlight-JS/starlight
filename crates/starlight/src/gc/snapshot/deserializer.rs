@@ -9,6 +9,7 @@ use crate::{
     gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
     gc::Heap,
     jsrt::VM_NATIVE_REFERENCES,
+    prelude::Class,
     vm::{
         self,
         arguments::JsArguments,
@@ -798,13 +799,21 @@ impl Deserializable for JsObject {
 
             _ => (),
         }
+        if let Some(deser_fn) = (*object).class.deserialize {
+            let rt = deser.rt;
+            deser_fn(&mut *object, deser, &mut *rt);
+        }
     }
 
     unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         let tag = transmute(deser.get_u32() as u8);
         deser.pc -= 4;
-        rt.gc()
-            .allocate_raw(vtable_of_type::<Self>() as _, object_size_with_tag(tag))
+        let class: &'static Class = transmute(deser.get_reference());
+        deser.pc -= 4;
+        rt.gc().allocate_raw(
+            vtable_of_type::<Self>() as _,
+            object_size_with_tag(tag, class),
+        )
     }
 }
 

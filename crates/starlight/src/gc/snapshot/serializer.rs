@@ -390,6 +390,9 @@ impl Serializable for JsObject {
             }
             _ => (),
         }
+        if let Some(ser) = self.class.serialize {
+            ser(self, serializer);
+        }
     }
 }
 

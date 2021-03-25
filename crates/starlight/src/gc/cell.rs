@@ -411,3 +411,12 @@ impl<T: GcCell> Clone for WeakRef<T> {
         *self
     }
 }
+
+unsafe impl<T: Trace, E: Trace> Trace for Result<T, E> {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        match self {
+            Ok(x) => x.trace(visitor),
+            Err(e) => e.trace(visitor),
+        }
+    }
+}

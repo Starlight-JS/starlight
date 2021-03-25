@@ -7,7 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ryu-js = "0.2.1"
 mopa = "0.2"
 wtf-rs = { path = "../wtf-rs" }
 rand = "0.8"
@@ -18,7 +17,6 @@ dashmap = "4.0"
 swc_atoms = "0.2.5"
 swc_common = "0.10.11"
 swc_ecmascript = { version = "0.24", features = ["parser", "utils", "visit"] }
-vec-collections = "0.3"
 libc = "0.2"
 libmimalloc-sys = { version = "0.1", features = ["extended"] }
 starlight-derive = { path = "../starlight-derive" }
@@ -27,8 +25,10 @@ backtrace = "0.3"
 atomic = "*"
 crossbeam = "0.8"
 yastl = "0.1.2"
+libffi = "1.0.0"
 num = "0.3.1"
 mimalloc = "0.1.25"
+libloading = "0.7.0"
 [features]
 val-as-f64 = []
 val-as-u64 = []

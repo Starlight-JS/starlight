@@ -1,4 +1,8 @@
-use super::method_table::MethodTable;
+use super::{method_table::MethodTable, object::JsObject, Runtime};
+use crate::gc::{
+    cell::Tracer,
+    snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
+};
 
 #[macro_export]
 macro_rules! js_class_list {
@@ -67,6 +71,11 @@ pub struct Class {
     pub name: &'static str,
     pub ty: u32,
     pub method_table: MethodTable,
+    pub trace: Option<extern "C" fn(&mut dyn Tracer, &mut JsObject)>,
+    pub drop: Option<extern "C" fn(&mut JsObject)>,
+    pub deserialize: Option<extern "C" fn(&mut JsObject, &mut Deserializer, &mut Runtime)>,
+    pub serialize: Option<extern "C" fn(&JsObject, &mut SnapshotSerializer)>,
+    pub additional_size: Option<extern "C" fn() -> usize>,
 }
 
 #[macro_export]
@@ -93,6 +102,42 @@ macro_rules! define_jsclass_with_symbol {
                     GetOwnPropertyNames: $class::GetOwnPropertyNamesMethod,
                     DefaultValue: $class::DefaultValueMethod,
                 },
+                drop: None,
+                trace: None,
+                serialize: None,
+                deserialize: None,
+                additional_size: None,
+            };
+            &CLASS
+        }
+    };
+    ($class: ident,$name : ident,$sym: ident,$fin: expr,$trace: expr,$deser: expr,$ser: expr,$size: expr) => {
+        pub fn get_class() -> &'static $crate::vm::class::Class {
+            static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
+                name: stringify!($name),
+                ty: $crate::vm::class::JsClassType::$sym as _,
+                method_table: MethodTable {
+                    GetNonIndexedSlot: $class::GetNonIndexedSlotMethod,
+                    GetIndexedSlot: $class::GetIndexedSlotMethod,
+                    GetNonIndexedPropertySlot: $class::GetNonIndexedPropertySlotMethod,
+                    GetIndexedPropertySlot: $class::GetIndexedPropertySlotMethod,
+                    GetOwnNonIndexedPropertySlot: $class::GetOwnNonIndexedPropertySlotMethod,
+                    GetOwnIndexedPropertySlot: $class::GetOwnIndexedPropertySlotMethod,
+                    PutNonIndexedSlot: $class::PutNonIndexedSlotMethod,
+                    PutIndexedSlot: $class::PutIndexedSlotMethod,
+                    DeleteNonIndexed: $class::DeleteNonIndexedMethod,
+                    DeleteIndexed: $class::DeleteIndexedMethod,
+                    DefineOwnNonIndexedPropertySlot: $class::DefineOwnNonIndexedPropertySlotMethod,
+                    DefineOwnIndexedPropertySlot: $class::DefineOwnIndexedPropertySlotMethod,
+                    GetPropertyNames: $class::GetPropertyNamesMethod,
+                    GetOwnPropertyNames: $class::GetOwnPropertyNamesMethod,
+                    DefaultValue: $class::DefaultValueMethod,
+                },
+                drop: $fin,
+                trace: $trace,
+                deserialize: $deser,
+                serialize: $ser,
+                additional_size: $size,
             };
             &CLASS
         }
