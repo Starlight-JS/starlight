@@ -36,6 +36,7 @@ pub mod global;
 pub mod indexed_elements;
 pub mod interpreter;
 pub mod object;
+pub mod perf;
 pub mod property_descriptor;
 pub mod slot;
 pub mod string;
@@ -134,6 +135,8 @@ pub struct Runtime {
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: RuntimeParams,
     pub(crate) shadowstack: ShadowStack,
+    #[cfg(feature = "perf")]
+    pub(crate) perf: perf::Perf,
 }
 
 impl Runtime {
@@ -257,6 +260,8 @@ impl Runtime {
             global_data: GlobalData::default(),
             external_references,
             shadowstack: ShadowStack::new(),
+            #[cfg(feature = "perf")]
+            perf: perf::Perf::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -351,6 +356,8 @@ impl Runtime {
             global_data: GlobalData::default(),
             external_references,
             shadowstack: ShadowStack::new(),
+            #[cfg(feature = "perf")]
+            perf: perf::Perf::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -493,5 +500,14 @@ impl std::fmt::Write for OutBuf {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         print!("{}", s);
         Ok(())
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        #[cfg(feature = "perf")]
+        {
+            self.perf.print_perf();
+        }
     }
 }

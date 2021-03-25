@@ -112,5 +112,6 @@ fn main() {
             std::process::exit(1);
         }
     }
+
     drop(rt);
 }

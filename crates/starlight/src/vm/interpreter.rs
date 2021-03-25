@@ -171,7 +171,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
-
+        #[cfg(feature = "perf")]
+        {
+            rt.perf.get_perf(opcode as u8);
+        }
         stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_NOP => {}

@@ -33,8 +33,8 @@ mimalloc = "0.1.25"
 val-as-f64 = []
 val-as-u64 = []
 enable-gc-tracking = []
-# enable compressed RC which stores RC in 5 bits
-compressed-rc = []
+# enable performance counter for interpreter/gc/codegen
+perf = []
 default = ["val-as-f64"]
 
 [dev-dependencies]

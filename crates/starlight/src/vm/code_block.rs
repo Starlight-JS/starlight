@@ -7,7 +7,6 @@ use crate::{
     gc::cell::{GcCell, Trace},
     gc::snapshot::deserializer::Deserializable,
 };
-use starlight_derive::GcTrace;
 use std::fmt::Write;
 //#[derive(GcTrace)]
 pub struct CodeBlock {
@@ -24,7 +23,7 @@ pub struct CodeBlock {
     pub strict: bool,
     pub use_arguments: bool,
 }
-use super::symbol_table::symbol_table;
+
 unsafe impl Trace for CodeBlock {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.codes.trace(visitor);

@@ -454,9 +454,15 @@ impl Compiler {
         compiler.compile(&p.body);
         // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
         compiler.builder.emit(Opcode::OP_RET, &[], false);
-        compiler.builder.finish(&mut compiler.vm)
+        let result = compiler.builder.finish(&mut compiler.vm);
+
+        result
     }
     pub fn compile_fn(&mut self, fun: &Function) {
+        #[cfg(feature = "perf")]
+        {
+            self.vm.perf.set_prev_inst(crate::vm::perf::Perf::CODEGEN);
+        }
         let is_strict = match fun.body {
             Some(ref body) => {
                 if body.stmts.is_empty() {
@@ -477,6 +483,10 @@ impl Compiler {
         //self.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
         self.builder.emit(Opcode::OP_RET, &[], false);
         self.builder.finish(&mut self.vm);
+        #[cfg(feature = "perf")]
+        {
+            self.vm.perf.get_perf(crate::vm::perf::Perf::INVALID);
+        }
     }
     pub fn compile(&mut self, body: &[Stmt]) {
         VisitFnDecl::visit(body, &mut |decl| {
