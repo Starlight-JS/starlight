@@ -2,7 +2,6 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::root;
 use starlight::{
-    gc::Heap,
     gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
@@ -13,26 +12,24 @@ use starlight::{
 use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let mut rrt = Runtime::new(
+    let rrt = Runtime::new(
         RuntimeParams::default(),
-        GcParams::default()
-            .with_parallel_marking(true)
-            .with_marker_threads(4),
+        GcParams::default().with_parallel_marking(false),
         None,
     );
     let stack = rrt.shadowstack();
-    let mut rt = rrt.gc();
+    let mut rt = rrt;
 
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
-    root!(long_lived = stack, rt.allocate(Node::new(None, None)));
+    root!(long_lived = stack, rt.gc().allocate(Node::new(None, None)));
     long_lived.j = 0xdead;
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
-    populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, *long_lived);
-    let arr = ArrayStorage::with_size(&mut rrt, ARRAY_SIZE as _, ARRAY_SIZE as _);
-    let mut rt = rrt.gc();
-    root!(array = stack, rt.allocate(arr));
+    populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, &mut long_lived);
+    let arr = ArrayStorage::with_size(&mut rt, ARRAY_SIZE as _, ARRAY_SIZE as _);
+
+    root!(array = stack, arr);
     for i in 0..(ARRAY_SIZE / 2) {
         *array.at_mut(i as _) = JsValue::encode_f64_value(1.0 / i as f64);
     }
@@ -56,10 +53,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 b.iter_batched(
                     || {},
                     |_data| {
-                        root!(temp_tree = stack, rt.allocate(Node::new(None, None)));
+                        root!(temp_tree = stack, rt.gc().allocate(Node::new(None, None)));
                         keep_on_stack!(&mut temp_tree);
-                        populate(&mut rt, depth as _, *temp_tree);
-                        rt.collect_if_necessary();
+                        populate(&mut rt, depth as _, &mut temp_tree);
+                        rt.gc().collect_if_necessary();
                     },
                     BatchSize::NumIterations(num_iters(depth) as _),
                 )
@@ -74,7 +71,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     |_data| {
                         root!(temp_tree = stack, make_tree(&mut rt, depth as _));
                         keep_on_stack!(&temp_tree);
-                        rt.collect_if_necessary();
+                        rt.gc().collect_if_necessary();
                     },
                     BatchSize::NumIterations(num_iters(depth) as _),
                 );
@@ -116,28 +113,30 @@ const fn num_iters(i: usize) -> usize {
     2 * tree_size(STRETCH_TREE_DEPTH) / tree_size(i)
 }
 
-fn populate(gc: &mut Heap, mut idepth: i32, mut this_node: GcPointer<Node>) {
-    keep_on_stack!(&mut this_node);
+fn populate(gc: &mut Runtime, mut idepth: i32, this_node: &mut GcPointer<Node>) {
+    gc.gc().collect_if_necessary();
+
     if idepth <= 0 {
         return;
     }
     idepth -= 1;
-    this_node.left = Some(gc.allocate(Node::new(None, None)));
-    this_node.right = Some(gc.allocate(Node::new(None, None)));
-    populate(gc, idepth, this_node.left.unwrap());
-    populate(gc, idepth, this_node.right.unwrap());
+    this_node.left = Some(gc.gc().allocate(Node::new(None, None)));
+    this_node.right = Some(gc.gc().allocate(Node::new(None, None)));
+
+    populate(gc, idepth, this_node.left.as_mut().unwrap());
+    populate(gc, idepth, this_node.right.as_mut().unwrap());
 }
 
-fn make_tree(gc: &mut Heap, idepth: i32) -> GcPointer<Node> {
+fn make_tree(gc: &mut Runtime, idepth: i32) -> GcPointer<Node> {
     if idepth <= 0 {
-        return gc.allocate(Node::new(None, None));
+        return gc.gc().allocate(Node::new(None, None));
     }
+    let stack = gc.shadowstack();
 
-    let n1 = make_tree(gc, idepth - 1);
-    keep_on_stack!(&n1);
-    let n2 = make_tree(gc, idepth - 1);
-    keep_on_stack!(&n2);
-    gc.allocate(Node::new(Some(n1), Some(n2)))
+    root!(n1 = stack, make_tree(gc, idepth - 1));
+    root!(n2 = stack, make_tree(gc, idepth - 1));
+    gc.gc().collect_if_necessary();
+    gc.gc().allocate(Node::new(Some(*&*n1), Some(*&*n2)))
 }
 
 impl Node {

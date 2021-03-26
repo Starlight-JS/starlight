@@ -29,10 +29,7 @@ static INIT: AtomicBool = AtomicBool::new(false);
 
 impl Platform {
     pub fn initialize() {
-        if INIT
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-            .is_ok()
-        {
+        if INIT.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed) == Ok(false) {
             vm::symbol_table::initialize_symbol_table();
         }
     }

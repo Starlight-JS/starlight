@@ -3,9 +3,11 @@ use starlight::{
     gc::{
         cell::{GcCell, Trace},
         default_heap,
+        shadowstack::ShadowStack,
         snapshot::serializer::{Serializable, SnapshotSerializer},
-        Heap,
+        SimpleMarkingConstraint,
     },
+    root,
     vm::GcParams,
     vtable_impl,
 };
@@ -24,17 +26,26 @@ impl Serializable for Large {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut gc = default_heap(GcParams::default());
+    let mut gc = default_heap(GcParams::default().with_parallel_marking(false));
     //gc.defer();
+    let mut stack = Box::new(ShadowStack::new());
+    let stack_ptr: *mut ShadowStack = &mut *stack;
+    gc.add_constraint(SimpleMarkingConstraint::new(
+        "mark-stack",
+        move |visitor| unsafe {
+            (*stack_ptr).trace(visitor);
+        },
+    ));
     c.bench_function("bench-alloc-f64", |b| {
         b.iter(|| {
             for _ in 0..10000 {
-                let x = black_box(gc.allocate(42.42));
+                root!(x = stack, black_box(gc.allocate(42.42)));
                 keep_on_stack!(&x);
-                let y = black_box(gc.allocate(42.42));
+                root!(y = stack, black_box(gc.allocate(42.42)));
                 keep_on_stack!(&y);
-                let z = black_box(gc.allocate(42.42));
+                root!(z = stack, black_box(gc.allocate(42.42)));
                 keep_on_stack!(&z);
+                gc.collect_if_necessary();
             }
         });
     });
