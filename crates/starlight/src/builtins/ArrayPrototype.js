@@ -1,14 +1,14 @@
 Array.prototype.some = function (callback, thisArg) {
     "use strict";
-    ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
-    let length = this.length;
+    let array = ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
+    let length = array.length;
 
     for (let i = 0; i < length; i += 1) {
-        if (!(i in this)) {
+        if (!(i in array)) {
             continue;
         }
 
-        if (callback.call(thisArg, this[i], i, this)) {
+        if (callback.call(thisArg, array[i], i, array)) {
             return true;
         }
     }
@@ -18,12 +18,12 @@ Array.prototype.some = function (callback, thisArg) {
 
 Array.prototype.find = function (callback, thisArg) {
     "use strict";
-    ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
-    let length = this.length;
+    let array = ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
+    let length = array.length;
 
     for (let i = 0; i < length; i += 1) {
-        let kValue = this[i];
-        if (callback.call(thisArg, kValue, i, this)) {
+        let kValue = array[i];
+        if (callback.call(thisArg, kValue, i, array)) {
             return kValue;
         }
     }
@@ -32,12 +32,12 @@ Array.prototype.find = function (callback, thisArg) {
 
 Array.prototype.findIndex = function (callback, thisArg) {
     "use strict";
-    ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
-    let length = ___toLength(this.length);
+    let array = ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
+    let length = ___toLength(array.length);
 
     for (let i = 0; i < length; i += 1) {
-        let kValue = this[i];
-        if (callback.call(thisArg, kValue, i, this)) {
+        let kValue = array[i];
+        if (callback.call(thisArg, kValue, i, array)) {
             return i;
         }
     }
@@ -46,8 +46,8 @@ Array.prototype.findIndex = function (callback, thisArg) {
 
 Array.prototype.includes = function (searchElement, fromIndex_) {
     "use strict";
-    ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
-    let length = ___toLength(this.length);
+    let array = ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
+    let length = ___toLength(array.length);
     if (length === 0) {
         return false;
     }
@@ -71,7 +71,7 @@ Array.prototype.includes = function (searchElement, fromIndex_) {
 
     let currentElement;
     for (; index < length; index += 1) {
-        currentElement = this[index];
+        currentElement = array[index];
         // Use SameValueZero comparison, rather than just StrictEquals.
         if (searchElement === currentElement || (searchElement != searchElement && currentElement !== currentElement)) {
             return true;
