@@ -322,6 +322,14 @@ impl CodeBlock {
                     Opcode::OP_NEG => {
                         writeln!(output, "neg")?;
                     }
+                    Opcode::OP_DELETE_BY_ID => {
+                        let id = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "delete_by_id @{}", id)?;
+                    }
+                    Opcode::OP_DELETE_BY_VAL => {
+                        writeln!(output, "delete")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }

@@ -850,6 +850,30 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     }
                 }
             }
+            Opcode::OP_DELETE_BY_ID => {
+                let name = ip.cast::<u32>().read();
+                ip = ip.add(4);
+                let name = unwrap_unchecked(frame.code_block).names[name as usize];
+                let object = frame.pop();
+                object.check_object_coercible(rt)?;
+                root!(object = gcstack, object.to_object(rt)?);
+                frame.push(JsValue::new(object.delete(
+                    rt,
+                    name,
+                    unwrap_unchecked(frame.code_block).strict,
+                )?));
+            }
+            Opcode::OP_DELETE_BY_VAL => {
+                let object = frame.pop();
+                let name = frame.pop().to_symbol(rt)?;
+                object.check_object_coercible(rt)?;
+                root!(object = gcstack, object.to_object(rt)?);
+                frame.push(JsValue::new(object.delete(
+                    rt,
+                    name,
+                    unwrap_unchecked(frame.code_block).strict,
+                )?));
+            }
             Opcode::OP_GET_FUNCTION => {
                 //vm.space().defer_gc();
                 let ix = ip.cast::<u32>().read_unaligned();

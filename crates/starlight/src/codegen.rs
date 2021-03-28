@@ -641,6 +641,7 @@ impl Compiler {
                 self.builder
                     .emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             }
+
             Expr::Fn(fun) => {
                 self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 let name = fun
@@ -876,6 +877,38 @@ impl Compiler {
                 }
             }
             Expr::Unary(unary) => {
+                if let UnaryOp::Delete = unary.op {
+                    match &*unary.arg {
+                        Expr::Member(member) => {
+                            let name = if !member.computed {
+                                if let Expr::Ident(id) = &*member.prop {
+                                    let s: &str = &id.sym;
+                                    let name = s.intern();
+                                    Some(self.builder.get_sym(name))
+                                } else {
+                                    self.emit(&member.prop, true);
+                                    None
+                                }
+                            } else {
+                                self.emit(&member.prop, true);
+                                None
+                            };
+
+                            match member.obj {
+                                ExprOrSuper::Expr(ref e) => self.emit(e, true),
+                                _ => todo!(),
+                            }
+
+                            if let Some(name) = name {
+                                self.builder.emit(Opcode::OP_DELETE_BY_ID, &[name], false);
+                            } else {
+                                self.builder.emit(Opcode::OP_DELETE_BY_VAL, &[], false);
+                            }
+                            return;
+                        }
+                        _ => todo!(),
+                    }
+                }
                 self.emit(&unary.arg, true);
                 match unary.op {
                     UnaryOp::Minus => self.builder.emit(Opcode::OP_NEG, &[], false),

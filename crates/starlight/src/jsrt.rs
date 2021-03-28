@@ -95,6 +95,21 @@ impl Runtime {
             false,
         );
 
+        let func = JsNativeFunction::new(self, "___isCallable".intern(), global::___is_callable, 1);
+        let _ = global.put(
+            self,
+            "___isCallable".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
+        let func = JsNativeFunction::new(self, "toString".intern(), global::to_string, 1);
+        let _ = global.put(
+            self,
+            "toString".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
+
         /*self.eval(
             true,
             r#"
@@ -802,6 +817,9 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         global::parse_float as _,
         global::parse_int as _,
         global::gc as _,
+        global::___is_callable as _,
+        global::___trunc as _,
+        global::to_string as _,
         string::string_concat as _,
         string::string_split as _,
         string::string_constructor as _,

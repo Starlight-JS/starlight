@@ -1,4 +1,7 @@
-use crate::vm::{arguments::Arguments, value::*, Runtime};
+use crate::{
+    prelude::JsString,
+    vm::{arguments::Arguments, value::*, Runtime},
+};
 use num::traits::*;
 
 pub fn parse_float(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -154,4 +157,14 @@ pub fn gc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
 pub fn ___trunc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let n = args.at(0).to_number(rt)?.trunc();
     Ok(JsValue::new(n))
+}
+
+pub fn ___is_callable(_: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    Ok(JsValue::new(args.at(0).is_callable()))
+}
+
+pub fn to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    args.at(0)
+        .to_string(rt)
+        .map(|x| JsValue::new(JsString::new(rt, x)))
 }

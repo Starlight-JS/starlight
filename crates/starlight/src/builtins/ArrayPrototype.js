@@ -132,3 +132,89 @@ Array.prototype.filter = function (callback, thisArg) {
     }
     return result;
 }
+
+Array.prototype.fill = function (value, start, end) {
+    "use strict";
+    let array = ___toObject(this, "Array.prototype.fill requires that |this| not be null or undefined");
+    let length = ___toLength(array.length);
+
+    let relativeStart = ___toIntegerOrInfinity(start);
+    let k = 0;
+    if (relativeStart < 0) {
+        k = length + relativeStart;
+        if (k < 0) {
+            k = 0;
+        }
+    } else {
+        k = relativeStart;
+        if (k > length) {
+            k = length;
+        }
+    }
+
+    let relativeEnd = length;
+
+    if (end !== undefined) {
+        relativeEnd = ___toIntegerOrInfinity(end);
+    }
+    let final = 0;
+    if (relativeEnd < 0) {
+        final = length + relativeEnd;
+        if (final < 0)
+            final = 0;
+
+    } else {
+        final = relativeEnd;
+        if (final > length)
+            final = length
+    }
+
+    for (; k < final; k++)
+        array[k] = value;
+
+    return array;
+}
+
+function ___sortCompact(receiver, receiverLength, compacted, isStringSort) {
+    "use strict";
+    let undefinedCount = 0;
+    let compactedIndex = 0;
+    for (var i = 0; i < receiverLength; ++i) {
+        if (i in receiver) {
+            var value = receiver[i];
+            if (value === undefined)
+                ++undefinedCount;
+            else {
+                compacted[compactedIndex] = isStringSort ? { string: toString(value), value } : value;
+                ++compactedIndex;
+            }
+        }
+    }
+    return undefinedCount;
+}
+
+function ___sortCommit(receiver, receiverLength, sorted, undefinedCount) {
+
+}
+
+Array.prototype.sort = function (comparator) {
+    "use strict";
+
+    let isStringSort = false;
+    if (comparator === undefined) isStringSort = false;
+    else if (!___isCallable(comparator))
+        throw new TypeError("Array.prototype.sort requires the comparator argument to be a function or undefined");
+
+    let receiver = ___toObject(this, "Array.prototype.sort requires that |this| not be null or undefined");
+    let receiverLength = ___toLength(receiver.length);
+    // For compatibility with Firefox and Chrome, do nothing observable
+    // to the target array if it has 0 or 1 sortable properties.
+    if (receiverLength < 2) {
+        return receiver;
+    }
+
+    let compacted = [];
+    let sorted = null;
+
+
+}
