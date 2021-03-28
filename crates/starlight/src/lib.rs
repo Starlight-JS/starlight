@@ -4,7 +4,8 @@
     llvm_asm,
     linked_list_cursors,
     destructuring_assignment,
-    const_raw_ptr_to_usize_cast
+    const_raw_ptr_to_usize_cast,
+    try_trait
 )]
 #![allow(unused_unsafe, unused_mut)]
 
@@ -21,6 +22,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod codegen;
 pub mod jsrt;
+pub mod tracingjit;
 pub mod vm;
 
 pub struct Platform;

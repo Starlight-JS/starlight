@@ -154,6 +154,7 @@ unsafe fn eval_internal(
                     (*frame).push(e);
                     continue;
                 }
+
                 return Err(e);
             }
         }
@@ -202,31 +203,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 set_var(rt, frame, name, fdbk, val)?;
             }
             Opcode::OP_PUSH_ENV => {
-                let fdbk = ip.cast::<u32>().read_unaligned();
+                let _fdbk = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let structure = if let TypeFeedBack::StructureCache { structure } =
-                    unwrap_unchecked(frame.code_block)
-                        .feedback
-                        .get_unchecked(fdbk as usize)
-                {
-                    Some(*structure)
-                } else {
-                    None
-                };
-                let structure = {
-                    let structure =
-                        Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
-                    *unwrap_unchecked(frame.code_block)
-                        .feedback
-                        .get_unchecked_mut(fdbk as usize) = TypeFeedBack::StructureCache {
-                        structure: structure, //rt.gc().make_weak(structure),
-                    };
-                    structure
-                }; /*else {
-                       structure
-                           .unwrap()
-                           .change_prototype_with_no_transition(frame.env.get_jsobject())
-                   };*/
+
+                let structure = Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
+
                 let env = JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);
                 frame.env = JsValue::encode_object_value(env);
             }
@@ -612,15 +593,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
 
-                fn get_by_id_slow(
-                    rt: &mut Runtime,
-                    name: Symbol,
-                    val: JsValue,
-                ) -> Result<JsValue, JsValue> {
-                    let mut slot = Slot::new();
-                    val.get_slot(rt, name, &mut slot)
-                }
-
                 frame.push(get_by_id_slow(rt, name, object)?)
             }
             Opcode::OP_PUT_BY_ID => {
@@ -971,7 +943,7 @@ fn get_env(rt: &mut Runtime, frame: &mut CallFrame, name: Symbol) -> Option<GcPo
     }
 }
 #[inline(never)]
-unsafe fn get_var(
+pub unsafe fn get_var(
     rt: &mut Runtime,
     name: Symbol,
     frame: &mut CallFrame,
@@ -1022,7 +994,7 @@ unsafe fn get_var(
     )))
 }
 #[inline(never)]
-unsafe fn set_var(
+pub unsafe fn set_var(
     rt: &mut Runtime,
     frame: &mut CallFrame,
     name: Symbol,
@@ -1114,4 +1086,9 @@ unsafe impl Trace for SpreadValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.array.trace(visitor);
     }
+}
+
+pub fn get_by_id_slow(rt: &mut Runtime, name: Symbol, val: JsValue) -> Result<JsValue, JsValue> {
+    let mut slot = Slot::new();
+    val.get_slot(rt, name, &mut slot)
 }

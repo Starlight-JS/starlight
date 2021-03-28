@@ -51,7 +51,6 @@ pub enum Opcode {
     OP_LOGICAL_NOT,
     OP_POS,
     OP_NEG,
-    OP_BNOT,
     OP_THROW,
     OP_PUSH_CATCH,
     OP_POP_CATCH,

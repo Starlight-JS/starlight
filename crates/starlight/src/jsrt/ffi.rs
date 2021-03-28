@@ -72,6 +72,7 @@ pub fn initialize_ffi(rt: &mut Runtime) {
         )?;
 
         rt.eval(
+            None,
             false,
             r#"
 globalThis.FFI.void = 0
@@ -814,7 +815,7 @@ impl FFIFunction {
         let pointer = match_ffi_type!(
             self.return_type,
             pointer => {
-                let result: RawPointer = ffi_call(cif_ptr, fun_ptr, args_ptr);
+                let _result: RawPointer = ffi_call(cif_ptr, fun_ptr, args_ptr);
 
                 todo!()
             }

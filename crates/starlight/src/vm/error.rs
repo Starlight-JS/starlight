@@ -23,7 +23,13 @@ impl JsError {
             structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-
+        let str = JsString::new(vm, "");
+        let _ = obj.define_own_property(
+            vm,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
                 vm,
@@ -50,7 +56,13 @@ impl JsEvalError {
             structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-
+        let str = JsString::new(vm, "");
+        let _ = obj.define_own_property(
+            vm,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
                 vm,
@@ -77,7 +89,13 @@ impl JsRangeError {
             structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-
+        let str = JsString::new(vm, "");
+        let _ = obj.define_own_property(
+            vm,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
                 vm,
@@ -108,7 +126,13 @@ impl JsReferenceError {
                 .unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-
+        let str = JsString::new(vm, "");
+        let _ = obj.define_own_property(
+            vm,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
                 vm,
@@ -135,7 +159,13 @@ impl JsSyntaxError {
             structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-
+        let str = JsString::new(vm, "");
+        let _ = obj.define_own_property(
+            vm,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
                 vm,
@@ -162,7 +192,13 @@ impl JsTypeError {
             structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-
+        let str = JsString::new(vm, "");
+        let _ = obj.define_own_property(
+            vm,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
         if !s.as_str().is_empty() {
             let _ = obj.define_own_property(
                 vm,

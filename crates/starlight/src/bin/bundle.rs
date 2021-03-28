@@ -29,7 +29,11 @@ fn main() {
     let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
     rt.gc().defer();
     let func = rt
-        .compile(opts.input.as_os_str().to_str().unwrap(), &string)
+        .compile(
+            opts.input.as_os_str().to_str().unwrap(),
+            "<script>",
+            &string,
+        )
         .unwrap_or_else(|error| match error.to_string(&mut rt) {
             Ok(s) => {
                 eprintln!("Failed to compile JS file: {}", s);

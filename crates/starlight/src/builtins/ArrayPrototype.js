@@ -89,7 +89,7 @@ Array.prototype.map = function (callback, thisArg) {
 
     let result = new Array(length);
 
-    for (var i = 0; i < length; i += 1) {
+    for (let i = 0; i < length; i += 1) {
         if (!(i in array)) {
             continue;
         }
@@ -98,5 +98,37 @@ Array.prototype.map = function (callback, thisArg) {
         result[i] = mappedValue;
     }
     return result;
+}
 
+Array.prototype.forEach = function (callback, thisArg) {
+    "use strict";
+    let array = ___toObject(this, "Array.prototype.forEach requires that |this| not be null or undefined");
+
+    let length = ___toLength(array.length);
+    for (let i = 0; i < length; i++) {
+        if (i in array) {
+            callback.call(thisArg, array[i], i, array);
+        }
+    }
+}
+
+Array.prototype.filter = function (callback, thisArg) {
+    "use strict";
+    let array = ___toObject(this, "Array.prototype.filter requires that |this| not be null or undefined");
+    let length = ___toLength(array.length);
+
+    let result = [];
+    let nextIndex = 0;
+    for (let i = 0; i < length; i++) {
+        if (!(i in array)) {
+            continue;
+        }
+
+        let current = array[i];
+        if (callback.call(thisArg, current, i, array)) {
+            result[nextIndex] = current;
+            ++nextIndex;
+        }
+    }
+    return result;
 }

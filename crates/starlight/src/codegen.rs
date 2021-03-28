@@ -573,6 +573,16 @@ impl Compiler {
     }
     pub fn emit(&mut self, expr: &Expr, used: bool) {
         match expr {
+            Expr::Cond(cond) => {
+                self.emit(&cond.test, true);
+                let jelse = self.cjmp(false);
+                self.emit(&cond.cons, used);
+
+                let jend = self.jmp();
+                jelse(self);
+                self.emit(&cond.alt, used);
+                jend(self);
+            }
             Expr::Arrow(fun) => {
                 let is_strict = match &fun.body {
                     BlockStmtOrExpr::BlockStmt(block) => {
@@ -873,6 +883,7 @@ impl Compiler {
                     UnaryOp::Tilde => self.builder.emit(Opcode::OP_NOT, &[], false),
                     UnaryOp::Bang => self.builder.emit(Opcode::OP_LOGICAL_NOT, &[], false),
                     UnaryOp::TypeOf => self.builder.emit(Opcode::OP_TYPEOF, &[], false),
+
                     _ => todo!("{:?}", unary.op),
                 }
                 if !used {
@@ -1092,6 +1103,32 @@ impl Compiler {
                     self.builder.emit(Opcode::OP_POP, &[], false);
                 }
             }
+            Expr::Update(update) => {
+                let op = match update.op {
+                    UpdateOp::PlusPlus => Opcode::OP_ADD,
+                    UpdateOp::MinusMinus => Opcode::OP_SUB,
+                };
+                if update.prefix {
+                    self.builder
+                        .emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
+                    self.emit(&update.arg, true);
+                    self.builder.emit(op, &[], false);
+                    if used {
+                        self.builder.emit(Opcode::OP_DUP, &[], false);
+                    }
+                    self.emit_store_expr(&update.arg);
+                } else {
+                    self.builder
+                        .emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
+                    self.emit(&update.arg, true);
+                    if used {
+                        self.builder.emit(Opcode::OP_DUP, &[], false);
+                    }
+                    self.builder.emit(op, &[], false);
+
+                    self.emit_store_expr(&update.arg);
+                }
+            }
             _ => todo!("{:?}", expr),
         }
     }
@@ -1237,7 +1274,9 @@ impl Compiler {
                 self.builder.emit(Opcode::OP_RET, &[], false);
             }
             Stmt::Break(_) => {
-                // self.builder.emit(Opcode::OP_POP_SCOPE, &[], false);
+                for _ in 0..self.lci.last().map(|x| x.scope_depth - 1).unwrap() {
+                    self.builder.emit(Opcode::OP_POP_ENV, &[], false);
+                }
                 let br = self.jmp();
                 self.lci.last_mut().unwrap().breaks.push(Box::new(br));
             }
@@ -1425,7 +1464,7 @@ impl Compiler {
                 }
             }
 
-            _ => todo!(),
+            x => todo!("{:?}", x),
         }
     }
     pub fn generate_pat_store(&mut self, pat: &Pat, decl: bool, mutable: bool) {

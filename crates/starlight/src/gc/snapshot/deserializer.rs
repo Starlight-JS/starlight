@@ -563,52 +563,6 @@ impl Deserializable for String {
     }
 }
 
-unsafe fn object_dummy_read(deser: &mut Deserializer) -> ObjectTag {
-    let tag = std::mem::transmute::<_, ObjectTag>(deser.get_u32() as u8);
-    deser.get_u32();
-    deser.get_u32();
-    deser.get_u32();
-    deser.get_u32();
-    deser.get_u32();
-
-    match tag {
-        ObjectTag::NormalArguments => {
-            let sz = deser.get_u64();
-            for _ in 0..sz {
-                Symbol::dummy_read(deser);
-            }
-            deser.get_u32();
-        }
-        ObjectTag::Function => {
-            Option::<GcPointer<Structure>>::dummy_read(deser);
-            let ty = deser.get_u8();
-            match ty {
-                0x01 => {
-                    deser.get_u32();
-                    deser.get_u32();
-                }
-                0x02 => {
-                    deser.get_u32();
-                }
-                0x03 => {
-                    deser.get_u32();
-                    deser.get_u32();
-                    JsValue::dummy_read(deser);
-                }
-                _ => unreachable_unchecked(),
-            }
-        }
-        ObjectTag::Global => {
-            HashMap::<Symbol, u32>::dummy_read(deser);
-            let len = deser.get_u64();
-            for _ in 0..len {
-                StoredSlot::dummy_read(deser);
-            }
-        }
-        _ => (),
-    }
-    tag
-}
 impl Deserializable for StoredSlot {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         let value = JsValue::deserialize_inplace(deser);
@@ -1315,6 +1269,7 @@ impl Deserializable for CodeBlock {
         let codes = Vec::<GcPointer<Self>>::deserialize_inplace(deser);
         let top_level = bool::deserialize_inplace(deser);
         let use_arguments = bool::deserialize_inplace(deser);
+        let filename = String::deserialize_inplace(deser);
         Self {
             use_arguments,
             name,
@@ -1328,6 +1283,7 @@ impl Deserializable for CodeBlock {
             rest_param,
             params,
             codes,
+            file_name: filename,
         }
     }
 

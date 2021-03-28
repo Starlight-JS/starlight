@@ -2,7 +2,7 @@ use crate::{
     bytecode::TypeFeedBack,
     gc::cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
     vm::{
-        arguments::{Arguments, JsArguments},
+        arguments::JsArguments,
         array_storage::ArrayStorage,
         attributes::AttrSafe,
         code_block::CodeBlock,
@@ -487,6 +487,7 @@ impl Serializable for CodeBlock {
         self.codes.serialize(serializer);
         self.top_level.serialize(serializer);
         self.use_arguments.serialize(serializer);
+        self.file_name.serialize(serializer);
     }
 }
 

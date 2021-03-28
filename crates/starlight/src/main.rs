@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use starlight::{
     gc::{malloc_gc::MallocGC, migc::MiGC, Heap},
+    prelude::{Internable, Slot},
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
@@ -74,7 +75,11 @@ fn main() {
         Ok(source) => {
             root!(
                 function = gcstack,
-                match rt.compile(options.file.as_os_str().to_str().unwrap(), &source) {
+                match rt.compile(
+                    options.file.as_os_str().to_str().unwrap(),
+                    "<script>",
+                    &source
+                ) {
                     Ok(function) => function.get_jsobject(),
                     Err(e) => {
                         let string = e.to_string(&mut rt);
@@ -105,11 +110,29 @@ fn main() {
                     eprintln!("Executed in {}ms", elapsed.as_nanos() as f64 / 1000000f64);
                 }
                 Err(e) => {
+                    let mut slot = Slot::new();
+                    let stacktrace = e.get_slot(&mut rt, "stack".intern(), &mut slot);
+                    let stacktrace = if stacktrace.is_ok() {
+                        let g = JsValue::new(rt.global_object());
+                        match slot.get(&mut rt, g) {
+                            Ok(val) => match val.to_string(&mut rt) {
+                                Ok(x) => Some(x),
+                                Err(_) => None,
+                            },
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+
                     let str = match e.to_string(&mut rt) {
                         Ok(s) => s,
                         Err(_) => "<unknown error>".to_owned(),
                     };
                     eprintln!("Uncaught exception: {}", str);
+                    if let Some(stacktrace) = stacktrace {
+                        println!("Stacktrace: \n\t{}", stacktrace);
+                    }
                 }
             }
         }

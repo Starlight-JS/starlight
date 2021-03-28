@@ -22,6 +22,7 @@ pub struct CodeBlock {
     pub feedback: Vec<TypeFeedBack>,
     pub strict: bool,
     pub use_arguments: bool,
+    pub file_name: String,
 }
 
 unsafe impl Trace for CodeBlock {
@@ -318,6 +319,9 @@ impl CodeBlock {
                     Opcode::OP_PUSH_NAN => {
                         writeln!(output, "nan")?;
                     }
+                    Opcode::OP_NEG => {
+                        writeln!(output, "neg")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }
@@ -327,6 +331,7 @@ impl CodeBlock {
     pub fn new(rt: &mut Runtime, name: Symbol, strict: bool) -> GcPointer<Self> {
         let this = Self {
             name,
+            file_name: String::new(),
             strict,
             codes: vec![],
             top_level: false,

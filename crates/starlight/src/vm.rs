@@ -141,7 +141,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn compile(&mut self, name: &str, script: &str) -> Result<JsValue, JsValue> {
+    pub fn compile(&mut self, path: &str, name: &str, script: &str) -> Result<JsValue, JsValue> {
         let cm: Lrc<SourceMap> = Default::default();
         let _e = BufferedError::default();
 
@@ -170,8 +170,9 @@ impl Runtime {
         };
         let mut vmref = RuntimeRef(self);
 
-        let code = Compiler::compile_script(&mut *vmref, &script);
-
+        let mut code = Compiler::compile_script(&mut *vmref, &script);
+        code.file_name = path.to_owned();
+        code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
 
         let envs = Structure::new_indexed(self, Some(self.global_object()), false);
@@ -179,7 +180,12 @@ impl Runtime {
         let fun = JsVMFunction::new(self, code, env);
         return Ok(JsValue::encode_object_value(fun));
     }
-    pub fn eval(&mut self, force_strict: bool, script: &str) -> Result<JsValue, JsValue> {
+    pub fn eval(
+        &mut self,
+        path: Option<&str>,
+        force_strict: bool,
+        script: &str,
+    ) -> Result<JsValue, JsValue> {
         let res = {
             let cm: Lrc<SourceMap> = Default::default();
             let _e = BufferedError::default();
@@ -210,6 +216,7 @@ impl Runtime {
             let mut vmref = RuntimeRef(self);
             let mut code = Compiler::compile_script(&mut *vmref, &script);
             code.strict = code.strict || force_strict;
+            code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
             let stack = self.shadowstack();
             root!(

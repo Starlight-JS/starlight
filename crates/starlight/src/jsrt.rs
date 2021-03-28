@@ -122,16 +122,22 @@ impl Runtime {
             )
         });*/
 
-        let mut eval = |source| {
-            self.eval(false, source)
+        let mut eval = |path, source| {
+            self.eval(Some(path), false, source)
                 .unwrap_or_else(|error| match error.to_string(self) {
                     Ok(str) => panic!("Failed to initialize builtins: {}", str),
                     Err(_) => panic!("Failed to initialize builtins"),
                 });
         };
 
-        eval(include_str!("builtins/GlobalOperations.js"));
-        eval(include_str!("builtins/ArrayPrototype.js"));
+        eval(
+            "builtins/GlobalOperations.js",
+            include_str!("builtins/GlobalOperations.js"),
+        );
+        eval(
+            "builtins/ArrayPrototype.js",
+            include_str!("builtins/ArrayPrototype.js"),
+        );
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -270,23 +276,23 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(reduce), W | C | E),
             false,
         );
-        let name = "forEach".intern();
+        /*let name = "forEach".intern();
         let for_each = JsNativeFunction::new(self, name, array_for_each, 1);
         let _ = proto.define_own_property(
             self,
             name,
             &*DataDescriptor::new(JsValue::from(for_each), W | C | E),
             false,
-        );
+        );*/
 
-        let name = "filter".intern();
+        /*let name = "filter".intern();
         let filter = JsNativeFunction::new(self, name, array_filter, 1);
         let _ = proto.define_own_property(
             self,
             name,
             &*DataDescriptor::new(JsValue::from(filter), W | C | E),
             false,
-        );
+        );*/
 
         /*let name = "map".intern();
         let map = JsNativeFunction::new(self, name, array_map, 1);
