@@ -412,3 +412,68 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     }
     Ok(JsValue::new(*&*result))
 }
+
+pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = rt.shadowstack();
+    root!(obj = stack, args.this.to_object(rt)?);
+
+    let len = super::get_length(rt, &mut obj)?;
+    let mut k;
+    if args.size() != 0 {
+        let relative_start = args.at(0).to_int32(rt)?;
+        if relative_start < 0 {
+            k = (relative_start + len as i32).max(0) as u32;
+        } else {
+            k = (relative_start as u32).min(len);
+        }
+    } else {
+        k = 0;
+    }
+
+    let mut fin;
+    if args.size() > 1 {
+        if args.at(1).is_undefined() {
+            fin = len;
+        } else {
+            let relative_end = args.at(1).to_int32(rt)?;
+            if relative_end < 0 {
+                fin = (relative_end + len as i32).max(0) as u32;
+            } else {
+                fin = (relative_end as u32).min(len);
+            }
+        }
+    } else {
+        fin = len;
+    }
+
+    let result_len = if fin > k { fin - k } else { 0 };
+
+    if result_len > 1024 << 6 {
+        root!(ary = stack, JsArray::new(rt, result_len));
+
+        let mut n = 0;
+        while k < fin {
+            let kval = obj.get(rt, Symbol::Index(k))?;
+            ary.define_own_property(
+                rt,
+                Symbol::Index(n),
+                &*DataDescriptor::new(kval, W | E | C),
+                false,
+            )?;
+            k += 1;
+            n += 1;
+        }
+        return Ok(JsValue::new(*&*ary));
+    }
+    root!(ary = stack, JsArray::new(rt, result_len));
+    let mut n = 0;
+    while k < fin {
+        if obj.has_property(rt, Symbol::Index(k)) {
+            let val = obj.get(rt, Symbol::Index(k))?;
+            ary.put(rt, Symbol::Index(n), val, false)?;
+        }
+        k += 1;
+        n += 1;
+    }
+    return Ok(JsValue::new(*&*ary));
+}

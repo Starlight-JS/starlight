@@ -1,4 +1,4 @@
-Array.prototype.some = function (callback, thisArg) {
+Array.prototype.some = function some(callback, thisArg) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
     let length = array.length;
@@ -16,7 +16,7 @@ Array.prototype.some = function (callback, thisArg) {
 }
 
 
-Array.prototype.find = function (callback, thisArg) {
+Array.prototype.find = function find(callback, thisArg) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
     let length = array.length;
@@ -30,7 +30,7 @@ Array.prototype.find = function (callback, thisArg) {
     return undefined;
 }
 
-Array.prototype.findIndex = function (callback, thisArg) {
+Array.prototype.findIndex = function findIndex(callback, thisArg) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
     let length = ___toLength(array.length);
@@ -44,7 +44,7 @@ Array.prototype.findIndex = function (callback, thisArg) {
     return -1;
 }
 
-Array.prototype.includes = function (searchElement, fromIndex_) {
+Array.prototype.includes = function includes(searchElement, fromIndex_) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
     let length = ___toLength(array.length);
@@ -81,7 +81,7 @@ Array.prototype.includes = function (searchElement, fromIndex_) {
     return false;
 }
 
-Array.prototype.map = function (callback, thisArg) {
+Array.prototype.map = function map(callback, thisArg) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.map requires that |this| not be null or undefined");
 
@@ -100,7 +100,7 @@ Array.prototype.map = function (callback, thisArg) {
     return result;
 }
 
-Array.prototype.forEach = function (callback, thisArg) {
+Array.prototype.forEach = function forEach(callback, thisArg) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.forEach requires that |this| not be null or undefined");
 
@@ -112,7 +112,7 @@ Array.prototype.forEach = function (callback, thisArg) {
     }
 }
 
-Array.prototype.filter = function (callback, thisArg) {
+Array.prototype.filter = function filter(callback, thisArg) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.filter requires that |this| not be null or undefined");
     let length = ___toLength(array.length);
@@ -133,7 +133,7 @@ Array.prototype.filter = function (callback, thisArg) {
     return result;
 }
 
-Array.prototype.fill = function (value, start, end) {
+Array.prototype.fill = function fill(value, start, end) {
     "use strict";
     let array = ___toObject(this, "Array.prototype.fill requires that |this| not be null or undefined");
     let length = ___toLength(array.length);
@@ -193,28 +193,141 @@ function ___sortCompact(receiver, receiverLength, compacted, isStringSort) {
     return undefinedCount;
 }
 
-function ___sortCommit(receiver, receiverLength, sorted, undefinedCount) {
-
+function ___moveElements(target, targetOffset, source, sourceLength) {
+    for (let i = 0; i < sourceLength; ++i) {
+        let value = source[i];
+        if (value)
+            target[targetOffset + i] = value;
+    }
 }
 
-Array.prototype.sort = function (comparator) {
+function ___append_memory(resultArray, otherArray, startValue) {
+    let startIndex = ___toIntegerOrInfinity(startValue);
+    ___moveElements(resultArray, startIndex, otherArray, otherArray.length);
+}
+Array.prototype.sort = function sort(compareFn) {
+
+    return mergeSort(this)
+    // Split the array into halves and merge them recursively 
+    function mergeSort(arr) {
+        if (arr.length === 1) {
+            // return once we hit an array with a single item
+            return arr
+        }
+        const middle = ___toIntegerOrInfinity(arr.length / 2) // get the middle item of the array rounded down
+        const left = arr.slice(0, middle) // items on the left side
+        const right = arr.slice(middle) // items on the right side
+        return merge(
+            mergeSort(left),
+            mergeSort(right)
+        )
+    }
+    // compare the arrays item by item and return the concatenated result
+    function merge(left, right) {
+        let result = []
+        let indexLeft = 0
+        let indexRight = 0
+        while (indexLeft < left.length && indexRight < right.length) {
+            //compareFn ? compareFn =()=> left[indexLeft] < right[indexRight] : compareFn
+            let _left = left[indexLeft]
+            let _right = right[indexRight]
+            if (compareFn)
+                compareFn = composeCompareFn(compareFn(left, right))
+            compareFn = (l, r) => l < r
+            if (compareFn(_left, _right)) {
+                result.push(left[indexLeft])
+                indexLeft++
+            } else {
+                result.push(right[indexRight])
+                indexRight++
+            }
+        }
+        return result.concat(left.slice(indexLeft)).concat(right.slice(indexRight))
+    }
+    function composeCompareFn(compareResult) {
+        if (compareResult < 0)
+            return false
+        if (compareResult > 0)
+            return true
+        if (compareResult == 0)
+            return false
+    }
+}
+
+let flatIntoArray = function flatIntoArray(target, source, sourceLength, targetIndex, depth) {
     "use strict";
 
-    let isStringSort = false;
-    if (comparator === undefined) isStringSort = false;
-    else if (!___isCallable(comparator))
-        throw new TypeError("Array.prototype.sort requires the comparator argument to be a function or undefined");
+    for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {
+        if (sourceIndex in source) {
+            var element = source[sourceIndex];
+            if (depth > 0 && Array.isArray(element))
+                targetIndex = flatIntoArray(target, element, ___toLength(element.length), targetIndex, depth - 1);
+            else {
 
-    let receiver = ___toObject(this, "Array.prototype.sort requires that |this| not be null or undefined");
-    let receiverLength = ___toLength(receiver.length);
-    // For compatibility with Firefox and Chrome, do nothing observable
-    // to the target array if it has 0 or 1 sortable properties.
-    if (receiverLength < 2) {
-        return receiver;
+                target[targetIndex] = element;
+                ++targetIndex;
+            }
+        }
     }
+    return targetIndex;
+}
+Array.prototype.flat = function (depth) {
+    "use strict";
 
-    let compacted = [];
-    let sorted = null;
+    var array = ___toObject(this, "Array.prototype.flat requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
+    var depthNum = 1;
+
+    if (depth !== undefined)
+        depthNum = ___toIntegerOrInfinity(depth);
+
+    var result = []
+
+    flatIntoArray(result, array, length, 0, depthNum);
+    return result;
+}
+let flatIntoArrayWithCallback = function flatIntoArrayWithCallback(target, source, sourceLength, targetIndex, callback, thisArg) {
+    "use strict";
+
+    for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {
+        if (sourceIndex in source) {
+            var element = callback.call(thisArg, source[sourceIndex], sourceIndex, source);
+            if (Array.isArray(element))
+                targetIndex = flatIntoArray(target, element, ___toLength(element.length), targetIndex, 0);
+            else {
+                target[targetIndex] = element;
+
+                ++targetIndex;
+            }
+        }
+    }
+    return target;
+}
+
+Array.prototype.flatMap = function flatMap(callback, thisArg) {
+    "use strict";
+
+    var array = ___toObject(this, "Array.prototype.flatMap requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
+
+    if (!___isCallable(callback))
+        throw new TypeError("Array.prototype.flatMap callback must be a function");
 
 
+    var result = []
+
+    return flatIntoArrayWithCallback(result, array, length, 0, callback, thisArg);
+}
+
+Array.prototype.at = function at(index) {
+    "use strict";
+
+    var array = ___toObject(this, "Array.prototype.at requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
+
+    var k = ___toIntegerOrInfinity(index);
+    if (k < 0)
+        k += length;
+
+    return (k >= 0 && k < length) ? array[k] : undefined;
 }

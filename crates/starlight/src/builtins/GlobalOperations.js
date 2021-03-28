@@ -22,3 +22,8 @@ function ___toObject(target, error) {
 
     return Object(target);
 }
+
+function ___assert(cond) {
+    if (!cond)
+        throw "Assertion failed";
+}

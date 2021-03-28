@@ -291,6 +291,15 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(reduce), W | C | E),
             false,
         );
+
+        let name = "slice".intern();
+        let slice = JsNativeFunction::new(self, name, array_slice, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(slice), W | C | E),
+            false,
+        );
         /*let name = "forEach".intern();
         let for_each = JsNativeFunction::new(self, name, array_for_each, 1);
         let _ = proto.define_own_property(
@@ -804,6 +813,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array::array_for_each as _,
         array::array_filter as _,
         array::array_map as _,
+        array::array_slice as _,
         error::error_constructor as usize,
         error::error_to_string as usize,
         error::eval_error_constructor as usize,
