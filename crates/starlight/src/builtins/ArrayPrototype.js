@@ -1,5 +1,6 @@
-Array.prototype.some = function array_some(callback, thisArg) {
+Array.prototype.some = function (callback, thisArg) {
     "use strict";
+    ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
     let length = this.length;
 
     for (let i = 0; i < length; i += 1) {
@@ -16,6 +17,8 @@ Array.prototype.some = function array_some(callback, thisArg) {
 
 
 Array.prototype.find = function (callback, thisArg) {
+    "use strict";
+    ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
     let length = this.length;
 
     for (let i = 0; i < length; i += 1) {
@@ -29,7 +32,7 @@ Array.prototype.find = function (callback, thisArg) {
 
 Array.prototype.findIndex = function (callback, thisArg) {
     "use strict";
-
+    ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
     let length = ___toLength(this.length);
 
     for (let i = 0; i < length; i += 1) {
@@ -43,7 +46,7 @@ Array.prototype.findIndex = function (callback, thisArg) {
 
 Array.prototype.includes = function (searchElement, fromIndex_) {
     "use strict";
-
+    ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
     let length = ___toLength(this.length);
     if (length === 0) {
         return false;
@@ -76,4 +79,24 @@ Array.prototype.includes = function (searchElement, fromIndex_) {
     }
 
     return false;
+}
+
+Array.prototype.map = function (callback, thisArg) {
+    "use strict";
+    let array = ___toObject(this, "Array.prototype.map requires that |this| not be null or undefined");
+
+    let length = array.length;
+
+    let result = new Array(length);
+
+    for (var i = 0; i < length; i += 1) {
+        if (!(i in array)) {
+            continue;
+        }
+
+        let mappedValue = callback.call(thisArg, array[i], i, array);
+        result[i] = mappedValue;
+    }
+    return result;
+
 }

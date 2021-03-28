@@ -288,14 +288,14 @@ impl Runtime {
             false,
         );
 
-        let name = "map".intern();
+        /*let name = "map".intern();
         let map = JsNativeFunction::new(self, name, array_map, 1);
         let _ = proto.define_own_property(
             self,
             name,
             &*DataDescriptor::new(JsValue::from(map), W | C | E),
             false,
-        );
+        );*/
         let name = "concat".intern();
         let concat = JsNativeFunction::new(self, name, array_concat, 1);
         let _ = proto.define_own_property(

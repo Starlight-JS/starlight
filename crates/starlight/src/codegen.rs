@@ -19,6 +19,7 @@ use swc_ecmascript::{ast::*, visit::noop_visit_type};
 pub struct LoopControlInfo {
     breaks: Vec<Box<dyn FnOnce(&mut Compiler)>>,
     continues: Vec<Box<dyn FnOnce(&mut Compiler)>>,
+    scope_depth: i32,
 }
 pub struct Compiler {
     builder: ByteCodeBuilder,
@@ -1199,6 +1200,7 @@ impl Compiler {
         self.lci.push(LoopControlInfo {
             continues: vec![],
             breaks: vec![],
+            scope_depth: 0,
         });
     }
 
@@ -1215,8 +1217,14 @@ impl Compiler {
             }
             Stmt::Block(block) => {
                 self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth += 1;
+                }
                 for stmt in block.stmts.iter() {
                     self.emit_stmt(stmt);
+                }
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth -= 1;
                 }
                 self.builder.emit(Opcode::OP_POP_ENV, &[], false);
             }
@@ -1234,11 +1242,17 @@ impl Compiler {
                 self.lci.last_mut().unwrap().breaks.push(Box::new(br));
             }
             Stmt::Continue(_) => {
-                self.builder.emit(Opcode::OP_POP_ENV, &[], false);
+                for _ in 0..self.lci.last().map(|x| x.scope_depth).unwrap() {
+                    self.builder.emit(Opcode::OP_POP_ENV, &[], false);
+                }
+                // self.builder.emit(Opcode::OP_POP_ENV, &[], false);
                 let j = self.jmp();
                 self.lci.last_mut().unwrap().continues.push(Box::new(j));
             }
             Stmt::For(for_stmt) => {
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth += 1;
+                }
                 self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 match for_stmt.init {
                     Some(ref init) => match init {
@@ -1264,17 +1278,28 @@ impl Compiler {
                 }
                 let jend = self.cjmp(false);
                 self.emit_stmt(&for_stmt.body);
+                let skip = self.jmp();
                 while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
                     c(self);
                 }
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth -= 1;
+                }
+                //self.builder.emit(Opcode::OP_POP_ENV, &[], false);
+                skip(self);
                 if let Some(fin) = &for_stmt.update {
                     self.emit(&**fin, false);
                 }
                 self.goto(head as _);
                 self.pop_lci();
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth -= 1;
+                }
                 self.builder.emit(Opcode::OP_POP_ENV, &[], false);
                 jend(self);
-
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth -= 1;
+                }
                 self.builder.emit(Opcode::OP_POP_ENV, &[], false);
             }
             Stmt::While(while_stmt) => {
@@ -1330,6 +1355,9 @@ impl Compiler {
             Stmt::Try(try_stmt) => {
                 let try_push = self.try_();
                 if !try_stmt.block.stmts.is_empty() {
+                    if let Some(lci) = self.lci.last_mut() {
+                        lci.scope_depth += 1;
+                    }
                     self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                 }
                 for stmt in try_stmt.block.stmts.iter() {
@@ -1343,6 +1371,9 @@ impl Compiler {
                 let jcatch_finally = match try_stmt.handler {
                     Some(ref catch) => {
                         if !catch.body.stmts.is_empty() {
+                            if let Some(lci) = self.lci.last_mut() {
+                                lci.scope_depth += 1;
+                            }
                             self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                         }
                         match catch.param {
@@ -1357,6 +1388,9 @@ impl Compiler {
                             self.emit_stmt(stmt);
                         }
                         if !catch.body.stmts.is_empty() {
+                            if let Some(lci) = self.lci.last_mut() {
+                                lci.scope_depth -= 1;
+                            }
                             self.builder.emit(Opcode::OP_POP_ENV, &[], false);
                         }
                         self.jmp()
@@ -1372,12 +1406,18 @@ impl Compiler {
                 match try_stmt.finalizer {
                     Some(ref block) => {
                         if !block.stmts.is_empty() {
+                            if let Some(lci) = self.lci.last_mut() {
+                                lci.scope_depth += 1;
+                            }
                             self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
                         }
                         for stmt in block.stmts.iter() {
                             self.emit_stmt(stmt);
                         }
                         if !block.stmts.is_empty() {
+                            if let Some(lci) = self.lci.last_mut() {
+                                lci.scope_depth -= 1;
+                            }
                             self.builder.emit(Opcode::OP_POP_ENV, &[], false);
                         }
                     }

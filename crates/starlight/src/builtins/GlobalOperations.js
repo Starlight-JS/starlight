@@ -14,3 +14,11 @@ function ___toLength(target) {
     return +length;
 }
 
+
+function ___toObject(target, error) {
+    if (target === null || target === undefined) {
+        throw new TypeError(error);
+    }
+
+    return Object(target);
+}

@@ -213,7 +213,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 } else {
                     None
                 };
-                let structure = if unlikely(structure.is_none()) {
+                let structure = {
                     let structure =
                         Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
                     *unwrap_unchecked(frame.code_block)
@@ -222,11 +222,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         structure: structure, //rt.gc().make_weak(structure),
                     };
                     structure
-                } else {
-                    structure
-                        .unwrap()
-                        .change_prototype_with_no_transition(frame.env.get_jsobject())
-                };
+                }; /*else {
+                       structure
+                           .unwrap()
+                           .change_prototype_with_no_transition(frame.env.get_jsobject())
+                   };*/
                 let env = JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);
                 frame.env = JsValue::encode_object_value(env);
             }
@@ -728,7 +728,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 let sym = lhs.to_symbol(rt)?;
                 frame.push(JsValue::encode_bool_value(
-                    rhs.get_jsobject().has_property(rt, sym),
+                    rhs.get_jsobject().has_own_property(rt, sym),
                 ));
             }
             Opcode::OP_THROW => {

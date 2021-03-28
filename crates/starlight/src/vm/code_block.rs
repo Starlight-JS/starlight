@@ -257,6 +257,7 @@ impl CodeBlock {
                     }
 
                     Opcode::OP_PUSH_ENV => {
+                        pc = pc.add(4);
                         writeln!(output, "push_scope")?;
                     }
                     /* Opcode::OP_SET_GETTER_SETTER => {
@@ -310,6 +311,12 @@ impl CodeBlock {
                     }
                     Opcode::OP_LOGICAL_NOT => {
                         writeln!(output, "logical_not")?;
+                    }
+                    Opcode::OP_POS => {
+                        writeln!(output, "positive")?;
+                    }
+                    Opcode::OP_PUSH_NAN => {
+                        writeln!(output, "nan")?;
                     }
                     _ => todo!("{:?}", op),
                 }
