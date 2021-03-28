@@ -150,3 +150,8 @@ pub fn gc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let _ = args;
     Ok(JsValue::encode_undefined_value())
 }
+
+pub fn ___trunc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let n = args.at(0).to_number(rt)?.trunc();
+    Ok(JsValue::new(n))
+}

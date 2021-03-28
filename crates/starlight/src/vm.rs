@@ -399,12 +399,23 @@ impl Runtime {
     pub fn add_ffi(&mut self) {
         crate::jsrt::ffi::initialize_ffi(self);
     }
+
+    pub fn new_type_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsTypeError::new(self, msg, None)
+    }
+
+    pub fn new_reference_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsReferenceError::new(self, msg, None)
+    }
 }
 
 use starlight_derive::GcTrace;
 use wtf_rs::{keep_on_stack, unwrap_unchecked};
 
 use self::{
+    error::{JsReferenceError, JsTypeError},
     function::JsNativeFunction,
     global::JsGlobal,
     interpreter::stack::Stack,

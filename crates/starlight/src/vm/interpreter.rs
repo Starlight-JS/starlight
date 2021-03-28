@@ -215,11 +215,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 };
                 let structure = if unlikely(structure.is_none()) {
                     let structure =
-                        Structure::new_unique_indexed(rt, Some(frame.env.get_jsobject()), false);
+                        Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
                     *unwrap_unchecked(frame.code_block)
                         .feedback
-                        .get_unchecked_mut(fdbk as usize) =
-                        TypeFeedBack::StructureCache { structure };
+                        .get_unchecked_mut(fdbk as usize) = TypeFeedBack::StructureCache {
+                        structure: structure, //rt.gc().make_weak(structure),
+                    };
                     structure
                 } else {
                     structure
@@ -230,10 +231,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.env = JsValue::encode_object_value(env);
             }
             Opcode::OP_POP_ENV => {
-                let env = frame.env.get_jsobject();
+                let mut env = frame.env.get_jsobject();
+
                 frame.env = JsValue::encode_object_value(
                     env.prototype().copied().expect("no environments left"),
                 );
+                env.structure.prototype = None;
             }
             Opcode::OP_JMP => {
                 rt.gc().collect_if_necessary();
@@ -263,6 +266,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
             Opcode::OP_PUSH_TRUE => {
                 frame.push(JsValue::encode_bool_value(true));
+            }
+            Opcode::OP_PUSH_FALSE => {
+                frame.push(JsValue::encode_bool_value(false));
             }
             Opcode::OP_PUSH_LITERAL => {
                 let ix = ip.cast::<u32>().read();
@@ -575,9 +581,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                 .feedback
                                 .get_unchecked(fdbk as usize)
                         {
-                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                frame.push(*obj.direct(*offset as _));
-                                continue;
+                            if let Some(structure) = structure.upgrade() {
+                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                    frame.push(*obj.direct(*offset as _));
+                                    continue;
+                                }
                             }
                         }
                     }
@@ -590,11 +598,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: slot
-                                .base()
-                                .unwrap()
-                                .downcast_unchecked::<JsObject>()
-                                .structure(),
+                            structure: rt.gc().make_weak(
+                                slot.base()
+                                    .unwrap()
+                                    .downcast_unchecked::<JsObject>()
+                                    .structure(),
+                            ),
 
                             offset: slot.offset(),
                         }
@@ -633,10 +642,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                 .feedback
                                 .get_unchecked(fdbk as usize)
                         {
-                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                *obj.direct_mut(*offset as usize) = value;
+                            if let Some(structure) = structure.upgrade() {
+                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                    *obj.direct_mut(*offset as usize) = value;
 
-                                continue;
+                                    continue;
+                                }
                             }
                         }
                     }
@@ -655,7 +666,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: obj.structure(),
+                            structure: rt.gc().make_weak(obj.structure()),
                             offset: slot.offset(),
                         };
                     }
@@ -980,8 +991,10 @@ unsafe fn get_var(
         .feedback
         .get_unchecked(fdbk as usize)
     {
-        if GcPointer::ptr_eq(&structure, &env.structure()) {
-            return Ok(*env.direct(*offset as usize));
+        if let Some(structure) = structure.upgrade() {
+            if GcPointer::ptr_eq(&structure, &env.structure()) {
+                return Ok(*env.direct(*offset as usize));
+            }
         }
     }
 
@@ -991,7 +1004,7 @@ unsafe fn get_var(
             *unwrap_unchecked(frame.code_block)
                 .feedback
                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                structure: env.structure(),
+                structure: rt.gc().make_weak(env.structure()),
                 offset: slot.offset(),
             };
         }
@@ -1038,8 +1051,10 @@ unsafe fn set_var(
         .feedback
         .get_unchecked(fdbk as usize)
     {
-        if likely(GcPointer::ptr_eq(&structure, &env.structure())) {
-            *env.direct_mut(*offset as usize) = val;
+        if let Some(structure) = structure.upgrade() {
+            if likely(GcPointer::ptr_eq(&structure, &env.structure())) {
+                *env.direct_mut(*offset as usize) = val;
+            }
         }
     }
 
@@ -1058,7 +1073,7 @@ unsafe fn set_var(
     *unwrap_unchecked(frame.code_block)
         .feedback
         .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-        structure: slot.0.structure(),
+        structure: rt.gc().make_weak(slot.0.structure()),
         offset: slot.1.offset(),
     };
     //*env.direct_mut(slot.1.offset() as usize) = val;

@@ -674,8 +674,10 @@ impl Compiler {
                 let nix = self.builder.get_sym(name);
                 self.builder
                     .emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
-                self.builder.emit(Opcode::OP_DUP, &[], false);
-                self.builder.emit(Opcode::OP_SET_VAR, &[nix as _], true);
+                if name != "<anonymous>".intern() {
+                    self.builder.emit(Opcode::OP_DUP, &[], false);
+                    self.builder.emit(Opcode::OP_SET_VAR, &[nix as _], true);
+                }
                 self.builder.emit(Opcode::OP_POP_ENV, &[], false);
             }
             Expr::This(_) => {

@@ -316,3 +316,99 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
 
     Ok(JsValue::encode_object_value(new_values))
 }
+
+pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = rt.shadowstack();
+    root!(array = stack, args.this.to_object(rt)?);
+    let length = super::get_length(rt, &mut array)?;
+
+    let callback = args.at(0);
+    if !callback.is_callable() {
+        return Err(JsValue::new(rt.new_type_error(
+            "Array.prototype.forEach callback must be a function",
+        )));
+    }
+
+    root!(callback = stack, callback.to_object(rt)?);
+    let this_arg = args.at(1);
+    let mut buf: [JsValue; 3] = [JsValue::encode_undefined_value(); 3];
+    for i in 0..length {
+        if array.has_property(rt, Symbol::Index(i)) {
+            let element = array.get(rt, Symbol::Index(i))?;
+            buf[0] = element;
+            buf[1] = JsValue::new(i);
+            buf[2] = JsValue::new(*&*array);
+            root!(args = stack, Arguments::new(this_arg, &mut buf));
+
+            callback.as_function_mut().call(rt, &mut args)?;
+        }
+    }
+    Ok(JsValue::encode_undefined_value())
+}
+
+pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = rt.shadowstack();
+    root!(array = stack, args.this.to_object(rt)?);
+    let length = super::get_length(rt, &mut array)?;
+
+    let callback = args.at(0);
+    if !callback.is_callable() {
+        return Err(JsValue::new(rt.new_type_error(
+            "Array.prototype.forEach callback must be a function",
+        )));
+    }
+
+    root!(callback = stack, callback.to_object(rt)?);
+    root!(result = stack, JsArray::new(rt, 0));
+    root!(this_arg = stack, args.at(1));
+
+    let mut next_index = 0;
+    let mut buf = [JsValue::encode_undefined_value(); 3];
+    for i in 0..length {
+        if !array.has_own_property(rt, Symbol::Index(i)) {
+            continue;
+        }
+        let current = array.get(rt, Symbol::Index(i))?;
+        buf[0] = current;
+        buf[1] = JsValue::new(i);
+        buf[2] = JsValue::new(*&*array);
+        let mut args = Arguments::new(*&*this_arg, &mut buf);
+        let val = callback.as_function_mut().call(rt, &mut args)?;
+        if val.to_boolean() {
+            result.put(rt, Symbol::Index(next_index), current, true)?;
+            next_index += 1;
+        }
+    }
+    Ok(JsValue::new(*&*result))
+}
+
+pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = rt.shadowstack();
+    root!(array = stack, args.this.to_object(rt)?);
+    let length = super::get_length(rt, &mut array)?;
+
+    let callback = args.at(0);
+    if !callback.is_callable() {
+        return Err(JsValue::new(rt.new_type_error(
+            "Array.prototype.forEach callback must be a function",
+        )));
+    }
+
+    root!(callback = stack, callback.to_object(rt)?);
+    root!(result = stack, JsArray::new(rt, 0));
+    root!(this_arg = stack, args.at(1));
+    let mut buf = [JsValue::encode_undefined_value(); 3];
+    for i in 0..length {
+        if !array.has_own_property(rt, Symbol::Index(i)) {
+            continue;
+        }
+
+        buf[0] = array.get(rt, Symbol::Index(i))?;
+        buf[1] = JsValue::new(i);
+        buf[2] = JsValue::new(*&*array);
+        let mut args = Arguments::new(*&*this_arg, &mut buf);
+        let mapped_value = callback.as_function_mut().call(rt, &mut args)?;
+        result.put(rt, Symbol::Index(i), mapped_value, true)?;
+    }
+    Ok(JsValue::new(*&*result))
+}

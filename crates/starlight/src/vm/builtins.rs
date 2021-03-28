@@ -63,6 +63,26 @@ pub unsafe fn reflect_apply(
     Ok(())
 }
 
+pub unsafe fn to_object(
+    rt: &mut Runtime,
+    frame: &mut CallFrame,
+    _ip: &mut *mut u8,
+    _argc: u32,
+    _effect: u8,
+) -> Result<(), JsValue> {
+    let value = frame.pop();
+    let error_msg = frame.pop();
+
+    if value.is_object() {
+        frame.push(value);
+    } else {
+        let error_msg = error_msg.to_string(rt)?;
+        let msg = JsString::new(rt, error_msg);
+        return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+    }
+    Ok(())
+}
+
 pub type Builtin =
     unsafe fn(&mut Runtime, &mut CallFrame, &mut *mut u8, u32, u8) -> Result<(), JsValue>;
 

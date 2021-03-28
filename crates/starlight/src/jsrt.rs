@@ -87,6 +87,51 @@ impl Runtime {
             JsValue::encode_object_value(func),
             false,
         );
+        let func = JsNativeFunction::new(self, "___trunc".intern(), global::___trunc, 1);
+        let _ = global.put(
+            self,
+            "___trunc".intern(),
+            JsValue::encode_object_value(func),
+            false,
+        );
+
+        /*self.eval(
+            true,
+            r#"
+        Array.prototype.some = function array_some(callback,thisArg) {
+            let length = this.length;
+
+            for (let i = 0;i < length;i+=1) {
+                if (!(i in this)) {
+                    continue;
+                }
+
+                if (callback.call(thisArg,this[i],i,this)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        "#,
+        )
+        .unwrap_or_else(|e| {
+            panic!(
+                "failed to initialize builtins: {}",
+                e.to_string(self).unwrap_or_else(|_| panic!())
+            )
+        });*/
+
+        let mut eval = |source| {
+            self.eval(false, source)
+                .unwrap_or_else(|error| match error.to_string(self) {
+                    Ok(str) => panic!("Failed to initialize builtins: {}", str),
+                    Err(_) => panic!("Failed to initialize builtins"),
+                });
+        };
+
+        eval(include_str!("builtins/GlobalOperations.js"));
+        eval(include_str!("builtins/ArrayPrototype.js"));
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -223,6 +268,32 @@ impl Runtime {
             self,
             name,
             &*DataDescriptor::new(JsValue::from(reduce), W | C | E),
+            false,
+        );
+        let name = "forEach".intern();
+        let for_each = JsNativeFunction::new(self, name, array_for_each, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(for_each), W | C | E),
+            false,
+        );
+
+        let name = "filter".intern();
+        let filter = JsNativeFunction::new(self, name, array_filter, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(filter), W | C | E),
+            false,
+        );
+
+        let name = "map".intern();
+        let map = JsNativeFunction::new(self, name, array_map, 1);
+        let _ = proto.define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(map), W | C | E),
             false,
         );
         let name = "concat".intern();
@@ -709,6 +780,9 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array::array_reduce as usize,
         array::array_to_string as usize,
         array::array_concat as usize,
+        array::array_for_each as _,
+        array::array_filter as _,
+        array::array_map as _,
         error::error_constructor as usize,
         error::error_to_string as usize,
         error::eval_error_constructor as usize,

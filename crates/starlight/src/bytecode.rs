@@ -15,7 +15,7 @@ pub enum TypeFeedBack {
         structure: GcPointer<Structure>,
     },
     PropertyCache {
-        structure: GcPointer<Structure>,
+        structure: WeakRef<Structure>,
         offset: u32,
     },
     None,
