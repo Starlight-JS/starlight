@@ -41,7 +41,7 @@ Array.prototype.findIndex = function (callback, thisArg) {
             return i;
         }
     }
-    return undefined;
+    return -1;
 }
 
 Array.prototype.includes = function (searchElement, fromIndex_) {
