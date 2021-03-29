@@ -217,7 +217,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.env = JsValue::encode_object_value(
                     env.prototype().copied().expect("no environments left"),
                 );
-                env.structure.prototype = None;
             }
             Opcode::OP_JMP => {
                 rt.gc().collect_if_necessary();
@@ -572,10 +571,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     }
 
                     let mut slot = Slot::new();
-                    if rt.options.inline_caches
-                        && obj.get_property_slot(rt, name, &mut slot)
-                        && slot.is_load_cacheable()
-                    {
+                    let found = obj.get_property_slot(rt, name, &mut slot);
+                    if rt.options.inline_caches && slot.is_load_cacheable() {
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
@@ -589,7 +586,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             offset: slot.offset(),
                         }
                     }
-                    frame.push(slot.value());
+                    if found {
+                        frame.push(slot.get(rt, object)?);
+                    } else {
+                        frame.push(JsValue::encode_undefined_value());
+                    }
                     continue;
                 }
 
@@ -778,6 +779,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let key = frame.pop().to_symbol(rt)?;
                 let mut slot = Slot::new();
                 let value = object.get_slot(rt, key, &mut slot)?;
+
                 frame.push(value);
             }
 

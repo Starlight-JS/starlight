@@ -111,28 +111,12 @@ fn main() {
                 }
                 Err(e) => {
                     let mut slot = Slot::new();
-                    let stacktrace = e.get_slot(&mut rt, "stack".intern(), &mut slot);
-                    let stacktrace = if stacktrace.is_ok() {
-                        let g = JsValue::new(rt.global_object());
-                        match slot.get(&mut rt, g) {
-                            Ok(val) => match val.to_string(&mut rt) {
-                                Ok(x) => Some(x),
-                                Err(_) => None,
-                            },
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
 
                     let str = match e.to_string(&mut rt) {
                         Ok(s) => s,
                         Err(_) => "<unknown error>".to_owned(),
                     };
                     eprintln!("Uncaught exception: {}", str);
-                    if let Some(stacktrace) = stacktrace {
-                        println!("Stacktrace: \n\t{}", stacktrace);
-                    }
                 }
             }
         }

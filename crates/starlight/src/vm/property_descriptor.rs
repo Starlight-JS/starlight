@@ -273,7 +273,6 @@ impl StoredSlot {
         if self.attributes.is_data() {
             return Ok(self.value);
         }
-        assert!(self.attributes.is_accessor());
 
         self.accessor().invoke_getter(context, this_binding)
     }

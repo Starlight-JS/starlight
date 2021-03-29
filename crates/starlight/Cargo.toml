@@ -35,7 +35,7 @@ val-as-u64 = []
 enable-gc-tracking = []
 # enable performance counter for interpreter/gc/codegen
 perf = []
-default = ["val-as-f64"]
+default = ["val-as-u64"]
 
 [dev-dependencies]
 criterion = "0.3"

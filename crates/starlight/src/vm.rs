@@ -6,7 +6,7 @@ use crate::{
     gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
-    jsrt::object::{object_constructor, object_to_string},
+    jsrt::object::*,
 };
 use arguments::Arguments;
 use error::JsSyntaxError;
@@ -298,8 +298,61 @@ impl Runtime {
             .unwrap()
             .change_prototype_with_no_transition(proto.clone());
 
+        this.global_data
+            .empty_object_struct
+            .as_mut()
+            .unwrap()
+            .change_prototype_with_no_transition(proto.clone());
+        this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
+        this.init_func(proto);
+        this.init_error(proto.clone());
+        this.init_array(proto.clone());
+        this.init_builtin();
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
+        let _ = this.global_object().define_own_property(
+            &mut this,
+            name,
+            &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
+            false,
+        );
+        let global = this.global_object();
+
+        let name = "Object".intern();
+        let _ = this.global_object().put(
+            &mut this,
+            "globalThis".intern(),
+            JsValue::encode_object_value(global),
+            false,
+        );
+        let func = JsNativeFunction::new(
+            &mut this,
+            "defineProperty".intern(),
+            object_define_property,
+            3,
+        );
+        let _ = obj_constructor.define_own_property(
+            &mut this,
+            "defineProperty".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+
+        let func = JsNativeFunction::new(&mut this, "keys".intern(), object_keys, 1);
+        let _ = obj_constructor.define_own_property(
+            &mut this,
+            "keys".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+        let func = JsNativeFunction::new(&mut this, "create".intern(), object_create, 3);
+        let _ = obj_constructor.define_own_property(
+            &mut this,
+            "create".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+
         let _ = obj_constructor.define_own_property(
             &mut this,
             "prototype".intern(),
@@ -320,32 +373,12 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(obj_to_string), W | C),
             false,
         );
-        let name = "Object".intern();
-        this.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto.clone());
-        this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
-        keep_on_stack!(&mut proto);
-        this.init_error(proto.clone());
-        keep_on_stack!(&mut proto);
-        let _ = this.global_object().define_own_property(
+
+        let func = JsNativeFunction::new(&mut this, "hasOwnProperty".intern(), has_own_property, 1);
+        let _ = proto.define_own_property(
             &mut this,
-            name,
-            &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
-            false,
-        );
-        keep_on_stack!(&mut proto);
-        this.init_array(proto.clone());
-        keep_on_stack!(&mut proto);
-        this.init_func(proto);
-        this.init_builtin();
-        let global = this.global_object();
-        let _ = this.global_object().put(
-            &mut this,
-            "globalThis".intern(),
-            JsValue::encode_object_value(global),
+            "hasOwnProperty".intern(),
+            &*DataDescriptor::new(JsValue::from(func), W | C),
             false,
         );
         this.gc.undefer();

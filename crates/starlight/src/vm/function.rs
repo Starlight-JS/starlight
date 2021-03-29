@@ -149,7 +149,36 @@ impl JsFunction {
                 target.as_function_mut().call(vm, &mut args)
             }
         }
-    }
+    } /*
+      pub fn call_with_env<'a>(
+          &mut self,
+          vm: &mut Runtime,
+          args: &mut Arguments,
+          env: GcPointer<JsObject>,
+      ) -> Result<JsValue, JsValue> {
+          match self.ty {
+              FuncType::Native(ref x) => (x.func)(vm, args),
+              FuncType::User(ref x) => {
+                  let structure = Structure::new_indexed(vm, Some(env), false);
+                  let scope =
+                      JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+                  vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args)
+              }
+              FuncType::Bound(ref mut x) => {
+                  let stack = vm.shadowstack();
+                  root!(
+                      args = stack,
+                      Arguments {
+                          this: x.this,
+                          ctor_call: args.ctor_call,
+                          values: x.args.as_slice_mut(),
+                      }
+                  );
+                  let mut target = x.target.clone();
+                  target.as_function_mut().call(vm, &mut args)
+              }
+          }
+      }*/
     pub fn new(vm: &mut Runtime, ty: FuncType, _strict: bool) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             vm,

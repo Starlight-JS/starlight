@@ -566,7 +566,7 @@ impl JsObject {
         let sz = s.get_slots_size();
         obj.slots.resize(vm.gc(), sz as _);
 
-        assert!(stored.value() == desc.value());
+        //assert!(stored.value() == desc.value());
         *obj.direct_mut(offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
         //println!("add");
@@ -1339,6 +1339,18 @@ impl GcPointer<JsObject> {
     ) -> Result<bool, JsValue> {
         let mut slot = Slot::new();
         self.define_own_property_slot(vm, name, desc, &mut slot, throwable)
+    }
+
+    pub fn get_own_property(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+    ) -> Option<PropertyDescriptor> {
+        let mut slot = Slot::new();
+        if self.get_own_property_slot(vm, name, &mut slot) {
+            return Some(slot.to_descriptor());
+        }
+        None
     }
 }
 pub struct Env {

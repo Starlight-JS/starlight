@@ -157,7 +157,9 @@ impl Runtime {
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let name = "Function".intern();
-        let mut func_proto = JsNativeFunction::new(self, name, function_prototype, 1);
+
+        let mut func_proto =
+            JsNativeFunction::new_with_struct(self, &_structure, name, function_prototype, 1);
         self.global_data
             .function_struct
             .unwrap()
@@ -800,6 +802,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         object::object_constructor as usize,
         object::object_create as usize,
         object::object_to_string as usize,
+        object::object_define_property as usize,
         array::array_ctor as usize,
         array::array_from as usize,
         array::array_is_array as usize,
@@ -848,4 +851,116 @@ pub fn get_length(rt: &mut Runtime, val: &mut GcPointer<JsObject>) -> Result<u32
     }
     let len = val.get(rt, "length".intern())?;
     len.to_uint32(rt)
+}
+
+/// Convert JS object to JS property descriptor
+pub fn to_property_descriptor(
+    rt: &mut Runtime,
+    target: JsValue,
+) -> Result<PropertyDescriptor, JsValue> {
+    if !target.is_jsobject() {
+        return Err(JsValue::new(
+            rt.new_type_error("ToPropertyDescriptor requires Object argument"),
+        ));
+    }
+
+    let mut attr: u32 = DEFAULT;
+    let stack = rt.shadowstack();
+    root!(obj = stack, target.get_jsobject());
+    let mut value = JsValue::encode_undefined_value();
+    let mut getter = JsValue::encode_undefined_value();
+    let mut setter = JsValue::encode_undefined_value();
+
+    {
+        let sym = "enumerable".intern();
+        if obj.has_property(rt, sym) {
+            let enumerable = obj.get(rt, sym)?.to_boolean();
+            if enumerable {
+                attr = (attr & !UNDEF_ENUMERABLE) | ENUMERABLE;
+            } else {
+                attr = attr & !UNDEF_ENUMERABLE;
+            }
+        }
+    }
+    {
+        let sym = "configurable".intern();
+        if obj.has_property(rt, sym) {
+            let configurable = obj.get(rt, sym)?.to_boolean();
+            if configurable {
+                attr = (attr & !UNDEF_CONFIGURABLE) | CONFIGURABLE;
+            } else {
+                attr = attr & !UNDEF_CONFIGURABLE;
+            }
+        }
+    }
+
+    {
+        let sym = "value".intern();
+        if obj.has_property(rt, sym) {
+            value = obj.get(rt, sym)?;
+            attr |= DATA;
+            attr &= !UNDEF_VALUE;
+        }
+    }
+
+    {
+        let sym = "writable".intern();
+        if obj.has_property(rt, sym) {
+            let writable = obj.get(rt, sym)?.to_boolean();
+            attr |= DATA;
+            attr &= !UNDEF_WRITABLE;
+            if writable {
+                attr |= WRITABLE;
+            }
+        }
+    }
+    {
+        let sym = "get".intern();
+        if obj.has_property(rt, sym) {
+            let r = obj.get(rt, sym)?;
+            if !r.is_callable() && !r.is_undefined() {
+                return Err(JsValue::new(
+                    rt.new_type_error("property 'get' is not callable"),
+                ));
+            }
+
+            attr |= ACCESSOR;
+            if !r.is_undefined() {
+                getter = r;
+            }
+            attr &= !UNDEF_GETTER;
+        }
+    }
+
+    {
+        let sym = "set".intern();
+        if obj.has_property(rt, sym) {
+            let r = obj.get(rt, sym)?;
+            if !r.is_callable() && !r.is_undefined() {
+                return Err(JsValue::new(
+                    rt.new_type_error("property 'set' is not callable"),
+                ));
+            }
+
+            attr |= ACCESSOR;
+            if !r.is_undefined() {
+                setter = r;
+            }
+            attr &= !UNDEF_SETTER;
+        }
+    }
+
+    if (attr & ACCESSOR) != 0 && (attr & DATA) != 0 {
+        return Err(JsValue::new(
+            rt.new_type_error("invalid property descriptor object"),
+        ));
+    }
+
+    if (attr & ACCESSOR) != 0 {
+        return Ok(*AccessorDescriptor::new(getter, setter, attr));
+    } else if (attr & DATA) != 0 {
+        return Ok(*DataDescriptor::new(value, attr));
+    } else {
+        return Ok(*GenericDescriptor::new(attr));
+    }
 }

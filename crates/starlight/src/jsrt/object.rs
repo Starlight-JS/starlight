@@ -2,10 +2,12 @@ use crate::{
     vm::Runtime,
     vm::{
         arguments::Arguments,
+        array::*,
         error::JsTypeError,
-        object::{JsObject, ObjectTag},
+        object::{JsObject, ObjectTag, *},
         string::JsString,
         structure::Structure,
+        symbol_table::*,
         value::JsValue,
     },
 };
@@ -77,4 +79,61 @@ pub fn object_constructor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
             return val.to_object(vm).map(|x| JsValue::encode_object_value(x));
         }
     }
+}
+
+pub fn object_define_property(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = vm.shadowstack();
+    if args.size() != 0 {
+        let first = args.at(0);
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+
+            let name = args.at(1).to_symbol(vm)?;
+            let attr = args.at(2);
+            let desc = super::to_property_descriptor(vm, attr)?;
+            obj.define_own_property(vm, name, &desc, true)?;
+            return Ok(JsValue::new(*&*obj));
+        }
+    }
+
+    return Err(JsValue::new(
+        vm.new_type_error("Object.defineProperty requires Object argument"),
+    ));
+}
+
+pub fn has_own_property(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() == 0 {
+        return Ok(JsValue::new(false));
+    }
+    let prop = args.at(0).to_symbol(vm)?;
+    let mut obj = args.this.to_object(vm)?;
+    Ok(JsValue::new(obj.get_own_property(vm, prop).is_some()))
+}
+
+pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = vm.shadowstack();
+    if args.size() != 0 {
+        let first = args.at(0);
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+            let mut names = vec![];
+            obj.get_own_property_names(
+                vm,
+                &mut |name, _| names.push(name),
+                EnumerationMode::Default,
+            );
+            root!(arr = stack, JsArray::new(vm, names.len() as _));
+
+            for (i, name) in names.iter().enumerate() {
+                let desc = vm.description(*name);
+                let name = JsString::new(vm, desc);
+                arr.put(vm, Symbol::Index(i as _), JsValue::new(name), false)?;
+            }
+            return Ok(JsValue::new(*&*arr));
+        }
+    }
+
+    Err(JsValue::new(
+        vm.new_type_error("Object.keys requires object argument"),
+    ))
 }
