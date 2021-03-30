@@ -1321,6 +1321,47 @@ impl Compiler {
                 let j = self.jmp();
                 self.lci.last_mut().unwrap().continues.push(Box::new(j));
             }
+            Stmt::ForIn(for_in) => {
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth += 1;
+                }
+                self.builder.emit(Opcode::OP_PUSH_ENV, &[], true);
+                let name = match for_in.left {
+                    VarDeclOrPat::VarDecl(ref var_decl) => self.emit_var_decl(var_decl)[0],
+                    VarDeclOrPat::Pat(Pat::Ident(ref ident)) => {
+                        let id = self.intern(&ident.id);
+                        let id = self.builder.get_sym(id);
+                        self.builder.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                        self.builder.emit(Opcode::OP_SET_VAR_CURRENT, &[id], false);
+                        id
+                    }
+                    _ => unreachable!(),
+                };
+
+                self.emit(&for_in.right, true);
+                let for_in_setup = self.jmp_custom(Opcode::OP_FORIN_SETUP);
+                let head = self.builder.code.code.len();
+                self.push_lci(head as _);
+                let for_in_enumerate = self.jmp_custom(Opcode::OP_FORIN_ENUMERATE);
+                self.builder.emit(Opcode::OP_SET_VAR, &[name], true);
+                self.emit_stmt(&for_in.body);
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth -= 1;
+                }
+
+                self.goto(head as _);
+
+                if let Some(lci) = self.lci.last_mut() {
+                    lci.scope_depth -= 1;
+                }
+                for_in_enumerate(self);
+                for_in_setup(self);
+                self.builder.emit(Opcode::OP_POP_ENV, &[], false);
+                self.builder.emit(Opcode::OP_FORIN_LEAVE, &[], false);
+            }
             Stmt::For(for_stmt) => {
                 if let Some(lci) = self.lci.last_mut() {
                     lci.scope_depth += 1;
@@ -1605,6 +1646,23 @@ impl Compiler {
             //this.builder.code.code[p] = ins as u8;
         }
     }
+
+    pub fn jmp_custom(&mut self, op: Opcode) -> impl FnOnce(&mut Self) {
+        let p = self.builder.code.code.len();
+        self.builder.emit(op, &[0], false);
+
+        move |this: &mut Self| {
+            // this.builder.emit(Opcode::OP_NOP, &[], false);
+            let to = this.builder.code.code.len() - (p + 5);
+            let bytes = (to as u32).to_le_bytes();
+            this.builder.code.code[p] = op as u8;
+            this.builder.code.code[p + 1] = bytes[0];
+            this.builder.code.code[p + 2] = bytes[1];
+            this.builder.code.code[p + 3] = bytes[2];
+            this.builder.code.code[p + 4] = bytes[3];
+            //this.builder.code.code[p] = ins as u8;
+        }
+    }
     pub fn emit_lit(&mut self, lit: &Lit) {
         match lit {
             Lit::Null(_) => self.builder.emit(Opcode::OP_PUSH_NULL, &[], false),
@@ -1636,7 +1694,8 @@ impl Compiler {
             _ => todo!("Other literals"),
         }
     }
-    pub fn emit_var_decl(&mut self, var: &VarDecl) {
+    pub fn emit_var_decl(&mut self, var: &VarDecl) -> Vec<u32> {
+        let mut names = vec![];
         for decl in var.decls.iter() {
             match &decl.name {
                 Pat::Ident(name) => match decl.init {
@@ -1658,6 +1717,7 @@ impl Compiler {
                                 }
                             }
                         }
+                        names.push(ix);
                     }
                     None => {
                         let s: &str = &name.id.sym;
@@ -1667,20 +1727,24 @@ impl Compiler {
                         match var.kind {
                             VarDeclKind::Let => {
                                 self.builder.emit(Opcode::OP_DECL_LET, &[ix], true);
-                                return;
+                                names.push(ix);
+                                continue;
                             }
                             VarDeclKind::Const => {
                                 self.builder.emit(Opcode::OP_DECL_CONST, &[ix], true);
-                                return;
+                                names.push(ix);
+                                continue;
                             }
                             VarDeclKind::Var => {}
                         }
                         self.builder.emit(Opcode::OP_SET_VAR, &[ix], true);
+                        names.push(ix);
                     }
                 },
                 _ => todo!(),
             }
         }
+        names
     }
 }
 

@@ -230,6 +230,26 @@ impl CodeBlock {
                             (pc as usize - start as usize) as i32 + off
                         )?;
                     }
+                    Opcode::OP_FORIN_ENUMERATE => {
+                        let off = pc.cast::<i32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(
+                            output,
+                            "for_in_enumerate {}[->{}]",
+                            off,
+                            (pc as usize - start as usize) as i32 + off
+                        )?;
+                    }
+                    Opcode::OP_FORIN_SETUP => {
+                        let off = pc.cast::<i32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(
+                            output,
+                            "for_in_setup {}[->{}]",
+                            off,
+                            (pc as usize - start as usize) as i32 + off
+                        )?;
+                    }
                     Opcode::OP_NOP => {
                         writeln!(output, "nop")?;
                     }
@@ -329,6 +349,14 @@ impl CodeBlock {
                     }
                     Opcode::OP_DELETE_BY_VAL => {
                         writeln!(output, "delete")?;
+                    }
+                    Opcode::OP_SET_VAR_CURRENT => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "set_var_current @{}", name)?;
+                    }
+                    Opcode::OP_FORIN_LEAVE => {
+                        writeln!(output, "for_in_leave")?;
                     }
                     _ => todo!("{:?}", op),
                 }

@@ -35,6 +35,7 @@ pub mod function;
 pub mod global;
 pub mod indexed_elements;
 pub mod interpreter;
+pub mod native_iterator;
 pub mod object;
 pub mod perf;
 pub mod property_descriptor;
@@ -318,7 +319,7 @@ impl Runtime {
         );
         let global = this.global_object();
 
-        let name = "Object".intern();
+        let _name = "Object".intern();
         let _ = this.global_object().put(
             &mut this,
             "globalThis".intern(),

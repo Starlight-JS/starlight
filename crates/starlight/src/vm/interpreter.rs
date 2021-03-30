@@ -1,8 +1,8 @@
 use self::{frame::CallFrame, stack::Stack};
 use super::{
     arguments::*, array::*, code_block::CodeBlock, error::JsTypeError, error::*,
-    function::JsVMFunction, object::*, slot::*, string::JsString, structure::*, symbol_table::*,
-    value::*, Runtime,
+    function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString, structure::*,
+    symbol_table::*, value::*, Runtime,
 };
 use crate::root;
 use crate::{
@@ -703,6 +703,51 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::encode_bool_value(
                     rhs.get_jsobject().has_own_property(rt, sym),
                 ));
+            }
+            Opcode::OP_FORIN_SETUP => {
+                let offset = ip.cast::<i32>().read_unaligned();
+                ip = ip.add(4);
+                let enumerable = frame.pop();
+
+                if enumerable.is_null() || enumerable.is_undefined() {
+                    ip = ip.offset(offset as _);
+                    continue;
+                }
+
+                let it = if enumerable.is_jsstring() {
+                    NativeIterator::new(rt, enumerable.get_object())
+                } else {
+                    let obj = enumerable.to_object(rt)?;
+                    NativeIterator::new(rt, obj.as_dyn())
+                };
+                frame.push(JsValue::new(it));
+                assert!(ip.cast::<Opcode>().read_unaligned() == Opcode::OP_FORIN_ENUMERATE);
+            }
+            Opcode::OP_FORIN_ENUMERATE => {
+                let offset = ip.cast::<i32>().read_unaligned();
+                ip = ip.add(4);
+                let mut it = frame
+                    .pop()
+                    .get_object()
+                    .downcast_unchecked::<NativeIterator>();
+                frame.push(JsValue::new(it));
+                if let Some(sym) = it.next() {
+                    let desc = rt.description(sym);
+                    frame.push(JsValue::new(JsString::new(rt, desc)));
+                } else {
+                    ip = ip.offset(offset as _);
+                }
+            }
+            Opcode::OP_FORIN_LEAVE => {
+                frame.pop();
+            }
+            Opcode::OP_SET_VAR_CURRENT => {
+                let name = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let name = unwrap_unchecked(frame.code_block).names[name as usize];
+                let mut env = frame.env.get_jsobject();
+                let val = frame.pop();
+                env.put(rt, name, val, false)?;
             }
             Opcode::OP_THROW => {
                 let val = frame.pop();

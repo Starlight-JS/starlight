@@ -94,7 +94,10 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
 }
 
 pub mod prelude {
-    pub use super::gc::{Heap, MarkingConstraint, SimpleMarkingConstraint};
+    pub use super::gc::{
+        cell::*, snapshot::deserializer::*, snapshot::serializer::*, Heap, MarkingConstraint,
+        SimpleMarkingConstraint,
+    };
     pub use super::vm::{
         arguments::Arguments,
         array::JsArray,

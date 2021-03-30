@@ -4,6 +4,7 @@ use crate::{
 };
 
 pub mod opcodes;
+pub mod opcodes_v2;
 pub mod profile;
 
 pub enum ObservedType {
