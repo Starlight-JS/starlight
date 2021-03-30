@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use starlight::{
-    gc::{malloc_gc::MallocGC, migc::MiGC, Heap},
-    prelude::{Internable, Slot},
+    gc::{malloc_gc::MallocGC, migc::MiGC, snapshot::Snapshot, Heap},
+    prelude::Deserializer,
     root,
     vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
     Platform,
@@ -35,9 +35,13 @@ struct Options {
     enable_ffi: bool,
 }
 
+use const_random::const_random;
+const BIN_ID: u64 = const_random!(u64);
+const SNAPSHOT_FILENAME: &'static str = ".startup-snapshot";
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
+
     let gc = if options.parallel_marking {
         GcParams::default()
             .with_parallel_marking(true)
@@ -50,24 +54,66 @@ fn main() {
     } else {
         Heap::new(MiGC::new(gc))
     };
-    let mut rt = Runtime::with_heap(
-        heap,
-        RuntimeParams::default()
-            .with_dump_bytecode(options.dump_bytecode)
-            .with_inline_caching(!options.disable_ic),
-        None,
-    );
+    let mut deserialized = false;
+    let mut rt = if Path::new(SNAPSHOT_FILENAME).exists() {
+        let mut src = std::fs::read(SNAPSHOT_FILENAME);
+        match src {
+            Ok(ref mut src) => {
+                let mut bytes: [u8; 8] = [0; 8];
+                bytes.copy_from_slice(&src[0..8]);
+                if u64::from_ne_bytes(bytes) != BIN_ID {
+                    Runtime::with_heap(
+                        heap,
+                        RuntimeParams::default()
+                            .with_dump_bytecode(options.dump_bytecode)
+                            .with_inline_caching(!options.disable_ic),
+                        None,
+                    )
+                } else {
+                    let snapshot = &src[8..];
+                    deserialized = true;
+
+                    Deserializer::deserialize(
+                        false,
+                        snapshot,
+                        RuntimeParams::default()
+                            .with_dump_bytecode(options.dump_bytecode)
+                            .with_inline_caching(!options.disable_ic),
+                        heap,
+                        None,
+                        |_, _| {},
+                    )
+                }
+            }
+            Err(_) => Runtime::with_heap(
+                heap,
+                RuntimeParams::default()
+                    .with_dump_bytecode(options.dump_bytecode)
+                    .with_inline_caching(!options.disable_ic),
+                None,
+            ),
+        }
+    } else {
+        Runtime::with_heap(
+            heap,
+            RuntimeParams::default()
+                .with_dump_bytecode(options.dump_bytecode)
+                .with_inline_caching(!options.disable_ic),
+            None,
+        )
+    };
 
     if options.enable_ffi {
         rt.add_ffi();
     }
-    /*let mut rt = Runtime::with_heap(
-        Heap::new(MarkAndSweep::new(GcParams::default())),
-        RuntimeParams::default()
-            .with_dump_bytecode(options.dump_bytecode)
-            .with_inline_caching(!options.disable_ic),
-        None,
-    );*/
+    if !deserialized {
+        let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
+        let mut buf = Vec::<u8>::with_capacity(8 + snapshot.buffer.len());
+        buf.extend(&BIN_ID.to_ne_bytes());
+        buf.extend(snapshot.buffer.iter());
+        std::fs::write(SNAPSHOT_FILENAME, &buf).unwrap();
+    }
+
     let gcstack = rt.shadowstack();
 
     let string = std::fs::read_to_string(&options.file);
@@ -110,8 +156,6 @@ fn main() {
                     eprintln!("Executed in {}ms", elapsed.as_nanos() as f64 / 1000000f64);
                 }
                 Err(e) => {
-                    let mut slot = Slot::new();
-
                     let str = match e.to_string(&mut rt) {
                         Ok(s) => s,
                         Err(_) => "<unknown error>".to_owned(),

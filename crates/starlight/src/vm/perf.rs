@@ -33,7 +33,7 @@ impl Perf {
 impl Perf {
     pub fn new() -> Self {
         Perf {
-            counter: vec![PerfCounter::new(); 256],
+            counter: vec![PerfCounter::new(); 1 << 15],
             timer: Instant::now(),
             prev_time: Duration::from_secs(0),
             prev_inst: Perf::INVALID,

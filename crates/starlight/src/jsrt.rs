@@ -803,6 +803,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         object::object_create as usize,
         object::object_to_string as usize,
         object::object_define_property as usize,
+        object::has_own_property as usize,
+        object::object_keys as usize,
         array::array_ctor as usize,
         array::array_from as usize,
         array::array_is_array as usize,
