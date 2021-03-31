@@ -490,10 +490,10 @@ impl JsVMFunction {
             code: code.clone(),
             scope: *scope,
         };
-        vm.gc().defer();
+        vm.heap().defer();
         root!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
         root!(proto = stack, JsObject::new_empty(vm));
-        vm.gc().undefer();
+        vm.heap().undefer();
         let _ = proto.define_own_property(
             vm,
             "constructor".intern(),

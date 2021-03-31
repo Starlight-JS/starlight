@@ -42,7 +42,7 @@ use Opcode::*;
 pub const TRACE_MAX_SIZE: usize = 316;
 
 pub unsafe fn record(rt: &mut Runtime, frame: *mut CallFrame, trace: &mut Vec<Ir>) -> TraceResult {
-    rt.gc().collect_if_necessary();
+    rt.heap().collect_if_necessary();
     let mut ip = (*frame).ip;
 
     let mut frame: &'static mut CallFrame = &mut *frame;

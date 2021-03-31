@@ -140,7 +140,7 @@ impl TransitionsTable {
             attrs: attrs.raw(),
         };
         if let Transition::Pair(x, y) = &self.var {
-            let mut table = vm.gc().allocate(HashMap::new());
+            let mut table = vm.heap().allocate(HashMap::new());
             table.insert(x.clone(), y.clone());
             self.var = Transition::Table(Some(table));
         }
@@ -229,7 +229,7 @@ pub struct DeletedEntryHolder {
 
 impl DeletedEntryHolder {
     pub fn push(&mut self, vm: &mut Runtime, offset: u32) {
-        let entry = vm.gc().allocate(DeletedEntry {
+        let entry = vm.heap().allocate(DeletedEntry {
             prev: self.entry.clone(),
             offset,
         });
@@ -283,7 +283,7 @@ impl GcCell for DeletedEntry {
 
 impl Structure {
     fn ctor(vm: &mut Runtime, previous: GcPointer<Self>, unique: bool) -> GcPointer<Self> {
-        let mut this = vm.gc().allocate(Structure {
+        let mut this = vm.heap().allocate(Structure {
             prototype: previous.prototype.clone(),
             previous: Some(previous.clone()),
             table: if unique && previous.is_unique() {
@@ -315,7 +315,7 @@ impl Structure {
         unique: bool,
         indexed: bool,
     ) -> GcPointer<Self> {
-        vm.gc().allocate(Structure {
+        vm.heap().allocate(Structure {
             prototype,
             previous: None,
             table: None,
@@ -352,8 +352,8 @@ impl Structure {
 
     fn ctor3(vm: &mut Runtime, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
         let table = it.iter().copied().collect::<TargetTable>();
-        let table = vm.gc().allocate(table);
-        let mut this = vm.gc().allocate(Structure {
+        let table = vm.heap().allocate(table);
+        let mut this = vm.heap().allocate(Structure {
             prototype: None,
             previous: None,
             table: Some(table),
@@ -402,7 +402,7 @@ impl Structure {
         indexed: bool,
     ) -> GcPointer<Structure> {
         let table = if let Some(table) = table {
-            Some(vm.gc().allocate(table))
+            Some(vm.heap().allocate(table))
         } else {
             None
         };
@@ -468,7 +468,7 @@ impl GcPointer<Structure> {
                 Some(cur) => {
                     if cur.has_table() {
                         self.table =
-                            Some(vm.gc().allocate((**cur.table.as_ref().unwrap()).clone()));
+                            Some(vm.heap().allocate((**cur.table.as_ref().unwrap()).clone()));
                         break;
                     } else {
                         if cur.is_adding_map() {
@@ -478,7 +478,7 @@ impl GcPointer<Structure> {
                     current = cur.previous.clone();
                 }
                 None => {
-                    self.table = Some(vm.gc().allocate(HashMap::new()));
+                    self.table = Some(vm.heap().allocate(HashMap::new()));
                     break;
                 }
             }

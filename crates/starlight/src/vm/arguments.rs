@@ -13,10 +13,13 @@ use super::{
     Runtime,
 };
 use crate::gc::cell::{GcPointer, Trace, Tracer};
-
+/// Arguments to JS function.
 pub struct Arguments<'a> {
+    /// 'this' value. In non-strict mode when this is undefined then global object is passed.
     pub this: JsValue,
+    /// Argument values buffer.
     pub values: &'a mut [JsValue],
+    /// Is current call is a constructor call?
     pub ctor_call: bool,
 }
 

@@ -533,7 +533,7 @@ impl JsObject {
                             let s = &obj.structure;
                             let sz = s.get_slots_size();
                             //   println!("resize to {} from {}", s.get_slots_size(), obj.slots.size());
-                            obj.slots.resize(vm.gc(), sz as _);
+                            obj.slots.resize(vm.heap(), sz as _);
 
                             *obj.direct_mut(offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
@@ -564,7 +564,7 @@ impl JsObject {
 
         let s = &obj.structure;
         let sz = s.get_slots_size();
-        obj.slots.resize(vm.gc(), sz as _);
+        obj.slots.resize(vm.heap(), sz as _);
 
         //assert!(stored.value() == desc.value());
         *obj.direct_mut(offset as _) = stored.value();
@@ -859,7 +859,7 @@ impl JsObject {
     ) -> GcPointer<Self> {
         let stack = vm.shadowstack();
         let init = IndexedElements::new(vm);
-        root!(indexed = stack, vm.gc().allocate(init));
+        root!(indexed = stack, vm.heap().allocate(init));
         root!(
             storage = stack,
             ArrayStorage::with_size(
@@ -878,7 +878,7 @@ impl JsObject {
             flags: OBJ_FLAG_EXTENSIBLE,
             tag,
         };
-        vm.gc().allocate(this)
+        vm.heap().allocate(this)
     }
 
     pub fn tag(&self) -> ObjectTag {
@@ -1211,7 +1211,7 @@ impl GcPointer<JsObject> {
                 self.structure = s;
             }
 
-            self.indexed.vector.resize(vm.gc(), index + 1);
+            self.indexed.vector.resize(vm.heap(), index + 1);
 
             if !absent {
                 *self.indexed.vector.at_mut(index) = val;
@@ -1351,6 +1351,60 @@ impl GcPointer<JsObject> {
             return Some(slot.to_descriptor());
         }
         None
+    }
+    #[inline]
+    pub fn change_extensible(&mut self, vm: &mut Runtime, val: bool) {
+        if val {
+            self.flags |= OBJ_FLAG_EXTENSIBLE;
+        } else {
+            self.flags &= !OBJ_FLAG_EXTENSIBLE;
+        }
+
+        self.structure = self.structure.change_extensible_transition(vm);
+        self.indexed.make_sparse(vm);
+    }
+    pub fn freeze(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {
+        let mut names = vec![];
+        self.get_own_property_names(
+            vm,
+            &mut |name, _| names.push(name),
+            EnumerationMode::IncludeNotEnumerable,
+        );
+
+        for name in names {
+            let mut desc = self.get_own_property(vm, name).unwrap();
+            if desc.is_data() {
+                desc.set_writable(false);
+            }
+            if desc.is_configurable() {
+                desc.set_configurable(false);
+            }
+            self.define_own_property(vm, name, &desc, true)?;
+        }
+        self.change_extensible(vm, false);
+
+        Ok(true)
+    }
+
+    pub fn seal(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {
+        let mut names = vec![];
+        self.get_own_property_names(
+            vm,
+            &mut |name, _| names.push(name),
+            EnumerationMode::IncludeNotEnumerable,
+        );
+
+        for name in names {
+            let mut desc = self.get_own_property(vm, name).unwrap();
+
+            if desc.is_configurable() {
+                desc.set_configurable(false);
+            }
+            self.define_own_property(vm, name, &desc, true)?;
+        }
+        self.change_extensible(vm, false);
+
+        Ok(true)
     }
 }
 pub struct Env {
@@ -1497,7 +1551,7 @@ mod tests {
             false,
         );
         assert!(result.is_ok());
-        rt.gc().gc();
+        rt.heap().gc();
         match object.get(&mut rt, "key".intern()) {
             Ok(val) => {
                 assert!(val.is_number());
@@ -1521,7 +1575,7 @@ mod tests {
             assert!(result.is_ok());
         }
 
-        rt.gc().gc();
+        rt.heap().gc();
         for i in 0..10000u32 {
             let result = object.get(&mut rt, Symbol::Index(i));
             match result {
@@ -1542,7 +1596,7 @@ mod tests {
             false,
         );
         assert!(result.is_ok());
-        rt.gc().gc();
+        rt.heap().gc();
         for i in 0..10000u32 {
             let result = object.get(&mut rt, Symbol::Index(i));
             match result {

@@ -28,7 +28,7 @@ pub type TypePointer = *mut ffi_type;
 pub type RawPointer = *mut c_void;
 
 pub fn initialize_ffi(rt: &mut Runtime) {
-    rt.gc().defer();
+    rt.heap().defer();
     let structure =
         Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
     let mut init = || -> Result<(), JsValue> {
@@ -138,7 +138,7 @@ CFunction.create = function cnew(library, name, args, ret, variadic) {
             unreachable!()
         }
     }
-    rt.gc().undefer();
+    rt.heap().undefer();
 }
 /// A wrapper around a C pointer.
 #[derive(Clone, Copy)]
@@ -920,7 +920,7 @@ pub fn ffi_function_attach(rt: &mut Runtime, args: &Arguments) -> Result<JsValue
 
 pub fn ffi_function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    rt.gc().defer();
+    rt.heap().defer();
     let func = unsafe {
         let val = args.this;
         if !val.is_jsobject() {
@@ -955,7 +955,7 @@ pub fn ffi_function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
         func.data::<FFIFunction>().call(rt, &args)
     });
 
-    rt.gc().undefer();
+    rt.heap().undefer();
     // can't just do `*res` since it is internally Pin<&mut Result<JsValue,JsValue>>`
     match &*res {
         Ok(val) => Ok(*val),

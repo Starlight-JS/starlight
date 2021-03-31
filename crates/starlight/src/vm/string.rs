@@ -30,7 +30,7 @@ impl JsString {
         let proto = Self {
             string: str.to_owned(),
         };
-        let cell = vm.gc().allocate(proto);
+        let cell = vm.heap().allocate(proto);
 
         cell
     }

@@ -500,7 +500,7 @@ impl Accessor {
     }
     pub fn new(vm: &mut Runtime, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
         let this = Self { getter, setter };
-        vm.gc().allocate(this)
+        vm.heap().allocate(this)
     }
 
     pub fn invoke_getter(

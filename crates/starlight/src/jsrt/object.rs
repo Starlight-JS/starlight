@@ -137,3 +137,117 @@ pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
         vm.new_type_error("Object.keys requires object argument"),
     ))
 }
+
+pub fn object_freeze(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() != 0 {
+        let first = args.at(0);
+        let stack = vm.shadowstack();
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+            obj.freeze(vm)?;
+            return Ok(JsValue::new(*obj));
+        }
+    }
+    Err(JsValue::new(
+        vm.new_type_error("Object.freeze requires object argument"),
+    ))
+}
+
+pub fn object_seal(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() != 0 {
+        let first = args.at(0);
+        let stack = vm.shadowstack();
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+            obj.seal(vm)?;
+            return Ok(JsValue::new(*obj));
+        }
+    }
+    Err(JsValue::new(
+        vm.new_type_error("Object.seal requires object argument"),
+    ))
+}
+pub fn object_prevent_extensions(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() != 0 {
+        let first = args.at(0);
+        let stack = vm.shadowstack();
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+            obj.change_extensible(vm, false);
+            return Ok(JsValue::new(*obj));
+        }
+    }
+    Err(JsValue::new(vm.new_type_error(
+        "Object.preventExtensions requires object argument",
+    )))
+}
+
+pub fn object_is_sealed(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() != 0 {
+        let first = args.at(0);
+        let stack = vm.shadowstack();
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+            let mut names = vec![];
+            obj.get_own_property_names(
+                vm,
+                &mut |name, _| names.push(name),
+                EnumerationMode::IncludeNotEnumerable,
+            );
+            for name in names {
+                let desc = obj.get_own_property(vm, name).unwrap();
+                if desc.is_configurable() {
+                    return Ok(JsValue::new(false));
+                }
+            }
+            return Ok(JsValue::new(!obj.is_extensible()));
+        }
+    }
+    Err(JsValue::new(
+        vm.new_type_error("Object.isSealed requires object argument"),
+    ))
+}
+
+pub fn object_is_frozen(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() != 0 {
+        let first = args.at(0);
+        let stack = vm.shadowstack();
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+            let mut names = vec![];
+            obj.get_own_property_names(
+                vm,
+                &mut |name, _| names.push(name),
+                EnumerationMode::IncludeNotEnumerable,
+            );
+            for name in names {
+                let desc = obj.get_own_property(vm, name).unwrap();
+                if desc.is_configurable() {
+                    return Ok(JsValue::new(false));
+                }
+                if desc.is_data() && desc.is_writable() {
+                    return Ok(JsValue::new(false));
+                }
+            }
+            return Ok(JsValue::new(!obj.is_extensible()));
+        }
+    }
+    Err(JsValue::new(
+        vm.new_type_error("Object.isFrozen requires object argument"),
+    ))
+}
+
+pub fn object_is_extensible(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() != 0 {
+        let first = args.at(0);
+        let stack = vm.shadowstack();
+        if first.is_jsobject() {
+            root!(obj = stack, first.get_jsobject());
+
+            return Ok(JsValue::new(obj.is_extensible()));
+        }
+    }
+    Err(JsValue::new(vm.new_type_error(
+        "Object.isExtensible requires object argument",
+    )))
+}

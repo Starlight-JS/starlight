@@ -32,7 +32,7 @@ impl NativeIterator {
         } else {
             todo!()
         }
-        rt.gc().allocate(Self { names, at: 0 })
+        rt.heap().allocate(Self { names, at: 0 })
     }
 }
 

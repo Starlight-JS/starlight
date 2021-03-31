@@ -22,7 +22,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
-    root!(long_lived = stack, rt.gc().allocate(Node::new(None, None)));
+    root!(long_lived = stack, rt.heap().allocate(Node::new(None, None)));
     long_lived.j = 0xdead;
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
@@ -53,10 +53,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 b.iter_batched(
                     || {},
                     |_data| {
-                        root!(temp_tree = stack, rt.gc().allocate(Node::new(None, None)));
+                        root!(temp_tree = stack, rt.heap().allocate(Node::new(None, None)));
                         keep_on_stack!(&mut temp_tree);
                         populate(&mut rt, depth as _, &mut temp_tree);
-                        rt.gc().collect_if_necessary();
+                        rt.heap().collect_if_necessary();
                     },
                     BatchSize::NumIterations(num_iters(depth) as _),
                 )
@@ -71,7 +71,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     |_data| {
                         root!(temp_tree = stack, make_tree(&mut rt, depth as _));
                         keep_on_stack!(&temp_tree);
-                        rt.gc().collect_if_necessary();
+                        rt.heap().collect_if_necessary();
                     },
                     BatchSize::NumIterations(num_iters(depth) as _),
                 );
@@ -114,14 +114,14 @@ const fn num_iters(i: usize) -> usize {
 }
 
 fn populate(gc: &mut Runtime, mut idepth: i32, this_node: &mut GcPointer<Node>) {
-    gc.gc().collect_if_necessary();
+    gc.heap().collect_if_necessary();
 
     if idepth <= 0 {
         return;
     }
     idepth -= 1;
-    this_node.left = Some(gc.gc().allocate(Node::new(None, None)));
-    this_node.right = Some(gc.gc().allocate(Node::new(None, None)));
+    this_node.left = Some(gc.heap().allocate(Node::new(None, None)));
+    this_node.right = Some(gc.heap().allocate(Node::new(None, None)));
 
     populate(gc, idepth, this_node.left.as_mut().unwrap());
     populate(gc, idepth, this_node.right.as_mut().unwrap());
@@ -129,14 +129,14 @@ fn populate(gc: &mut Runtime, mut idepth: i32, this_node: &mut GcPointer<Node>) 
 
 fn make_tree(gc: &mut Runtime, idepth: i32) -> GcPointer<Node> {
     if idepth <= 0 {
-        return gc.gc().allocate(Node::new(None, None));
+        return gc.heap().allocate(Node::new(None, None));
     }
     let stack = gc.shadowstack();
 
     root!(n1 = stack, make_tree(gc, idepth - 1));
     root!(n2 = stack, make_tree(gc, idepth - 1));
-    gc.gc().collect_if_necessary();
-    gc.gc().allocate(Node::new(Some(*&*n1), Some(*&*n2)))
+    gc.heap().collect_if_necessary();
+    gc.heap().allocate(Node::new(Some(*&*n1), Some(*&*n2)))
 }
 
 impl Node {

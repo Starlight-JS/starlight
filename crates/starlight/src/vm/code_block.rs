@@ -381,7 +381,7 @@ impl CodeBlock {
             feedback: vec![],
         };
 
-        rt.gc().allocate(this)
+        rt.heap().allocate(this)
     }
 }
 

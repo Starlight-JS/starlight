@@ -67,10 +67,17 @@ macro_rules! def_enum {
 }
 
 js_class_list!(def_enum);
+
+
+/// Simple tpe that is used to implement custom JS objects.
 pub struct Class {
+    /// Class name. `Object.prototype.toString` will print this name.
     pub name: &'static str,
+    /// Internal class type.
     pub ty: u32,
+    /// Class method table.
     pub method_table: MethodTable,
+    /// `trace` method that is used by GC to mark object.
     pub trace: Option<extern "C" fn(&mut dyn Tracer, &mut JsObject)>,
     pub drop: Option<extern "C" fn(&mut JsObject)>,
     pub deserialize: Option<extern "C" fn(&mut JsObject, &mut Deserializer, &mut Runtime)>,
@@ -78,6 +85,8 @@ pub struct Class {
     pub additional_size: Option<extern "C" fn() -> usize>,
 }
 
+/// Define JS class. `$class` is type that will be passed to JS, $name` is class name, and `$sym` is internal class type.
+/// There's second macro arm that is used to pass additional methods to class.
 #[macro_export]
 macro_rules! define_jsclass_with_symbol {
     ($class: ident,$name : ident,$sym: ident) => {
@@ -144,6 +153,7 @@ macro_rules! define_jsclass_with_symbol {
     };
 }
 
+/// Same as `define_jsclass_with_symbol!` except `$name` is used as `$symbol`.
 #[macro_export]
 macro_rules! define_jsclass {
     ($class: ident,$name : ident) => {

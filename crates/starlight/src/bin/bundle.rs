@@ -27,7 +27,7 @@ fn main() {
     });
 
     let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
-    rt.gc().defer();
+    rt.heap().defer();
     let func = rt
         .compile(
             opts.input.as_os_str().to_str().unwrap(),
@@ -47,7 +47,7 @@ fn main() {
     let snapshot = Snapshot::take(false, &mut rt, |ser, _rt| {
         ser.write_gcpointer(func.get_object())
     });
-    rt.gc().undefer();
+    rt.heap().undefer();
     let mut c_src = String::with_capacity(snapshot.buffer.len() + 128);
     c_src.push_str(&format!(
         r#"

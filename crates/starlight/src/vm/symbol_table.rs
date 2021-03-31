@@ -137,7 +137,7 @@ pub struct JsSymbol {
 
 impl JsSymbol {
     pub fn new(rt: &mut Runtime, sym: Symbol) -> GcPointer<Self> {
-        rt.gc().allocate(Self { sym })
+        rt.heap().allocate(Self { sym })
     }
 
     pub fn symbol(&self) -> Symbol {

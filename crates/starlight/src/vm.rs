@@ -36,6 +36,7 @@ pub mod global;
 pub mod indexed_elements;
 pub mod interpreter;
 pub mod native_iterator;
+pub mod number;
 pub mod object;
 pub mod perf;
 pub mod property_descriptor;
@@ -128,6 +129,7 @@ impl GcParams {
     }
 }
 
+/// JavaScript runtime instance.
 pub struct Runtime {
     pub(crate) gc: Heap,
     pub(crate) stack: Stack,
@@ -142,6 +144,8 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Compile provided script into JS function. If error when compiling happens `SyntaxError` instance
+    /// is returned.
     pub fn compile(&mut self, path: &str, name: &str, script: &str) -> Result<JsValue, JsValue> {
         let cm: Lrc<SourceMap> = Default::default();
         let _e = BufferedError::default();
@@ -181,6 +185,12 @@ impl Runtime {
         let fun = JsVMFunction::new(self, code, env);
         return Ok(JsValue::encode_object_value(fun));
     }
+
+    /// Tries to evaluate provided `script`. If error when parsing or execution occurs then `Err` with exception value is returned.
+    ///
+    ///
+    ///
+    /// TODO: Return script execution result. Right now just `undefined` value is returned.
     pub fn eval(
         &mut self,
         path: Option<&str>,
@@ -246,16 +256,18 @@ impl Runtime {
             Err(_) => None,
         }
     }
+    /// Return [Symbol](crate::vm::symbol_table::Symbol) description.
     pub fn description(&self, sym: Symbol) -> String {
         match sym {
             Symbol::Key(key) => symbol_table::symbol_table().description(key).to_owned(),
             Symbol::Index(x) => x.to_string(),
         }
     }
-    pub fn gc(&mut self) -> &mut Heap {
+    /// Get mutable heap reference.
+    pub fn heap(&mut self) -> &mut Heap {
         &mut self.gc
     }
-
+    /// Construct runtime instance with specific GC heap.
     pub fn with_heap(
         gc: Heap,
         options: RuntimeParams,
@@ -311,6 +323,8 @@ impl Runtime {
         this.init_builtin();
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
+        super::jsrt::object_init(&mut this, obj_constructor, proto);
+
         let _ = this.global_object().define_own_property(
             &mut this,
             name,
@@ -326,64 +340,9 @@ impl Runtime {
             JsValue::encode_object_value(global),
             false,
         );
-        let func = JsNativeFunction::new(
-            &mut this,
-            "defineProperty".intern(),
-            object_define_property,
-            3,
-        );
-        let _ = obj_constructor.define_own_property(
-            &mut this,
-            "defineProperty".intern(),
-            &*DataDescriptor::new(JsValue::new(func), NONE),
-            false,
-        );
-
-        let func = JsNativeFunction::new(&mut this, "keys".intern(), object_keys, 1);
-        let _ = obj_constructor.define_own_property(
-            &mut this,
-            "keys".intern(),
-            &*DataDescriptor::new(JsValue::new(func), NONE),
-            false,
-        );
-        let func = JsNativeFunction::new(&mut this, "create".intern(), object_create, 3);
-        let _ = obj_constructor.define_own_property(
-            &mut this,
-            "create".intern(),
-            &*DataDescriptor::new(JsValue::new(func), NONE),
-            false,
-        );
-
-        let _ = obj_constructor.define_own_property(
-            &mut this,
-            "prototype".intern(),
-            &*DataDescriptor::new(JsValue::from(proto.clone()), NONE),
-            false,
-        );
-        let _ = proto.define_own_property(
-            &mut this,
-            "constructor".intern(),
-            &*DataDescriptor::new(JsValue::from(obj_constructor.clone()), W | C),
-            false,
-        );
-        let obj_to_string =
-            JsNativeFunction::new(&mut this, "toString".intern(), object_to_string, 0);
-        let _ = proto.define_own_property(
-            &mut this,
-            "toString".intern(),
-            &*DataDescriptor::new(JsValue::from(obj_to_string), W | C),
-            false,
-        );
-
-        let func = JsNativeFunction::new(&mut this, "hasOwnProperty".intern(), has_own_property, 1);
-        let _ = proto.define_own_property(
-            &mut this,
-            "hasOwnProperty".intern(),
-            &*DataDescriptor::new(JsValue::from(func), W | C),
-            false,
-        );
+        this.init_self_hosted();
         this.gc.undefer();
-
+        this.gc.collect_if_necessary();
         this
     }
     pub(crate) fn new_empty(
@@ -417,6 +376,7 @@ impl Runtime {
 
         this
     }
+    /// Create new JS runtime with `MiGC` set as GC.
     pub fn new(
         options: RuntimeParams,
         gc_params: GcParams,
@@ -432,20 +392,25 @@ impl Runtime {
     pub fn global_data(&self) -> &GlobalData {
         &self.global_data
     }
-    /// Returns shadow stack for GC rooting that will be usable in current scope.
+    /// Return "global" shadow stack instance. Note that returned instance is bound to
+    /// scope where this function was invoked.
     pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
         unsafe { std::mem::transmute(&self.shadowstack) }
     }
-
+    /// Enable FFI builtin object.
+    ///
+    ///
+    /// FFI object allows to load arbitrary dynamic library and then load functions from it.
     pub fn add_ffi(&mut self) {
         crate::jsrt::ffi::initialize_ffi(self);
     }
 
+    /// Construct new type error from provided string.
     pub fn new_type_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsTypeError::new(self, msg, None)
     }
-
+    /// Construct new reference error from provided string.
     pub fn new_reference_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsReferenceError::new(self, msg, None)
@@ -453,7 +418,7 @@ impl Runtime {
 }
 
 use starlight_derive::GcTrace;
-use wtf_rs::{keep_on_stack, unwrap_unchecked};
+use wtf_rs::unwrap_unchecked;
 
 use self::{
     error::{JsReferenceError, JsTypeError},
@@ -465,6 +430,7 @@ use self::{
     symbol_table::{Internable, Symbol},
 };
 
+/// Global JS data that is used internally in Starlight.
 #[derive(Default, GcTrace)]
 pub struct GlobalData {
     pub(crate) normal_arguments_structure: Option<GcPointer<Structure>>,

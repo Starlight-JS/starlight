@@ -162,7 +162,7 @@ unsafe fn eval_internal(
 }
 
 pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
-    rt.gc().collect_if_necessary();
+    rt.heap().collect_if_necessary();
     let mut ip = (*frame).ip;
 
     let mut frame: &'static mut CallFrame = &mut *frame;
@@ -219,7 +219,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 );
             }
             Opcode::OP_JMP => {
-                rt.gc().collect_if_necessary();
+                rt.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
                 ip = ip.offset(offset as isize);
@@ -273,7 +273,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::encode_null_value());
             }
             Opcode::OP_RET => {
-                rt.gc().collect_if_necessary();
+                rt.heap().collect_if_necessary();
                 let mut value = if frame.sp <= frame.limit {
                     JsValue::encode_undefined_value()
                 } else {
@@ -467,7 +467,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_CALL => {
-                rt.gc().collect_if_necessary();
+                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let mut func = frame.pop();
@@ -494,7 +494,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(result);
             }
             Opcode::OP_NEW => {
-                rt.gc().collect_if_necessary();
+                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
 
@@ -576,7 +576,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.gc().make_weak(
+                            structure: rt.heap().make_weak(
                                 slot.base()
                                     .unwrap()
                                     .downcast_unchecked::<JsObject>()
@@ -639,7 +639,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         *unwrap_unchecked(frame.code_block)
                             .feedback
                             .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.gc().make_weak(obj.structure()),
+                            structure: rt.heap().make_weak(obj.structure()),
                             offset: slot.offset(),
                         };
                     }
@@ -966,7 +966,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_CALL_BUILTIN => {
-                rt.gc().collect_if_necessary();
+                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let builtin_id = ip.cast::<u32>().read();
@@ -1047,7 +1047,7 @@ pub unsafe fn get_var(
             *unwrap_unchecked(frame.code_block)
                 .feedback
                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                structure: rt.gc().make_weak(env.structure()),
+                structure: rt.heap().make_weak(env.structure()),
                 offset: slot.offset(),
             };
         }
@@ -1116,7 +1116,7 @@ pub unsafe fn set_var(
     *unwrap_unchecked(frame.code_block)
         .feedback
         .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-        structure: rt.gc().make_weak(slot.0.structure()),
+        structure: rt.heap().make_weak(slot.0.structure()),
         offset: slot.1.offset(),
     };
     //*env.direct_mut(slot.1.offset() as usize) = val;
@@ -1133,7 +1133,7 @@ impl SpreadValue {
         unsafe {
             if value.is_jsobject() {
                 if value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array {
-                    return Ok(rt.gc().allocate(Self {
+                    return Ok(rt.heap().allocate(Self {
                         array: value.get_object().downcast_unchecked(),
                     }));
                 }

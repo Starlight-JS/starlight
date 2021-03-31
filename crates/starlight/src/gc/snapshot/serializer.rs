@@ -108,7 +108,7 @@ impl SnapshotSerializer {
         self.output[patch_at + 3] = count[3];
     }
     pub(crate) fn build_heap_reference_map(&mut self, rt: &mut Runtime) {
-        let gc = rt.gc();
+        let gc = rt.heap();
 
         /*Heap::walk(gc.mi_heap, |object, _| {
             //let ix = self.reference_map.len() as u32;
@@ -131,7 +131,7 @@ impl SnapshotSerializer {
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
-        let gc = rt.gc();
+        let gc = rt.heap();
         let patch_at = self.output.len();
         self.write_u32(0);
         let mut count: u32 = 0;

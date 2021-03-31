@@ -1,12 +1,5 @@
 use std::path::{Path, PathBuf};
-
-use starlight::{
-    gc::{malloc_gc::MallocGC, migc::MiGC, snapshot::Snapshot, Heap},
-    prelude::Deserializer,
-    root,
-    vm::{arguments::Arguments, value::JsValue, GcParams, Runtime, RuntimeParams},
-    Platform,
-};
+use starlight::prelude::*;
 use structopt::*;
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -50,9 +43,9 @@ fn main() {
         GcParams::default().with_parallel_marking(false)
     };
     let heap = if options.use_malloc_gc {
-        Heap::new(MallocGC::new(gc))
+        Heap::new(starlight::gc::malloc_gc::MallocGC::new(gc))
     } else {
-        Heap::new(MiGC::new(gc))
+        Heap::new(starlight::gc::migc::MiGC::new(gc))
     };
     let mut deserialized = false;
     let mut rt = if Path::new(SNAPSHOT_FILENAME).exists() {
@@ -148,7 +141,6 @@ fn main() {
                 args = gcstack,
                 Arguments::new(JsValue::encode_object_value(global), &mut [])
             );
-            wtf_rs::keep_on_stack!(&mut args, &mut function);
             let start = std::time::Instant::now();
             match function.as_function_mut().call(&mut rt, &mut args) {
                 Ok(_) => {

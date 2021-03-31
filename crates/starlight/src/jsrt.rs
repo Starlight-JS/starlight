@@ -22,7 +22,7 @@ use array::*;
 use error::*;
 use function::*;
 use wtf_rs::keep_on_stack;
-#[no_mangle]
+
 pub fn print(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     for i in 0..args.size() {
         let value = args.at(i);
@@ -109,34 +109,8 @@ impl Runtime {
             JsValue::encode_object_value(func),
             false,
         );
-
-        /*self.eval(
-            true,
-            r#"
-        Array.prototype.some = function array_some(callback,thisArg) {
-            let length = this.length;
-
-            for (let i = 0;i < length;i+=1) {
-                if (!(i in this)) {
-                    continue;
-                }
-
-                if (callback.call(thisArg,this[i],i,this)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        "#,
-        )
-        .unwrap_or_else(|e| {
-            panic!(
-                "failed to initialize builtins: {}",
-                e.to_string(self).unwrap_or_else(|_| panic!())
-            )
-        });*/
-
+    }
+    pub(crate) fn init_self_hosted(&mut self) {
         let mut eval = |path, source| {
             self.eval(Some(path), false, source)
                 .unwrap_or_else(|error| match error.to_string(self) {
@@ -729,6 +703,118 @@ impl Runtime {
         }
     }
 }
+
+use object::*;
+
+pub(crate) fn object_init(
+    rt: &mut Runtime,
+    mut obj_constructor: GcPointer<JsObject>,
+    mut proto: GcPointer<JsObject>,
+) {
+    let func = JsNativeFunction::new(rt, "defineProperty".intern(), object_define_property, 3);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "defineProperty".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "seal".intern(), object_seal, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "seal".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "freeze".intern(), object_freeze, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "freeze".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "isSealed".intern(), object_is_sealed, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "isSealed".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "isFrozen".intern(), object_is_frozen, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "isFrozen".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "isExtensible".intern(), object_is_extensible, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "isExtensible".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(
+        rt,
+        "preventExtensions".intern(),
+        object_prevent_extensions,
+        1,
+    );
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "preventExtensions".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "keys".intern(), object_keys, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "keys".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+    let func = JsNativeFunction::new(rt, "create".intern(), object_create, 3);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "create".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
+
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "prototype".intern(),
+        &*DataDescriptor::new(JsValue::from(proto.clone()), NONE),
+        false,
+    );
+    let _ = proto.define_own_property(
+        rt,
+        "constructor".intern(),
+        &*DataDescriptor::new(JsValue::from(obj_constructor.clone()), W | C),
+        false,
+    );
+    let obj_to_string = JsNativeFunction::new(rt, "toString".intern(), object_to_string, 0);
+    let _ = proto.define_own_property(
+        rt,
+        "toString".intern(),
+        &*DataDescriptor::new(JsValue::from(obj_to_string), W | C),
+        false,
+    );
+
+    let func = JsNativeFunction::new(rt, "hasOwnProperty".intern(), has_own_property, 1);
+    let _ = proto.define_own_property(
+        rt,
+        "hasOwnProperty".intern(),
+        &*DataDescriptor::new(JsValue::from(func), W | C),
+        false,
+    );
+}
 use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
@@ -805,6 +891,12 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         object::object_define_property as usize,
         object::has_own_property as usize,
         object::object_keys as usize,
+        object::object_freeze as _,
+        object::object_seal as _,
+        object::object_is_extensible as _,
+        object::object_is_sealed as _,
+        object::object_is_frozen as _,
+        object::object_prevent_extensions as _,
         array::array_ctor as usize,
         array::array_from as usize,
         array::array_is_array as usize,

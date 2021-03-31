@@ -1,4 +1,4 @@
-function ___toIntegerOrInfinity(target) {
+let toint = function ___toIntegerOrInfinity(target) {
     "use strict";
     let number_value = +target;
     if (number_value !== number_value || !number_value) {
@@ -7,15 +7,30 @@ function ___toIntegerOrInfinity(target) {
     return ___trunc(number_value);
 }
 
-function ___toLength(target) {
+Object.defineProperty(globalThis, "___toIntegerOrInfinity", {
+    value: ___toIntegerOrInfinity,
+    writable: false,
+    configurable: false,
+    enumerable: false
+});
+
+let toLength = function ___toLength(target) {
     "use strict";
     let length = ___toIntegerOrInfinity(target);
 
     return +length;
 }
 
-
-function ___toObject(target, error) {
+Object.defineProperty(
+    globalThis, "___toLength",
+    {
+        value: toLength,
+        writable: false,
+        configurable: false,
+        enumerable: false
+    }
+);
+let ___toObject = function ___toObject(target, error) {
     if (target === null || target === undefined) {
         throw new TypeError(error);
     }
@@ -23,7 +38,22 @@ function ___toObject(target, error) {
     return Object(target);
 }
 
-function ___assert(cond) {
+Object.defineProperty(globalThis, "___toObject", {
+    value: ___toObject,
+    writable: false,
+    configurable: false,
+    enumerable: false
+});
+
+
+let assert = function ___assert(cond) {
     if (!cond)
         throw "Assertion failed";
 }
+
+Object.defineProperty(globalThis, "___assert", {
+    value: ___assert,
+    writable: false,
+    configurable: false,
+    enumerable: false
+});
