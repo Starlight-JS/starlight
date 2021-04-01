@@ -129,6 +129,7 @@ impl JsFunction {
         self.call(vm, args)
     }
 
+
     pub fn call<'a>(&mut self, vm: &mut Runtime, args: &mut Arguments) -> Result<JsValue, JsValue> {
         match self.ty {
             FuncType::Native(ref x) => (x.func)(vm, args),

@@ -62,7 +62,7 @@ impl Stack {
             self.cursor = if frame.prev.is_null() {
                 self.start
             } else {
-                (*frame.prev).limit
+                (*frame.prev).sp
             };
 
             Some(frame)

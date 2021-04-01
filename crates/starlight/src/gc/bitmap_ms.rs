@@ -1,9 +1,7 @@
 use super::{accounting::space_bitmap::SpaceBitmap, freelist::FreeList, *};
-use cell::*;
 use mem::align_usize;
 use memmap2::MmapMut;
 use std::collections::LinkedList;
-use swc_common::Mark;
 pub struct MarkAndSweep {
     freelist: FreeList,
     weak_slots: LinkedList<WeakSlot>,
@@ -109,8 +107,8 @@ impl MarkAndSweep {
             let mut freelist = std::mem::replace(&mut self.freelist, FreeList::new());
             let live: &mut SpaceBitmap<8> = &mut *(&mut self.live_bitmap as *mut _);
             let mark: &mut SpaceBitmap<8> = &mut *(&mut self.mark_bitmap as *mut _);
-            let mut garbage_start = Address::from(sweep_begin);
-            let mut add_freelist = |start: Address, end: Address| {
+            let mut _garbage_start = Address::from(sweep_begin);
+            let mut _add_freelist = |start: Address, end: Address| {
                 if start.is_null() {
                     return;
                 }
