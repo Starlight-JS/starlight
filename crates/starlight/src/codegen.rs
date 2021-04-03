@@ -1,10 +1,3 @@
-use crate::{
-    bytecode::{opcodes::Opcode, TypeFeedBack},
-    gc::cell::{GcPointer, Trace, Tracer},
-    vm::code_block::CodeBlock,
-    vm::symbol_table::*,
-    vm::{string::JsString, symbol_table::Symbol, value::*, Runtime, RuntimeRef},
-};
 use std::collections::HashMap;
 use swc_atoms::JsWord;
 use swc_common::DUMMY_SP;

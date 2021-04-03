@@ -25,7 +25,7 @@ impl Stack {
             map,
         }
     }
-    pub fn new_frame(&mut self, iloc_count: u32, callee: JsValue) -> Option<*mut CallFrame> {
+    pub fn new_frame(&mut self, iloc_count: u32, _callee: JsValue) -> Option<*mut CallFrame> {
         unsafe {
             if self.cursor.add(iloc_count as _) >= self.end {
                 return None;

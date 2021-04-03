@@ -10,13 +10,9 @@ pub struct LoopControlInfo {
     continues: Vec<Box<dyn FnOnce(&mut ByteCompiler)>>,
     scope_depth: i32,
 }
+use super::codegen::BindingKind;
 use super::codegen::Scope as Analyzer;
-use super::codegen::{BindingKind, ScopeKind};
-use swc_atoms::JsWord;
 use swc_common::DUMMY_SP;
-use swc_ecmascript::utils::find_ids;
-use swc_ecmascript::utils::ident::IdentLike;
-use swc_ecmascript::utils::Id;
 use swc_ecmascript::visit::Node;
 use swc_ecmascript::visit::Visit;
 use swc_ecmascript::visit::VisitWith;
@@ -334,7 +330,7 @@ impl ByteCompiler {
 
         VisitFnDecl::visit(body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
-            let mut rest = None;
+            let mut _rest = None;
             let mut params = vec![];
             let mut rat = None;
             let mut code = CodeBlock::new(&mut self.rt, name, false);
@@ -365,7 +361,7 @@ impl ByteCompiler {
                     }
                     Pat::Rest(ref r) => match &*r.arg {
                         Pat::Ident(ref id) => {
-                            rest = Some(Self::ident_to_sym(&id.id));
+                            _rest = Some(Self::ident_to_sym(&id.id));
                             rat = Some(
                                 compiler
                                     .scope
@@ -412,7 +408,7 @@ impl ByteCompiler {
         for stmt in body.iter() {
             if contains_ident(stmt, "arguments") {
                 self.code.use_arguments = true;
-                self.scope.borrow_mut().add_var("arguments".intern());
+                self.code.args_at = self.scope.borrow_mut().add_var("arguments".intern()) as _;
                 break;
             }
         }
@@ -1209,7 +1205,7 @@ impl ByteCompiler {
                 let code = compiler.finish(&mut self.rt);
                 let ix = self.code.codes.len();
                 self.code.codes.push(code);
-                let nix = self.get_sym(name);
+                let _nix = self.get_sym(name);
                 self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
                 if name != "<anonymous>".intern() {
                     self.emit(Opcode::OP_DUP, &[], false);

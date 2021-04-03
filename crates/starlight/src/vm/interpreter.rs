@@ -1,7 +1,7 @@
 use self::{frame::CallFrame, stack::Stack};
 use super::{
     arguments::*, array::*, code_block::CodeBlock, environment::*, error::JsTypeError, error::*,
-    function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString, structure::*,
+    function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString,
     symbol_table::*, value::*, Runtime,
 };
 use crate::root;
@@ -13,10 +13,7 @@ use crate::{
     },
 };
 use crate::{bytecode::*, gc::cell::Tracer};
-use std::{
-    hint::unreachable_unchecked,
-    intrinsics::{likely, unlikely},
-};
+use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
 pub mod frame;
 pub mod stack;
@@ -660,7 +657,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
 
                 let mut func = frame.pop();
-                let mut this = frame.pop();
+                let mut _this = frame.pop();
 
                 let args_start = frame.sp.sub(argc as _);
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);

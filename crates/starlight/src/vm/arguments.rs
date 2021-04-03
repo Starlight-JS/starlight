@@ -4,7 +4,7 @@ use super::{
     environment::Environment,
     error::JsTypeError,
     method_table::*,
-    object::{EnumerationMode, Env, JsHint, JsObject, ObjectTag},
+    object::{EnumerationMode, JsHint, JsObject, ObjectTag},
     property_descriptor::*,
     slot::*,
     string::JsString,

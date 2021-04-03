@@ -1,6 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
-use super::codegen::*;
 use crate::{
     bytecompiler::ByteCompiler,
     gc::default_heap,
@@ -13,6 +10,7 @@ use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
 use function::JsVMFunction;
+use std::ops::{Deref, DerefMut};
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
 use swc_common::{
