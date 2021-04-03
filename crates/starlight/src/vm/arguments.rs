@@ -1,6 +1,7 @@
 use std::mem::ManuallyDrop;
 
 use super::{
+    environment::Environment,
     error::JsTypeError,
     method_table::*,
     object::{EnumerationMode, Env, JsHint, JsObject, ObjectTag},
@@ -85,7 +86,7 @@ unsafe impl Trace for Arguments<'_> {
 pub struct JsArguments {
     // TODO: Better alternative?
     pub mapping: Box<[Symbol]>,
-    pub env: GcPointer<JsObject>,
+    pub env: GcPointer<Environment>,
 }
 #[allow(non_snake_case)]
 impl JsArguments {
@@ -134,7 +135,7 @@ impl JsArguments {
                             if desc.is_data() {
                                 let data = DataDescriptor { parent: *desc };
                                 if !data.is_value_absent() {
-                                    Env {
+                                    /*Env {
                                         record: arg.env.clone(),
                                     }
                                     .set_variable(
@@ -142,7 +143,8 @@ impl JsArguments {
                                         mapped,
                                         desc.value(),
                                         throwable,
-                                    )?;
+                                    )?;*/
+                                    arg.env.values[mapped.get_index() as usize].0 = desc.value();
                                 }
 
                                 if !data.is_writable_absent() && !data.is_writable() {
@@ -171,10 +173,7 @@ impl JsArguments {
         if arg.mapping.len() > index as usize {
             let mapped = arg.mapping[index as usize];
             if mapped != DUMMY_SYMBOL {
-                let val = arg
-                    .env
-                    .get(vm, mapped)
-                    .unwrap_or_else(|_| JsValue::encode_undefined_value());
+                let val = arg.env.values[mapped.get_index() as usize].0;
                 let attrs = slot.attributes();
                 slot.set(val, attrs);
                 return true;
@@ -315,7 +314,7 @@ impl JsArguments {
     }
     pub fn new(
         vm: &mut Runtime,
-        env: GcPointer<JsObject>,
+        env: GcPointer<Environment>,
         params: &[Symbol],
         len: u32,
         init: &[JsValue],

@@ -88,8 +88,8 @@ Array.prototype.map = function map(callback, thisArg) {
     let length = array.length;
 
     let result = new Array(length);
-
     for (let i = 0; i < length; i += 1) {
+
         if (!(i in array)) {
             continue;
         }

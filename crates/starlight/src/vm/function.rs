@@ -1,4 +1,3 @@
-use super::object::*;
 use super::slot::*;
 use super::string::*;
 use super::structure::Structure;
@@ -8,6 +7,7 @@ use super::Runtime;
 use super::{arguments::*, code_block::CodeBlock};
 use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
+use super::{environment::Environment, object::*};
 use super::{error::JsTypeError, method_table::*};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
 use std::mem::ManuallyDrop;
@@ -117,6 +117,7 @@ impl JsFunction {
 
         args: &mut Arguments,
         structure: Option<GcPointer<Structure>>,
+        this_fn: JsValue,
     ) -> Result<JsValue, JsValue> {
         let stack = vm.shadowstack();
         root!(
@@ -126,15 +127,19 @@ impl JsFunction {
         let obj = JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
         args.ctor_call = true;
         args.this = JsValue::encode_object_value(obj);
-        self.call(vm, args)
+        self.call(vm, args, this_fn)
     }
 
-
-    pub fn call<'a>(&mut self, vm: &mut Runtime, args: &mut Arguments) -> Result<JsValue, JsValue> {
+    pub fn call<'a>(
+        &mut self,
+        vm: &mut Runtime,
+        args: &mut Arguments,
+        this: JsValue,
+    ) -> Result<JsValue, JsValue> {
         match self.ty {
             FuncType::Native(ref x) => (x.func)(vm, args),
             FuncType::User(ref x) => {
-                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args)
+                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args, this)
             }
             FuncType::Bound(ref mut x) => {
                 let stack = vm.shadowstack();
@@ -147,7 +152,7 @@ impl JsFunction {
                     }
                 );
                 let mut target = x.target.clone();
-                target.as_function_mut().call(vm, &mut args)
+                target.as_function_mut().call(vm, &mut args, this)
             }
         }
     } /*
@@ -472,24 +477,21 @@ unsafe impl Trace for JsVMFunction {
 #[derive(Clone)]
 pub struct JsVMFunction {
     pub code: GcPointer<CodeBlock>,
-    pub scope: GcPointer<JsObject>,
+    pub scope: GcPointer<Environment>,
 }
 impl JsVMFunction {
     pub fn new(
         vm: &mut Runtime,
         code: GcPointer<CodeBlock>,
-        env: GcPointer<JsObject>,
+        env: GcPointer<Environment>,
     ) -> GcPointer<JsObject> {
         // let vm = vm.space().new_local_context();
         let stack = vm.shadowstack();
-        root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
-        root!(
-            scope = stack,
-            JsObject::new(vm, &envs, JsObject::get_class(), ObjectTag::Ordinary)
-        );
+        //root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
+        //root!(scope = stack, Environment::new(vm, 0));
         let f = JsVMFunction {
             code: code.clone(),
-            scope: *scope,
+            scope: env,
         };
         vm.heap().defer();
         root!(this = stack, JsFunction::new(vm, FuncType::User(f), false));

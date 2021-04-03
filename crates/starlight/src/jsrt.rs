@@ -4,8 +4,8 @@ use crate::{
     gc::cell::{GcPointer, WeakRef},
     vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_storage::ArrayStorage,
-        attributes::*, code_block::CodeBlock, error::*, function::*, global::JsGlobal,
-        indexed_elements::IndexedElements, interpreter::SpreadValue, object::*,
+        attributes::*, code_block::CodeBlock, environment::Environment, error::*, function::*,
+        global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, object::*,
         property_descriptor::*, string::*, structure::*, symbol_table::*, value::*, Runtime,
     },
 };
@@ -933,6 +933,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         string::string_to_string as _,
         string::string_value_of as _,
         JsStringObject::get_class() as *const _ as usize,
+        Environment::deserialize as _,
+        Environment::allocate as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

@@ -131,12 +131,13 @@ pub fn array_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
     root!(this = stack, args.this.to_object(vm)?);
     let m = this.get_property(vm, "join".intern());
     if m.value().is_callable() {
-        root!(f = stack, unsafe {
+        root!(func = stack, unsafe {
             m.value().get_object().downcast_unchecked::<JsObject>()
         });
-        let f = f.as_function_mut();
+        root!(f2 = stack, *&*func);
+        let f = func.as_function_mut();
         root!(args = stack, Arguments::new(args.this, &mut []));
-        return f.call(vm, &mut args);
+        return f.call(vm, &mut args, JsValue::new(*f2));
     }
     root!(args = stack, Arguments::new(args.this, &mut []));
     object_to_string(vm, &mut args)
@@ -218,8 +219,9 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
 
-    root!(callback = stack, args.at(0).get_jsobject());
-    let callback = callback.as_function_mut();
+    root!(callbackf = stack, args.at(0).get_jsobject());
+    root!(cb = stack, *&*callbackf);
+    let callback = callbackf.as_function_mut();
     if len == 0 && arg_count <= 1 {
         let msg = JsString::new(
             rt,
@@ -267,7 +269,7 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
             *args.at_mut(1) = obj.get(rt, Symbol::Index(k))?;
             *args.at_mut(2) = JsValue::encode_f64_value(k as _);
             *args.at_mut(3) = JsValue::encode_object_value(*obj);
-            *acc = callback.call(rt, &mut args)?;
+            *acc = callback.call(rt, &mut args, JsValue::new(*cb))?;
         }
         k += 1;
     }
@@ -330,6 +332,7 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
     }
 
     root!(callback = stack, callback.to_object(rt)?);
+    root!(cb2 = stack, *&*callback);
     let this_arg = args.at(1);
     let mut buf: [JsValue; 3] = [JsValue::encode_undefined_value(); 3];
     for i in 0..length {
@@ -340,7 +343,9 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
             buf[2] = JsValue::new(*&*array);
             root!(args = stack, Arguments::new(this_arg, &mut buf));
 
-            callback.as_function_mut().call(rt, &mut args)?;
+            callback
+                .as_function_mut()
+                .call(rt, &mut args, JsValue::new(*cb2))?;
         }
     }
     Ok(JsValue::encode_undefined_value())
@@ -359,6 +364,7 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
     }
 
     root!(callback = stack, callback.to_object(rt)?);
+    root!(cb2 = stack, *&*callback);
     root!(result = stack, JsArray::new(rt, 0));
     root!(this_arg = stack, args.at(1));
 
@@ -373,7 +379,9 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         buf[1] = JsValue::new(i);
         buf[2] = JsValue::new(*&*array);
         let mut args = Arguments::new(*&*this_arg, &mut buf);
-        let val = callback.as_function_mut().call(rt, &mut args)?;
+        let val = callback
+            .as_function_mut()
+            .call(rt, &mut args, JsValue::new(*cb2))?;
         if val.to_boolean() {
             result.put(rt, Symbol::Index(next_index), current, true)?;
             next_index += 1;
@@ -395,6 +403,7 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     }
 
     root!(callback = stack, callback.to_object(rt)?);
+    root!(cb2 = stack, *&*callback);
     root!(result = stack, JsArray::new(rt, 0));
     root!(this_arg = stack, args.at(1));
     let mut buf = [JsValue::encode_undefined_value(); 3];
@@ -407,7 +416,9 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
         buf[1] = JsValue::new(i);
         buf[2] = JsValue::new(*&*array);
         let mut args = Arguments::new(*&*this_arg, &mut buf);
-        let mapped_value = callback.as_function_mut().call(rt, &mut args)?;
+        let mapped_value = callback
+            .as_function_mut()
+            .call(rt, &mut args, JsValue::new(*cb2))?;
         result.put(rt, Symbol::Index(i), mapped_value, true)?;
     }
     Ok(JsValue::new(*&*result))

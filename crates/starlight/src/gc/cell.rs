@@ -9,7 +9,10 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use crate::gc::snapshot::{deserializer::Deserializable, serializer::Serializable};
+use crate::{
+    gc::snapshot::{deserializer::Deserializable, serializer::Serializable},
+    prelude::SnapshotSerializer,
+};
 use mopa::mopafy;
 
 pub trait Tracer {
@@ -418,5 +421,28 @@ unsafe impl<T: Trace, E: Trace> Trace for Result<T, E> {
             Ok(x) => x.trace(visitor),
             Err(e) => e.trace(visitor),
         }
+    }
+}
+
+impl<A: GcCell + Deserializable, B: GcCell + Deserializable> GcCell for (A, B) {
+    fn compute_size(&self) -> usize {
+        self.0.compute_size() + self.1.compute_size()
+    }
+
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
+
+impl<A: GcCell, B: GcCell> Serializable for (A, B) {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.0.serialize(serializer);
+        self.1.serialize(serializer);
+    }
+}
+unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.0.trace(visitor);
+        self.1.trace(visitor);
     }
 }

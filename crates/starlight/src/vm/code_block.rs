@@ -11,9 +11,9 @@ use std::fmt::Write;
 //#[derive(GcTrace)]
 pub struct CodeBlock {
     pub name: Symbol,
-    pub variables: Vec<Symbol>,
-    pub rest_param: Option<Symbol>,
-    pub params: Vec<Symbol>,
+    pub var_count: u32,
+    pub param_count: u32,
+    pub rest_at: Option<u32>,
     pub names: Vec<Symbol>,
     pub code: Vec<u8>,
     pub top_level: bool,
@@ -23,6 +23,7 @@ pub struct CodeBlock {
     pub strict: bool,
     pub use_arguments: bool,
     pub file_name: String,
+    pub args_at: u32,
 }
 
 unsafe impl Trace for CodeBlock {
@@ -32,21 +33,10 @@ unsafe impl Trace for CodeBlock {
         self.feedback.trace(visitor);
     }
 }
+
 impl CodeBlock {
     pub fn display_to<T: Write>(&self, output: &mut T) -> std::fmt::Result {
         unsafe {
-            writeln!(output, "variables: ")?;
-            if self.variables.is_empty() {
-                writeln!(output, " <none>")?;
-            }
-            for var in self.variables.iter() {
-                match var {
-                    Symbol::Key(s) => {
-                        writeln!(output, " var {}", s)?;
-                    }
-                    _ => unreachable!(),
-                }
-            }
             writeln!(output, "is strict?={}", self.strict)?;
             let start = self.code.as_ptr() as *mut u8;
             let mut pc = self.code.as_ptr() as *mut u8;
@@ -72,6 +62,23 @@ impl CodeBlock {
                     }
                     Opcode::OP_PUT_BY_VAL => {
                         writeln!(output, "put_by_val ",)?;
+                    }
+                    Opcode::OP_TRY_GET_BY_ID => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let feedback = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "try_get_by_id @{}, fdbk @{}", name, feedback)?;
+                    }
+                    Opcode::OP_GET_ENV => {
+                        let depth = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "get_environment {}", depth)?;
+                    }
+                    Opcode::OP_SET_ENV => {
+                        let depth = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "set_environment {}", depth)?;
                     }
                     Opcode::OP_PUT_BY_ID => {
                         let name = pc.cast::<u32>().read_unaligned();
@@ -110,30 +117,16 @@ impl CodeBlock {
                     Opcode::OP_GET_VAR => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        let feedback = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "get_var @{}, fdbk @{}", name, feedback)?;
+
+                        writeln!(output, "get_var @{}", name)?;
                     }
                     Opcode::OP_SET_VAR => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        let feedback = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "set_var @{}, fdbk @{}", name, feedback)?;
+
+                        writeln!(output, "set_var @{}", name,)?;
                     }
 
-                    Opcode::OP_GET_GLOBAL => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-
-                        writeln!(output, "get_global @{}", name)?;
-                    }
-                    Opcode::OP_SET_GLOBAL => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-
-                        writeln!(output, "set_global @{}", name)?;
-                    }
                     Opcode::OP_NEWOBJECT => {
                         writeln!(output, "newobject")?;
                     }
@@ -278,7 +271,7 @@ impl CodeBlock {
                     }
 
                     Opcode::OP_PUSH_ENV => {
-                        pc = pc.add(4);
+                        // pc = pc.add(4);
                         writeln!(output, "push_scope")?;
                     }
                     /* Opcode::OP_SET_GETTER_SETTER => {
@@ -303,19 +296,11 @@ impl CodeBlock {
                         )?;
                     }
                     Opcode::OP_DECL_LET => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        let feedback = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "decl_let @{}, fdbk @{}", name, feedback)?;
+                        writeln!(output, "decl_let ",)?;
                     }
 
                     Opcode::OP_DECL_CONST => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        let feedback = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "decl_const @{}, fdbk @{}", name, feedback)?;
+                        writeln!(output, "decl_const",)?;
                     }
                     Opcode::OP_THROW => {
                         writeln!(output, "throw")?;
@@ -350,13 +335,15 @@ impl CodeBlock {
                     Opcode::OP_DELETE_BY_VAL => {
                         writeln!(output, "delete")?;
                     }
-                    Opcode::OP_SET_VAR_CURRENT => {
-                        let name = pc.cast::<u32>().read_unaligned();
-                        pc = pc.add(4);
-                        writeln!(output, "set_var_current @{}", name)?;
-                    }
+
                     Opcode::OP_FORIN_LEAVE => {
                         writeln!(output, "for_in_leave")?;
+                    }
+                    Opcode::OP_GLOBALTHIS => {
+                        writeln!(output, "global_object")?;
+                    }
+                    Opcode::OP_LOOPHINT => {
+                        writeln!(output, "loophint")?;
                     }
                     _ => todo!("{:?}", op),
                 }
@@ -371,14 +358,15 @@ impl CodeBlock {
             strict,
             codes: vec![],
             top_level: false,
-            variables: vec![],
-            rest_param: None,
-            params: vec![],
             names: vec![],
+            args_at: 0,
             code: vec![],
+            rest_at: None,
             use_arguments: false,
             literals: vec![],
             feedback: vec![],
+            var_count: 0,
+            param_count: 0,
         };
 
         rt.heap().allocate(this)

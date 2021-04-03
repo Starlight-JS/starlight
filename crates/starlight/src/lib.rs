@@ -20,6 +20,7 @@ pub mod utils;
 #[macro_use]
 pub mod gc;
 pub mod bytecode;
+pub mod bytecompiler;
 pub mod codegen;
 pub mod jsrt;
 pub mod tracingjit;
@@ -67,6 +68,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     let stack = rt.shadowstack();
 
     root!(function = stack, function.expect("No function"));
+    root!(funcc = stack, *&*function);
     assert!(function.is_callable(), "Not a callable function");
 
     let global = rt.global_object();
@@ -74,7 +76,10 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
         args = stack,
         Arguments::new(JsValue::encode_object_value(global), &mut [])
     );
-    match function.as_function_mut().call(&mut rt, &mut args) {
+    match function
+        .as_function_mut()
+        .call(&mut rt, &mut args, JsValue::new(*funcc))
+    {
         Ok(x) => {
             if x.is_number() {
                 drop(rt);
@@ -94,11 +99,9 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
 }
 
 pub mod prelude {
-    pub use super::Platform;
     pub use super::gc::{
-        snapshot::Snapshot,
-        cell::*, snapshot::deserializer::*, snapshot::serializer::*, Heap, MarkingConstraint,
-        SimpleMarkingConstraint,
+        cell::*, snapshot::deserializer::*, snapshot::serializer::*, snapshot::Snapshot, Heap,
+        MarkingConstraint, SimpleMarkingConstraint,
     };
     pub use super::root;
     pub use super::vm::{
@@ -118,4 +121,5 @@ pub mod prelude {
         value::JsValue,
     };
     pub use super::vm::{GcParams, Runtime, RuntimeParams};
+    pub use super::Platform;
 }

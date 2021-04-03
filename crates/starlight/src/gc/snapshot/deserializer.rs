@@ -287,7 +287,9 @@ impl<'a> Deserializer<'a> {
 }
 
 pub trait Deserializable {
-    unsafe fn dummy_read(deser: &mut Deserializer);
+    unsafe fn dummy_read(deser: &mut Deserializer) {
+        unreachable!()
+    }
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self;
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer);
     unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase;
@@ -701,6 +703,7 @@ impl Deserializable for JsObject {
                     0x01 => {
                         let scope = deser.get_reference();
                         let code = deser.get_reference();
+
                         FuncType::User(JsVMFunction {
                             scope: transmute(scope),
                             code: transmute(code),
@@ -1260,30 +1263,33 @@ impl Deserializable for CodeBlock {
         let name = Symbol::deserialize_inplace(deser);
         let names = Vec::<Symbol>::deserialize_inplace(deser);
         let strict = bool::deserialize_inplace(deser);
-        let variables = Vec::<Symbol>::deserialize_inplace(deser);
         let code = Vec::<u8>::deserialize_inplace(deser);
         let feedback = Vec::<TypeFeedBack>::deserialize_inplace(deser);
         let literals = Vec::<JsValue>::deserialize_inplace(deser);
-        let rest_param = Option::<Symbol>::deserialize_inplace(deser);
-        let params = Vec::<Symbol>::deserialize_inplace(deser);
         let codes = Vec::<GcPointer<Self>>::deserialize_inplace(deser);
         let top_level = bool::deserialize_inplace(deser);
         let use_arguments = bool::deserialize_inplace(deser);
         let filename = String::deserialize_inplace(deser);
+        let rest_at = Option::<u32>::deserialize_inplace(deser);
+        let var_count = u32::deserialize_inplace(deser);
+        let param_count = u32::deserialize_inplace(deser);
+        let args_at = u32::deserialize_inplace(deser);
         Self {
+            args_at,
             use_arguments,
             name,
             names,
             top_level,
             strict,
-            variables,
+
             code,
             feedback,
             literals,
-            rest_param,
-            params,
             codes,
             file_name: filename,
+            rest_at,
+            var_count,
+            param_count,
         }
     }
 
@@ -1368,5 +1374,18 @@ impl Deserializable for JsSymbol {
         //Self::dummy_read(deser);
         rt.heap()
             .allocate_raw(vtable_of_type::<Self>() as _, size_of::<Self>() as _)
+    }
+}
+
+impl<A: Deserializable, B: Deserializable> Deserializable for (A, B) {
+    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
+        (A::deserialize_inplace(deser), B::deserialize_inplace(deser))
+    }
+    unsafe fn deserialize(_at: *mut u8, _deser: &mut Deserializer) {
+        unreachable!()
+    }
+
+    unsafe fn allocate(_rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+        unreachable!()
     }
 }

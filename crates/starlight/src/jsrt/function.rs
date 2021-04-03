@@ -94,13 +94,14 @@ pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
     root!(this = stack, args.this);
     if this.is_callable() {
         root!(obj = stack, this.get_jsobject());
+        root!(objc = stack, *&*obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
         let arg_array = args.at(1);
         if args_size == 1 || arg_array.is_null() || arg_array.is_undefined() {
             root!(args = stack, Arguments::new(args.at(0), &mut []));
-            return func.call(rt, &mut args);
+            return func.call(rt, &mut args, JsValue::new(*objc));
         }
 
         if !arg_array.is_jsobject() {
@@ -121,7 +122,7 @@ pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
             argsv.push(arg_array.get(rt, Symbol::Index(i))?);
         }
         crate::root!(args_ = stack, Arguments::new(args.at(0), &mut argsv));
-        return func.call(rt, &mut args_);
+        return func.call(rt, &mut args_, JsValue::new(*objc));
     }
 
     let msg = JsString::new(rt, "Function.prototype.apply is not a generic function");
@@ -135,6 +136,7 @@ pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
     let stack = rt.shadowstack();
     if this.is_callable() {
         root!(obj = stack, this.get_jsobject());
+        root!(objc = stack, *&*obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
@@ -147,7 +149,7 @@ pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
         }
         root!(args_ = stack, Arguments::new(args.at(0), &mut argsv,));
 
-        return func.call(rt, &mut args_);
+        return func.call(rt, &mut args_, JsValue::new(*objc));
     }
 
     let msg = JsString::new(rt, "Function.prototype.call is not a generic function");

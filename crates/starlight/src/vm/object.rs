@@ -332,7 +332,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(vm, &mut args)
+                    .call(vm, &mut args, ac.setter())
                     .map(|_| ());
             }
         }
@@ -437,7 +437,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(vm, &mut args)
+                    .call(vm, &mut args, ac.setter())
                     .map(|_| ());
             }
         }
@@ -501,6 +501,7 @@ impl JsObject {
             obj.get_own_property_slot(vm, name, slot);
         }
 
+        let stack = vm.shadowstack();
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
                 if GcPointer::ptr_eq(&base, &obj) {
@@ -532,9 +533,10 @@ impl JsObject {
                             obj.structure = new_struct;
                             let s = &obj.structure;
                             let sz = s.get_slots_size();
+                            root!(slots = stack, obj.slots);
                             //   println!("resize to {} from {}", s.get_slots_size(), obj.slots.size());
-                            obj.slots.resize(vm.heap(), sz as _);
-
+                            slots.mut_handle().resize(vm.heap(), sz as _);
+                            obj.slots = *slots;
                             *obj.direct_mut(offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
                         }
@@ -564,8 +566,9 @@ impl JsObject {
 
         let s = &obj.structure;
         let sz = s.get_slots_size();
-        obj.slots.resize(vm.heap(), sz as _);
-
+        root!(slots = stack, obj.slots);
+        slots.mut_handle().resize(vm.heap(), sz as _);
+        obj.slots = *slots;
         //assert!(stored.value() == desc.value());
         *obj.direct_mut(offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
@@ -817,7 +820,7 @@ impl JsObject {
                         .downcast::<JsObject>()
                         .unwrap()
                         .as_function_mut()
-                        .call(vm, &mut args)?;
+                        .call(vm, &mut args, m)?;
                     if res.is_primitive() || (res.is_undefined() || res.is_null()) {
                         return Ok(res);
                     }
@@ -942,7 +945,7 @@ impl GcPointer<JsObject> {
                     JsHint::String => JsValue::encode_object_value(JsString::new(vm, "string")),
                 };
 
-                f.call(vm, &mut args)
+                f.call(vm, &mut args, val)
             }
             _ => (self.class.method_table.DefaultValue)(&mut obj, vm, hint),
         }
@@ -1210,9 +1213,10 @@ impl GcPointer<JsObject> {
 
                 self.structure = s;
             }
-
-            self.indexed.vector.resize(vm.heap(), index + 1);
-
+            let stack = vm.shadowstack();
+            root!(vector = stack, self.indexed.vector);
+            vector.mut_handle().resize(vm.heap(), index + 1);
+            self.indexed.vector = *vector;
             if !absent {
                 *self.indexed.vector.at_mut(index) = val;
             } else {

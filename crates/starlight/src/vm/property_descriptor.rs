@@ -517,7 +517,7 @@ impl Accessor {
                 .downcast::<JsObject>()
                 .unwrap()
                 .as_function_mut()
-                .call(vm, &mut args)
+                .call(vm, &mut args, self.getter())
         } else {
             Ok(JsValue::encode_undefined_value())
         }

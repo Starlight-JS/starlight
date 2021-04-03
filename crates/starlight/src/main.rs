@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use starlight::prelude::*;
+use std::path::{Path, PathBuf};
 use structopt::*;
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -135,6 +135,7 @@ fn main() {
                     }
                 }
             );
+            root!(funcc = gcstack, *&*function);
             let global = rt.global_object();
 
             root!(
@@ -142,7 +143,10 @@ fn main() {
                 Arguments::new(JsValue::encode_object_value(global), &mut [])
             );
             let start = std::time::Instant::now();
-            match function.as_function_mut().call(&mut rt, &mut args) {
+            match function
+                .as_function_mut()
+                .call(&mut rt, &mut args, JsValue::new(*funcc))
+            {
                 Ok(_) => {
                     let elapsed = start.elapsed();
                     eprintln!("Executed in {}ms", elapsed.as_nanos() as f64 / 1000000f64);

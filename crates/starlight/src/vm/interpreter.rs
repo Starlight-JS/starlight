@@ -1,6 +1,6 @@
 use self::{frame::CallFrame, stack::Stack};
 use super::{
-    arguments::*, array::*, code_block::CodeBlock, error::JsTypeError, error::*,
+    arguments::*, array::*, code_block::CodeBlock, environment::*, error::JsTypeError, error::*,
     function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString, structure::*,
     symbol_table::*, value::*, Runtime,
 };
@@ -27,12 +27,13 @@ impl Runtime {
         func: &JsVMFunction,
         env: JsValue,
         args_: &Arguments,
+        callee: JsValue,
     ) -> Result<JsValue, JsValue> {
         let stack = self.shadowstack();
         root!(scope = stack, unsafe {
-            env.get_object().downcast_unchecked::<JsObject>()
+            env.get_object().downcast_unchecked::<Environment>()
         });
-        root!(
+        /*root!(
             structure = stack,
             Structure::new_indexed(self, Some(*scope), false)
         );
@@ -41,17 +42,29 @@ impl Runtime {
             nscope = stack,
             JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary)
         );
-
+        */
+        root!(
+            nscope = stack,
+            Environment::new(
+                self,
+                func.code.param_count
+                    + func.code.var_count
+                    + func.code.rest_at.map(|_| 1).unwrap_or(0)
+                    + if func.code.use_arguments { 1 } else { 0 }
+            )
+        );
+        nscope.parent = Some(*scope);
         let mut i = 0;
-        for p in func.code.params.iter() {
-            let _ = nscope
+        for _ in 0..func.code.param_count {
+            /*let _ = nscope
                 .put(self, *p, args_.at(i), false)
                 .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
-
+            */
+            nscope.values[i as usize].0 = args_.at(i);
             i += 1;
         }
 
-        if let Some(rest) = func.code.rest_param {
+        if let Some(rest) = func.code.rest_at {
             let mut args_arr = JsArray::new(self, args_.size() as u32 - i as u32);
             let mut ai = 0;
             for ix in i..args_.size() {
@@ -64,38 +77,36 @@ impl Runtime {
                 )?;
                 ai += 1;
             }
-            nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
+            nscope.values[rest as usize].0 = JsValue::new(args_arr);
+            //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
-        root!(
-            vscope = stack,
-            if func.code.top_level {
-                self.global_object()
-            } else {
-                *nscope
-            }
-        );
-        for val in func.code.variables.iter() {
-            vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
+        root!(vscope = stack, *nscope);
+        for _ in 0..func.code.var_count {
+            vscope.values[i as usize].0 = JsValue::encode_undefined_value();
+            //   vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
         }
         if func.code.use_arguments {
-            let mut args = JsArguments::new(
-                self,
-                nscope.clone(),
-                &func.code.params,
-                args_.size() as _,
-                args_.values,
-            );
+            let p = {
+                let mut p = vec![];
+                for i in 0..func.code.param_count {
+                    p.push(Symbol::Index(i));
+                }
+                p
+            };
+            let mut args =
+                JsArguments::new(self, nscope.clone(), &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
             }
 
-            let _ = nscope.put(
+            /*let _ = nscope.put(
                 self,
                 "arguments".intern(),
                 JsValue::encode_object_value(args),
                 false,
-            )?;
+            )?;*/
+            nscope.values[func.code.args_at as usize].0 = JsValue::new(args);
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
@@ -115,6 +126,7 @@ impl Runtime {
                 _this,
                 args_.ctor_call,
                 *nscope,
+                callee,
             )
         }
     }
@@ -124,12 +136,12 @@ impl Runtime {
         func: &JsVMFunction,
         env: JsValue,
         args_: &Arguments,
-    ) -> Result<(JsValue,GcPointer<JsObject>), JsValue> {
+    ) -> Result<(JsValue, GcPointer<Environment>), JsValue> {
         let stack = self.shadowstack();
         root!(scope = stack, unsafe {
-            env.get_object().downcast_unchecked::<JsObject>()
+            env.get_object().downcast_unchecked::<Environment>()
         });
-        root!(
+        /*root!(
             structure = stack,
             Structure::new_indexed(self, Some(*scope), false)
         );
@@ -138,17 +150,29 @@ impl Runtime {
             nscope = stack,
             JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary)
         );
-
+        */
+        root!(
+            nscope = stack,
+            Environment::new(
+                self,
+                func.code.param_count
+                    + func.code.var_count
+                    + func.code.rest_at.map(|_| 1).unwrap_or(0)
+                    + if func.code.use_arguments { 1 } else { 0 }
+            )
+        );
+        nscope.parent = Some(*scope);
         let mut i = 0;
-        for p in func.code.params.iter() {
-            let _ = nscope
+        for _ in 0..func.code.param_count {
+            /*let _ = nscope
                 .put(self, *p, args_.at(i), false)
                 .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
-
+            */
+            nscope.values[i as usize].0 = args_.at(i);
             i += 1;
         }
 
-        if let Some(rest) = func.code.rest_param {
+        if let Some(rest) = func.code.rest_at {
             let mut args_arr = JsArray::new(self, args_.size() as u32 - i as u32);
             let mut ai = 0;
             for ix in i..args_.size() {
@@ -161,38 +185,36 @@ impl Runtime {
                 )?;
                 ai += 1;
             }
-            nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
+            nscope.values[rest as usize].0 = JsValue::new(args_arr);
+            //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
-        root!(
-            vscope = stack,
-            if func.code.top_level {
-                self.global_object()
-            } else {
-                *nscope
-            }
-        );
-        for val in func.code.variables.iter() {
-            vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
+        root!(vscope = stack, *nscope);
+        for _ in 0..func.code.var_count {
+            vscope.values[i as usize].0 = JsValue::encode_undefined_value();
+            //   vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
         }
         if func.code.use_arguments {
-            let mut args = JsArguments::new(
-                self,
-                nscope.clone(),
-                &func.code.params,
-                args_.size() as _,
-                args_.values,
-            );
+            let p = {
+                let mut p = vec![];
+                for i in 0..func.code.param_count {
+                    p.push(Symbol::Index(i));
+                }
+                p
+            };
+            let mut args =
+                JsArguments::new(self, nscope.clone(), &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
             }
 
-            let _ = nscope.put(
+            /*let _ = nscope.put(
                 self,
                 "arguments".intern(),
                 JsValue::encode_object_value(args),
                 false,
-            )?;
+            )?;*/
+            nscope.values[func.code.args_at as usize].0 = JsValue::new(args);
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
@@ -214,9 +236,10 @@ impl Runtime {
                 *nscope,
             )
         }*/
-        Ok((_this,*nscope))
+        Ok((_this, *nscope))
     }
 }
+
 #[inline(never)]
 unsafe fn eval_internal(
     rt: &mut Runtime,
@@ -224,9 +247,10 @@ unsafe fn eval_internal(
     ip: *mut u8,
     this: JsValue,
     ctor: bool,
-    scope: GcPointer<JsObject>,
+    scope: GcPointer<Environment>,
+    callee: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let frame = rt.stack.new_frame();
+    let frame = rt.stack.new_frame(0, callee);
     if frame.is_none() {
         let msg = JsString::new(rt, "stack overflow");
         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -271,50 +295,64 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
         #[cfg(feature = "perf")]
-            {
-                rt.perf.get_perf(opcode as u8);
-            }
+        {
+            rt.perf.get_perf(opcode as u8);
+        }
+        //   println!("{:?}", opcode);
         stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_NOP => {}
             Opcode::OP_GET_VAR => {
-                let name = ip.cast::<u32>().read_unaligned();
+                let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                let value = get_var(rt, name, frame, fdbk)?;
+                let env = frame.pop().get_object().downcast_unchecked::<Environment>();
+                debug_assert!(
+                    index < env.values.len() as u32,
+                    "invalid var index at pc: {}",
+                    ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
+                );
 
-                frame.push(value);
+                frame.push(env.values.get_unchecked(index as usize).0);
             }
             Opcode::OP_SET_VAR => {
+                let index = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let mut env = frame.pop().get_object().downcast_unchecked::<Environment>();
+                debug_assert!(index < env.values.len() as u32);
                 let val = frame.pop();
-                let name = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                set_var(rt, frame, name, fdbk, val)?;
+                if unlikely(!env.values[index as usize].1) {
+                    return Err(JsValue::new(
+                        rt.new_type_error(format!("Cannot assign to immutable variable")),
+                    ));
+                }
+                env.values.get_unchecked_mut(index as usize).0 = val;
             }
-            Opcode::OP_PUSH_ENV => {
-                let _fdbk = ip.cast::<u32>().read_unaligned();
+            Opcode::OP_GET_ENV => {
+                let mut depth = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
+                let mut env = frame
+                    .env
+                    .get_object()
+                    .downcast::<Environment>()
+                    .expect("Corrupted environment");
+                while depth != 0 {
+                    env = env.parent.expect("Invalid environment depth");
+                    depth -= 1;
+                }
 
-                let structure = Structure::new_indexed(rt, Some(frame.env.get_jsobject()), false);
+                frame.push(JsValue::new(env));
+            }
 
-                let env = JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);
-                frame.env = JsValue::encode_object_value(env);
+            Opcode::OP_PUSH_ENV => {
+                let mut env = Environment::new(rt, 0);
+                env.parent = Some(frame.env.get_object().downcast_unchecked());
+                frame.env = JsValue::new(env);
             }
             Opcode::OP_POP_ENV => {
-                let mut env = frame.env.get_jsobject();
+                //rt.heap().collect_if_necessary();
+                let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
 
-                frame.env = JsValue::encode_object_value(
-                    env.prototype().copied().expect("no environments left"),
-                );
+                frame.env = JsValue::new(env.parent.expect("corrupted environment"));
             }
             Opcode::OP_JMP => {
                 rt.heap().collect_if_necessary();
@@ -371,7 +409,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::encode_null_value());
             }
             Opcode::OP_RET => {
-                rt.heap().collect_if_necessary();
                 let mut value = if frame.sp <= frame.limit {
                     JsValue::encode_undefined_value()
                 } else {
@@ -535,7 +572,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_LESS => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-                //    println!("{} {}", lhs.get_number(), rhs.get_number());
+
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_TRUE,
                 ));
@@ -579,6 +616,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )));
                 }
                 root!(func_object = gcstack, func.get_jsobject());
+                root!(funcc = gcstack, *&*func_object);
                 let func = func_object.as_function_mut();
 
                 root!(
@@ -590,9 +628,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
-                    let (this,scope) = rt.setup_for_vm_call(vm_fn,scope,&args_)?;
+                    let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
 
-                    let cframe = rt.stack.new_frame();
+                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
                     if cframe.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -608,10 +646,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = false;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
-                    frame = &mut*cframe;
+                    frame = &mut *cframe;
                     ip = (*cframe).ip;
                 } else {
-                    let result = func.call(rt, &mut args_)?;
+                    let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
 
                     frame.push(result);
                 }
@@ -635,24 +673,24 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
 
                 root!(func_object = gcstack, func.get_jsobject());
+                root!(funcc = gcstack, func.get_jsobject());
                 let map = func_object.func_construct_map(rt)?;
                 let func = func_object.as_function_mut();
+                let object = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
                 root!(
                     args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, &mut args)
+                    Arguments::from_array_storage(rt, JsValue::new(object), &mut args)
                 );
                 args_.ctor_call = true;
                 frame.ip = ip;
                 frame.sp = args_start;
-                let object = JsObject::new(rt,&map,JsObject::get_class(),ObjectTag::Ordinary);
-                args_.this = JsValue::new(object);
-                frame.sp = args_start;
+
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
-                    let (this,scope) = rt.setup_for_vm_call(vm_fn,scope,&args_)?;
+                    let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
 
-                    let cframe = rt.stack.new_frame();
+                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
                     if cframe.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -668,10 +706,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     (*cframe).ctor = true;
                     (*cframe).exit_on_return = false;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
-                    frame = &mut*cframe;
+                    frame = &mut *cframe;
                     ip = (*cframe).ip;
                 } else {
-                    let result = func.call(rt, &mut args_)?;
+                    let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
 
                     frame.push(result);
                 }
@@ -700,7 +738,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(JsValue::encode_f64_value(-n));
                 }
             }
-            Opcode::OP_GET_BY_ID => {
+            Opcode::OP_GET_BY_ID | Opcode::OP_TRY_GET_BY_ID => {
                 let name = ip.cast::<u32>().read_unaligned();
                 let name = *unwrap_unchecked(frame.code_block)
                     .names
@@ -745,6 +783,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     if found {
                         frame.push(slot.get(rt, object)?);
                     } else {
+                        if unlikely(opcode == Opcode::OP_TRY_GET_BY_ID) {
+                            let desc = rt.description(name);
+                            return Err(JsValue::new(
+                                rt.new_reference_error(format!("Property '{}' not found", desc)),
+                            ));
+                        }
                         frame.push(JsValue::encode_undefined_value());
                     }
                     continue;
@@ -897,64 +941,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_FORIN_LEAVE => {
                 frame.pop();
             }
-            Opcode::OP_SET_VAR_CURRENT => {
-                let name = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = unwrap_unchecked(frame.code_block).names[name as usize];
-                let mut env = frame.env.get_jsobject();
-                let val = frame.pop();
-                env.put(rt, name, val, false)?;
-            }
+
             Opcode::OP_THROW => {
                 let val = frame.pop();
                 return Err(val);
             }
-            Opcode::OP_GET_ENV => {
-                let name = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                let result = 'search: loop {
-                    let mut current = Some((*frame).env.get_jsobject());
-                    while let Some(env) = current {
-                        if (Env { record: env }).has_own_variable(rt, name) {
-                            break 'search Some(env);
-                        }
-                        current = env.prototype().copied();
-                    }
-                    break 'search None;
-                };
 
-                match result {
-                    Some(env) => frame.push(JsValue::encode_object_value(env)),
-                    None => frame.push(JsValue::encode_undefined_value()),
-                }
-            }
-
-            Opcode::OP_SET_GLOBAL => {
-                let val = frame.pop();
-                let name = ip.cast::<u32>().read_unaligned();
-
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-
-                rt.global_object()
-                    .put(rt, name, val, unwrap_unchecked(frame.code_block).strict)?;
-            }
-            Opcode::OP_GET_GLOBAL => {
-                let name = ip.cast::<u32>().read_unaligned();
-
-                ip = ip.add(4);
-                let name = *unwrap_unchecked((*frame).code_block)
-                    .names
-                    .get_unchecked(name as usize);
-
-                let val = rt.global_object().get(rt, name)?;
-                frame.push(val);
-            }
             Opcode::OP_GLOBALTHIS => {
                 let global = rt.global_object();
                 frame.push(JsValue::encode_object_value(global));
@@ -1019,24 +1011,33 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_DECL_CONST => {
+                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 let val = frame.pop();
-                let name = ip.cast::<u32>().read();
-                ip = ip.add(8);
-                let name = unwrap_unchecked(frame.code_block).names[name as usize];
-                Env {
-                    record: frame.env.get_jsobject(),
-                }
-                .declare_variable(rt, name, val, false)?;
-            }
-            Opcode::OP_DECL_LET => {
-                let val = frame.pop();
-                let name = ip.cast::<u32>().read();
+                /*let name = ip.cast::<u32>().read();
                 ip = ip.add(8);
                 let name = unwrap_unchecked(frame.code_block).names[name as usize];
                 Env {
                     record: frame.env.get_jsobject(),
                 }
                 .declare_variable(rt, name, val, true)?;
+                */
+
+                env.values.push((val, false));
+            }
+            Opcode::OP_DECL_LET => {
+                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
+                let val = frame.pop();
+                /*let name = ip.cast::<u32>().read();
+                ip = ip.add(8);
+                let name = unwrap_unchecked(frame.code_block).names[name as usize];
+                Env {
+                    record: frame.env.get_jsobject(),
+                }
+                .declare_variable(rt, name, val, true)?;
+                */
+
+                env.values.push((val, true));
+                //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
             }
             Opcode::OP_DELETE_VAR => {
                 let name = ip.cast::<u32>().read();
@@ -1084,7 +1085,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let func = JsVMFunction::new(
                     rt,
                     unwrap_unchecked(frame.code_block).codes[ix as usize],
-                    (*frame).env.get_jsobject(),
+                    (*frame)
+                        .env
+                        .get_object()
+                        .downcast()
+                        .expect("corrupted environment"),
                 );
                 assert!(func.is_callable());
 

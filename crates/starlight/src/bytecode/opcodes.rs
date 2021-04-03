@@ -56,6 +56,7 @@ pub enum Opcode {
     OP_POP_CATCH,
 
     OP_GET_BY_ID,
+    OP_TRY_GET_BY_ID,
     OP_GET_BY_VAL,
     OP_PUT_BY_ID,
     OP_PUT_BY_VAL,
@@ -63,6 +64,7 @@ pub enum Opcode {
     OP_PUSH_ENV,
     OP_POP_ENV,
     OP_GET_ENV,
+    OP_SET_ENV,
     OP_GET_VAR,
     OP_SET_VAR,
     OP_SET_GLOBAL,
@@ -83,12 +85,15 @@ pub enum Opcode {
     OP_DELETE_BY_VAL,
     OP_GLOBALTHIS,
 
-    OP_MOVE,
-    OP_PUSH_REG,
-    OP_POP_REG,
-
     OP_FORIN_SETUP,
     OP_FORIN_ENUMERATE,
     OP_FORIN_LEAVE,
     OP_SET_VAR_CURRENT,
+
+    OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
+    OP_GET_ILOCAL,
+    OP_SET_ILOCAL,
+    OP_CLOSURE,
+    OP_CLOSE,
 }

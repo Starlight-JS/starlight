@@ -12,8 +12,8 @@
 //!
 use crate::gc::cell::{Trace, Tracer};
 use std::ops::{Deref, DerefMut};
-use std::{cell::Cell, ptr::null_mut};
 use std::pin::Pin;
+use std::{cell::Cell, ptr::null_mut};
 
 /// Shadow stack type. This is a simple sinly-linked list used for rooting in starlight.
 pub struct ShadowStack {
@@ -71,10 +71,20 @@ pub struct RootedInternal<'a, T: Trace> {
     pub value: T,
 }
 
-impl<'a,T: Trace> RootedInternal<'a,T> {
+impl<'a, T: Trace> RootedInternal<'a, T> {
     #[inline]
-    pub unsafe fn construct(stack: &'a ShadowStack,prev: *mut RawShadowStackEntry,vtable: usize,value: T) -> Self {
-        Self {stack,prev,vtable,value}
+    pub unsafe fn construct(
+        stack: &'a ShadowStack,
+        prev: *mut RawShadowStackEntry,
+        vtable: usize,
+        value: T,
+    ) -> Self {
+        Self {
+            stack,
+            prev,
+            vtable,
+            value,
+        }
     }
 }
 
@@ -89,7 +99,7 @@ pub struct Rooted<'a, 'b, T: Trace> {
     #[doc(hidden)]
     pinned: std::pin::Pin<&'a mut RootedInternal<'b, T>>,
 }
-pub fn identity_clos<T,R>(x: T,clos: impl FnOnce(T) -> R) -> R {
+pub fn identity_clos<T, R>(x: T, clos: impl FnOnce(T) -> R) -> R {
     clos(x)
 }
 /// Create [Rooted<T>](Rooted) instance and push it to provided shadowstack instance.
@@ -104,58 +114,61 @@ macro_rules! root {
     ($name: ident: $t: ty  = $stack: expr,$value: expr) => {
         let stack: &ShadowStack = &$stack;
         let value = $value;
-        let mut $name = unsafe {$crate::gc::shadowstack::RootedInternal::<$t>::construct(
-             stack as *mut _,
-             stack.head,
-
+        let mut $name = unsafe {
+            $crate::gc::shadowstack::RootedInternal::<$t>::construct(
+                stack as *mut _,
+                stack.head,
                 std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn $crate::gc::cell::Trace)
                     .vtable as usize,
-            value,
-        )};
+                value,
+            )
+        };
 
         stack.head.set(unsafe { std::mem::transmute(&mut $name) });
 
-         let mut $name = unsafe {$crate::gc::shadowstack::Rooted::construct(
-            std::pin::Pin::new(&mut $name)
-        )};
+        let mut $name =
+            unsafe { $crate::gc::shadowstack::Rooted::construct(std::pin::Pin::new(&mut $name)) };
     };
 
     ($name : ident = $stack: expr,$value: expr) => {
         let stack: &$crate::gc::shadowstack::ShadowStack = &$stack;
         let value = $value;
-        let mut $name = unsafe {$crate::gc::shadowstack::RootedInternal::<_>::construct(
-
-            stack,
-             stack.head.get(),
-
+        let mut $name = unsafe {
+            $crate::gc::shadowstack::RootedInternal::<_>::construct(
+                stack,
+                stack.head.get(),
                 std::mem::transmute::<_, mopa::TraitObject>(&value as &dyn $crate::gc::cell::Trace)
                     .vtable as usize,
-            value,
-        )};
+                value,
+            )
+        };
 
         stack.head.set(unsafe { std::mem::transmute(&mut $name) });
 
-        let mut $name = unsafe {$crate::gc::shadowstack::Rooted::construct(
-            std::pin::Pin::new(&mut $name)
-        )};
+        let mut $name =
+            unsafe { $crate::gc::shadowstack::Rooted::construct(std::pin::Pin::new(&mut $name)) };
     };
 }
 
-
-
-impl<'a,'b, T: Trace> Rooted<'a, 'b, T> {
+impl<'a, 'b, T: Trace> Rooted<'a, 'b, T> {
     /// Create `Rooted<T>` instance from pinned reference. Note that this should be used only
     /// inside `root!` macro and users of Starlight API should not use this function.
-    pub unsafe fn construct(pin: Pin<&'a mut RootedInternal<'b,T>>) -> Self {
-        Self {
-            pinned: pin
-        }
+    pub unsafe fn construct(pin: Pin<&'a mut RootedInternal<'b, T>>) -> Self {
+        Self { pinned: pin }
     }
     pub unsafe fn get_internal(&self) -> &RootedInternal<T> {
         std::mem::transmute_copy::<_, &RootedInternal<T>>(&self.pinned)
     }
     pub unsafe fn get_internal_mut(&mut self) -> &mut RootedInternal<T> {
         std::mem::transmute_copy::<_, &mut RootedInternal<T>>(&mut self.pinned)
+    }
+
+    pub fn mut_handle(&mut self) -> HandleMut<'_, T> {
+        HandleMut { value: &mut **self }
+    }
+
+    pub fn handle(&self) -> Handle<'_, T> {
+        Handle { value: &**self }
     }
 }
 
@@ -171,5 +184,32 @@ impl<'a, T: Trace> DerefMut for Rooted<'a, '_, T> {
         unsafe {
             &mut std::mem::transmute_copy::<_, &mut RootedInternal<T>>(&mut self.pinned).value
         }
+    }
+}
+
+/// Reference to `Rooted<T>` value.
+pub struct Handle<'a, T: Trace> {
+    value: &'a T,
+}
+
+pub struct HandleMut<'a, T: Trace> {
+    value: &'a mut T,
+}
+impl<T: Trace> Deref for Handle<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.value
+    }
+}
+
+impl<T: Trace> Deref for HandleMut<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.value
+    }
+}
+impl<T: Trace> DerefMut for HandleMut<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value
     }
 }

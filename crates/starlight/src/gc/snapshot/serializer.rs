@@ -478,16 +478,20 @@ impl Serializable for CodeBlock {
         self.name.serialize(serializer);
         self.names.serialize(serializer);
         self.strict.serialize(serializer);
-        self.variables.serialize(serializer);
+
         self.code.serialize(serializer);
         self.feedback.serialize(serializer);
         self.literals.serialize(serializer);
-        self.rest_param.serialize(serializer);
-        self.params.serialize(serializer);
+
         self.codes.serialize(serializer);
         self.top_level.serialize(serializer);
         self.use_arguments.serialize(serializer);
         self.file_name.serialize(serializer);
+
+        self.rest_at.serialize(serializer);
+        self.var_count.serialize(serializer);
+        self.param_count.serialize(serializer);
+        self.args_at.serialize(serializer);
     }
 }
 

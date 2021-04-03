@@ -75,7 +75,12 @@ impl Symbol {
             _ => false,
         }
     }
-
+    pub fn get_index(self) -> u32 {
+        match self {
+            Self::Index(x) => x,
+            _ => unreachable!(),
+        }
+    }
     pub fn is_key(self) -> bool {
         !self.is_index()
     }

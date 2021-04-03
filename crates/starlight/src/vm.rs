@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use super::codegen::*;
 use crate::{
+    bytecompiler::ByteCompiler,
     gc::default_heap,
     gc::shadowstack::ShadowStack,
     gc::Heap,
@@ -9,6 +10,7 @@ use crate::{
     jsrt::object::*,
 };
 use arguments::Arguments;
+use environment::Environment;
 use error::JsSyntaxError;
 use function::JsVMFunction;
 use std::{fmt::Display, io::Write, sync::RwLock};
@@ -30,6 +32,7 @@ pub mod attributes;
 pub mod bigint;
 pub mod builtins;
 pub mod code_block;
+pub mod environment;
 pub mod error;
 pub mod function;
 pub mod global;
@@ -175,13 +178,12 @@ impl Runtime {
         };
         let mut vmref = RuntimeRef(self);
 
-        let mut code = Compiler::compile_script(&mut *vmref, &script);
+        let mut code = ByteCompiler::compile_script(&mut *vmref, &script);
         code.file_name = path.to_owned();
         code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
 
-        let envs = Structure::new_indexed(self, Some(self.global_object()), false);
-        let env = JsObject::new(self, &envs, JsObject::get_class(), ObjectTag::Ordinary);
+        let env = Environment::new(self, 0);
         let fun = JsVMFunction::new(self, code, env);
         return Ok(JsValue::encode_object_value(fun));
     }
@@ -225,27 +227,22 @@ impl Runtime {
                 }
             };
             let mut vmref = RuntimeRef(self);
-            let mut code = Compiler::compile_script(&mut *vmref, &script);
+            let mut code = ByteCompiler::compile_script(&mut *vmref, &script);
             code.strict = code.strict || force_strict;
             code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
             let stack = self.shadowstack();
-            root!(
-                envs = stack,
-                Structure::new_indexed(self, Some(self.global_object()), false)
-            );
-            root!(
-                env = stack,
-                JsObject::new(self, &*envs, JsObject::get_class(), ObjectTag::Ordinary)
-            );
-            root!(fun = stack, JsVMFunction::new(self, code, *env));
 
+            root!(env = stack, Environment::new(self, 0));
+            root!(fun = stack, JsVMFunction::new(self, code, *env));
+            root!(func = stack, *&*fun);
             root!(
                 args = stack,
                 Arguments::new(JsValue::encode_undefined_value(), &mut [])
             );
 
-            fun.as_function_mut().call(self, &mut args)
+            fun.as_function_mut()
+                .call(self, &mut args, JsValue::new(*func))
         };
         res
     }
@@ -355,7 +352,6 @@ impl Runtime {
             options,
             stack: Stack::new(),
             global_object: None,
-
             global_data: GlobalData::default(),
             external_references,
             shadowstack: ShadowStack::new(),

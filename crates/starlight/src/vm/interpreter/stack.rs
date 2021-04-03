@@ -1,6 +1,5 @@
 use super::*;
 use crate::gc::cell::Trace;
-use frame::*;
 use memmap2::MmapMut;
 use std::{intrinsics::unlikely, ptr::null_mut};
 #[allow(dead_code)]
@@ -26,9 +25,9 @@ impl Stack {
             map,
         }
     }
-    pub fn new_frame(&mut self) -> Option<*mut CallFrame> {
+    pub fn new_frame(&mut self, iloc_count: u32, callee: JsValue) -> Option<*mut CallFrame> {
         unsafe {
-            if self.cursor.add(FRAME_SIZE) >= self.end {
+            if self.cursor.add(iloc_count as _) >= self.end {
                 return None;
             }
 
@@ -39,11 +38,12 @@ impl Stack {
                 try_stack: vec![],
                 env: JsValue::encode_empty_value(),
                 this: JsValue::encode_empty_value(),
-                sp: self.cursor,
-                limit: self.cursor,
+                sp: self.cursor.add(iloc_count as _),
+                limit: self.cursor.add(iloc_count as _),
                 code_block: None,
                 callee: JsValue::encode_undefined_value(),
                 ip: null_mut(),
+                locals_start: self.cursor,
             }));
             self.current = frame;
 
