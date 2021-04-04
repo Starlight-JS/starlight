@@ -267,9 +267,10 @@ unsafe fn eval_internal(
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {
-                if let Some((env, ip)) = (*frame).try_stack.pop() {
+                if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
                     (*frame).env = env;
                     (*frame).ip = ip;
+                    (*frame).sp = sp;
                     (*frame).push(e);
                     continue;
                 }
@@ -295,7 +296,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         {
             rt.perf.get_perf(opcode as u8);
         }
-        //   println!("{:?}", opcode);
+        //println!("{:?}", opcode);
         stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_NOP => {}
@@ -847,6 +848,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_EQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+
                 frame.push(JsValue::encode_bool_value(lhs.abstract_equal(rhs, rt)?));
             }
             Opcode::OP_STRICTEQ => {
@@ -978,7 +980,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let env = frame.env;
 
-                frame.try_stack.push((env, ip.offset(offset as isize)));
+                frame
+                    .try_stack
+                    .push((env, ip.offset(offset as isize), frame.sp));
             }
             Opcode::OP_POP_CATCH => {
                 frame.try_stack.pop();

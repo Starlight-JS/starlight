@@ -20,7 +20,7 @@ pub struct CallFrame {
     pub exit_on_return: bool,
     pub env: JsValue,
     /// (Environment,Instruction) stack
-    pub try_stack: Vec<(JsValue, *mut u8)>,
+    pub try_stack: Vec<(JsValue, *mut u8, *mut JsValue)>,
     pub locals_start: *mut JsValue,
 }
 impl CallFrame {
@@ -57,7 +57,7 @@ unsafe impl Trace for CallFrame {
         self.code_block.trace(visitor);
         self.this.trace(visitor);
         self.env.trace(visitor);
-        for (env, _) in self.try_stack.iter_mut() {
+        for (env, _, _) in self.try_stack.iter_mut() {
             env.trace(visitor);
         }
     }

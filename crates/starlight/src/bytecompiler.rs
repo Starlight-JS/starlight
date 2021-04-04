@@ -144,7 +144,7 @@ impl ByteCompiler {
         let s: &str = &id.sym;
         s.intern()
     }
-    pub fn var_decl(&mut self, var: &VarDecl) -> Vec<u16> {
+    pub fn var_decl(&mut self, var: &VarDecl) -> Vec<Symbol> {
         let mut names = vec![];
         for decl in var.decls.iter() {
             match &decl.name {
@@ -157,7 +157,7 @@ impl ByteCompiler {
                             self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                         }
                     }
-
+                    names.push(Self::ident_to_sym(&name.id));
                     match var.kind {
                         VarDeclKind::Const => {
                             self.decl_const(Self::ident_to_sym(&name.id));
@@ -327,7 +327,25 @@ impl ByteCompiler {
     }
     pub fn compile(&mut self, body: &[Stmt]) {
         let scopea = Analyzer::analyze_stmts(body);
-
+        if !self.top_level {
+            for var in scopea.vars.iter() {
+                match var.1.kind() {
+                    BindingKind::Var => {
+                        let s: &str = &(var.0).0;
+                        let name = s.intern();
+                        self.scope.borrow_mut().add_var(name);
+                        self.code.var_count += 1;
+                    }
+                    BindingKind::Function => {
+                        let s: &str = &(var.0).0;
+                        let name = s.intern();
+                        self.scope.borrow_mut().add_var(name);
+                        self.code.var_count += 1;
+                    }
+                    _ => (),
+                }
+            }
+        }
         VisitFnDecl::visit(body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
             let mut _rest = None;
@@ -375,25 +393,7 @@ impl ByteCompiler {
                     _ => todo!(),
                 }
             }
-            if !self.top_level {
-                for var in scopea.vars.iter() {
-                    match var.1.kind() {
-                        BindingKind::Var => {
-                            let s: &str = &(var.0).0;
-                            let name = s.intern();
-                            self.scope.borrow_mut().add_var(name);
-                            self.code.var_count += 1;
-                        }
-                        BindingKind::Function => {
-                            let s: &str = &(var.0).0;
-                            let name = s.intern();
-                            self.scope.borrow_mut().add_var(name);
-                            self.code.var_count += 1;
-                        }
-                        _ => (),
-                    }
-                }
-            }
+
             code.param_count = params.len() as _;
             code.rest_at = rat;
             compiler.compile_fn(&decl.function);
@@ -405,6 +405,7 @@ impl ByteCompiler {
             let var = self.access_var(name);
             self.access_set(var);
         });
+
         for stmt in body.iter() {
             if contains_ident(stmt, "arguments") {
                 self.code.use_arguments = true;
@@ -485,6 +486,42 @@ impl ByteCompiler {
                 // self.emit(Opcode::OP_POP_ENV, &[], false);
                 let j = self.jmp();
                 self.lci.last_mut().unwrap().continues.push(Box::new(j));
+            }
+            Stmt::ForIn(for_in) => {
+                let depth = self.push_scope();
+                self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                let name = match for_in.left {
+                    VarDeclOrPat::VarDecl(ref var_decl) => self.var_decl(var_decl)[0],
+                    VarDeclOrPat::Pat(Pat::Ident(ref ident)) => {
+                        let sym = Self::ident_to_sym(&ident.id);
+                        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                        self.emit(Opcode::OP_GET_ENV, &[0], false);
+                        self.decl_let(sym);
+                        sym
+                    }
+                    _ => unreachable!(),
+                };
+
+                self.expr(&for_in.right, true);
+                let for_in_setup = self.jmp_custom(Opcode::OP_FORIN_SETUP);
+                let head = self.code.code.len();
+                self.push_lci(head as _, depth);
+                let for_in_enumerate = self.jmp_custom(Opcode::OP_FORIN_ENUMERATE);
+                let acc = self.access_var(name);
+                self.access_set(acc);
+                //self.emit(Opcode::OP_SET_VAR, &[name], true);
+                self.stmt(&for_in.body);
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
+
+                self.goto(head as _);
+
+                for_in_enumerate(self);
+                for_in_setup(self);
+                self.emit(Opcode::OP_POP_ENV, &[], false);
+                self.pop_scope();
+                self.emit(Opcode::OP_FORIN_LEAVE, &[], false);
             }
             Stmt::For(for_stmt) => {
                 let _env = self.push_scope();
@@ -894,8 +931,8 @@ impl ByteCompiler {
                     UpdateOp::MinusMinus => Opcode::OP_SUB,
                 };
                 if update.prefix {
-                    self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.expr(&update.arg, true);
+                    self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.emit(op, &[], false);
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
@@ -904,11 +941,11 @@ impl ByteCompiler {
                     self.access_set(acc);
                     //self.emit_store_expr(&update.arg);
                 } else {
-                    self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.expr(&update.arg, true);
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
+                    self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.emit(op, &[], false);
                     let acc = self.compile_access(&update.arg, false);
                     self.access_set(acc);

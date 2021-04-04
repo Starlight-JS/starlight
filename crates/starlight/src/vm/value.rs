@@ -636,7 +636,7 @@ impl JsValue {
                 return Ok(self.get_number() == rhs.get_number());
             }
 
-            if (lhs.is_undefined() || lhs.is_null()) && (rhs.is_undefined() && rhs.is_null()) {
+            if (lhs.is_undefined() || lhs.is_null()) && (rhs.is_undefined() || rhs.is_null()) {
                 return Ok(true);
             }
 
