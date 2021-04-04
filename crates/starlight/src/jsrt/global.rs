@@ -168,3 +168,11 @@ pub fn to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
         .to_string(rt)
         .map(|x| JsValue::new(JsString::new(rt, x)))
 }
+
+// TODO: Breakpoints
+pub fn __breakpoint(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
+    todo!()
+}
+pub fn __breakpoint_noop(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
+    Ok(JsValue::encode_undefined_value())
+}

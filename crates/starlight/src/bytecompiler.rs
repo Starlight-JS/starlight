@@ -124,6 +124,7 @@ impl ByteCompiler {
             Access::Global(var)
         }
     }
+
     pub fn decl_const(&mut self, name: Symbol) -> u16 {
         self.emit(Opcode::OP_GET_ENV, &[0], false);
         let _ix = self.scope.borrow_mut().add_var(name);
@@ -175,6 +176,27 @@ impl ByteCompiler {
             }
         }
         names
+    }
+    pub fn access_delete(&mut self, acc: Access) {
+        match acc {
+            Access::Global(x) => {
+                let id = self.get_sym(x);
+                self.emit(Opcode::OP_GLOBALTHIS, &[], false);
+                self.emit(Opcode::OP_DELETE_BY_ID, &[id], false);
+            }
+            Access::ByVal => {
+                self.emit(Opcode::OP_DELETE_BY_VAL, &[], false);
+            }
+            Access::ById(x) => {
+                let id = self.get_sym(x);
+                self.emit(Opcode::OP_DELETE_BY_ID, &[id], false);
+            }
+            Access::Variable(_ix, _depth) => {
+                self.emit(Opcode::OP_PUSH_TRUE, &[], false);
+                // self.access_set()
+            }
+            _ => unreachable!(),
+        }
     }
     pub fn access_set(&mut self, acc: Access) {
         match acc {
@@ -880,7 +902,9 @@ impl ByteCompiler {
             }
             Expr::Unary(unary) => {
                 if let UnaryOp::Delete = unary.op {
-                    match &*unary.arg {
+                    let acc = self.compile_access(&*unary.arg, false);
+                    self.access_delete(acc);
+                    /* match &*unary.arg {
                         Expr::Member(member) => {
                             let name = if !member.computed {
                                 if let Expr::Ident(id) = &*member.prop {
@@ -908,8 +932,10 @@ impl ByteCompiler {
                             }
                             return;
                         }
+                        Expr::Ident(x) => {}
                         _ => todo!(),
-                    }
+                    }*/
+                    return;
                 }
                 self.expr(&unary.arg, true);
                 match unary.op {

@@ -328,11 +328,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_GET_ENV => {
                 let mut depth = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = frame
-                    .env
-                    .get_object()
-                    .downcast::<Environment>()
-                    .expect("Corrupted environment");
+                let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
+
                 while depth != 0 {
                     env = env.parent.expect("Invalid environment depth");
                     depth -= 1;
@@ -350,7 +347,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 //rt.heap().collect_if_necessary();
                 let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
 
-                frame.env = JsValue::new(env.parent.expect("corrupted environment"));
+                frame.env = JsValue::new(unwrap_unchecked(env.parent));
             }
             Opcode::OP_JMP => {
                 rt.heap().collect_if_necessary();
@@ -1014,29 +1011,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_DECL_CONST => {
                 let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 let val = frame.pop();
-                /*let name = ip.cast::<u32>().read();
-                ip = ip.add(8);
-                let name = unwrap_unchecked(frame.code_block).names[name as usize];
-                Env {
-                    record: frame.env.get_jsobject(),
-                }
-                .declare_variable(rt, name, val, true)?;
-                */
-
                 env.values.push((val, false));
             }
             Opcode::OP_DECL_LET => {
                 let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 let val = frame.pop();
-                /*let name = ip.cast::<u32>().read();
-                ip = ip.add(8);
-                let name = unwrap_unchecked(frame.code_block).names[name as usize];
-                Env {
-                    record: frame.env.get_jsobject(),
-                }
-                .declare_variable(rt, name, val, true)?;
-                */
-
                 env.values.push((val, true));
                 //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
             }
