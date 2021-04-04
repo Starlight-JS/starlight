@@ -11,6 +11,13 @@ extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _: &mut Runtim
     });
 }
 
+extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
+    obj.data::<NumberObject>()
+        .get()
+        .to_bits()
+        .serialize(serializer);
+}
+
 extern "C" fn sz() -> usize {
     size_of::<NumberObject>()
 }
@@ -22,7 +29,7 @@ impl NumberObject {
         None,
         None,
         Some(deser),
-        None,
+        Some(ser),
         Some(sz)
     );
 
@@ -54,5 +61,13 @@ impl NumberObject {
     pub fn to_mut(obj: &mut GcPointer<JsObject>) -> &mut Self {
         assert!(obj.tag() == ObjectTag::Number);
         obj.data::<Self>()
+    }
+    #[inline]
+    pub fn get(&self) -> f64 {
+        self.value
+    }
+    #[inline]
+    pub fn set(&mut self, value: f64) {
+        self.value = value;
     }
 }

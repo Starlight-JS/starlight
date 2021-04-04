@@ -16,6 +16,7 @@ pub mod error;
 pub mod ffi;
 pub mod function;
 pub mod global;
+pub mod number;
 pub mod object;
 pub mod string;
 
@@ -940,6 +941,15 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         ffi::ffi_function_attach as _,
         ffi::ffi_function_call as _,
         ffi::ffi_library_open as _,
+        number::number_constructor as _,
+        number::number_clz as _,
+        number::number_is_finite as _,
+        number::number_is_integer as _,
+        number::number_is_nan as _,
+        number::number_to_int as _,
+        number::number_to_precisiion as _,
+        number::number_to_string as _,
+        number::number_value_of as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

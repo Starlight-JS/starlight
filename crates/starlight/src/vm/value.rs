@@ -8,9 +8,10 @@ use std::{
 use super::{
     attributes::*,
     error::*,
+    number::*,
     object::{JsHint, JsObject},
     slot::*,
-    string::JsString,
+    string::*,
     symbol_table::*,
     Runtime,
 };
@@ -589,7 +590,12 @@ impl JsValue {
         if self.is_object() && self.get_object().is::<JsObject>() {
             return Ok(unsafe { self.get_object().downcast_unchecked() });
         }
-
+        if self.is_number() {
+            return Ok(NumberObject::new(rt, self.get_number()));
+        }
+        if self.is_jsstring() {
+            return Ok(JsStringObject::new(rt, self.get_jsstring()));
+        }
         todo!()
     }
     pub fn is_jsobject(self) -> bool {

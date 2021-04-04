@@ -315,7 +315,9 @@ impl Runtime {
         this.init_func(proto);
         this.init_error(proto.clone());
         this.init_array(proto.clone());
+        crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
+
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
         super::jsrt::object_init(&mut this, obj_constructor, proto);
