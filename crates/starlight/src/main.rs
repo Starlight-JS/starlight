@@ -1,11 +1,10 @@
-use gccjit_rs::ctx::Context;
-use starlight::{jit::JITCompiler, prelude::*};
+use starlight::prelude::*;
 use std::path::{Path, PathBuf};
 use structopt::*;
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-/*#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 struct Options {
     #[structopt(
         long = "gc-threads",
@@ -170,7 +169,7 @@ fn main() {
 
     drop(rt);
 }
-*/
+/*
 
 fn main() {
     let ctx = Context::default();
@@ -190,3 +189,4 @@ fn main() {
     block.end_with_return(None, jit.bitcast(&block, val, jit.ctx.new_type::<f64>()));
     let result = jit.ctx.compile();
 }
+*/
