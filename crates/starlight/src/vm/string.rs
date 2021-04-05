@@ -18,7 +18,7 @@ use std::mem::size_of;
 
 #[repr(C)]
 pub struct JsString {
-    pub(crate) string: String,
+    pub string: String,
 }
 
 impl JsString {
