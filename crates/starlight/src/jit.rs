@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     prelude::*,
     vm::value::{ExtendedTag, BOOL_TAG, FIRST_TAG, OBJECT_TAG},
@@ -12,6 +10,9 @@ use gccjit_rs::{
     ty::*,
 };
 use gccjit_rs::{ctx::Context, field::Field};
+use std::collections::HashMap;
+
+pub mod stubs;
 
 pub struct JITResult {
     pub is_err: i32,
@@ -204,5 +205,24 @@ impl JITCompiler {
         let val = val.to_rvalue() & self.u64(JsValue::DATA_MASK as _);
         self.ctx
             .new_cast(None, val, self.ctx.new_type::<()>().make_pointer())
+    }
+
+    pub fn check_type_equals(&self, val: impl ToRValue, type_id: impl ToRValue) -> RValue {
+        let ret = self.ctx.new_type::<u64>();
+        let param = self.ctx.new_type::<*const ()>();
+        let ty = self
+            .ctx
+            .new_function_pointer_type(None, ret, &[param], false);
+        // #1: Invoke stub that obtains object type id.
+        let func = self
+            .ctx
+            .new_rvalue_from_ptr(ty, stubs::type_id_of_object_stub as *mut ());
+        let val = self
+            .ctx
+            .new_cast(None, val.to_rvalue(), self.ctx.new_type::<*const ()>());
+        let result = self.ctx.new_call_through_ptr(None, func, &[val]);
+        // #2: compare type id of object and desired type id
+        self.ctx
+            .new_comparison(None, ComparisonOp::Equals, result, type_id.to_rvalue())
     }
 }

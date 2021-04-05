@@ -14,6 +14,39 @@ use std::{
     mem::size_of,
     ptr::{null_mut, NonNull},
 };
+
+/// Like C's offsetof but you can use it with GC-able objects to get offset from GC header to field.
+///
+/// The magic number 0x4000 is insignificant. We use it to avoid using NULL, since
+/// NULL can cause compiler problems, especially in cases of multiple inheritance
+#[macro_export]
+macro_rules! gc_offsetof {
+    ($name : ident. $($field: ident).*) => {
+        unsafe {
+            let uninit = std::mem::transmute::<_,$crate::gc::cell::GcPointer<$name>>(0x4000usize);
+            let fref = &uninit.$($field).*;
+            let faddr = fref as *const _ as usize;
+            faddr - 0x4000
+        }
+    };
+}
+
+/// Just like C's offsetof.
+///
+/// The magic number 0x4000 is insignificant. We use it to avoid using NULL, since
+/// NULL can cause compiler problems, especially in cases of multiple inheritance.
+#[macro_export]
+macro_rules! offsetof {
+    ($name : ident . $($field: ident).*) => {
+        unsafe {
+            let uninit = std::mem::transmute::<_,*const $name>(0x4000usize);
+            let fref = &(&*uninit).$($field).*;
+            let faddr = fref as *const _ as usize;
+            faddr - 0x4000
+        }
+    }
+}
+
 #[macro_use]
 pub mod cell;
 pub mod snapshot;
@@ -448,38 +481,6 @@ impl fmt::Display for FormattedSize {
 
 pub fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
-}
-
-/// Like C's offsetof but you can use it with GC-able objects to get offset from GC header to field.
-///
-/// The magic number 0x4000 is insignificant. We use it to avoid using NULL, since
-/// NULL can cause compiler problems, especially in cases of multiple inheritance
-#[macro_export]
-macro_rules! gc_offsetof {
-    ($name : ident. $($field: ident).*) => {
-        unsafe {
-            let uninit = std::mem::transmute::<_,$crate::gc::cell::GcPointer<$name>>(0x4000usize);
-            let fref = &uninit.$($field).*;
-            let faddr = fref as *const _ as usize;
-            faddr - 0x4000
-        }
-    };
-}
-
-/// Just like C's offsetof.
-///
-/// The magic number 0x4000 is insignificant. We use it to avoid using NULL, since
-/// NULL can cause compiler problems, especially in cases of multiple inheritance.
-#[macro_export]
-macro_rules! offsetof {
-    ($name : ident . $($field: ident).*) => {
-        unsafe {
-            let uninit = std::mem::transmute::<_,*const $name>(0x4000usize);
-            let fref = &(&*uninit).$($field).*;
-            let faddr = fref as *const _ as usize;
-            faddr - 0x4000
-        }
-    }
 }
 
 #[cfg(test)]

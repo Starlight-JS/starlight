@@ -116,6 +116,17 @@ pub const POSSIBLY_GREY: u8 = 2;
 pub const DEFINETELY_WHITE: u8 = 1;
 
 impl GcPointerBase {
+    pub fn vtable_offsetof() -> usize {
+        offsetof!(GcPointerBase.vtable)
+    }
+
+    pub fn size_offsetof() -> usize {
+        offsetof!(GcPointerBase.size)
+    }
+
+    pub fn state_offsetof() -> usize {
+        offsetof!(GcPointerBase.cell_state)
+    }
     pub fn new(vtable: usize, size: u32) -> Self {
         Self {
             vtable: vtable,
@@ -190,7 +201,8 @@ pub fn vtable_of_type<T: GcCell + Sized>() -> usize {
 ///
 /// The smart pointer is simply a guarantee to the garbage collector
 /// that this points to a garbage collected object with the correct header,
-/// and not some arbitrary bits that you've decided to gc allocate.
+/// and not some arbitrary bits that you've decided to gc allocate.]
+#[repr(transparent)]
 pub struct GcPointer<T: ?Sized> {
     pub(crate) base: NonNull<GcPointerBase>,
     pub(crate) marker: PhantomData<T>,
