@@ -24,6 +24,7 @@ pub mod bytecompiler;
 pub mod codegen;
 pub mod jsrt;
 pub mod tracingjit;
+pub mod jit;
 pub mod vm;
 
 pub struct Platform;

@@ -30,6 +30,7 @@ libffi = "1.0.0"
 num = "0.3.1"
 mimalloc = "0.1.25"
 libloading = "0.7.0"
+gccjit-rs = { git = "https://github.com/playxe/gccjit-rs" }
 const-random = "0.1.13"
 [features]
 val-as-f64 = []
