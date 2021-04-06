@@ -31,7 +31,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     root!(array = stack, arr);
     for i in 0..(ARRAY_SIZE / 2) {
-        *array.at_mut(i as _) = JsValue::encode_f64_value(1.0 / i as f64);
+        *array.at_mut(i as _) = JsValue::new(1.0 / i as f64);
     }
     keep_on_stack!(&mut array);
     let mut depth = MIN_TREE_DEPTH;

@@ -149,7 +149,7 @@ impl JsArray {
     ) -> bool {
         if name == "length".intern() {
             slot.set_1(
-                JsValue::encode_f64_value(obj.indexed.length() as f64),
+                JsValue::new(obj.indexed.length() as f64),
                 if obj.indexed.writable() {
                     create_data(AttrExternal::new(Some(W)))
                 } else {

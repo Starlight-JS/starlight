@@ -668,7 +668,7 @@ impl Deserializable for JsObject {
         let class = deser.get_reference();
         let slots = deser.get_reference();
         let structure = deser.get_reference();
-        let indexed = deser.get_reference();
+        let indexed = IndexedElements::deserialize_inplace(deser);
         let flags = deser.get_u32();
         let object = at.cast::<JsObject>();
         object.write(Self {
@@ -1146,12 +1146,12 @@ impl Deserializable for Transition {
         match ty {
             0x0 => Self::None,
             0x1 => {
-                let table = Option::<GcPointer<HashMap<TransitionKey,GcPointer<Structure>>>>::deserialize_inplace(deser);
+                let table = Option::<GcPointer<HashMap<TransitionKey,WeakRef<Structure>>>>::deserialize_inplace(deser);
                 Self::Table(table)
             }
             0x2 => {
                 let key = TransitionKey::deserialize_inplace(deser);
-                let structure = GcPointer::<Structure>::deserialize_inplace(deser);
+                let structure = WeakRef::<Structure>::deserialize_inplace(deser);
                 Self::Pair(key, structure)
             }
             _ => unreachable!(),

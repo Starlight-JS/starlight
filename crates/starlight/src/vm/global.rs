@@ -53,7 +53,7 @@ impl JsGlobal {
     pub fn lookup_constant(&self, name: Symbol) -> Option<JsValue> {
         let _vm = self.vm;
         if name == "Infinity".intern() {
-            Some(JsValue::encode_f64_value(std::f64::INFINITY))
+            Some(JsValue::new(std::f64::INFINITY))
         } else if name == "NaN".intern() {
             Some(JsValue::encode_nan_value())
         } else if name == "undefined".intern() {

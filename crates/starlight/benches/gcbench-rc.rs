@@ -64,9 +64,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     populate(LONG_LIVED_TREE_DEPTH as _, long_lived.clone());
 
-    let mut array = Rc::new([JsValue::encode_f64_value(0.0); ARRAY_SIZE]);
+    let mut array = Rc::new([JsValue::new(0.0); ARRAY_SIZE]);
     for i in 0..(ARRAY_SIZE / 2) {
-        array[i] = JsValue::encode_f64_value(1.0 / i as f64);
+        array[i] = JsValue::new(1.0 / i as f64);
     }
 
     let mut depth = MIN_TREE_DEPTH;

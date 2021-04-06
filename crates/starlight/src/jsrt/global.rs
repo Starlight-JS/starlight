@@ -117,14 +117,14 @@ pub fn parse_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
         //     b. Return +0𝔽.
         if math_int == 0_f64 {
             if sign == -1 {
-                return Ok(JsValue::encode_f64_value(-0_f64));
+                return Ok(JsValue::new(-0_f64));
             } else {
-                return Ok(JsValue::encode_f64_value(0_f64));
+                return Ok(JsValue::new(0_f64));
             }
         }
 
         // 16. Return 𝔽(sign × mathInt).
-        Ok(JsValue::encode_f64_value(sign as f64 * math_int))
+        Ok(JsValue::new(sign as f64 * math_int))
     } else {
         Ok(JsValue::encode_nan_value())
     }

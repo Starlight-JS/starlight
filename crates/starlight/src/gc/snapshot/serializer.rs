@@ -373,7 +373,8 @@ impl Serializable for JsObject {
         serializer.write_reference(self.class);
         serializer.write_gcpointer(self.slots);
         serializer.write_gcpointer(self.structure);
-        serializer.write_gcpointer(self.indexed);
+        self.indexed.serialize(serializer);
+        //serializer.write_gcpointer(self.indexed);
         serializer.write_u32(self.flags);
         match self.tag {
             ObjectTag::NormalArguments => {

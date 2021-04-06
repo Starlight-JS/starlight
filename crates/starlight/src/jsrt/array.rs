@@ -172,8 +172,8 @@ pub fn array_push(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
         )));
     }
     let len = n as f64;
-    obj.put(vm, "length".intern(), JsValue::encode_f64_value(len), false)?;
-    Ok(JsValue::encode_f64_value(n as f64))
+    obj.put(vm, "length".intern(), JsValue::new(len), false)?;
+    Ok(JsValue::new(n as f64))
 }
 
 pub fn array_pop(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -188,18 +188,13 @@ pub fn array_pop(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
         )));
     };
     if len == 0 {
-        obj.put(vm, "length".intern(), JsValue::encode_f64_value(0.0), true)?;
+        obj.put(vm, "length".intern(), JsValue::new(0.0), true)?;
         return Ok(JsValue::encode_undefined_value());
     } else {
         let index = len - 1;
         let element = obj.get(vm, Symbol::Index(index))?;
         obj.delete(vm, Symbol::Index(index), true)?;
-        obj.put(
-            vm,
-            "length".intern(),
-            JsValue::encode_f64_value(index as _),
-            true,
-        )?;
+        obj.put(vm, "length".intern(), JsValue::new(index as i32), true)?;
         Ok(element)
     }
 }
@@ -267,7 +262,7 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
             );
             *args.at_mut(0) = *acc;
             *args.at_mut(1) = obj.get(rt, Symbol::Index(k))?;
-            *args.at_mut(2) = JsValue::encode_f64_value(k as _);
+            *args.at_mut(2) = JsValue::new(k as i32);
             *args.at_mut(3) = JsValue::encode_object_value(*obj);
             *acc = callback.call(rt, &mut args, JsValue::new(*cb))?;
         }

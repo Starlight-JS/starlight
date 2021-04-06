@@ -130,7 +130,7 @@ pub trait GarbageCollector {
 }
 
 pub struct Heap {
-    gc: Box<dyn GarbageCollector>,
+    pub gc: Box<dyn GarbageCollector>,
 }
 
 pub fn default_heap(params: GcParams) -> Heap {

@@ -251,6 +251,9 @@ impl JsValue {
 
     #[inline]
     pub fn get_number(&self) -> f64 {
+        if self.is_int32() {
+            return self.get_int32() as f64;
+        }
         self.get_double()
     }
 
@@ -259,7 +262,7 @@ impl JsValue {
     }
 
     pub fn is_number(&self) -> bool {
-        self.is_double()
+        self.is_double() || self.is_int32()
     }
 }
 
@@ -436,6 +439,9 @@ impl JsValue {
     }
     #[inline]
     pub fn get_double(&self) -> f64 {
+        if self.is_int32() {
+            return self.get_int32() as i32;
+        }
         f64::from_bits(self.0.to_bits())
     }
     #[inline]
@@ -479,7 +485,7 @@ impl JsValue {
     }
 
     pub fn is_number(&self) -> bool {
-        self.is_double()
+        self.is_double() || self.is_int32()
     }
 }
 
@@ -657,17 +663,17 @@ impl JsValue {
                 return Ok(lhs.get_raw() == rhs.get_raw());
             }
             if lhs.is_number() && rhs.is_jsstring() {
-                rhs = JsValue::encode_f64_value(rhs.to_number(rt)?);
+                rhs = JsValue::new(rhs.to_number(rt)?);
                 continue;
             }
 
             if lhs.is_bool() {
-                lhs = JsValue::encode_f64_value(lhs.to_number(rt)?);
+                lhs = JsValue::new(lhs.to_number(rt)?);
                 continue;
             }
 
             if rhs.is_bool() {
-                rhs = JsValue::encode_f64_value(rhs.to_number(rt)?);
+                rhs = JsValue::new(rhs.to_number(rt)?);
                 continue;
             }
 
@@ -733,6 +739,9 @@ impl JsValue {
         Self::compare(self, rhs, true, rt)
     }
     pub fn to_int32(self, rt: &mut Runtime) -> Result<i32, JsValue> {
+        if self.is_int32() {
+            return Ok(self.get_int32());
+        }
         let number = self.to_number(rt)?;
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
@@ -741,6 +750,9 @@ impl JsValue {
     }
 
     pub fn to_uint32(self, rt: &mut Runtime) -> Result<u32, JsValue> {
+        if self.is_int32() {
+            return Ok(self.get_int32() as _);
+        }
         let number = self.to_number(rt)?;
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
@@ -751,6 +763,8 @@ impl JsValue {
     pub fn to_number(self, rt: &mut Runtime) -> Result<f64, JsValue> {
         if likely(self.is_double()) {
             Ok(self.get_double())
+        } else if likely(self.is_int32()) {
+            Ok(self.get_int32() as _)
         } else if self.is_object() && self.get_object().is::<JsString>() {
             let s = unsafe { self.get_object().downcast_unchecked::<JsString>() };
             if let Ok(n) = s.as_str().parse::<i32>() {
@@ -927,7 +941,7 @@ impl JsValue {
 
                 if name == "length".intern() {
                     slot.set_1(
-                        JsValue::encode_f64_value(str.len() as _),
+                        JsValue::new(str.len() as i32),
                         string_length(),
                         Some(str.as_dyn()),
                     );
@@ -1016,6 +1030,9 @@ macro_rules! from_primitive {
     ($($t: ty),*) => {$(
         impl From<$t> for JsValue {
             fn from(x: $t) -> Self {
+                if x as i32 as $t == x {
+                    return Self::encode_int32(x as _);
+                }
                 Self::encode_f64_value(x as f64)
             }
         })*

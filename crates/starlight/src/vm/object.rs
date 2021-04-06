@@ -88,7 +88,7 @@ pub struct JsObject {
     pub(crate) tag: ObjectTag,
     pub(crate) class: &'static Class,
     pub(crate) structure: GcPointer<Structure>,
-    pub(crate) indexed: GcPointer<IndexedElements>,
+    pub(crate) indexed: IndexedElements,
     pub(crate) slots: FixedStorage,
     pub(crate) flags: u32,
     pub(crate) object_data_start: u8,
@@ -862,7 +862,7 @@ impl JsObject {
     ) -> GcPointer<Self> {
         let stack = vm.shadowstack();
         let init = IndexedElements::new(vm);
-        root!(indexed = stack, vm.heap().allocate(init));
+        //root!(indexed = stack, vm.heap().allocate(init));
         root!(
             storage = stack,
             ArrayStorage::with_size(
@@ -877,7 +877,7 @@ impl JsObject {
 
             slots: *storage,
             object_data_start: 0,
-            indexed: *indexed,
+            indexed: init,
             flags: OBJ_FLAG_EXTENSIBLE,
             tag,
         };
@@ -1548,12 +1548,7 @@ mod tests {
 
         root!(object = stack, JsObject::new_empty(&mut rt));
 
-        let result = object.put(
-            &mut rt,
-            "key".intern(),
-            JsValue::encode_f64_value(42.4242),
-            false,
-        );
+        let result = object.put(&mut rt, "key".intern(), JsValue::new(42.4242), false);
         assert!(result.is_ok());
         rt.heap().gc();
         match object.get(&mut rt, "key".intern()) {
@@ -1596,7 +1591,7 @@ mod tests {
         let result = object.put(
             &mut rt,
             Symbol::Index((1024 << 6) + 1),
-            JsValue::encode_f64_value(42.42),
+            JsValue::new(42.42),
             false,
         );
         assert!(result.is_ok());

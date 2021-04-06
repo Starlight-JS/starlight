@@ -214,10 +214,7 @@ impl JsStringObject {
     ) -> bool {
         let value = obj.as_string_object().value;
         if name == "length".intern() {
-            slot.set(
-                JsValue::encode_f64_value(value.len() as f64),
-                string_length(),
-            );
+            slot.set(JsValue::new(value.len() as f64), string_length());
             return true;
         }
         JsObject::GetOwnNonIndexedPropertySlotMethod(obj, vm, name, slot)

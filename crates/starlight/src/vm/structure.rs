@@ -4,7 +4,7 @@ use wtf_rs::unwrap_unchecked;
 
 use super::{attributes::*, object::JsObject};
 use super::{symbol_table::*, Runtime};
-use crate::gc::cell::{GcCell, GcPointer, Trace};
+use crate::gc::cell::{GcCell, GcPointer, Trace, WeakRef};
 use crate::gc::{cell::Tracer, snapshot::deserializer::Deserializable};
 /// In JavaScript programs, it's common to have multiple objects with the same property keys. Such objects
 /// have the same *shape*.
@@ -93,7 +93,7 @@ unsafe impl Trace for TransitionKey {}
 pub enum Transition {
     None,
     Table(Option<GcPointer<Table>>),
-    Pair(TransitionKey, GcPointer<Structure>),
+    Pair(TransitionKey, WeakRef<Structure>),
 }
 
 pub struct TransitionsTable {
@@ -145,9 +145,9 @@ impl TransitionsTable {
             self.var = Transition::Table(Some(table));
         }
         if let Transition::Table(Some(ref mut table)) = self.var {
-            table.insert(key, map);
+            table.insert(key, vm.heap().make_weak(map));
         } else {
-            self.var = Transition::Pair(key, map);
+            self.var = Transition::Pair(key, vm.heap().make_weak(map));
         }
     }
 
@@ -157,10 +157,10 @@ impl TransitionsTable {
             attrs: attrs.raw(),
         };
         if let Transition::Table(ref table) = &self.var {
-            return table.as_ref().unwrap().get(&key).copied();
+            return table.as_ref().unwrap().get(&key).and_then(|x| x.upgrade());
         } else if let Transition::Pair(key_, map) = &self.var {
             if key == *key_ {
-                return Some(*map);
+                return map.upgrade();
             }
         }
         None
@@ -174,7 +174,7 @@ impl TransitionsTable {
     }
 }
 
-pub type Table = HashMap<TransitionKey, GcPointer<Structure>>;
+pub type Table = HashMap<TransitionKey, WeakRef<Structure>>;
 
 unsafe impl Trace for TransitionsTable {
     fn trace(&mut self, tracer: &mut dyn Tracer) {

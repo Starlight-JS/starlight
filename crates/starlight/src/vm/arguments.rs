@@ -358,12 +358,7 @@ impl JsArguments {
 
             //let _ = obj.put(vm, Symbol::Indexed(i as _), JsValue::undefined(), false);
         }
-        let _ = obj.put(
-            vm,
-            "length".intern(),
-            JsValue::encode_f64_value(len as _),
-            false,
-        );
+        let _ = obj.put(vm, "length".intern(), JsValue::new(len as i32), false);
         obj.as_arguments_mut().mapping = mapping.into_boxed_slice();
         obj
     }

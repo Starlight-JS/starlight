@@ -32,7 +32,7 @@ pub fn print(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
         print!("{}", string);
     }
     println!();
-    Ok(JsValue::encode_f64_value(args.size() as _))
+    Ok(JsValue::new(args.size() as i32))
 }
 
 impl Runtime {

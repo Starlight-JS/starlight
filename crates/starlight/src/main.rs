@@ -1,3 +1,4 @@
+use starlight::gc::formatted_size;
 use starlight::prelude::*;
 use std::path::{Path, PathBuf};
 use structopt::*;
@@ -27,6 +28,11 @@ struct Options {
     use_malloc_gc: bool,
     #[structopt(long = "enable-ffi", help = "Enable FFI and CFunction objects for use")]
     enable_ffi: bool,
+    #[structopt(
+        long = "dump-stats",
+        help = "Dump various statistics at the end of execution"
+    )]
+    dump_stats: bool,
 }
 
 use const_random::const_random;
@@ -107,7 +113,7 @@ fn main() {
         buf.extend(snapshot.buffer.iter());
         std::fs::write(SNAPSHOT_FILENAME, &buf).unwrap();
     }
-
+    let at_init = rt.heap().gc.stats();
     let gcstack = rt.shadowstack();
 
     let string = std::fs::read_to_string(&options.file);
@@ -166,7 +172,17 @@ fn main() {
             std::process::exit(1);
         }
     }
-
+    let after_exec = rt.heap().gc.stats();
+    if options.dump_stats {
+        eprintln!(
+            "Memory used at start: {}",
+            formatted_size(at_init.allocated)
+        );
+        eprintln!(
+            "Memroy used at end: {}",
+            formatted_size(after_exec.allocated)
+        );
+    }
     drop(rt);
 }
 /*

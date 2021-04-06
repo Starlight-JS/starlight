@@ -82,7 +82,7 @@ impl ByteCompiler {
         }
 
         let val_ = match val.clone() {
-            Val::Float(x) => JsValue::encode_f64_value(f64::from_bits(x)),
+            Val::Float(x) => JsValue::new(f64::from_bits(x)),
             Val::Str(x) => JsValue::encode_object_value(JsString::new(vm, x)),
         };
         let ix = self.code.literals.len();

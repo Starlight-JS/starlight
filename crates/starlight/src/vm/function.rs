@@ -403,7 +403,7 @@ impl JsNativeFunction {
         let _ = func.define_own_property(
             vm,
             l,
-            &*DataDescriptor::new(JsValue::encode_f64_value(n as _), NONE),
+            &*DataDescriptor::new(JsValue::new(n as i32), NONE),
             false,
         );
         let n = "name".intern();
@@ -437,7 +437,7 @@ impl JsNativeFunction {
         let _ = func.define_own_property(
             vm,
             l,
-            &*DataDescriptor::new(JsValue::encode_f64_value(n as f64), NONE),
+            &*DataDescriptor::new(JsValue::new(n as f64), NONE),
             false,
         );
         let n = "name".intern();

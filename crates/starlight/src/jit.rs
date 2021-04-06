@@ -1,16 +1,24 @@
+#![allow(dead_code, unused_imports, unused_variables)]
 use crate::{
+    bytecode::opcodes::Opcode,
     prelude::*,
-    vm::value::{ExtendedTag, BOOL_TAG, FIRST_TAG, OBJECT_TAG},
+    vm::{
+        code_block::CodeBlock,
+        environment::*,
+        interpreter::frame::*,
+        value::{ExtendedTag, BOOL_TAG, FIRST_TAG, OBJECT_TAG},
+    },
 };
 use gccjit_rs::{
-    block::{Block, ComparisonOp},
+    block::{BinaryOp, Block, Case, ComparisonOp},
     function::Function,
+    lvalue::LValue,
     parameter::Parameter,
     rvalue::{RValue, ToRValue},
     ty::*,
 };
 use gccjit_rs::{ctx::Context, field::Field};
-use std::collections::HashMap;
+use std::{collections::HashMap, intrinsics::transmute};
 
 pub mod stubs;
 
@@ -40,6 +48,7 @@ impl Typeable for JITResult {
 
 pub struct JITCompiler {
     op_blocks: HashMap<*mut u8, Block>,
+    block_to_case: HashMap<*mut u8, Case>,
     pub ctx: Context,
     pub fun: Function,
     #[cfg(feature = "val-as-f64")]
@@ -57,7 +66,10 @@ impl JITCompiler {
             false,
         );
         Self {
+            block_to_case: HashMap::new(),
             fun,
+            #[cfg(feature = "val-as-f64")]
+            cast_union: ctx.new_type::<u64>(),
             ctx,
             op_blocks: Default::default(),
         }
@@ -206,7 +218,9 @@ impl JITCompiler {
         self.ctx
             .new_cast(None, val, self.ctx.new_type::<()>().make_pointer())
     }
-
+    /// Check if `val`'s type id is equal to other type id.
+    ///
+    /// NOTE:  `val` must be pointer to GC allocated object.
     pub fn check_type_equals(&self, val: impl ToRValue, type_id: impl ToRValue) -> RValue {
         let ret = self.ctx.new_type::<u64>();
         let param = self.ctx.new_type::<*const ()>();
@@ -224,5 +238,261 @@ impl JITCompiler {
         // #2: compare type id of object and desired type id
         self.ctx
             .new_comparison(None, ComparisonOp::Equals, result, type_id.to_rvalue())
+    }
+    pub fn push(&mut self, block: &Block, frame: LValue, value: RValue) {
+        let sp = frame.access_field(
+            None,
+            self.ctx
+                .new_field(None, self.ctx.new_type::<u64>().make_pointer(), "sp"),
+        );
+        block.add_assignment(None, sp.get_address(None).dereference(None), value);
+        block.add_assignment_op(None, sp, BinaryOp::Plus, self.u64(1));
+    }
+    pub fn pop(&mut self, block: &Block, frame: LValue) -> LValue {
+        let sp = frame.access_field(
+            None,
+            self.ctx
+                .new_field(None, self.ctx.new_type::<u64>().make_pointer(), "sp"),
+        );
+        block.add_assignment_op(None, sp, BinaryOp::Minus, self.u64(1));
+        sp.get_address(None).dereference(None)
+    }
+
+    pub fn pop_or_undefined(&mut self, block: &mut Block, frame: LValue) -> RValue {
+        let merge = self
+            .fun
+            .new_local(None, self.ctx.new_type::<u64>(), "merge");
+        let sp = frame.access_field(
+            None,
+            self.ctx
+                .new_field(None, self.ctx.new_type::<u64>().make_pointer(), "sp"),
+        );
+        let limit = frame.access_field(
+            None,
+            self.ctx
+                .new_field(None, self.ctx.new_type::<u64>().make_pointer(), "limit"),
+        );
+        let cond = self.ctx.new_comparison(
+            None,
+            ComparisonOp::LessThanEquals,
+            sp.to_rvalue(),
+            limit.to_rvalue(),
+        );
+        let if_true = self.fun.new_block("pop_undef");
+        let if_false = self.fun.new_block("real_pop");
+        let merge_block = self.fun.new_block("merge");
+        block.end_with_conditional(None, cond, if_true, if_false);
+        *block = if_false;
+        block.add_assignment_op(None, sp, BinaryOp::Minus, self.u64(1));
+        block.add_assignment(
+            None,
+            merge,
+            sp.get_address(None).dereference(None).to_rvalue(),
+        );
+        block.end_with_jump(None, merge_block);
+        *block = if_true;
+        block.add_assignment(None, merge, self.encode_undefined_value());
+        block.end_with_jump(None, merge_block);
+        *block = merge_block;
+        merge.to_rvalue()
+    }
+
+    pub fn get_or_add_block(&mut self, ip: *mut u8) -> Block {
+        if let Some(bb) = self.op_blocks.get(&ip) {
+            return *bb;
+        }
+        let block = self.fun.new_block("bb");
+        self.op_blocks.insert(ip, block);
+        block
+    }
+    pub fn generate(
+        &mut self,
+        mut code_block: GcPointer<CodeBlock>,
+        frame_struct: gccjit_rs::structs::Struct,
+    ) {
+        let mut pc: *mut u8 = &mut code_block.code[0];
+        let pframe = self.fun.get_param(0);
+        let pruntime = self.fun.get_param(1);
+        let ptarget = self.fun.get_param(2);
+        let frame = self
+            .fun
+            .new_local(None, self.ctx.new_type::<()>().make_pointer(), "frame");
+        let runtime = self
+            .fun
+            .new_local(None, self.ctx.new_type::<()>().make_pointer(), "runtime");
+        let target = self
+            .fun
+            .new_local(None, self.ctx.new_type::<u32>(), "target");
+        let entry = self.fun.new_block("entry");
+        entry.add_assignment(None, frame, pframe.to_rvalue());
+        entry.add_assignment(None, runtime, pruntime.to_rvalue());
+        entry.add_assignment(None, target, ptarget.to_rvalue());
+        let end = code_block.code.last_mut().unwrap() as *mut u8;
+        unsafe {
+            while pc < end {
+                let op_loc = pc;
+                let op = transmute::<_, Opcode>(pc.read());
+                let block = self.get_or_add_block(pc);
+                pc = pc.add(1);
+                match op {
+                    Opcode::OP_NOP => { /* no op */ }
+                    Opcode::OP_POP => {
+                        self.pop(&block, frame);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_PUSH_UNDEF => {
+                        let undef = self.encode_undefined_value();
+                        self.push(&block, frame, undef);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_PUSH_NULL => {
+                        let null = self.encode_null_value();
+                        self.push(&block, frame, null);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_PUSH_NAN => {
+                        let nan = self.encode_nan_value(&block);
+                        self.push(&block, frame, nan);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_PUSH_TRUE => {
+                        let val = self.encode_bool_value(
+                            self.ctx.new_rvalue_from_int(self.ctx.new_type::<bool>(), 1),
+                        );
+                        self.push(&block, frame, val);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_PUSH_FALSE => {
+                        let val = self.encode_bool_value(
+                            self.ctx.new_rvalue_from_int(self.ctx.new_type::<bool>(), 1),
+                        );
+                        self.push(&block, frame, val);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_PUSH_ENV => {
+                        let fty = self.ctx.new_function_pointer_type(
+                            None,
+                            self.ctx.new_type::<()>(),
+                            &[
+                                self.ctx.new_type::<()>().make_pointer(),
+                                frame_struct.as_type(),
+                            ],
+                            false,
+                        );
+                        let fptr = self
+                            .ctx
+                            .new_rvalue_from_ptr(fty, stubs::push_env as *mut ());
+                        let call = self.ctx.new_call_through_ptr(
+                            None,
+                            fptr,
+                            &[runtime.to_rvalue(), frame.to_rvalue()],
+                        );
+                        block.add_eval(None, call);
+                        //  let field = self.ctx.new_field(None, self.ctx.new_type::<u64>(), "env");
+                        //  let
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_POP_ENV => {
+                        let field = self.ctx.new_field(None, self.ctx.new_type::<u64>(), "env");
+
+                        let env = frame.access_field(None, field);
+                        let unboxed = self.get_object(env.to_rvalue());
+                        let parent = self.ctx.new_binary_op(
+                            None,
+                            BinaryOp::Plus,
+                            self.ctx.new_type::<()>().make_pointer(),
+                            unboxed,
+                            self.ctx.new_rvalue_from_long(
+                                self.ctx.new_type::<usize>(),
+                                gc_offsetof!(Environment.parent) as _,
+                            ),
+                        );
+                        let boxed = self.encode_object_value(parent);
+                        block.add_assignment(None, env, boxed);
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_GET_ENV => {
+                        let field = self.ctx.new_field(None, self.ctx.new_type::<u64>(), "env");
+                        let depth = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        let env = frame.access_field(None, field);
+                        if depth == 0 {
+                            self.push(&block, frame, env.to_rvalue());
+                        } else {
+                            let level =
+                                self.fun
+                                    .new_local(None, self.ctx.new_type::<u32>(), "level");
+                            block.add_assignment(
+                                None,
+                                level,
+                                self.ctx
+                                    .new_rvalue_from_int(self.ctx.new_type::<u32>(), depth as _),
+                            );
+
+                            let env_ = self.fun.new_local(
+                                None,
+                                self.ctx.new_type::<()>().make_pointer(),
+                                "envx",
+                            );
+                            block.add_assignment(None, env_, self.get_object(env.to_rvalue()));
+                            let loop_cond = self.fun.new_block("loop");
+                            let loop_body = self.fun.new_block("body");
+                            let after_loop = self.fun.new_block("after_loop");
+
+                            block.end_with_jump(None, loop_cond);
+                            let res = self.ctx.new_comparison(
+                                None,
+                                ComparisonOp::NotEquals,
+                                level.to_rvalue(),
+                                self.ctx.new_rvalue_from_int(self.ctx.new_type::<u32>(), 0),
+                            );
+                            loop_cond.end_with_conditional(None, res, loop_body, after_loop);
+
+                            loop_body.add_assignment_op(
+                                None,
+                                level,
+                                BinaryOp::Minus,
+                                self.ctx.new_rvalue_from_int(self.ctx.new_type::<u32>(), 0),
+                            );
+                            let loaded = self.ctx.new_binary_op(
+                                None,
+                                BinaryOp::Plus,
+                                self.ctx.new_type::<()>().make_pointer(),
+                                env_.to_rvalue(),
+                                self.ctx.new_rvalue_from_long(
+                                    self.ctx.new_type::<usize>(),
+                                    gc_offsetof!(Environment.parent) as _,
+                                ),
+                            );
+                            let loaded = self.ctx.new_cast(
+                                None,
+                                loaded,
+                                self.ctx.new_type::<()>().make_pointer().make_pointer(),
+                            );
+                            loop_body.add_assignment(None, env_, loaded.dereference(None));
+                            loop_body.end_with_jump(None, loop_cond);
+
+                            self.push(
+                                &&after_loop,
+                                frame,
+                                self.encode_object_value(env_.to_rvalue()),
+                            );
+                        }
+                        let next = self.get_or_add_block(pc);
+                        block.end_with_jump(None, next);
+                    }
+                    Opcode::OP_RET => {}
+                    _ => todo!("NYI: {:?}", op),
+                }
+            }
+        }
     }
 }

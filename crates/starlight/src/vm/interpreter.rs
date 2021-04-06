@@ -395,7 +395,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let int = ip.cast::<i32>().read();
 
                 ip = ip.add(4);
-                frame.push(JsValue::encode_f64_value(int as f64));
+                frame.push(JsValue::encode_int32(int));
             }
             Opcode::OP_PUSH_NAN => {
                 frame.push(JsValue::encode_nan_value());
@@ -428,9 +428,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = frame.pop();
                 let rhs = frame.pop();
                 // profile.observe_lhs_and_rhs(lhs, rhs);
-
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    if let Some(val) = lhs.get_int32().checked_add(rhs.get_int32()) {
+                        frame.push(JsValue::encode_int32(val));
+                        continue;
+                    }
+                }
                 if likely(lhs.is_number() && rhs.is_number()) {
-                    let result = JsValue::encode_f64_value(lhs.get_number() + rhs.get_number());
+                    let result = JsValue::new(lhs.get_number() + rhs.get_number());
 
                     frame.push(result);
                     continue;
@@ -457,7 +462,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 } else {
                     let lhs = lhs.to_number(rt)?;
                     let rhs = rhs.to_number(rt)?;
-                    frame.push(JsValue::encode_f64_value(lhs + rhs));
+                    frame.push(JsValue::new(lhs + rhs));
                 }
             }
             Opcode::OP_SUB => {
@@ -466,19 +471,18 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //profile.lhs_saw_number();
                     //profile.rhs_saw_number();
-                    frame.push(JsValue::encode_f64_value(
-                        lhs.get_number() - rhs.get_number(),
-                    ));
+                    frame.push(JsValue::new(lhs.get_number() - rhs.get_number()));
 
                     continue;
                 }
                 // profile.observe_lhs_and_rhs(lhs, rhs);
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
-                frame.push(JsValue::encode_f64_value(lhs - rhs));
+                frame.push(JsValue::new(lhs - rhs));
             }
             Opcode::OP_DIV => {
                 //let profile = &mut *ip.cast::<ArithProfile>();
@@ -489,15 +493,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //    profile.lhs_saw_number();
                     //    profile.rhs_saw_number();
-                    frame.push(JsValue::encode_f64_value(
-                        lhs.get_number() / rhs.get_number(),
-                    ));
+                    frame.push(JsValue::new(lhs.get_number() / rhs.get_number()));
                     continue;
                 }
                 //profile.observe_lhs_and_rhs(lhs, rhs);
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
-                frame.push(JsValue::encode_f64_value(lhs / rhs));
+                frame.push(JsValue::new(lhs / rhs));
             }
             Opcode::OP_MUL => {
                 //let profile = &mut *ip.cast::<ArithProfile>();
@@ -509,15 +511,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     //  profile.lhs_saw_number();
                     //  profile.rhs_saw_number();
 
-                    frame.push(JsValue::encode_f64_value(
-                        lhs.get_number() * rhs.get_number(),
-                    ));
+                    frame.push(JsValue::new(lhs.get_number() * rhs.get_number()));
                     continue;
                 }
                 //profile.observe_lhs_and_rhs(lhs, rhs);
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
-                frame.push(JsValue::encode_f64_value(lhs * rhs));
+                frame.push(JsValue::new(lhs * rhs));
             }
             Opcode::OP_REM => {
                 //let profile = &mut *ip.cast::<ArithProfile>();
@@ -529,15 +529,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //  profile.lhs_saw_number();
                     //  profile.rhs_saw_number();
-                    frame.push(JsValue::encode_f64_value(
-                        lhs.get_number() % rhs.get_number(),
-                    ));
+                    frame.push(JsValue::new(lhs.get_number() % rhs.get_number()));
                     continue;
                 }
                 // profile.observe_lhs_and_rhs(lhs, rhs);
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
-                frame.push(JsValue::encode_f64_value(lhs % rhs));
+                frame.push(JsValue::new(lhs % rhs));
             }
             Opcode::OP_SHL => {
                 let lhs = frame.pop();
@@ -545,7 +543,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let left = lhs.to_int32(rt)?;
                 let right = rhs.to_uint32(rt)?;
-                frame.push(JsValue::encode_f64_value((left << (right & 0x1f)) as f64));
+                frame.push(JsValue::new((left << (right & 0x1f)) as f64));
             }
             Opcode::OP_SHR => {
                 let lhs = frame.pop();
@@ -553,7 +551,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let left = lhs.to_int32(rt)?;
                 let right = rhs.to_uint32(rt)?;
-                frame.push(JsValue::encode_f64_value((left >> (right & 0x1f)) as f64));
+                frame.push(JsValue::new((left >> (right & 0x1f)) as f64));
             }
 
             Opcode::OP_USHR => {
@@ -562,7 +560,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let left = lhs.to_uint32(rt)?;
                 let right = rhs.to_uint32(rt)?;
-                frame.push(JsValue::encode_f64_value((left >> (right & 0x1f)) as f64));
+                frame.push(JsValue::new((left >> (right & 0x1f)) as f64));
             }
             Opcode::OP_LESS => {
                 let lhs = frame.pop();
@@ -593,6 +591,147 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
+            }
+            Opcode::OP_GET_BY_ID | Opcode::OP_TRY_GET_BY_ID => {
+                let name = ip.cast::<u32>().read_unaligned();
+                let name = *unwrap_unchecked(frame.code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let object = frame.pop();
+                if likely(object.is_jsobject()) {
+                    root!(obj = gcstack, object.get_jsobject());
+
+                    if let TypeFeedBack::PropertyCache { structure, offset } =
+                        unwrap_unchecked(frame.code_block)
+                            .feedback
+                            .get_unchecked(fdbk as usize)
+                    {
+                        if let Some(structure) = structure.upgrade() {
+                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                frame.push(*obj.direct(*offset as _));
+
+                                continue;
+                            }
+                        }
+                    }
+
+                    #[inline(never)]
+                    #[cold]
+                    unsafe fn slow_get_by_id(
+                        rt: &mut Runtime,
+                        frame: &mut CallFrame,
+                        obj: &mut GcPointer<JsObject>,
+                        name: Symbol,
+                        fdbk: u32,
+                        is_try: bool,
+                    ) -> Result<(), JsValue> {
+                        let mut slot = Slot::new();
+                        let found = obj.get_property_slot(rt, name, &mut slot);
+                        if slot.is_load_cacheable() {
+                            *unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                                structure: rt.heap().make_weak(
+                                    slot.base()
+                                        .unwrap()
+                                        .downcast_unchecked::<JsObject>()
+                                        .structure(),
+                                ),
+
+                                offset: slot.offset(),
+                            }
+                        }
+                        if found {
+                            frame.push(slot.get(rt, JsValue::new(*obj))?);
+                        } else {
+                            if unlikely(is_try) {
+                                let desc = rt.description(name);
+                                return Err(JsValue::new(rt.new_reference_error(format!(
+                                    "Property '{}' not found",
+                                    desc
+                                ))));
+                            }
+                            frame.push(JsValue::encode_undefined_value());
+                        }
+                        Ok(())
+                    }
+                    slow_get_by_id(
+                        rt,
+                        frame,
+                        &mut obj,
+                        name,
+                        fdbk,
+                        opcode == Opcode::OP_TRY_GET_BY_ID,
+                    )?;
+                    continue;
+                }
+
+                frame.push(get_by_id_slow(rt, name, object)?)
+            }
+            Opcode::OP_PUT_BY_ID => {
+                let name = ip.cast::<u32>().read_unaligned();
+                let name = *unwrap_unchecked(frame.code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+
+                let object = frame.pop();
+                let value = frame.pop();
+                if likely(object.is_jsobject()) {
+                    let mut obj = object.get_jsobject();
+
+                    if let TypeFeedBack::PropertyCache { structure, offset } =
+                        unwrap_unchecked(frame.code_block)
+                            .feedback
+                            .get_unchecked(fdbk as usize)
+                    {
+                        if let Some(structure) = structure.upgrade() {
+                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                *obj.direct_mut(*offset as usize) = value;
+                                continue;
+                            }
+                        }
+                    }
+
+                    #[cold]
+                    #[inline(never)]
+                    unsafe fn slow_put_by_id(
+                        rt: &mut Runtime,
+                        frame: &mut CallFrame,
+                        obj: &mut GcPointer<JsObject>,
+                        name: Symbol,
+                        value: JsValue,
+                        fdbk: u32,
+                    ) -> Result<(), JsValue> {
+                        let mut slot = Slot::new();
+
+                        obj.put_slot(
+                            rt,
+                            name,
+                            value,
+                            &mut slot,
+                            unwrap_unchecked(frame.code_block).strict,
+                        )?;
+
+                        if slot.is_put_cacheable() {
+                            *unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                                structure: rt.heap().make_weak(obj.structure()),
+                                offset: slot.offset(),
+                            };
+                        }
+                        Ok(())
+                    }
+                    slow_put_by_id(rt, frame, &mut obj, name, value, fdbk)?;
+                } else {
+                    eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
+                }
             }
 
             Opcode::OP_CALL => {
@@ -727,121 +866,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_NEG => {
                 let v1 = frame.pop();
                 if v1.is_number() {
-                    frame.push(JsValue::encode_f64_value(-v1.get_number()));
+                    frame.push(JsValue::new(-v1.get_number()));
                 } else {
                     let n = v1.to_number(rt)?;
-                    frame.push(JsValue::encode_f64_value(-n));
+                    frame.push(JsValue::new(-n));
                 }
             }
-            Opcode::OP_GET_BY_ID | Opcode::OP_TRY_GET_BY_ID => {
-                let name = ip.cast::<u32>().read_unaligned();
-                let name = *unwrap_unchecked(frame.code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let object = frame.pop();
-                if likely(object.is_jsobject()) {
-                    root!(obj = gcstack, object.get_jsobject());
-                    if likely(rt.options.inline_caches) {
-                        if let TypeFeedBack::PropertyCache { structure, offset } =
-                            unwrap_unchecked(frame.code_block)
-                                .feedback
-                                .get_unchecked(fdbk as usize)
-                        {
-                            if let Some(structure) = structure.upgrade() {
-                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                    frame.push(*obj.direct(*offset as _));
-                                    continue;
-                                }
-                            }
-                        }
-                    }
 
-                    let mut slot = Slot::new();
-                    let found = obj.get_property_slot(rt, name, &mut slot);
-                    if rt.options.inline_caches && slot.is_load_cacheable() {
-                        *unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.heap().make_weak(
-                                slot.base()
-                                    .unwrap()
-                                    .downcast_unchecked::<JsObject>()
-                                    .structure(),
-                            ),
-
-                            offset: slot.offset(),
-                        }
-                    }
-                    if found {
-                        frame.push(slot.get(rt, object)?);
-                    } else {
-                        if unlikely(opcode == Opcode::OP_TRY_GET_BY_ID) {
-                            let desc = rt.description(name);
-                            return Err(JsValue::new(
-                                rt.new_reference_error(format!("Property '{}' not found", desc)),
-                            ));
-                        }
-                        frame.push(JsValue::encode_undefined_value());
-                    }
-                    continue;
-                }
-
-                frame.push(get_by_id_slow(rt, name, object)?)
-            }
-            Opcode::OP_PUT_BY_ID => {
-                let name = ip.cast::<u32>().read_unaligned();
-                let name = *unwrap_unchecked(frame.code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-
-                let object = frame.pop();
-                let value = frame.pop();
-                if likely(object.is_jsobject()) {
-                    let mut obj = object.get_jsobject();
-                    if true {
-                        if let TypeFeedBack::PropertyCache { structure, offset } =
-                            unwrap_unchecked(frame.code_block)
-                                .feedback
-                                .get_unchecked(fdbk as usize)
-                        {
-                            if let Some(structure) = structure.upgrade() {
-                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                    *obj.direct_mut(*offset as usize) = value;
-
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-
-                    let mut slot = Slot::new();
-
-                    obj.put_slot(
-                        rt,
-                        name,
-                        value,
-                        &mut slot,
-                        unwrap_unchecked(frame.code_block).strict,
-                    )?;
-
-                    if slot.is_put_cacheable() {
-                        *unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.heap().make_weak(obj.structure()),
-                            offset: slot.offset(),
-                        };
-                    }
-                } else {
-                    eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
-                }
-            }
             Opcode::OP_EQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
@@ -993,10 +1024,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let v1 = frame.pop();
                 if v1.is_number() {
                     let n = v1.get_number() as i32;
-                    frame.push(JsValue::encode_f64_value((!n) as _));
+                    frame.push(JsValue::new((!n) as i32));
                 } else {
                     let n = v1.to_number(rt)? as i32;
-                    frame.push(JsValue::encode_f64_value((!n) as _));
+                    frame.push(JsValue::new((!n) as i32));
                 }
             }
             Opcode::OP_POS => {
@@ -1005,7 +1036,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(value);
                 }
                 let x = value.to_number(rt)?;
-                frame.push(JsValue::encode_f64_value(x));
+                frame.push(JsValue::new(x));
             }
 
             Opcode::OP_DECL_CONST => {
