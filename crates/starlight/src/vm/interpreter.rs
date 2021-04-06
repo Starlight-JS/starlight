@@ -254,7 +254,7 @@ unsafe fn eval_internal(
             rt, msg, None,
         )));
     }
-    let frame = unwrap_unchecked(frame);
+    let mut frame = unwrap_unchecked(frame);
     (*frame).code_block = Some(code);
     (*frame).this = this;
     (*frame).env = JsValue::encode_object_value(scope);
@@ -262,17 +262,24 @@ unsafe fn eval_internal(
     (*frame).exit_on_return = true;
     (*frame).ip = ip;
 
-    loop {
+    'interp: loop {
         let result = eval(rt, frame);
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {
-                if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
-                    (*frame).env = env;
-                    (*frame).ip = ip;
-                    (*frame).sp = sp;
-                    (*frame).push(e);
-                    continue;
+                loop {
+                    if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
+                        (*frame).env = env;
+                        (*frame).ip = ip;
+                        (*frame).sp = sp;
+                        (*frame).push(e);
+                        continue 'interp;
+                    } else if !(*frame).exit_on_return {
+                        frame = (*frame).prev;
+                        rt.stack.pop_frame().unwrap();
+                        continue;
+                    }
+                    break;
                 }
 
                 return Err(e);
@@ -734,7 +741,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
             }
 
-            Opcode::OP_CALL => {
+            Opcode::OP_CALL | Opcode::OP_TAILCALL => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -763,7 +770,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-
+                    let mut exit = false;
+                    if opcode == Opcode::OP_TAILCALL {
+                        exit = rt.stack.pop_frame().unwrap().exit_on_return;
+                    }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
                     if cframe.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
@@ -778,9 +788,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     (*cframe).this = this;
                     (*cframe).env = JsValue::encode_object_value(scope);
                     (*cframe).ctor = false;
-                    (*cframe).exit_on_return = false;
+                    (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
+
                     ip = (*cframe).ip;
                 } else {
                     let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;

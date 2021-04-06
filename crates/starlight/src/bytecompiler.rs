@@ -73,6 +73,7 @@ pub struct ByteCompiler {
     pub lci: Vec<LoopControlInfo>,
     pub fmap: HashMap<Symbol, u32>,
     pub top_level: bool,
+    pub tail_pos: bool,
 }
 
 impl ByteCompiler {
@@ -321,6 +322,7 @@ impl ByteCompiler {
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
             top_level: true,
+            tail_pos: false,
             scope: Rc::new(RefCell::new(Scope {
                 parent: None,
                 variables: Default::default(),
@@ -383,6 +385,7 @@ impl ByteCompiler {
             let mut compiler = ByteCompiler {
                 lci: Vec::new(),
                 code,
+                tail_pos: false,
                 fmap: HashMap::new(),
                 val_map: HashMap::new(),
                 name_map: HashMap::new(),
@@ -486,10 +489,12 @@ impl ByteCompiler {
                 //self.emit(Opcode::OP_SET_ENV, &[prev], false);
             }
             Stmt::Return(ret) => {
+                self.tail_pos = true;
                 match ret.arg {
                     Some(ref arg) => self.expr(arg, true),
                     None => self.emit(Opcode::OP_PUSH_UNDEF, &[], false),
                 };
+                self.tail_pos = false;
                 self.emit(Opcode::OP_RET, &[], false);
             }
             Stmt::Break(_) => {
@@ -888,7 +893,12 @@ impl ByteCompiler {
                     },
                 }
                 if !has_spread {
-                    self.emit(Opcode::OP_CALL, &[call.args.len() as u32], false);
+                    let op = if self.tail_pos {
+                        Opcode::OP_TAILCALL
+                    } else {
+                        Opcode::OP_CALL
+                    };
+                    self.emit(op, &[call.args.len() as u32], false);
                 } else {
                     self.emit(
                         Opcode::OP_CALL_BUILTIN,
@@ -1149,7 +1159,7 @@ impl ByteCompiler {
                 let mut compiler = ByteCompiler {
                     lci: Vec::new(),
                     top_level: false,
-
+                    tail_pos: false,
                     code: code,
                     val_map: Default::default(),
                     name_map: Default::default(),
@@ -1223,6 +1233,7 @@ impl ByteCompiler {
                 let mut compiler = ByteCompiler {
                     lci: Vec::new(),
                     top_level: false,
+                    tail_pos: false,
 
                     code: code,
                     val_map: Default::default(),

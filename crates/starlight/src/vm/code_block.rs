@@ -144,6 +144,16 @@ impl CodeBlock {
                         pc = pc.add(4);
                         writeln!(output, "call <{}>", argc)?;
                     }
+                    Opcode::OP_TAILCALL => {
+                        let argc = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "tail_call <{}>", argc)?;
+                    }
+                    Opcode::OP_TAILNEW => {
+                        let argc = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "tail_new <{}>", argc)?;
+                    }
                     Opcode::OP_CALL_BUILTIN => {
                         let argc = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
