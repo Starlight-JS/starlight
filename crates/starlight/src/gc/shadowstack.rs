@@ -15,7 +15,7 @@ use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::{cell::Cell, ptr::null_mut};
 
-/// Shadow stack type. This is a simple sinly-linked list used for rooting in starlight.
+/// Shadow stack type. This is a simple singly-linked list used for rooting in starlight.
 pub struct ShadowStack {
     #[doc(hidden)]
     pub head: Cell<*mut RawShadowStackEntry>,
