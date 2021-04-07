@@ -30,16 +30,7 @@ impl Runtime {
         root!(scope = stack, unsafe {
             env.get_object().downcast_unchecked::<Environment>()
         });
-        /*root!(
-            structure = stack,
-            Structure::new_indexed(self, Some(*scope), false)
-        );
 
-        root!(
-            nscope = stack,
-            JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary)
-        );
-        */
         root!(
             nscope = stack,
             Environment::new(
@@ -78,10 +69,7 @@ impl Runtime {
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
         root!(vscope = stack, *nscope);
-        for _ in 0..func.code.var_count {
-            vscope.values[i as usize].0 = JsValue::encode_undefined_value();
-            //   vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
-        }
+
         if func.code.use_arguments {
             let p = {
                 let mut p = vec![];
@@ -138,16 +126,7 @@ impl Runtime {
         root!(scope = stack, unsafe {
             env.get_object().downcast_unchecked::<Environment>()
         });
-        /*root!(
-            structure = stack,
-            Structure::new_indexed(self, Some(*scope), false)
-        );
 
-        root!(
-            nscope = stack,
-            JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary)
-        );
-        */
         root!(
             nscope = stack,
             Environment::new(
@@ -186,10 +165,11 @@ impl Runtime {
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
         root!(vscope = stack, *nscope);
-        for _ in 0..func.code.var_count {
-            vscope.values[i as usize].0 = JsValue::encode_undefined_value();
+        /*for j in 0..func.code.var_count {
+            vscope.values[j as usize + i as usize].0 = JsValue::encode_undefined_value();
+
             //   vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
-        }
+        }*/
         if func.code.use_arguments {
             let p = {
                 let mut p = vec![];
@@ -309,11 +289,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let env = frame.pop().get_object().downcast_unchecked::<Environment>();
-                debug_assert!(
+                /*debug_assert!(
                     index < env.values.len() as u32,
                     "invalid var index at pc: {}",
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
-                );
+                );*/
 
                 frame.push(env.values.get_unchecked(index as usize).0);
             }
@@ -734,8 +714,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         Ok(())
                     }
                     slow_put_by_id(rt, frame, &mut obj, name, value, fdbk)?;
-                } else {
-                    eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
                 }
             }
 
@@ -906,6 +884,23 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let rhs = frame.pop();
                 frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
             }
+            Opcode::OP_PUT_BY_VAL => {
+                let object = frame.pop();
+                let key = frame.pop().to_symbol(rt)?;
+                let value = frame.pop();
+                if likely(object.is_jsobject()) {
+                    let mut obj = object.get_jsobject();
+                    obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
+                }
+            }
+            Opcode::OP_GET_BY_VAL => {
+                let object = frame.pop();
+                let key = frame.pop().to_symbol(rt)?;
+                let mut slot = Slot::new();
+                let value = object.get_slot(rt, key, &mut slot)?;
+
+                frame.push(value);
+            }
             Opcode::OP_INSTANCEOF => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
@@ -995,25 +990,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let obj = JsObject::new_empty(rt);
                 frame.push(JsValue::encode_object_value(obj));
             }
-            Opcode::OP_PUT_BY_VAL => {
-                let object = frame.pop();
-                let key = frame.pop().to_symbol(rt)?;
-                let value = frame.pop();
-                if likely(object.is_jsobject()) {
-                    let mut obj = object.get_jsobject();
-                    obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
-                } else {
-                    eprintln!("Internal waning: PUT_BY_VAL on primitives is not implemented yet");
-                }
-            }
-            Opcode::OP_GET_BY_VAL => {
-                let object = frame.pop();
-                let key = frame.pop().to_symbol(rt)?;
-                let mut slot = Slot::new();
-                let value = object.get_slot(rt, key, &mut slot)?;
-
-                frame.push(value);
-            }
 
             Opcode::OP_PUSH_CATCH => {
                 let offset = ip.cast::<i32>().read();
@@ -1062,21 +1038,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 env.values.push((val, true));
                 //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
             }
-            Opcode::OP_DELETE_VAR => {
-                let name = ip.cast::<u32>().read();
-                ip = ip.add(4);
-                let name = unwrap_unchecked(frame.code_block).names[name as usize];
-                let env = get_env(rt, frame, name);
 
-                match env {
-                    Some(mut env) => {
-                        frame.push(JsValue::encode_bool_value(env.delete(rt, name, false)?))
-                    }
-                    None => {
-                        frame.push(JsValue::encode_bool_value(true));
-                    }
-                }
-            }
             Opcode::OP_DELETE_BY_ID => {
                 let name = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -1108,13 +1070,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let func = JsVMFunction::new(
                     rt,
                     unwrap_unchecked(frame.code_block).codes[ix as usize],
-                    (*frame)
-                        .env
-                        .get_object()
-                        .downcast()
-                        .expect("corrupted environment"),
+                    (*frame).env.get_object().downcast_unchecked(),
                 );
-                assert!(func.is_callable());
 
                 frame.push(JsValue::encode_object_value(func));
                 // vm.space().undefer_gc();

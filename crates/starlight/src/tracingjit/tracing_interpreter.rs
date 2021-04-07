@@ -53,12 +53,7 @@ pub unsafe fn record(
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
-        #[cfg(feature = "perf")]
-        {
-            rt.perf.get_perf(opcode as u8);
-        }
-        //println!("{:?}", opcode);
-        stack.cursor = frame.sp;
+
         match opcode {
             Opcode::OP_NOP => {}
             Opcode::OP_GET_VAR => {
@@ -156,7 +151,7 @@ pub unsafe fn record(
                 let int = ip.cast::<i32>().read();
 
                 ip = ip.add(4);
-                frame.push(JsValue::new(int as f64));
+                frame.push(JsValue::encode_int32(int));
             }
             Opcode::OP_PUSH_NAN => {
                 frame.push(JsValue::encode_nan_value());
@@ -189,7 +184,12 @@ pub unsafe fn record(
                 let lhs = frame.pop();
                 let rhs = frame.pop();
                 // profile.observe_lhs_and_rhs(lhs, rhs);
-
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    if let Some(val) = lhs.get_int32().checked_add(rhs.get_int32()) {
+                        frame.push(JsValue::encode_int32(val));
+                        continue;
+                    }
+                }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     let result = JsValue::new(lhs.get_number() + rhs.get_number());
 
@@ -227,6 +227,7 @@ pub unsafe fn record(
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //profile.lhs_saw_number();
                     //profile.rhs_saw_number();
@@ -347,8 +348,149 @@ pub unsafe fn record(
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
             }
+            Opcode::OP_GET_BY_ID | Opcode::OP_TRY_GET_BY_ID => {
+                let name = ip.cast::<u32>().read_unaligned();
+                let name = *unwrap_unchecked(frame.code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let object = frame.pop();
+                if likely(object.is_jsobject()) {
+                    root!(obj = gcstack, object.get_jsobject());
 
-            Opcode::OP_CALL => {
+                    if let TypeFeedBack::PropertyCache { structure, offset } =
+                        unwrap_unchecked(frame.code_block)
+                            .feedback
+                            .get_unchecked(fdbk as usize)
+                    {
+                        if let Some(structure) = structure.upgrade() {
+                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                frame.push(*obj.direct(*offset as _));
+
+                                continue;
+                            }
+                        }
+                    }
+
+                    #[inline(never)]
+                    #[cold]
+                    unsafe fn slow_get_by_id(
+                        rt: &mut Runtime,
+                        frame: &mut CallFrame,
+                        obj: &mut GcPointer<JsObject>,
+                        name: Symbol,
+                        fdbk: u32,
+                        is_try: bool,
+                    ) -> Result<(), JsValue> {
+                        let mut slot = Slot::new();
+                        let found = obj.get_property_slot(rt, name, &mut slot);
+                        if slot.is_load_cacheable() {
+                            *unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                                structure: rt.heap().make_weak(
+                                    slot.base()
+                                        .unwrap()
+                                        .downcast_unchecked::<JsObject>()
+                                        .structure(),
+                                ),
+
+                                offset: slot.offset(),
+                            }
+                        }
+                        if found {
+                            frame.push(slot.get(rt, JsValue::new(*obj))?);
+                        } else {
+                            if unlikely(is_try) {
+                                let desc = rt.description(name);
+                                return Err(JsValue::new(rt.new_reference_error(format!(
+                                    "Property '{}' not found",
+                                    desc
+                                ))));
+                            }
+                            frame.push(JsValue::encode_undefined_value());
+                        }
+                        Ok(())
+                    }
+                    slow_get_by_id(
+                        rt,
+                        frame,
+                        &mut obj,
+                        name,
+                        fdbk,
+                        opcode == Opcode::OP_TRY_GET_BY_ID,
+                    )?;
+                    continue;
+                }
+
+                frame.push(get_by_id_slow(rt, name, object)?)
+            }
+            Opcode::OP_PUT_BY_ID => {
+                let name = ip.cast::<u32>().read_unaligned();
+                let name = *unwrap_unchecked(frame.code_block)
+                    .names
+                    .get_unchecked(name as usize);
+                ip = ip.add(4);
+                let fdbk = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+
+                let object = frame.pop();
+                let value = frame.pop();
+                if likely(object.is_jsobject()) {
+                    let mut obj = object.get_jsobject();
+
+                    if let TypeFeedBack::PropertyCache { structure, offset } =
+                        unwrap_unchecked(frame.code_block)
+                            .feedback
+                            .get_unchecked(fdbk as usize)
+                    {
+                        if let Some(structure) = structure.upgrade() {
+                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                *obj.direct_mut(*offset as usize) = value;
+                                continue;
+                            }
+                        }
+                    }
+
+                    #[cold]
+                    #[inline(never)]
+                    unsafe fn slow_put_by_id(
+                        rt: &mut Runtime,
+                        frame: &mut CallFrame,
+                        obj: &mut GcPointer<JsObject>,
+                        name: Symbol,
+                        value: JsValue,
+                        fdbk: u32,
+                    ) -> Result<(), JsValue> {
+                        let mut slot = Slot::new();
+
+                        obj.put_slot(
+                            rt,
+                            name,
+                            value,
+                            &mut slot,
+                            unwrap_unchecked(frame.code_block).strict,
+                        )?;
+
+                        if slot.is_put_cacheable() {
+                            *unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                                structure: rt.heap().make_weak(obj.structure()),
+                                offset: slot.offset(),
+                            };
+                        }
+                        Ok(())
+                    }
+                    slow_put_by_id(rt, frame, &mut obj, name, value, fdbk)?;
+                } else {
+                    eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
+                }
+            }
+
+            Opcode::OP_CALL | Opcode::OP_TAILCALL => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -377,7 +519,10 @@ pub unsafe fn record(
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-
+                    let mut exit = false;
+                    if opcode == Opcode::OP_TAILCALL {
+                        exit = rt.stack.pop_frame().unwrap().exit_on_return;
+                    }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
                     if cframe.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
@@ -392,9 +537,10 @@ pub unsafe fn record(
                     (*cframe).this = this;
                     (*cframe).env = JsValue::encode_object_value(scope);
                     (*cframe).ctor = false;
-                    (*cframe).exit_on_return = false;
+                    (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
+
                     ip = (*cframe).ip;
                 } else {
                     let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
@@ -402,7 +548,7 @@ pub unsafe fn record(
                     frame.push(result);
                 }
             }
-            Opcode::OP_NEW => {
+            Opcode::OP_NEW | Opcode::OP_TAILNEW => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -437,7 +583,10 @@ pub unsafe fn record(
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-
+                    let mut exit = false;
+                    if opcode == Opcode::OP_TAILNEW {
+                        exit = stack.pop_frame().unwrap().exit_on_return;
+                    }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
                     if cframe.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
@@ -452,7 +601,7 @@ pub unsafe fn record(
                     (*cframe).this = this;
                     (*cframe).env = JsValue::encode_object_value(scope);
                     (*cframe).ctor = true;
-                    (*cframe).exit_on_return = false;
+                    (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
                     ip = (*cframe).ip;
@@ -486,115 +635,7 @@ pub unsafe fn record(
                     frame.push(JsValue::new(-n));
                 }
             }
-            Opcode::OP_GET_BY_ID | Opcode::OP_TRY_GET_BY_ID => {
-                let name = ip.cast::<u32>().read_unaligned();
-                let name = *unwrap_unchecked(frame.code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let object = frame.pop();
-                if likely(object.is_jsobject()) {
-                    root!(obj = gcstack, object.get_jsobject());
-                    if likely(rt.options.inline_caches) {
-                        if let TypeFeedBack::PropertyCache { structure, offset } =
-                            unwrap_unchecked(frame.code_block)
-                                .feedback
-                                .get_unchecked(fdbk as usize)
-                        {
-                            if let Some(structure) = structure.upgrade() {
-                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                    frame.push(*obj.direct(*offset as _));
-                                    continue;
-                                }
-                            }
-                        }
-                    }
 
-                    let mut slot = Slot::new();
-                    let found = obj.get_property_slot(rt, name, &mut slot);
-                    if rt.options.inline_caches && slot.is_load_cacheable() {
-                        *unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.heap().make_weak(
-                                slot.base()
-                                    .unwrap()
-                                    .downcast_unchecked::<JsObject>()
-                                    .structure(),
-                            ),
-
-                            offset: slot.offset(),
-                        }
-                    }
-                    if found {
-                        frame.push(slot.get(rt, object)?);
-                    } else {
-                        if unlikely(opcode == Opcode::OP_TRY_GET_BY_ID) {
-                            let desc = rt.description(name);
-                            return Err(JsValue::new(
-                                rt.new_reference_error(format!("Property '{}' not found", desc)),
-                            ));
-                        }
-                        frame.push(JsValue::encode_undefined_value());
-                    }
-                    continue;
-                }
-
-                frame.push(get_by_id_slow(rt, name, object)?)
-            }
-            Opcode::OP_PUT_BY_ID => {
-                let name = ip.cast::<u32>().read_unaligned();
-                let name = *unwrap_unchecked(frame.code_block)
-                    .names
-                    .get_unchecked(name as usize);
-                ip = ip.add(4);
-                let fdbk = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-
-                let object = frame.pop();
-                let value = frame.pop();
-                if likely(object.is_jsobject()) {
-                    let mut obj = object.get_jsobject();
-                    if true {
-                        if let TypeFeedBack::PropertyCache { structure, offset } =
-                            unwrap_unchecked(frame.code_block)
-                                .feedback
-                                .get_unchecked(fdbk as usize)
-                        {
-                            if let Some(structure) = structure.upgrade() {
-                                if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                    *obj.direct_mut(*offset as usize) = value;
-
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-
-                    let mut slot = Slot::new();
-
-                    obj.put_slot(
-                        rt,
-                        name,
-                        value,
-                        &mut slot,
-                        unwrap_unchecked(frame.code_block).strict,
-                    )?;
-
-                    if slot.is_put_cacheable() {
-                        *unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                            structure: rt.heap().make_weak(obj.structure()),
-                            offset: slot.offset(),
-                        };
-                    }
-                } else {
-                    eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
-                }
-            }
             Opcode::OP_EQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
@@ -772,9 +813,7 @@ pub unsafe fn record(
                 env.values.push((val, true));
                 //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
             }
-            Opcode::OP_DELETE_VAR => {
-                todo!();
-            }
+
             Opcode::OP_DELETE_BY_ID => {
                 let name = ip.cast::<u32>().read();
                 ip = ip.add(4);

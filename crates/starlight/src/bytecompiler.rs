@@ -285,10 +285,10 @@ impl ByteCompiler {
         self.code
     }
     pub fn compile_fn(&mut self, fun: &Function) {
-        #[cfg(feature = "perf")]
+        /*#[cfg(feature = "perf")]
         {
             self.vm.perf.set_prev_inst(crate::vm::perf::Perf::CODEGEN);
-        }
+        }*/
         let is_strict = match fun.body {
             Some(ref body) => {
                 if body.stmts.is_empty() {
@@ -310,10 +310,10 @@ impl ByteCompiler {
         //self.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
         self.emit(Opcode::OP_RET, &[], false);
         //self.finish(&mut self.vm);
-        #[cfg(feature = "perf")]
+        /*#[cfg(feature = "perf")]
         {
-            self.vm.perf.get_perf(crate::vm::perf::Perf::INVALID);
-        }
+            self.rt.perf.get_perf(crate::vm::perf::Perf::INVALID);
+        }*/
     }
     pub fn compile_script(mut vm: &mut Runtime, p: &Script) -> GcPointer<CodeBlock> {
         let name = "<script>".intern();
