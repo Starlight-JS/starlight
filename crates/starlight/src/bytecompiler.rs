@@ -1015,7 +1015,12 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                 self.expr(&*call.callee, true);
                 if !has_spread {
-                    self.emit(Opcode::OP_NEW, &[argc], false);
+                    let op = if self.tail_pos {
+                        Opcode::OP_TAILNEW
+                    } else {
+                        Opcode::OP_TAILCALL
+                    };
+                    self.emit(op, &[argc], false);
                 } else {
                     self.emit(Opcode::OP_CALL_BUILTIN, &[argc as _, 0, 1], false);
                 }

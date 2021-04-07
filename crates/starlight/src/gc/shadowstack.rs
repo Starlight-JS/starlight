@@ -23,9 +23,13 @@ pub struct ShadowStack {
 
 #[repr(C)]
 pub struct RawShadowStackEntry {
+    /// Shadowstack itself
     stack: *mut ShadowStack,
+    /// Previous rooted entry
     prev: *mut RawShadowStackEntry,
+    /// Pointer to vtable that is a `Trace` of rooted variable
     vtable: usize,
+    /// Value is located right after vtable pointer, to access it we can construct trait object.
     data_start: [u8; 0],
 }
 impl RawShadowStackEntry {
