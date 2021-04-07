@@ -3,7 +3,7 @@
 //!
 //! # Description
 //! Unlike other algorithms to take care of rooted objects like use reference counting to take count of instances
-//! of stack, this algorithm maintains a singly linked list of stack roots. This so-called "shadow stack" mirrors the
+//! on stack, this algorithm maintains a singly linked list of stack roots. This so-called "shadow stack" mirrors the
 //! machine stack. Maintaining this data is much faster and memory-efficent than using reference-counted stack roots,
 //! it does not require heap allocation, and does not rely on compiler optimizations.
 //!
@@ -198,6 +198,12 @@ pub struct Handle<'a, T: Trace> {
 
 pub struct HandleMut<'a, T: Trace> {
     value: &'a mut T,
+}
+
+impl<'a, T: Trace> HandleMut<'a, T> {
+    pub fn set(&mut self, value: T) -> T {
+        std::mem::replace(self.value, value)
+    }
 }
 impl<T: Trace> Deref for Handle<'_, T> {
     type Target = T;
