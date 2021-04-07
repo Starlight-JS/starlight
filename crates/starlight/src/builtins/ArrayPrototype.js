@@ -1,9 +1,9 @@
 Array.prototype.some = function some(callback, thisArg) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
-    let length = array.length;
+    var array = ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
+    var length = array.length;
 
-    for (let i = 0; i < length; i += 1) {
+    for (var i = 0; i < length; i += 1) {
         if (!(i in array)) {
             continue;
         }
@@ -18,11 +18,11 @@ Array.prototype.some = function some(callback, thisArg) {
 
 Array.prototype.find = function find(callback, thisArg) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
-    let length = array.length;
+    var array = ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
+    var length = array.length;
 
-    for (let i = 0; i < length; i += 1) {
-        let kValue = array[i];
+    for (var i = 0; i < length; i += 1) {
+        var kValue = array[i];
         if (callback.call(thisArg, kValue, i, array)) {
             return kValue;
         }
@@ -32,11 +32,11 @@ Array.prototype.find = function find(callback, thisArg) {
 
 Array.prototype.findIndex = function findIndex(callback, thisArg) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
-    let length = ___toLength(array.length);
+    var array = ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
 
-    for (let i = 0; i < length; i += 1) {
-        let kValue = array[i];
+    for (var i = 0; i < length; i += 1) {
+        var kValue = array[i];
         if (callback.call(thisArg, kValue, i, array)) {
             return i;
         }
@@ -46,19 +46,19 @@ Array.prototype.findIndex = function findIndex(callback, thisArg) {
 
 Array.prototype.includes = function includes(searchElement, fromIndex_) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
-    let length = ___toLength(array.length);
+    var array = ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
     if (length === 0) {
         return false;
     }
 
-    let fromIndex = 0;
-    let from = fromIndex_;
+    var fromIndex = 0;
+    var from = fromIndex_;
     if (from !== undefined) {
         fromIndex = ___toIntegerOrInfinity(from);
     }
 
-    let index;
+    var index;
     if (fromIndex >= 0) {
         index = fromIndex;
     } else {
@@ -69,7 +69,7 @@ Array.prototype.includes = function includes(searchElement, fromIndex_) {
         index = 0;
     }
 
-    let currentElement;
+    var currentElement;
     for (; index < length; index += 1) {
         currentElement = array[index];
         // Use SameValueZero comparison, rather than just StrictEquals.
@@ -83,18 +83,18 @@ Array.prototype.includes = function includes(searchElement, fromIndex_) {
 
 Array.prototype.map = function map(callback, thisArg) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.map requires that |this| not be null or undefined");
+    var array = ___toObject(this, "Array.prototype.map requires that |this| not be null or undefined");
 
-    let length = array.length;
+    var length = array.length;
 
-    let result = new Array(length);
-    for (let i = 0; i < length; i += 1) {
+    var result = new Array(length);
+    for (var i = 0; i < length; i += 1) {
 
         if (!(i in array)) {
             continue;
         }
 
-        let mappedValue = callback.call(thisArg, array[i], i, array);
+        var mappedValue = callback.call(thisArg, array[i], i, array);
         result[i] = mappedValue;
     }
     return result;
@@ -102,10 +102,10 @@ Array.prototype.map = function map(callback, thisArg) {
 
 Array.prototype.forEach = function forEach(callback, thisArg) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.forEach requires that |this| not be null or undefined");
+    var array = ___toObject(this, "Array.prototype.forEach requires that |this| not be null or undefined");
 
-    let length = ___toLength(array.length);
-    for (let i = 0; i < length; i++) {
+    var length = ___toLength(array.length);
+    for (var i = 0; i < length; i++) {
         if (i in array) {
             callback.call(thisArg, array[i], i, array);
         }
@@ -114,17 +114,17 @@ Array.prototype.forEach = function forEach(callback, thisArg) {
 
 Array.prototype.filter = function filter(callback, thisArg) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.filter requires that |this| not be null or undefined");
-    let length = ___toLength(array.length);
+    var array = ___toObject(this, "Array.prototype.filter requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
 
-    let result = [];
-    let nextIndex = 0;
-    for (let i = 0; i < length; i++) {
+    var result = [];
+    var nextIndex = 0;
+    for (var i = 0; i < length; i++) {
         if (!(i in array)) {
             continue;
         }
 
-        let current = array[i];
+        var current = array[i];
         if (callback.call(thisArg, current, i, array)) {
             result[nextIndex] = current;
             ++nextIndex;
@@ -135,11 +135,11 @@ Array.prototype.filter = function filter(callback, thisArg) {
 
 Array.prototype.fill = function fill(value, start, end) {
     "use strict";
-    let array = ___toObject(this, "Array.prototype.fill requires that |this| not be null or undefined");
-    let length = ___toLength(array.length);
+    var array = ___toObject(this, "Array.prototype.fill requires that |this| not be null or undefined");
+    var length = ___toLength(array.length);
 
-    let relativeStart = ___toIntegerOrInfinity(start);
-    let k = 0;
+    var relativeStart = ___toIntegerOrInfinity(start);
+    var k = 0;
     if (relativeStart < 0) {
         k = length + relativeStart;
         if (k < 0) {
@@ -152,12 +152,12 @@ Array.prototype.fill = function fill(value, start, end) {
         }
     }
 
-    let relativeEnd = length;
+    var relativeEnd = length;
 
     if (end !== undefined) {
         relativeEnd = ___toIntegerOrInfinity(end);
     }
-    let final = 0;
+    var final = 0;
     if (relativeEnd < 0) {
         final = length + relativeEnd;
         if (final < 0)
@@ -177,8 +177,8 @@ Array.prototype.fill = function fill(value, start, end) {
 
 function ___sortCompact(receiver, receiverLength, compacted, isStringSort) {
     "use strict";
-    let undefinedCount = 0;
-    let compactedIndex = 0;
+    var undefinedCount = 0;
+    var compactedIndex = 0;
     for (var i = 0; i < receiverLength; ++i) {
         if (i in receiver) {
             var value = receiver[i];
@@ -194,67 +194,65 @@ function ___sortCompact(receiver, receiverLength, compacted, isStringSort) {
 }
 
 function ___moveElements(target, targetOffset, source, sourceLength) {
-    for (let i = 0; i < sourceLength; ++i) {
-        let value = source[i];
+    for (var i = 0; i < sourceLength; ++i) {
+        var value = source[i];
         if (value)
             target[targetOffset + i] = value;
     }
 }
 
 function ___append_memory(resultArray, otherArray, startValue) {
-    let startIndex = ___toIntegerOrInfinity(startValue);
+    var startIndex = ___toIntegerOrInfinity(startValue);
     ___moveElements(resultArray, startIndex, otherArray, otherArray.length);
 }
-Array.prototype.sort = function sort(compareFn) {
 
-    return mergeSort(this)
-    // Split the array into halves and merge them recursively 
-    function mergeSort(arr) {
-        if (arr.length === 1) {
-            // return once we hit an array with a single item
-            return arr
-        }
-        const middle = ___toIntegerOrInfinity(arr.length / 2) // get the middle item of the array rounded down
-        const left = arr.slice(0, middle) // items on the left side
-        const right = arr.slice(middle) // items on the right side
-        return merge(
-            mergeSort(left),
-            mergeSort(right)
-        )
-    }
-    // compare the arrays item by item and return the concatenated result
-    function merge(left, right) {
-        let result = []
-        let indexLeft = 0
-        let indexRight = 0
-        while (indexLeft < left.length && indexRight < right.length) {
-            //compareFn ? compareFn =()=> left[indexLeft] < right[indexRight] : compareFn
-            let _left = left[indexLeft]
-            let _right = right[indexRight]
-            if (compareFn)
-                compareFn = composeCompareFn(compareFn(left, right))
-            compareFn = (l, r) => l < r
-            if (compareFn(_left, _right)) {
-                result.push(left[indexLeft])
-                indexLeft++
-            } else {
-                result.push(right[indexRight])
-                indexRight++
+Array.prototype.sort = function (cmp) {
+    "use strict";
+    var arr = ___toObject(this, "Array.prototype.sort requires that |this| not be null or undefined");
+    var fn = (l, r) => l < r || cmp;
+
+    var length = arr.length;
+    var mutableArray = new Array(length);
+    var buffer = new Array(length);
+
+    function destructiveSort(offset, length) {
+        // sorting zero or one elements is the degenerate case.
+        if (length > 1) {
+            var halfLength = ___toLength(length / 2);
+
+            // sort the first and second haves in place
+            destructiveSort(offset, halfLength);
+            destructiveSort(offset + halfLength, length - halfLength);
+
+            // now merge the two sorted sublists into the buffer
+            var z1 = offset + halfLength,
+                z2 = offset + length;
+
+            var i1 = offset,
+                i2 = offset + halfLength,
+                i3 = offset;
+
+            while (i1 < z1 && i2 < z2) {
+                if (fn(mutableArray[i1], mutableArray[i2])) {
+                    buffer[i3++] = mutableArray[i1++];
+                }
+                else buffer[i3++] = mutableArray[i2++];
             }
-        }
-        return result.concat(left.slice(indexLeft)).concat(right.slice(indexRight))
-    }
-    function composeCompareFn(compareResult) {
-        if (compareResult < 0)
-            return false
-        if (compareResult > 0)
-            return true
-        if (compareResult == 0)
-            return false
-    }
-}
+            while (fn(i1, z1)) buffer[i3++] = mutableArray[i1++];
+            while (fn(i2, z2)) buffer[i3++] = mutableArray[i2++];
 
-let flatIntoArray = function flatIntoArray(target, source, sourceLength, targetIndex, depth) {
+            // and copy the buffer back to the origial
+            for (var i = offset; i < z2; ++i) mutableArray[i] = buffer[i];
+
+        }
+    }
+
+    for (var i = 0; i < length; ++i) mutableArray[i] = arr[i];
+    destructiveSort(0, length)
+    return mutableArray;
+};
+
+var flatIntoArray = function flatIntoArray(target, source, sourceLength, targetIndex, depth) {
     "use strict";
 
     for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {
@@ -286,7 +284,7 @@ Array.prototype.flat = function (depth) {
     flatIntoArray(result, array, length, 0, depthNum);
     return result;
 }
-let flatIntoArrayWithCallback = function flatIntoArrayWithCallback(target, source, sourceLength, targetIndex, callback, thisArg) {
+var flatIntoArrayWithCallback = function flatIntoArrayWithCallback(target, source, sourceLength, targetIndex, callback, thisArg) {
     "use strict";
 
     for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {

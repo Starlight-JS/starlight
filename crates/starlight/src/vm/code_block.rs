@@ -149,6 +149,9 @@ impl CodeBlock {
                         pc = pc.add(4);
                         writeln!(output, "tail_call <{}>", argc)?;
                     }
+                    Opcode::OP_INSTANCEOF => {
+                        writeln!(output, "instanceof")?;
+                    }
                     Opcode::OP_TAILNEW => {
                         let argc = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);

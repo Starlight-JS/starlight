@@ -64,6 +64,7 @@ pub struct GcParams {
 
 pub struct RuntimeParams {
     pub(crate) dump_bytecode: bool,
+    #[allow(dead_code)]
     pub(crate) inline_caches: bool,
 }
 impl Default for RuntimeParams {

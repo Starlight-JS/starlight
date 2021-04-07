@@ -454,7 +454,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
 
     let result_len = if fin > k { fin - k } else { 0 };
 
-    if result_len > 1024 << 6 {
+    if result_len > (1024 << 6) {
         root!(ary = stack, JsArray::new(rt, result_len));
 
         let mut n = 0;

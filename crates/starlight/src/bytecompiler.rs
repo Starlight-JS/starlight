@@ -351,25 +351,32 @@ impl ByteCompiler {
     }
     pub fn compile(&mut self, body: &[Stmt]) {
         let scopea = Analyzer::analyze_stmts(body);
-        if !self.top_level {
-            for var in scopea.vars.iter() {
-                match var.1.kind() {
-                    BindingKind::Var => {
-                        let s: &str = &(var.0).0;
-                        let name = s.intern();
-                        self.scope.borrow_mut().add_var(name);
-                        self.code.var_count += 1;
-                    }
-                    BindingKind::Function => {
-                        let s: &str = &(var.0).0;
-                        let name = s.intern();
-                        self.scope.borrow_mut().add_var(name);
-                        self.code.var_count += 1;
-                    }
-                    _ => (),
+
+        for var in scopea.vars.iter() {
+            match var.1.kind() {
+                BindingKind::Var if !self.top_level => {
+                    let s: &str = &(var.0).0;
+                    let name = s.intern();
+                    self.scope.borrow_mut().add_var(name);
+                    self.code.var_count += 1;
                 }
+                BindingKind::Function if !self.top_level => {
+                    let s: &str = &(var.0).0;
+                    let name = s.intern();
+                    self.scope.borrow_mut().add_var(name);
+                    self.code.var_count += 1;
+                }
+                /*
+                BindingKind::Let | BindingKind::Const => {
+                    let s: &str = &(var.0).0;
+                    let name = s.intern();
+                    self.scope.borrow_mut().add_var(name);
+                    self.code.var_count += 1;
+                }*/
+                _ => (),
             }
         }
+
         VisitFnDecl::visit(body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
             let mut _rest = None;
@@ -894,7 +901,7 @@ impl ByteCompiler {
                 }
                 if !has_spread {
                     let op = if self.tail_pos {
-                        Opcode::OP_TAILCALL
+                        Opcode::OP_CALL
                     } else {
                         Opcode::OP_CALL
                     };
@@ -1016,9 +1023,9 @@ impl ByteCompiler {
                 self.expr(&*call.callee, true);
                 if !has_spread {
                     let op = if self.tail_pos {
-                        Opcode::OP_TAILNEW
+                        Opcode::OP_NEW
                     } else {
-                        Opcode::OP_TAILCALL
+                        Opcode::OP_NEW
                     };
                     self.emit(op, &[argc], false);
                 } else {
@@ -1139,7 +1146,7 @@ impl ByteCompiler {
                     BinaryOp::Lt => self.emit(Opcode::OP_LESS, &[], false),
                     BinaryOp::LtEq => self.emit(Opcode::OP_LESSEQ, &[], false),
                     BinaryOp::In => self.emit(Opcode::OP_IN, &[], false),
-
+                    BinaryOp::InstanceOf => self.emit(Opcode::OP_INSTANCEOF, &[], false),
                     _ => todo!(),
                 }
 
@@ -1231,7 +1238,14 @@ impl ByteCompiler {
                     .as_ref()
                     .map(|x| Self::ident_to_sym(x))
                     .unwrap_or_else(|| "<anonymous>".intern());
-
+                if name != "<anonymous>".intern() {
+                    if !self.top_level {
+                        let ix = self.scope.borrow_mut().add_var(name);
+                        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                        self.emit(Opcode::OP_GET_ENV, &[0], false);
+                        self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
+                    }
+                }
                 let mut params = vec![];
                 let mut code = CodeBlock::new(&mut self.rt, name, false);
 
