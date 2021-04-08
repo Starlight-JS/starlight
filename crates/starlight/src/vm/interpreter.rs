@@ -68,7 +68,6 @@ impl Runtime {
             nscope.values[rest as usize].0 = JsValue::new(args_arr);
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
-        root!(vscope = stack, *nscope);
 
         if func.code.use_arguments {
             let p = {
@@ -164,7 +163,7 @@ impl Runtime {
             nscope.values[rest as usize].0 = JsValue::new(args_arr);
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
-        root!(vscope = stack, *nscope);
+
         /*for j in 0..func.code.var_count {
             vscope.values[j as usize + i as usize].0 = JsValue::encode_undefined_value();
 

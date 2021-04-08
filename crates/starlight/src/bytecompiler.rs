@@ -366,71 +366,15 @@ impl ByteCompiler {
                     self.scope.borrow_mut().add_var(name);
                     self.code.var_count += 1;
                 }
-                /*
-                BindingKind::Let | BindingKind::Const => {
-                    let s: &str = &(var.0).0;
-                    let name = s.intern();
-                    self.scope.borrow_mut().add_var(name);
-                    self.code.var_count += 1;
-                }*/
+
                 _ => (),
             }
         }
 
         VisitFnDecl::visit(body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
-            let mut _rest = None;
-            let mut params = vec![];
-            let mut rat = None;
-            let mut code = CodeBlock::new(&mut self.rt, name, false);
-            let scope = Rc::new(RefCell::new(Scope {
-                variables: HashMap::new(),
-                parent: Some(self.scope.clone()),
-                depth: self.scope.borrow().depth + 1,
-            }));
-
-            let mut compiler = ByteCompiler {
-                lci: Vec::new(),
-                code,
-                tail_pos: false,
-                fmap: HashMap::new(),
-                val_map: HashMap::new(),
-                name_map: HashMap::new(),
-                top_level: false,
-                scope,
-                rt: RuntimeRef(&mut *self.rt),
-            };
-            for x in decl.function.params.iter() {
-                match x.pat {
-                    Pat::Ident(ref x) => {
-                        params.push(Self::ident_to_sym(&x.id));
-                        compiler
-                            .scope
-                            .borrow_mut()
-                            .add_var(Self::ident_to_sym(&x.id));
-                    }
-                    Pat::Rest(ref r) => match &*r.arg {
-                        Pat::Ident(ref id) => {
-                            _rest = Some(Self::ident_to_sym(&id.id));
-                            rat = Some(
-                                compiler
-                                    .scope
-                                    .borrow_mut()
-                                    .add_var(Self::ident_to_sym(&id.id))
-                                    as u32,
-                            );
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => todo!(),
-                }
-            }
-
-            code.param_count = params.len() as _;
-            code.rest_at = rat;
-            compiler.compile_fn(&decl.function);
+            let code = CodeBlock::new(&mut self.rt, name, false);
             let ix = self.code.codes.len();
-            let code = compiler.finish(&mut self.rt);
             self.code.codes.push(code);
             self.fmap.insert(name, ix as _);
             self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
@@ -638,6 +582,57 @@ impl ByteCompiler {
                     self.var_decl(var);
                 }
                 Decl::Fn(fun) => {
+                    let name = Self::ident_to_sym(&fun.ident);
+                    let mut _rest = None;
+                    let mut params = vec![];
+                    let mut rat = None;
+                    let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
+                    let scope = Rc::new(RefCell::new(Scope {
+                        variables: HashMap::new(),
+                        parent: Some(self.scope.clone()),
+                        depth: self.scope.borrow().depth + 1,
+                    }));
+
+                    let mut compiler = ByteCompiler {
+                        lci: Vec::new(),
+                        code,
+                        tail_pos: false,
+                        fmap: HashMap::new(),
+                        val_map: HashMap::new(),
+                        name_map: HashMap::new(),
+                        top_level: false,
+                        scope,
+                        rt: RuntimeRef(&mut *self.rt),
+                    };
+                    for x in fun.function.params.iter() {
+                        match x.pat {
+                            Pat::Ident(ref x) => {
+                                params.push(Self::ident_to_sym(&x.id));
+                                compiler
+                                    .scope
+                                    .borrow_mut()
+                                    .add_var(Self::ident_to_sym(&x.id));
+                            }
+                            Pat::Rest(ref r) => match &*r.arg {
+                                Pat::Ident(ref id) => {
+                                    _rest = Some(Self::ident_to_sym(&id.id));
+                                    rat = Some(
+                                        compiler
+                                            .scope
+                                            .borrow_mut()
+                                            .add_var(Self::ident_to_sym(&id.id))
+                                            as u32,
+                                    );
+                                }
+                                _ => unreachable!(),
+                            },
+                            _ => todo!(),
+                        }
+                    }
+
+                    code.param_count = params.len() as _;
+                    code.rest_at = rat;
+                    compiler.compile_fn(&fun.function);
                     let s: &str = &fun.ident.sym;
                     let sym = s.intern();
                     let ix = *self.fmap.get(&sym).unwrap();
