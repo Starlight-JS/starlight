@@ -14,6 +14,14 @@ use std::sync::atomic::AtomicBool;
 use vm::{
     arguments::Arguments, object::JsObject, value::JsValue, GcParams, Runtime, RuntimeParams,
 };
+#[macro_export]
+macro_rules! def_native_method {
+    ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr) => {{
+        let name = stringify!($name).intern();
+        let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
+        $obj.put($vm, name, JsValue::new(m), true)
+    }};
+}
 
 #[macro_use]
 pub mod utils;
@@ -22,9 +30,9 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
+pub mod jit;
 pub mod jsrt;
 pub mod tracingjit;
-pub mod jit;
 pub mod vm;
 
 pub struct Platform;

@@ -8,7 +8,7 @@ let toint = function ___toIntegerOrInfinity(target) {
 }
 
 Object.defineProperty(globalThis, "___toIntegerOrInfinity", {
-    value: ___toIntegerOrInfinity,
+    value: toint,
     writable: false,
     configurable: false,
     enumerable: false
@@ -52,7 +52,7 @@ let assert = function ___assert(cond) {
 }
 
 Object.defineProperty(globalThis, "___assert", {
-    value: ___assert,
+    value: assert,
     writable: false,
     configurable: false,
     enumerable: false

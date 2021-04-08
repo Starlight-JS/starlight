@@ -288,11 +288,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let env = frame.pop().get_object().downcast_unchecked::<Environment>();
-                /*debug_assert!(
+                debug_assert!(
                     index < env.values.len() as u32,
-                    "invalid var index at pc: {}",
+                    "invalid var index '{}' at pc: {}",
+                    index,
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
-                );*/
+                );
 
                 frame.push(env.values.get_unchecked(index as usize).0);
             }

@@ -16,6 +16,7 @@ pub mod error;
 pub mod ffi;
 pub mod function;
 pub mod global;
+pub mod math;
 pub mod number;
 pub mod object;
 pub mod string;
@@ -37,6 +38,12 @@ pub fn print(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
 
 impl Runtime {
     pub(crate) fn init_builtin(&mut self) {
+        let _ = self.global_object().put(
+            self,
+            "Infinity".intern(),
+            JsValue::new(std::f64::INFINITY),
+            false,
+        );
         let func = JsNativeFunction::new(self, "print".intern(), print, 0);
         self.global_object()
             .put(
@@ -950,6 +957,14 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         number::number_to_precisiion as _,
         number::number_to_string as _,
         number::number_value_of as _,
+        math::math_trunc as _,
+        math::math_floor as _,
+        math::math_log as _,
+        math::math_sin as _,
+        math::math_cos as _,
+        math::math_ceil as _,
+        math::math_exp as _,
+        math::math_abs as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

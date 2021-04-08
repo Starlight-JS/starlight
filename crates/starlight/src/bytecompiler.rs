@@ -459,9 +459,13 @@ impl ByteCompiler {
             Stmt::Continue(_) => {
                 let depth = self.lci.last().unwrap().scope_depth;
                 assert!(depth > 0);
-                let to = self.scope.borrow().depth - depth as u32;
+                /*let to = self.scope.borrow().depth - depth as u32 + 1;
                 self.emit(Opcode::OP_SET_ENV, &[to], false);
-                // self.emit(Opcode::OP_POP_ENV, &[], false);
+                // self.emit(Opcode::OP_POP_ENV, &[], false);*/
+                let cur = self.scope.borrow().depth;
+                for _ in 0..cur - depth as u32 - 1 {
+                    self.emit(Opcode::OP_POP_ENV, &[], false);
+                }
                 let j = self.jmp();
                 self.lci.last_mut().unwrap().continues.push(Box::new(j));
             }
@@ -528,13 +532,13 @@ impl ByteCompiler {
                 }
                 let jend = self.cjmp(false);
                 self.stmt(&for_stmt.body);
-                let skip = self.jmp();
+                //let skip = self.jmp();
                 while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
                     c(self);
                 }
 
                 //self.emit(Opcode::OP_POP_ENV, &[], false);
-                skip(self);
+                //skip(self);
                 if let Some(fin) = &for_stmt.update {
                     self.expr(&**fin, false);
                 }
@@ -633,6 +637,7 @@ impl ByteCompiler {
                     code.param_count = params.len() as _;
                     code.rest_at = rat;
                     compiler.compile_fn(&fun.function);
+                    compiler.finish(&mut self.rt);
                     let s: &str = &fun.ident.sym;
                     let sym = s.intern();
                     let ix = *self.fmap.get(&sym).unwrap();
@@ -1234,12 +1239,10 @@ impl ByteCompiler {
                     .map(|x| Self::ident_to_sym(x))
                     .unwrap_or_else(|| "<anonymous>".intern());
                 if name != "<anonymous>".intern() {
-                    if !self.top_level {
-                        let ix = self.scope.borrow_mut().add_var(name);
-                        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
-                        self.emit(Opcode::OP_GET_ENV, &[0], false);
-                        self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
-                    }
+                    let ix = self.scope.borrow_mut().add_var(name);
+                    self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                    self.emit(Opcode::OP_GET_ENV, &[0], false);
+                    self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
                 }
                 let mut params = vec![];
                 let mut code = CodeBlock::new(&mut self.rt, name, false);

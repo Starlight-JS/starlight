@@ -316,6 +316,7 @@ impl Runtime {
         this.init_func(proto);
         this.init_error(proto.clone());
         this.init_array(proto.clone());
+        this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
 
