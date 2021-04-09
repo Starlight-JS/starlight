@@ -316,7 +316,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
 
                 while depth != 0 {
-                    env = env.parent.expect("Invalid environment depth");
+                    env = unwrap_unchecked(env.parent);
                     depth -= 1;
                 }
 

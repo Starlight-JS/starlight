@@ -43,8 +43,8 @@ impl Perf {
     /// Record duration for current instruction.
     pub fn get_perf(&mut self, next_inst: u8) {
         let prev = self.prev_inst;
-        assert!(next_inst != 0);
-        assert!(prev != 0);
+        //assert!(next_inst != 0);
+        //assert!(prev != 0);
         let elapsed = self.timer.elapsed();
         if prev != Perf::INVALID {
             self.counter[prev as usize].count += 1;

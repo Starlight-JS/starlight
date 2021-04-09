@@ -153,7 +153,7 @@ impl ByteCompiler {
                 Pat::Ident(name) => {
                     match &decl.init {
                         Some(ref init) => {
-                            self.expr(init, true);
+                            self.expr(init, true, false);
                         }
                         None => {
                             self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
@@ -245,7 +245,7 @@ impl ByteCompiler {
             Expr::Ident(id) => self.access_var(Self::ident_to_sym(id)),
             Expr::Member(member) => {
                 match &member.obj {
-                    ExprOrSuper::Expr(e) => self.expr(e, true),
+                    ExprOrSuper::Expr(e) => self.expr(e, true, false),
                     _ => todo!(),
                 }
                 if dup {
@@ -261,7 +261,7 @@ impl ByteCompiler {
                     }
                 };
                 if name.is_none() {
-                    self.expr(&member.prop, true);
+                    self.expr(&member.prop, true, false);
                     self.emit(Opcode::OP_SWAP, &[], false);
                 }
 
@@ -427,7 +427,7 @@ impl ByteCompiler {
     pub fn stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Expr(expr) => {
-                self.expr(&expr.expr, false);
+                self.expr(&expr.expr, false, false);
             }
             Stmt::Block(block) => {
                 let _prev = self.push_scope();
@@ -442,7 +442,7 @@ impl ByteCompiler {
             Stmt::Return(ret) => {
                 self.tail_pos = true;
                 match ret.arg {
-                    Some(ref arg) => self.expr(arg, true),
+                    Some(ref arg) => self.expr(arg, true, true),
                     None => self.emit(Opcode::OP_PUSH_UNDEF, &[], false),
                 };
                 self.tail_pos = false;
@@ -484,7 +484,7 @@ impl ByteCompiler {
                     _ => unreachable!(),
                 };
 
-                self.expr(&for_in.right, true);
+                self.expr(&for_in.right, true, false);
                 let for_in_setup = self.jmp_custom(Opcode::OP_FORIN_SETUP);
                 let head = self.code.code.len();
                 self.push_lci(head as _, depth);
@@ -511,7 +511,7 @@ impl ByteCompiler {
                 match for_stmt.init {
                     Some(ref init) => match init {
                         VarDeclOrExpr::Expr(ref e) => {
-                            self.expr(e, false);
+                            self.expr(e, false, false);
                         }
                         VarDeclOrExpr::VarDecl(ref decl) => {
                             self.var_decl(decl);
@@ -524,7 +524,7 @@ impl ByteCompiler {
                 self.push_lci(head as _, _env);
                 match for_stmt.test {
                     Some(ref test) => {
-                        self.expr(&**test, true);
+                        self.expr(&**test, true, false);
                     }
                     None => {
                         self.emit(Opcode::OP_PUSH_TRUE, &[], false);
@@ -540,7 +540,7 @@ impl ByteCompiler {
                 //self.emit(Opcode::OP_POP_ENV, &[], false);
                 //skip(self);
                 if let Some(fin) = &for_stmt.update {
-                    self.expr(&**fin, false);
+                    self.expr(&**fin, false, false);
                 }
                 self.goto(head as _);
                 self.pop_lci();
@@ -554,7 +554,7 @@ impl ByteCompiler {
                 let head = self.code.code.len();
                 let d = self.scope.borrow().depth;
                 self.push_lci(head as _, d);
-                self.expr(&while_stmt.test, true);
+                self.expr(&while_stmt.test, true, false);
                 let jend = self.cjmp(false);
                 self.stmt(&while_stmt.body);
 
@@ -566,7 +566,7 @@ impl ByteCompiler {
                 self.pop_lci();
             }
             Stmt::If(if_stmt) => {
-                self.expr(&if_stmt.test, true);
+                self.expr(&if_stmt.test, true, false);
                 let jelse = self.cjmp(false);
                 self.stmt(&if_stmt.cons);
                 match if_stmt.alt {
@@ -651,7 +651,7 @@ impl ByteCompiler {
 
             Stmt::Empty(_) => {}
             Stmt::Throw(throw) => {
-                self.expr(&throw.arg, true);
+                self.expr(&throw.arg, true, false);
                 self.emit(Opcode::OP_THROW, &[], false);
             }
             Stmt::Try(try_stmt) => {
@@ -733,7 +733,7 @@ impl ByteCompiler {
         }
     }
 
-    pub fn expr(&mut self, expr: &Expr, used: bool) {
+    pub fn expr(&mut self, expr: &Expr, used: bool, tail: bool) {
         match expr {
             Expr::Ident(id) => {
                 if &id.sym == "undefined" {
@@ -805,7 +805,7 @@ impl ByteCompiler {
                             }
                             Prop::KeyValue(assign) => {
                                 self.emit(Opcode::OP_DUP, &[], false);
-                                self.expr(&assign.value, true);
+                                self.expr(&assign.value, true, false);
                                 let mut rt = self.rt;
                                 match assign.key {
                                     PropName::Ident(ref id) => {
@@ -857,7 +857,7 @@ impl ByteCompiler {
                 let has_spread = call.args.iter().any(|x| x.spread.is_some());
                 if has_spread {
                     for arg in call.args.iter().rev() {
-                        self.expr(&arg.expr, true);
+                        self.expr(&arg.expr, true, false);
                         if arg.spread.is_some() {
                             self.emit(Opcode::OP_SPREAD, &[], false);
                         }
@@ -865,7 +865,7 @@ impl ByteCompiler {
                     self.emit(Opcode::OP_NEWARRAY, &[call.args.len() as u32], false);
                 } else {
                     for arg in call.args.iter() {
-                        self.expr(&arg.expr, true);
+                        self.expr(&arg.expr, true, false);
                         assert!(arg.spread.is_none());
                     }
                 }
@@ -883,7 +883,7 @@ impl ByteCompiler {
                             };
                             match member.obj {
                                 ExprOrSuper::Expr(ref expr) => {
-                                    self.expr(expr, true);
+                                    self.expr(expr, true, false);
                                     self.emit(Opcode::OP_DUP, &[], false);
                                 }
                                 ExprOrSuper::Super(_super) => {
@@ -895,13 +895,13 @@ impl ByteCompiler {
                         }
                         _ => {
                             self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
-                            self.expr(&**expr, true);
+                            self.expr(&**expr, true, false);
                         }
                     },
                 }
                 if !has_spread {
-                    let op = if self.tail_pos {
-                        Opcode::OP_CALL
+                    let op = if tail {
+                        Opcode::OP_TAILCALL
                     } else {
                         Opcode::OP_CALL
                     };
@@ -921,40 +921,10 @@ impl ByteCompiler {
                 if let UnaryOp::Delete = unary.op {
                     let acc = self.compile_access(&*unary.arg, false);
                     self.access_delete(acc);
-                    /* match &*unary.arg {
-                        Expr::Member(member) => {
-                            let name = if !member.computed {
-                                if let Expr::Ident(id) = &*member.prop {
-                                    let s: &str = &id.sym;
-                                    let name = s.intern();
-                                    Some(self.get_sym(name))
-                                } else {
-                                    self.expr(&member.prop, true);
-                                    None
-                                }
-                            } else {
-                                self.expr(&member.prop, true);
-                                None
-                            };
 
-                            match member.obj {
-                                ExprOrSuper::Expr(ref e) => self.expr(e, true),
-                                _ => todo!(),
-                            }
-
-                            if let Some(name) = name {
-                                self.emit(Opcode::OP_DELETE_BY_ID, &[name], false);
-                            } else {
-                                self.emit(Opcode::OP_DELETE_BY_VAL, &[], false);
-                            }
-                            return;
-                        }
-                        Expr::Ident(x) => {}
-                        _ => todo!(),
-                    }*/
                     return;
                 }
-                self.expr(&unary.arg, true);
+                self.expr(&unary.arg, true, false);
                 match unary.op {
                     UnaryOp::Minus => self.emit(Opcode::OP_NEG, &[], false),
                     UnaryOp::Plus => self.emit(Opcode::OP_POS, &[], false),
@@ -974,7 +944,7 @@ impl ByteCompiler {
                     UpdateOp::MinusMinus => Opcode::OP_SUB,
                 };
                 if update.prefix {
-                    self.expr(&update.arg, true);
+                    self.expr(&update.arg, true, false);
                     self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.emit(op, &[], false);
                     if used {
@@ -984,7 +954,7 @@ impl ByteCompiler {
                     self.access_set(acc);
                     //self.emit_store_expr(&update.arg);
                 } else {
-                    self.expr(&update.arg, true);
+                    self.expr(&update.arg, true, false);
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
@@ -1005,7 +975,7 @@ impl ByteCompiler {
                 if let Some(ref args) = call.args {
                     if has_spread {
                         for arg in args.iter().rev() {
-                            self.expr(&arg.expr, true);
+                            self.expr(&arg.expr, true, false);
                             if arg.spread.is_some() {
                                 self.emit(Opcode::OP_SPREAD, &[], false);
                             }
@@ -1013,17 +983,17 @@ impl ByteCompiler {
                         self.emit(Opcode::OP_NEWARRAY, &[argc], false);
                     } else {
                         for arg in args.iter() {
-                            self.expr(&arg.expr, true);
+                            self.expr(&arg.expr, true, false);
                             assert!(arg.spread.is_none());
                         }
                     }
                 }
 
                 self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
-                self.expr(&*call.callee, true);
+                self.expr(&*call.callee, true, false);
                 if !has_spread {
-                    let op = if self.tail_pos {
-                        Opcode::OP_NEW
+                    let op = if tail {
+                        Opcode::OP_TAILNEW
                     } else {
                         Opcode::OP_NEW
                     };
@@ -1037,7 +1007,7 @@ impl ByteCompiler {
             }
             Expr::Assign(assign) => {
                 if let AssignOp::Assign = assign.op {
-                    self.expr(&assign.right, true);
+                    self.expr(&assign.right, true, false);
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
@@ -1048,7 +1018,7 @@ impl ByteCompiler {
 
                     self.access_set(acc);
                 } else {
-                    self.expr(&assign.right, true);
+                    self.expr(&assign.right, true, false);
                     let left = match &assign.left {
                         PatOrExpr::Expr(e) => self.compile_access(e, false),
                         PatOrExpr::Pat(p) => self.compile_access_pat(p, false),
@@ -1081,11 +1051,11 @@ impl ByteCompiler {
             Expr::Bin(binary) => {
                 match binary.op {
                     BinaryOp::LogicalOr => {
-                        self.expr(&binary.left, true);
+                        self.expr(&binary.left, true, false);
                         self.emit(Opcode::OP_DUP, &[], false);
                         let jtrue = self.cjmp(true);
                         self.emit(Opcode::OP_POP, &[], false);
-                        self.expr(&binary.right, true);
+                        self.expr(&binary.right, true, false);
                         //let end = self.jmp();
                         jtrue(self);
                         // self.emit(Opcode::OP_PUSH_TRUE, &[], false);
@@ -1096,11 +1066,11 @@ impl ByteCompiler {
                         return;
                     }
                     BinaryOp::LogicalAnd => {
-                        self.expr(&binary.left, true);
+                        self.expr(&binary.left, true, false);
                         self.emit(Opcode::OP_DUP, &[], false);
                         let jfalse = self.cjmp(false);
                         self.emit(Opcode::OP_POP, &[], false);
-                        self.expr(&binary.right, true);
+                        self.expr(&binary.right, true, false);
                         let end = self.jmp();
                         jfalse(self);
                         end(self);
@@ -1112,8 +1082,8 @@ impl ByteCompiler {
 
                     _ => (),
                 }
-                self.expr(&binary.right, true);
-                self.expr(&binary.left, true);
+                self.expr(&binary.right, true, false);
+                self.expr(&binary.left, true, false);
 
                 match binary.op {
                     BinaryOp::Add => {
@@ -1220,7 +1190,7 @@ impl ByteCompiler {
                         compiler.emit(Opcode::OP_RET, &[], false);
                     }
                     BlockStmtOrExpr::Expr(expr) => {
-                        compiler.expr(expr, true);
+                        compiler.expr(expr, true, true);
                         compiler.emit(Opcode::OP_RET, &[], false);
                     }
                 }
@@ -1315,7 +1285,7 @@ impl ByteCompiler {
                 for expr in array_lit.elems.iter().rev() {
                     match expr {
                         Some(expr) => {
-                            self.expr(&expr.expr, true);
+                            self.expr(&expr.expr, true, false);
                             if expr.spread.is_some() {
                                 self.emit(Opcode::OP_SPREAD, &[], false);
                             }
@@ -1330,17 +1300,17 @@ impl ByteCompiler {
             }
 
             Expr::Cond(cond) => {
-                self.expr(&cond.test, true);
+                self.expr(&cond.test, true, false);
                 let jelse = self.cjmp(false);
-                self.expr(&cond.cons, used);
+                self.expr(&cond.cons, used, false);
 
                 let jend = self.jmp();
                 jelse(self);
-                self.expr(&cond.alt, used);
+                self.expr(&cond.alt, used, false);
                 jend(self);
             }
             Expr::Paren(p) => {
-                self.expr(&p.expr, used);
+                self.expr(&p.expr, used, false);
             }
             x => todo!("{:?}", x),
         }

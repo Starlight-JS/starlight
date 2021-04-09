@@ -9,9 +9,13 @@ pub struct Environment {
 
 impl Environment {
     pub fn new(rt: &mut Runtime, cap: u32) -> GcPointer<Self> {
+        let mut vec = Vec::with_capacity(if cap != 0 { cap as _ } else { 4 });
+        for _ in 0..cap {
+            vec.push((JsValue::encode_undefined_value(), true));
+        }
         rt.heap().allocate(Self {
             parent: None,
-            values: vec![(JsValue::encode_undefined_value(), true); cap as usize],
+            values: vec,
         })
     }
 }

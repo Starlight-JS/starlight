@@ -125,7 +125,7 @@ impl Runtime {
             def_native_method!(self, math, cos, math_cos, 1)?;
             def_native_method!(self, math, ceil, math_ceil, 1)?;
             def_native_method!(self, math, exp, math_exp, 1)?;
-            def_native_method!(self, math, abs, math_abs, 1);
+            def_native_method!(self, math, abs, math_abs, 1)?;
             self.global_object()
                 .put(self, "Math".intern(), JsValue::new(math), false)?;
             let source = include_str!("../builtins/Math.js");
