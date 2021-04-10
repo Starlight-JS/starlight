@@ -58,7 +58,7 @@ impl CodeBlock {
                         pc = pc.add(4);
                         let feedback = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "get_by_id @{}, fdbk @{}", name, feedback)?;
+                        writeln!(output, "get_by_id {}, fdbk {}", name, feedback)?;
                     }
                     Opcode::OP_PUT_BY_VAL => {
                         writeln!(output, "put_by_val ",)?;
@@ -68,7 +68,7 @@ impl CodeBlock {
                         pc = pc.add(4);
                         let feedback = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "try_get_by_id @{}, fdbk @{}", name, feedback)?;
+                        writeln!(output, "try_get_by_id {}, fdbk {}", name, feedback)?;
                     }
                     Opcode::OP_GET_ENV => {
                         let depth = pc.cast::<u32>().read_unaligned();
@@ -85,12 +85,12 @@ impl CodeBlock {
                         pc = pc.add(4);
                         let feedback = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "put_by_id @{}, fdbk @{}", name, feedback)?;
+                        writeln!(output, "put_by_id {}, fdbk {}", name, feedback)?;
                     }
                     Opcode::OP_PUSH_LITERAL => {
                         let ix = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "push_lit @{}", ix)?;
+                        writeln!(output, "push_lit {}", ix)?;
                     }
                     Opcode::OP_PUSH_NULL => {
                         writeln!(output, "push_null")?;
@@ -112,19 +112,19 @@ impl CodeBlock {
                     Opcode::OP_GET_FUNCTION => {
                         let ix = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "get_function @{}", ix)?;
+                        writeln!(output, "get_function {}", ix)?;
                     }
                     Opcode::OP_GET_VAR => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
 
-                        writeln!(output, "get_var @{}", name)?;
+                        writeln!(output, "get_var {}", name)?;
                     }
                     Opcode::OP_SET_VAR => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
 
-                        writeln!(output, "set_var @{}", name,)?;
+                        writeln!(output, "set_var {}", name,)?;
                     }
 
                     Opcode::OP_NEWOBJECT => {
@@ -293,7 +293,7 @@ impl CodeBlock {
                     Opcode::OP_SET_GETTER_SETTER_BY_ID => {
                         let ix = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "set_getter_setter_by_id @{}", ix)?;
+                        writeln!(output, "set_getter_setter_by_id {}", ix)?;
                     }*/
                     Opcode::OP_POP_ENV => {
                         writeln!(output, "pop_scope")?;
@@ -309,11 +309,15 @@ impl CodeBlock {
                         )?;
                     }
                     Opcode::OP_DECL_LET => {
-                        writeln!(output, "decl_let ",)?;
+                        let ix = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "decl_let {}", ix)?;
                     }
 
                     Opcode::OP_DECL_CONST => {
-                        writeln!(output, "decl_const",)?;
+                        let ix = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "decl_const {}", ix)?;
                     }
                     Opcode::OP_THROW => {
                         writeln!(output, "throw")?;
@@ -343,7 +347,7 @@ impl CodeBlock {
                     Opcode::OP_DELETE_BY_ID => {
                         let id = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-                        writeln!(output, "delete_by_id @{}", id)?;
+                        writeln!(output, "delete_by_id {}", id)?;
                     }
                     Opcode::OP_DELETE_BY_VAL => {
                         writeln!(output, "delete")?;

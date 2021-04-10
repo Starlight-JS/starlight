@@ -283,7 +283,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             rt.perf.get_perf(opcode as u8);
         }
         match opcode {
-            Opcode::OP_NOP => {}
+            Opcode::OP_NOP => unreachable!(
+                "{}",
+                ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
+            ),
             Opcode::OP_GET_VAR => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
@@ -1028,14 +1031,18 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_DECL_CONST => {
+                let ix = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
                 let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 let val = frame.pop();
-                env.values.push((val, false));
+                env.values[ix as usize] = (val, false);
             }
             Opcode::OP_DECL_LET => {
+                let ix = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
                 let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 let val = frame.pop();
-                env.values.push((val, true));
+                env.values[ix as usize] = (val, true);
                 //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
             }
 

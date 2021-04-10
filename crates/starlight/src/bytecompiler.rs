@@ -25,17 +25,16 @@ pub struct Scope {
     pub depth: u32,
 }
 impl Scope {
-    pub fn add_var(&mut self, name: Symbol) -> u16 {
-        let len = self.variables.len();
+    pub fn add_var(&mut self, name: Symbol, ix: u16) -> u16 {
         self.variables.insert(
             name,
             Variable {
                 kind: VariableKind::Var,
                 name,
-                index: len as u16,
+                index: ix,
             },
         );
-        len as _
+        ix
     }
 }
 
@@ -74,6 +73,8 @@ pub struct ByteCompiler {
     pub fmap: HashMap<Symbol, u32>,
     pub top_level: bool,
     pub tail_pos: bool,
+    /// Freelist of unused variable indexes
+    pub variable_freelist: Vec<u32>,
 }
 
 impl ByteCompiler {
@@ -128,16 +129,33 @@ impl ByteCompiler {
 
     pub fn decl_const(&mut self, name: Symbol) -> u16 {
         self.emit(Opcode::OP_GET_ENV, &[0], false);
-        let _ix = self.scope.borrow_mut().add_var(name);
-        self.emit(Opcode::OP_DECL_CONST, &[], false);
+        let ix = if let Some(ix) = self.variable_freelist.pop() {
+            self.scope.borrow_mut().add_var(name, ix as _);
+            ix as u16
+        } else {
+            self.code.var_count += 1;
+            self.scope
+                .borrow_mut()
+                .add_var(name, self.code.var_count as u16 - 1)
+        };
+        self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
 
-        _ix
+        ix
     }
 
     pub fn decl_let(&mut self, name: Symbol) -> u16 {
         self.emit(Opcode::OP_GET_ENV, &[0], false);
-        let ix = self.scope.borrow_mut().add_var(name);
-        self.emit(Opcode::OP_DECL_LET, &[], false);
+
+        let ix = if let Some(ix) = self.variable_freelist.pop() {
+            self.scope.borrow_mut().add_var(name, ix as _);
+            ix as u16
+        } else {
+            self.code.var_count += 1;
+            self.scope
+                .borrow_mut()
+                .add_var(name, self.code.var_count as u16 - 1)
+        };
+        self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
         //self.emit_u16(ix);
         ix
     }
@@ -160,6 +178,7 @@ impl ByteCompiler {
                         }
                     }
                     names.push(Self::ident_to_sym(&name.id));
+
                     match var.kind {
                         VarDeclKind::Const => {
                             self.decl_const(Self::ident_to_sym(&name.id));
@@ -328,6 +347,7 @@ impl ByteCompiler {
                 variables: Default::default(),
                 depth: 0,
             })),
+            variable_freelist: vec![],
             code: code,
             val_map: Default::default(),
             name_map: Default::default(),
@@ -341,7 +361,9 @@ impl ByteCompiler {
         };
         code.top_level = true;
         code.strict = is_strict;
+        compiler.push_scope();
         compiler.compile(&p.body);
+        compiler.pop_scope();
         // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         let mut rt = compiler.rt;
@@ -357,13 +379,15 @@ impl ByteCompiler {
                 BindingKind::Var if !self.top_level => {
                     let s: &str = &(var.0).0;
                     let name = s.intern();
-                    self.scope.borrow_mut().add_var(name);
+                    let c = self.code.var_count;
+                    self.scope.borrow_mut().add_var(name, c as _);
                     self.code.var_count += 1;
                 }
                 BindingKind::Function if !self.top_level => {
                     let s: &str = &(var.0).0;
                     let name = s.intern();
-                    self.scope.borrow_mut().add_var(name);
+                    let c = self.code.var_count;
+                    self.scope.borrow_mut().add_var(name, c as _);
                     self.code.var_count += 1;
                 }
 
@@ -385,7 +409,11 @@ impl ByteCompiler {
         for stmt in body.iter() {
             if contains_ident(stmt, "arguments") {
                 self.code.use_arguments = true;
-                self.code.args_at = self.scope.borrow_mut().add_var("arguments".intern()) as _;
+                let c = self.code.var_count;
+                self.code.args_at = self
+                    .scope
+                    .borrow_mut()
+                    .add_var("arguments".intern(), c as _) as _;
                 break;
             }
         }
@@ -400,7 +428,7 @@ impl ByteCompiler {
         let d = self.scope.borrow().depth;
         let new_scope = Rc::new(RefCell::new(Scope {
             parent: Some(self.scope.clone()),
-            depth: self.scope.borrow().depth + 1,
+            depth: self.scope.borrow().depth,
             variables: Default::default(),
         }));
         self.scope = new_scope;
@@ -409,6 +437,9 @@ impl ByteCompiler {
     pub fn pop_scope(&mut self) {
         let scope = self.scope.clone();
         self.scope = scope.borrow().parent.clone().expect("No scopes left");
+        for var in scope.borrow().variables.iter() {
+            self.variable_freelist.push(var.1.index as u32);
+        }
     }
     pub fn push_lci(&mut self, _continue_target: u32, depth: u32) {
         self.lci.push(LoopControlInfo {
@@ -431,12 +462,12 @@ impl ByteCompiler {
             }
             Stmt::Block(block) => {
                 let _prev = self.push_scope();
-                self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                // self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 for stmt in block.stmts.iter() {
                     self.stmt(stmt);
                 }
                 self.pop_scope();
-                self.emit(Opcode::OP_POP_ENV, &[], false);
+                //self.emit(Opcode::OP_POP_ENV, &[], false);
                 //self.emit(Opcode::OP_SET_ENV, &[prev], false);
             }
             Stmt::Return(ret) => {
@@ -449,29 +480,16 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_RET, &[], false);
             }
             Stmt::Break(_) => {
-                let depth = self.lci.last().unwrap().scope_depth;
-                assert!(depth >= 0);
-                let to = self.scope.borrow().depth - depth as u32;
-                self.emit(Opcode::OP_SET_ENV, &[to], false);
                 let br = self.jmp();
                 self.lci.last_mut().unwrap().breaks.push(Box::new(br));
             }
             Stmt::Continue(_) => {
-                let depth = self.lci.last().unwrap().scope_depth;
-                assert!(depth > 0);
-                /*let to = self.scope.borrow().depth - depth as u32 + 1;
-                self.emit(Opcode::OP_SET_ENV, &[to], false);
-                // self.emit(Opcode::OP_POP_ENV, &[], false);*/
-                let cur = self.scope.borrow().depth;
-                for _ in 0..cur - depth as u32 - 1 {
-                    self.emit(Opcode::OP_POP_ENV, &[], false);
-                }
                 let j = self.jmp();
                 self.lci.last_mut().unwrap().continues.push(Box::new(j));
             }
             Stmt::ForIn(for_in) => {
                 let depth = self.push_scope();
-                self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                // self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 let name = match for_in.left {
                     VarDeclOrPat::VarDecl(ref var_decl) => self.var_decl(var_decl)[0],
                     VarDeclOrPat::Pat(Pat::Ident(ref ident)) => {
@@ -501,13 +519,13 @@ impl ByteCompiler {
 
                 for_in_enumerate(self);
                 for_in_setup(self);
-                self.emit(Opcode::OP_POP_ENV, &[], false);
+                // self.emit(Opcode::OP_POP_ENV, &[], false);
                 self.pop_scope();
                 self.emit(Opcode::OP_FORIN_LEAVE, &[], false);
             }
             Stmt::For(for_stmt) => {
                 let _env = self.push_scope();
-                self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                // self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 match for_stmt.init {
                     Some(ref init) => match init {
                         VarDeclOrExpr::Expr(ref e) => {
@@ -548,7 +566,7 @@ impl ByteCompiler {
                 // self.emit(Opcode::OP_POP_ENV, &[], false);
                 jend(self);
 
-                self.emit(Opcode::OP_POP_ENV, &[], false);
+                //                self.emit(Opcode::OP_POP_ENV, &[], false);
             }
             Stmt::While(while_stmt) => {
                 let head = self.code.code.len();
@@ -599,6 +617,7 @@ impl ByteCompiler {
 
                     let mut compiler = ByteCompiler {
                         lci: Vec::new(),
+                        variable_freelist: Vec::with_capacity(4),
                         code,
                         tail_pos: false,
                         fmap: HashMap::new(),
@@ -608,23 +627,26 @@ impl ByteCompiler {
                         scope,
                         rt: RuntimeRef(&mut *self.rt),
                     };
+                    let mut p = 0;
                     for x in fun.function.params.iter() {
                         match x.pat {
                             Pat::Ident(ref x) => {
                                 params.push(Self::ident_to_sym(&x.id));
+                                p += 1;
                                 compiler
                                     .scope
                                     .borrow_mut()
-                                    .add_var(Self::ident_to_sym(&x.id));
+                                    .add_var(Self::ident_to_sym(&x.id), p - 1);
                             }
                             Pat::Rest(ref r) => match &*r.arg {
                                 Pat::Ident(ref id) => {
+                                    p += 1;
                                     _rest = Some(Self::ident_to_sym(&id.id));
                                     rat = Some(
                                         compiler
                                             .scope
                                             .borrow_mut()
-                                            .add_var(Self::ident_to_sym(&id.id))
+                                            .add_var(Self::ident_to_sym(&id.id), p - 1)
                                             as u32,
                                     );
                                 }
@@ -635,6 +657,7 @@ impl ByteCompiler {
                     }
 
                     code.param_count = params.len() as _;
+                    code.var_count = p as _;
                     code.rest_at = rat;
                     compiler.compile_fn(&fun.function);
                     compiler.finish(&mut self.rt);
@@ -660,13 +683,13 @@ impl ByteCompiler {
                     if let Some(lci) = self.lci.last_mut() {
                         lci.scope_depth += 1;
                     }
-                    self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                    //     self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 }
                 for stmt in try_stmt.block.stmts.iter() {
                     self.stmt(stmt);
                 }
                 if !try_stmt.block.stmts.is_empty() {
-                    self.emit(Opcode::OP_POP_ENV, &[], false);
+                    //self.emit(Opcode::OP_POP_ENV, &[], false);
                 }
                 let jfinally = self.jmp();
                 try_push(self);
@@ -674,7 +697,7 @@ impl ByteCompiler {
                     Some(ref catch) => {
                         self.push_scope();
                         if !catch.body.stmts.is_empty() {
-                            self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                            //             self.emit(Opcode::OP_PUSH_ENV, &[], false);
                         }
                         match catch.param {
                             Some(ref pat) => {
@@ -691,7 +714,7 @@ impl ByteCompiler {
                             self.stmt(stmt);
                         }
                         if !catch.body.stmts.is_empty() {
-                            self.emit(Opcode::OP_POP_ENV, &[], false);
+                            //  self.emit(Opcode::OP_POP_ENV, &[], false);
                         }
                         self.pop_scope();
                         self.jmp()
@@ -708,13 +731,13 @@ impl ByteCompiler {
                     Some(ref block) => {
                         self.push_scope();
                         if !block.stmts.is_empty() {
-                            self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                            //             self.emit(Opcode::OP_PUSH_ENV, &[], false);
                         }
                         for stmt in block.stmts.iter() {
                             self.stmt(stmt);
                         }
                         if !block.stmts.is_empty() {
-                            self.emit(Opcode::OP_POP_ENV, &[], false);
+                            // self.emit(Opcode::OP_POP_ENV, &[], false);
                         }
                         self.pop_scope();
                     }
@@ -1143,6 +1166,7 @@ impl ByteCompiler {
                     top_level: false,
                     tail_pos: false,
                     code: code,
+                    variable_freelist: vec![],
                     val_map: Default::default(),
                     name_map: Default::default(),
 
@@ -1157,22 +1181,25 @@ impl ByteCompiler {
                 code.strict = is_strict;
                 let mut params = vec![];
                 let mut rest_at = None;
+                let mut p = 0;
                 for x in fun.params.iter() {
                     match x {
                         Pat::Ident(ref x) => {
                             params.push(Self::ident_to_sym(&x.id));
+                            p += 1;
                             compiler
                                 .scope
                                 .borrow_mut()
-                                .add_var(Self::ident_to_sym(&x.id));
+                                .add_var(Self::ident_to_sym(&x.id), p - 1);
                         }
                         Pat::Rest(ref r) => match &*r.arg {
                             Pat::Ident(ref id) => {
+                                p += 1;
                                 rest_at = Some(
                                     compiler
                                         .scope
                                         .borrow_mut()
-                                        .add_var(Self::ident_to_sym(&id.id))
+                                        .add_var(Self::ident_to_sym(&id.id), p - 1)
                                         as u32,
                                 );
                             }
@@ -1183,6 +1210,7 @@ impl ByteCompiler {
                 }
                 code.rest_at = rest_at;
                 code.param_count = params.len() as _;
+                code.var_count = p as _;
                 match &fun.body {
                     BlockStmtOrExpr::BlockStmt(block) => {
                         compiler.compile(&block.stmts);
@@ -1201,7 +1229,7 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             }
             Expr::Fn(fun) => {
-                self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                //  self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 self.push_scope();
                 let name = fun
                     .ident
@@ -1209,7 +1237,13 @@ impl ByteCompiler {
                     .map(|x| Self::ident_to_sym(x))
                     .unwrap_or_else(|| "<anonymous>".intern());
                 if name != "<anonymous>".intern() {
-                    let ix = self.scope.borrow_mut().add_var(name);
+                    let ix = if let Some(ix) = self.variable_freelist.pop() {
+                        ix as u16
+                    } else {
+                        self.code.var_count += 1;
+                        self.code.var_count as u16 - 1
+                    };
+                    let ix = self.scope.borrow_mut().add_var(name, ix);
                     self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                     self.emit(Opcode::OP_GET_ENV, &[0], false);
                     self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
@@ -1221,7 +1255,7 @@ impl ByteCompiler {
                     lci: Vec::new(),
                     top_level: false,
                     tail_pos: false,
-
+                    variable_freelist: vec![],
                     code: code,
                     val_map: Default::default(),
                     name_map: Default::default(),
@@ -1235,22 +1269,25 @@ impl ByteCompiler {
                     })),
                 };
                 let mut rest_at = None;
+                let mut p = 0;
                 for x in fun.function.params.iter() {
                     match x.pat {
                         Pat::Ident(ref x) => {
+                            p += 1;
                             params.push(Self::ident_to_sym(&x.id));
                             compiler
                                 .scope
                                 .borrow_mut()
-                                .add_var(Self::ident_to_sym(&x.id));
+                                .add_var(Self::ident_to_sym(&x.id), p - 1);
                         }
                         Pat::Rest(ref r) => match &*r.arg {
                             Pat::Ident(ref id) => {
+                                p += 1;
                                 rest_at = Some(
                                     compiler
                                         .scope
                                         .borrow_mut()
-                                        .add_var(Self::ident_to_sym(&id.id))
+                                        .add_var(Self::ident_to_sym(&id.id), p - 1)
                                         as u32,
                                 );
                             }
@@ -1260,6 +1297,7 @@ impl ByteCompiler {
                     }
                 }
                 code.param_count = params.len() as _;
+                code.var_count = p as _;
                 code.rest_at = rest_at;
 
                 compiler.compile_fn(&fun.function);
@@ -1272,10 +1310,9 @@ impl ByteCompiler {
                     self.emit(Opcode::OP_DUP, &[], false);
                     let var = self.access_var(name);
                     self.access_set(var);
-                    //   self.emit(Opcode::OP_SET_VAR, &[nix as _], true);
                 }
                 self.pop_scope();
-                self.emit(Opcode::OP_POP_ENV, &[], false);
+                //self.emit(Opcode::OP_POP_ENV, &[], false);
                 if !used {
                     self.emit(Opcode::OP_POP, &[], false);
                 }
