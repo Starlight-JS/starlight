@@ -246,6 +246,7 @@ unsafe fn eval_internal(
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {
+                rt.stacktrace = rt.stacktrace();
                 loop {
                     if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
                         (*frame).env = env;
@@ -326,17 +327,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::new(env));
             }
 
-            Opcode::OP_PUSH_ENV => {
-                let mut env = Environment::new(rt, 0);
-                env.parent = Some(frame.env.get_object().downcast_unchecked());
-                frame.env = JsValue::new(env);
-            }
-            Opcode::OP_POP_ENV => {
-                //rt.heap().collect_if_necessary();
-                let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
-
-                frame.env = JsValue::new(unwrap_unchecked(env.parent));
-            }
             Opcode::OP_JMP => {
                 rt.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
@@ -428,30 +418,39 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(result);
                     continue;
                 }
+                #[cold]
+                unsafe fn add_slowpath(
+                    rt: &mut Runtime,
+                    frame: &mut CallFrame,
+                    lhs: JsValue,
+                    rhs: JsValue,
+                ) -> Result<(), JsValue> {
+                    let lhs = lhs.to_primitive(rt, JsHint::None)?;
+                    let rhs = rhs.to_primitive(rt, JsHint::None)?;
 
-                let lhs = lhs.to_primitive(rt, JsHint::None)?;
-                let rhs = rhs.to_primitive(rt, JsHint::None)?;
+                    if lhs.is_jsstring() || rhs.is_jsstring() {
+                        #[inline(never)]
+                        fn concat(
+                            rt: &mut Runtime,
+                            lhs: JsValue,
+                            rhs: JsValue,
+                        ) -> Result<JsValue, JsValue> {
+                            let lhs = lhs.to_string(rt)?;
+                            let rhs = rhs.to_string(rt)?;
+                            let string = format!("{}{}", lhs, rhs);
+                            Ok(JsValue::encode_object_value(JsString::new(rt, string)))
+                        }
 
-                if lhs.is_jsstring() || rhs.is_jsstring() {
-                    #[inline(never)]
-                    fn concat(
-                        rt: &mut Runtime,
-                        lhs: JsValue,
-                        rhs: JsValue,
-                    ) -> Result<JsValue, JsValue> {
-                        let lhs = lhs.to_string(rt)?;
-                        let rhs = rhs.to_string(rt)?;
-                        let string = format!("{}{}", lhs, rhs);
-                        Ok(JsValue::encode_object_value(JsString::new(rt, string)))
+                        let result = concat(rt, lhs, rhs)?;
+                        frame.push(result);
+                    } else {
+                        let lhs = lhs.to_number(rt)?;
+                        let rhs = rhs.to_number(rt)?;
+                        frame.push(JsValue::new(lhs + rhs));
                     }
-
-                    let result = concat(rt, lhs, rhs)?;
-                    frame.push(result);
-                } else {
-                    let lhs = lhs.to_number(rt)?;
-                    let rhs = rhs.to_number(rt)?;
-                    frame.push(JsValue::new(lhs + rhs));
+                    Ok(())
                 }
+                add_slowpath(rt, frame, lhs, rhs)?;
             }
             Opcode::OP_SUB => {
                 //let profile = &mut *ip.cast::<ArithProfile>();
@@ -459,7 +458,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    let result = lhs.get_int32().checked_sub(rhs.get_int32());
+                    if likely(result.is_some()) {
+                        frame.push(JsValue::encode_int32(result.unwrap()));
+                        continue;
+                    }
+                }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //profile.lhs_saw_number();
                     //profile.rhs_saw_number();
@@ -495,6 +500,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    let result = lhs.get_int32().checked_mul(rhs.get_int32());
+                    if likely(result.is_some()) {
+                        frame.push(JsValue::encode_int32(result.unwrap()));
+                        continue;
+                    }
+                }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //  profile.lhs_saw_number();
                     //  profile.rhs_saw_number();
@@ -553,7 +565,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_LESS => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() < rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_TRUE,
                 ));
@@ -561,6 +576,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_LESSEQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() <= rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     rhs.compare(lhs, false, rt)? == CMP_FALSE,
                 ));
@@ -569,6 +588,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_GREATER => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() > rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     rhs.compare(lhs, false, rt)? == CMP_TRUE,
                 ));
@@ -576,6 +599,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_GREATEREQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() >= rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
@@ -720,7 +747,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
             }
 
-            Opcode::OP_CALL | Opcode::OP_TAILCALL => {
+            Opcode::OP_CALL => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -778,7 +805,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(result);
                 }
             }
-            Opcode::OP_NEW | Opcode::OP_TAILNEW => {
+            Opcode::OP_NEW => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);

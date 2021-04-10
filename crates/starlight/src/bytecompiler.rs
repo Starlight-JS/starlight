@@ -923,7 +923,7 @@ impl ByteCompiler {
                     },
                 }
                 if !has_spread {
-                    let op = if tail {
+                    let op = if false && tail {
                         Opcode::OP_TAILCALL
                     } else {
                         Opcode::OP_CALL
@@ -1015,7 +1015,7 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                 self.expr(&*call.callee, true, false);
                 if !has_spread {
-                    let op = if tail {
+                    let op = if tail && false {
                         Opcode::OP_TAILNEW
                     } else {
                         Opcode::OP_NEW

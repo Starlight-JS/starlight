@@ -929,7 +929,9 @@ impl JsValue {
             }
 
             if self.is_undefined() {
-                let msg = JsString::new(rt, "undefined does not have properties");
+                let d = rt.description(name);
+                let msg =
+                    JsString::new(rt, &format!("undefined does not have properties ('{}')", d));
                 return Err(JsValue::encode_object_value(JsTypeError::new(
                     rt, msg, None,
                 )));

@@ -140,12 +140,29 @@ pub struct Runtime {
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: RuntimeParams,
     pub(crate) shadowstack: ShadowStack,
+    pub(crate) stacktrace: String,
 
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
 }
 
 impl Runtime {
+    pub fn stacktrace(&mut self) -> String {
+        let mut result = String::new();
+        let mut frame = self.stack.current;
+        unsafe {
+            while !frame.is_null() {
+                if let Some(cb) = (*frame).code_block {
+                    let name = self.description(cb.name);
+                    result.push_str(&format!("  at '{}'\n", name));
+                } else {
+                    result.push_str(&format!(" at '<native code>\n"));
+                }
+                frame = (*frame).prev;
+            }
+        }
+        result
+    }
     /// Compile provided script into JS function. If error when compiling happens `SyntaxError` instance
     /// is returned.
     pub fn compile(&mut self, path: &str, name: &str, script: &str) -> Result<JsValue, JsValue> {
@@ -274,7 +291,7 @@ impl Runtime {
             options,
             stack: Stack::new(),
             global_object: None,
-
+            stacktrace: String::new(),
             global_data: GlobalData::default(),
             external_references,
             shadowstack: ShadowStack::new(),
@@ -344,6 +361,10 @@ impl Runtime {
         this.gc.collect_if_necessary();
         this
     }
+
+    pub fn take_stacktrace(&mut self) -> String {
+        std::mem::replace(&mut self.stacktrace, String::new())
+    }
     pub(crate) fn new_empty(
         gc: Heap,
         options: RuntimeParams,
@@ -356,6 +377,7 @@ impl Runtime {
             global_object: None,
             global_data: GlobalData::default(),
             external_references,
+            stacktrace: String::new(),
             shadowstack: ShadowStack::new(),
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),

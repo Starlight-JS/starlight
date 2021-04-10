@@ -179,7 +179,8 @@ function min(left, right) {
         return left;
     }
     return right;
-} function sortMerge(dst, src, srcIndex, srcEnd, width, comparator) {
+}
+function sortMerge(dst, src, srcIndex, srcEnd, width, comparator) {
     "use strict";
 
     var left = srcIndex;
@@ -191,18 +192,14 @@ function min(left, right) {
         if (right < rightEnd) {
             if (left >= leftEnd) {
                 dst[dstIndex] = src[right];
-                //@putByValDirect(dst, dstIndex, src[right]);
                 ++right;
                 continue;
             }
 
-            // See https://bugs.webkit.org/show_bug.cgi?id=47825 on boolean special-casing
             var comparisonResult = comparator(src[right], src[left]);
             if (comparisonResult === false || comparisonResult < 0) {
 
                 dst[dstIndex] = src[right];
-
-                //@putByValDirect(dst, dstIndex, src[right]);
                 ++right;
                 continue;
             }
@@ -210,7 +207,6 @@ function min(left, right) {
         }
 
         dst[dstIndex] = src[left];
-        //@putByValDirect(dst, dstIndex, src[left]);
         ++left;
     }
 }
@@ -255,21 +251,18 @@ function sortBucketSort(array, dst, bucket, depth) {
         var sorted = sortMergeSort(bucket, sortStringComparator);
         for (var i = 0; i < sorted.length; ++i) {
             array[dst] = sorted[i].value;
-            //@putByValDirect(array, dst, sorted[i].value);
             ++dst;
         }
         return dst;
     }
 
     var buckets = [];
-    //@setPrototypeDirect.@call(buckets, null);
     for (var i = 0; i < bucket.length; ++i) {
         var entry = bucket[i];
         var string = entry.string;
         if (string.length == depth) {
 
             array[dst] = entry.value;
-            // @putByValDirect(array, dst, entry.value);
             ++dst;
             continue;
         }
@@ -278,10 +271,8 @@ function sortBucketSort(array, dst, bucket, depth) {
         var cBucket = buckets[c];
         if (cBucket)
             cBucket.push(entry);
-        //@arrayPush(cBucket, entry);
         else
             buckets[c] = [entry];
-        //@putByValDirect(buckets, c, [entry]);
     }
 
     for (var i = 0; i < buckets.length; ++i) {
@@ -292,6 +283,55 @@ function sortBucketSort(array, dst, bucket, depth) {
 
     return dst;
 }
+
+
+function sortCommit(receiver, receiverLength, sorted, undefinedCount) {
+    "use strict";
+
+    // Move undefineds and holes to the end of an array. Result is [values..., undefineds..., holes...].
+
+    var sortedLength = sorted.length;
+
+    var i = 0;
+
+    for (; i < sortedLength; ++i)
+        receiver[i] = sorted[i];
+
+    for (; i < sortedLength + undefinedCount; ++i)
+        receiver[i] = undefined;
+
+    for (; i < receiverLength; ++i)
+        delete receiver[i];
+}
+function sortCompact(receiver, receiverLength, compacted, isStringSort) {
+    "use strict";
+
+    var undefinedCount = 0;
+    var compactedIndex = 0;
+
+    for (var i = 0; i < receiverLength; ++i) {
+        if (i in receiver) {
+            var value = receiver[i];
+            if (value === undefined)
+                ++undefinedCount;
+            else {
+                if (isStringSort) {
+                    compacted[compactedIndex] = {
+                        string: toString(value),
+                        value: value
+                    }
+                } else {
+                    compacted[compactedIndex] = value;
+                }
+
+                ++compactedIndex;
+            }
+        }
+    }
+
+    return undefinedCount;
+}
+
 Array.prototype.sort = function (comparator) {
     "use strict";
 
@@ -311,67 +351,13 @@ Array.prototype.sort = function (comparator) {
     var sorted = null;
     var undefinedCount = sortCompact(receiver, receiverLength, compacted, isStringSort);
     if (isStringSort) {
-        sorted = new Array(compacted.length);//@newArrayWithSize(compacted.length);
+        sorted = new Array(compacted.length);
         sortBucketSort(sorted, 0, compacted, 0);
     } else
         sorted = sortMergeSort(compacted, comparator);
     sortCommit(receiver, receiverLength, sorted, undefinedCount);
-    // @sortCommit(receiver, receiverLength, sorted, undefinedCount);
     return receiver;
 }
-
-function sortCommit(receiver, receiverLength, sorted, undefinedCount) {
-    "use strict";
-
-    // Move undefineds and holes to the end of an array. Result is [values..., undefineds..., holes...].
-
-    //@assert(@isJSArray(sorted));
-    var sortedLength = sorted.length;
-    // @assert(sortedLength + undefinedCount <= receiverLength);
-
-    var i = 0;
-
-    for (; i < sortedLength; ++i)
-        receiver[i] = sorted[i];
-
-    for (; i < sortedLength + undefinedCount; ++i)
-        receiver[i] = undefined;
-
-    /*for (; i < receiverLength; ++i)
-        devare receiver[i];*/
-}
-function sortCompact(receiver, receiverLength, compacted, isStringSort) {
-    "use strict";
-
-    var undefinedCount = 0;
-    var compactedIndex = 0;
-
-    for (var i = 0; i < receiverLength; ++i) {
-        if (i in receiver) {
-            var value = receiver[i];
-            if (value === undefined)
-                ++undefinedCount;
-            else {
-                /*@putByValDirect(compacted, compactedIndex,
-                    isStringSort ? { string: @toString(value), value
-            } : value);*/
-                if (isStringSort) {
-                    compacted[compactedIndex] = {
-                        string: toString(value),
-                        value: value
-                    }
-                } else {
-                    compacted[compactedIndex] = value;
-                }
-
-                ++compactedIndex;
-            }
-        }
-    }
-
-    return undefinedCount;
-}
-
 var flatIntoArray = function flatIntoArray(target, source, sourceLength, targetIndex, depth) {
     "use strict";
 

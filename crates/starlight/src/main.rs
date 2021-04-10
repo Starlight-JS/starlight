@@ -164,6 +164,7 @@ fn main() {
                         Err(_) => "<unknown error>".to_owned(),
                     };
                     eprintln!("Uncaught exception: {}", str);
+                    eprintln!("Stacktrace: \n{}", rt.take_stacktrace());
                 }
             }
         }
