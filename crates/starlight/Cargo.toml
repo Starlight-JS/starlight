@@ -30,8 +30,8 @@ libffi = "1.0.0"
 num = "0.3.1"
 mimalloc = "0.1.25"
 libloading = "0.7.0"
-gccjit-rs = { git = "https://github.com/playxe/gccjit-rs" }
 const-random = "0.1.13"
+libmir-sys = { path = "../libmir-sys" }
 [features]
 val-as-f64 = []
 val-as-u64 = []

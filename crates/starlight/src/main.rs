@@ -186,24 +186,3 @@ fn main() {
     }
     drop(rt);
 }
-/*
-
-fn main() {
-    let ctx = Context::default();
-    ctx.set_dump_code(true);
-    ctx.set_dump_gimple(true);
-    ctx.set_opt_level(gccjit_rs::ctx::OptimizationLevel::Aggressive);
-    let mut jit = JITCompiler::new(
-        ctx,
-        "foo",
-        &[ctx.new_parameter(None, ctx.new_type::<u64>(), "x")],
-        ctx.new_type::<f64>(),
-    );
-
-    let block = jit.fun.new_block("entry");
-    let val = jit.fun.get_param(0);
-
-    block.end_with_return(None, jit.bitcast(&block, val, jit.ctx.new_type::<f64>()));
-    let result = jit.ctx.compile();
-}
-*/

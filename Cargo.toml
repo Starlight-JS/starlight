@@ -1,12 +1,17 @@
 [workspace]
-members = ["crates/starlight", "crates/wtf-rs", "crates/starlight-derive"]
+members = [
+    "crates/starlight",
+    "crates/wtf-rs",
+    "crates/starlight-derive",
+    "crates/libmir-sys",
+]
 default-members = ["crates/starlight"]
 
 
 [profile.release]
 lto = true
 opt-level = 3
-debug = false
+debug = true
 codegen-units = 1
 
 [profile.bench]
