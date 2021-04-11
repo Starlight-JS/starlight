@@ -1421,7 +1421,7 @@ impl Env {
 
         prop.is_writable()
     }
-    pub fn set_variable(
+    pub fn set_localiable(
         &mut self,
         vm: &mut Runtime,
         name: Symbol,
@@ -1471,10 +1471,10 @@ impl Env {
             }
         }
     }
-    pub fn get_variable(&mut self, vm: &mut Runtime, name: Symbol) -> Result<JsValue, JsValue> {
+    pub fn get_localiable(&mut self, vm: &mut Runtime, name: Symbol) -> Result<JsValue, JsValue> {
         self.record.get(vm, name)
     }
-    pub fn get_variable_slot(
+    pub fn get_localiable_slot(
         &mut self,
         vm: &mut Runtime,
         name: Symbol,

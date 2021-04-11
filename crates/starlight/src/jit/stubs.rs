@@ -9,6 +9,6 @@ pub extern "C" fn type_id_of_object_stub(x: GcPointer<dyn GcCell>) -> u64 {
 
 pub unsafe extern "C" fn push_env(rt: &mut Runtime, frame: &mut CallFrame) {
     let mut env = Environment::new(rt, 0);
-    env.parent = Some(frame.env.get_object().downcast_unchecked());
-    frame.env = JsValue::new(env);
+    env.parent = Some(frame.env.unwrap().downcast_unchecked());
+    frame.env = Some(env);
 }

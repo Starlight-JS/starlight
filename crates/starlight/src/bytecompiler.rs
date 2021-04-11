@@ -126,9 +126,25 @@ impl ByteCompiler {
             Access::Global(var)
         }
     }
+    pub fn emit_get_local(&mut self, depth: u32, index: u32) {
+        if depth == 0 {
+            self.emit(Opcode::OP_GE0GL, &[index], false);
+        } else {
+            self.emit(Opcode::OP_GET_ENV, &[depth], false);
+            self.emit(Opcode::OP_GET_LOCAL, &[index], false);
+        }
+    }
+    pub fn emit_set_local(&mut self, depth: u32, index: u32) {
+        if depth == 0 {
+            self.emit(Opcode::OP_GE0SL, &[index], false);
+        } else {
+            self.emit(Opcode::OP_GET_ENV, &[depth], false);
+            self.emit(Opcode::OP_SET_LOCAL, &[index], false);
+        }
+    }
 
     pub fn decl_const(&mut self, name: Symbol) -> u16 {
-        self.emit(Opcode::OP_GET_ENV, &[0], false);
+        //self.emit(Opcode::OP_GET_ENV, &[0], false);
         let ix = if let Some(ix) = self.variable_freelist.pop() {
             self.scope.borrow_mut().add_var(name, ix as _);
             ix as u16
@@ -144,7 +160,7 @@ impl ByteCompiler {
     }
 
     pub fn decl_let(&mut self, name: Symbol) -> u16 {
-        self.emit(Opcode::OP_GET_ENV, &[0], false);
+        //self.emit(Opcode::OP_GET_ENV, &[0], false);
 
         let ix = if let Some(ix) = self.variable_freelist.pop() {
             self.scope.borrow_mut().add_var(name, ix as _);
@@ -221,8 +237,9 @@ impl ByteCompiler {
     pub fn access_set(&mut self, acc: Access) {
         match acc {
             Access::Variable(index, depth) => {
-                self.emit(Opcode::OP_GET_ENV, &[depth], false);
-                self.emit(Opcode::OP_SET_VAR, &[index as _], false);
+                /*  self.emit(Opcode::OP_GET_ENV, &[depth], false);
+                self.emit(Opcode::OP_SET_LOCAL, &[index as _], false);*/
+                self.emit_set_local(depth as _, index as _);
                 //self.emit_u16(index);
             }
             Access::Global(x) => {
@@ -241,8 +258,9 @@ impl ByteCompiler {
     pub fn access_get(&mut self, acc: Access) {
         match acc {
             Access::Variable(index, depth) => {
-                self.emit(Opcode::OP_GET_ENV, &[depth], false);
-                self.emit(Opcode::OP_GET_VAR, &[index as _], false);
+                self.emit_get_local(depth as _, index as _);
+                //self.emit(Opcode::OP_GET_ENV, &[depth], false);
+                //self.emit(Opcode::OP_GET_LOCAL, &[index as _], false);
                 //self.emit_u16(index);
             }
             Access::Global(x) => {
@@ -509,7 +527,7 @@ impl ByteCompiler {
                 let for_in_enumerate = self.jmp_custom(Opcode::OP_FORIN_ENUMERATE);
                 let acc = self.access_var(name);
                 self.access_set(acc);
-                //self.emit(Opcode::OP_SET_VAR, &[name], true);
+                //self.emit(Opcode::OP_SET_LOCAL, &[name], true);
                 self.stmt(&for_in.body);
                 while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
                     c(self);
@@ -667,7 +685,7 @@ impl ByteCompiler {
                     self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
                     let var = self.access_var(sym);
                     self.access_set(var);
-                    // self.emit(Opcode::OP_SET_VAR, &[nix], true);
+                    // self.emit(Opcode::OP_SET_LOCAL, &[nix], true);
                 }
                 _ => (),
             },
@@ -822,7 +840,7 @@ impl ByteCompiler {
                                 let acc = self.access_var(ix);
                                 let sym = self.get_sym(ix);
                                 self.access_get(acc);
-                                // self.emit(Opcode::OP_GET_VAR, &[sym], true);
+                                // self.emit(Opcode::OP_GET_LOCAL, &[sym], true);
                                 self.emit(Opcode::OP_SWAP, &[], false);
                                 self.emit(Opcode::OP_PUT_BY_ID, &[sym], true);
                             }
@@ -1245,7 +1263,7 @@ impl ByteCompiler {
                     };
                     let ix = self.scope.borrow_mut().add_var(name, ix);
                     self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
-                    self.emit(Opcode::OP_GET_ENV, &[0], false);
+                    //self.emit(Opcode::OP_GET_ENV, &[0], false);
                     self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
                 }
                 let mut params = vec![];

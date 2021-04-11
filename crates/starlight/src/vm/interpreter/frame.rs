@@ -5,7 +5,7 @@ use wtf_rs::round_up;
 
 use crate::{
     gc::cell::{GcPointer, Trace, Tracer},
-    vm::{code_block::CodeBlock, value::JsValue},
+    vm::{code_block::CodeBlock, environment::Environment, value::JsValue},
 };
 
 impl Typeable for CallFrame {
@@ -50,9 +50,9 @@ pub struct CallFrame {
     pub this: JsValue,
     pub ctor: bool,
     pub exit_on_return: bool,
-    pub env: JsValue,
+    pub env: Option<GcPointer<Environment>>,
     /// (Environment,Instruction) stack
-    pub try_stack: Vec<(JsValue, *mut u8, *mut JsValue)>,
+    pub try_stack: Vec<(Option<GcPointer<Environment>>, *mut u8, *mut JsValue)>,
     pub locals_start: *mut JsValue,
 }
 impl CallFrame {

@@ -67,8 +67,8 @@ pub enum Opcode {
     OP_POP_ENV,
     OP_GET_ENV,
     OP_SET_ENV,
-    OP_GET_VAR,
-    OP_SET_VAR,
+    OP_GET_LOCAL,
+    OP_SET_LOCAL,
     OP_SET_GLOBAL,
     OP_GET_GLOBAL,
     OP_DECL_LET,
@@ -90,4 +90,13 @@ pub enum Opcode {
     OP_FORIN_SETUP,
     OP_FORIN_ENUMERATE,
     OP_FORIN_LEAVE,
+
+    /// get_env 0 get_local
+    OP_GE0GL,
+    /// get_env 0 set_local
+    OP_GE0SL,
+    /// get_env 0 decl_let
+    OP_GE0DL,
+    /// get_env 0 decl_const
+    OP_GE0DC,
 }

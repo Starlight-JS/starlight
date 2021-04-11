@@ -36,7 +36,7 @@ impl Stack {
                 ctor: false,
                 prev: self.current,
                 try_stack: vec![],
-                env: JsValue::encode_empty_value(),
+                env: None,
                 this: JsValue::encode_empty_value(),
                 sp: self.cursor.add(iloc_count as _),
                 limit: self.cursor.add(iloc_count as _),

@@ -138,7 +138,7 @@ impl JsArguments {
                                     /*Env {
                                         record: arg.env.clone(),
                                     }
-                                    .set_variable(
+                                    .set_localiable(
                                         vm,
                                         mapped,
                                         desc.value(),

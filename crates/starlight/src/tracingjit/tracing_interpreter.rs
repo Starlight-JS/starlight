@@ -53,22 +53,55 @@ pub unsafe fn record(
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
-
+        #[cfg(feature = "perf")]
+        {
+            rt.perf.get_perf(opcode as u8);
+        }
         match opcode {
-            Opcode::OP_NOP => {}
-            Opcode::OP_GET_VAR => {
+            Opcode::OP_NOP => unreachable!(
+                "{}",
+                ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
+            ),
+            Opcode::OP_GE0GL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let env = frame.pop().get_object().downcast_unchecked::<Environment>();
+                let env = unwrap_unchecked(frame.env);
                 debug_assert!(
                     index < env.values.len() as u32,
-                    "invalid var index at pc: {}",
+                    "invalid var index '{}' at pc: {}",
+                    index,
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
                 frame.push(env.values.get_unchecked(index as usize).0);
             }
-            Opcode::OP_SET_VAR => {
+            Opcode::OP_GE0SL => {
+                let index = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let mut env = unwrap_unchecked(frame.env);
+                debug_assert!(index < env.values.len() as u32);
+                let val = frame.pop();
+                if unlikely(!env.values[index as usize].1) {
+                    return Err(JsValue::new(
+                        rt.new_type_error(format!("Cannot assign to immutable variable")),
+                    ));
+                }
+                env.values.get_unchecked_mut(index as usize).0 = val;
+            }
+            Opcode::OP_GET_LOCAL => {
+                let index = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let env = frame.pop().get_object().downcast_unchecked::<Environment>();
+                debug_assert!(
+                    index < env.values.len() as u32,
+                    "invalid var index '{}' at pc: {}",
+                    index,
+                    ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
+                );
+
+                frame.push(env.values.get_unchecked(index as usize).0);
+            }
+            Opcode::OP_SET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = frame.pop().get_object().downcast_unchecked::<Environment>();
@@ -84,27 +117,16 @@ pub unsafe fn record(
             Opcode::OP_GET_ENV => {
                 let mut depth = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
+                let mut env = unwrap_unchecked(frame.env);
 
                 while depth != 0 {
-                    env = env.parent.expect("Invalid environment depth");
+                    env = unwrap_unchecked(env.parent);
                     depth -= 1;
                 }
 
                 frame.push(JsValue::new(env));
             }
 
-            Opcode::OP_PUSH_ENV => {
-                let mut env = Environment::new(rt, 0);
-                env.parent = Some(frame.env.get_object().downcast_unchecked());
-                frame.env = JsValue::new(env);
-            }
-            Opcode::OP_POP_ENV => {
-                //rt.heap().collect_if_necessary();
-                let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
-
-                frame.env = JsValue::new(unwrap_unchecked(env.parent));
-            }
             Opcode::OP_JMP => {
                 rt.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
@@ -196,30 +218,39 @@ pub unsafe fn record(
                     frame.push(result);
                     continue;
                 }
+                #[cold]
+                unsafe fn add_slowpath(
+                    rt: &mut Runtime,
+                    frame: &mut CallFrame,
+                    lhs: JsValue,
+                    rhs: JsValue,
+                ) -> Result<(), JsValue> {
+                    let lhs = lhs.to_primitive(rt, JsHint::None)?;
+                    let rhs = rhs.to_primitive(rt, JsHint::None)?;
 
-                let lhs = lhs.to_primitive(rt, JsHint::None)?;
-                let rhs = rhs.to_primitive(rt, JsHint::None)?;
+                    if lhs.is_jsstring() || rhs.is_jsstring() {
+                        #[inline(never)]
+                        fn concat(
+                            rt: &mut Runtime,
+                            lhs: JsValue,
+                            rhs: JsValue,
+                        ) -> Result<JsValue, JsValue> {
+                            let lhs = lhs.to_string(rt)?;
+                            let rhs = rhs.to_string(rt)?;
+                            let string = format!("{}{}", lhs, rhs);
+                            Ok(JsValue::encode_object_value(JsString::new(rt, string)))
+                        }
 
-                if lhs.is_jsstring() || rhs.is_jsstring() {
-                    #[inline(never)]
-                    fn concat(
-                        rt: &mut Runtime,
-                        lhs: JsValue,
-                        rhs: JsValue,
-                    ) -> Result<JsValue, JsValue> {
-                        let lhs = lhs.to_string(rt)?;
-                        let rhs = rhs.to_string(rt)?;
-                        let string = format!("{}{}", lhs, rhs);
-                        Ok(JsValue::encode_object_value(JsString::new(rt, string)))
+                        let result = concat(rt, lhs, rhs)?;
+                        frame.push(result);
+                    } else {
+                        let lhs = lhs.to_number(rt)?;
+                        let rhs = rhs.to_number(rt)?;
+                        frame.push(JsValue::new(lhs + rhs));
                     }
-
-                    let result = concat(rt, lhs, rhs)?;
-                    frame.push(result);
-                } else {
-                    let lhs = lhs.to_number(rt)?;
-                    let rhs = rhs.to_number(rt)?;
-                    frame.push(JsValue::new(lhs + rhs));
+                    Ok(())
                 }
+                add_slowpath(rt, frame, lhs, rhs)?;
             }
             Opcode::OP_SUB => {
                 //let profile = &mut *ip.cast::<ArithProfile>();
@@ -227,7 +258,13 @@ pub unsafe fn record(
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    let result = lhs.get_int32().checked_sub(rhs.get_int32());
+                    if likely(result.is_some()) {
+                        frame.push(JsValue::encode_int32(result.unwrap()));
+                        continue;
+                    }
+                }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //profile.lhs_saw_number();
                     //profile.rhs_saw_number();
@@ -263,6 +300,13 @@ pub unsafe fn record(
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    let result = lhs.get_int32().checked_mul(rhs.get_int32());
+                    if likely(result.is_some()) {
+                        frame.push(JsValue::encode_int32(result.unwrap()));
+                        continue;
+                    }
+                }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //  profile.lhs_saw_number();
                     //  profile.rhs_saw_number();
@@ -321,7 +365,10 @@ pub unsafe fn record(
             Opcode::OP_LESS => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() < rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_TRUE,
                 ));
@@ -329,6 +376,10 @@ pub unsafe fn record(
             Opcode::OP_LESSEQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() <= rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     rhs.compare(lhs, false, rt)? == CMP_FALSE,
                 ));
@@ -337,6 +388,10 @@ pub unsafe fn record(
             Opcode::OP_GREATER => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() > rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     rhs.compare(lhs, false, rt)? == CMP_TRUE,
                 ));
@@ -344,6 +399,10 @@ pub unsafe fn record(
             Opcode::OP_GREATEREQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                if likely(lhs.is_int32() && rhs.is_int32()) {
+                    frame.push(JsValue::new(lhs.get_int32() >= rhs.get_int32()));
+                    continue;
+                }
                 frame.push(JsValue::encode_bool_value(
                     lhs.compare(rhs, true, rt)? == CMP_FALSE,
                 ));
@@ -485,12 +544,10 @@ pub unsafe fn record(
                         Ok(())
                     }
                     slow_put_by_id(rt, frame, &mut obj, name, value, fdbk)?;
-                } else {
-                    eprintln!("Internal waning: PUT_BY_ID on primitives is not implemented yet");
                 }
             }
 
-            Opcode::OP_CALL | Opcode::OP_TAILCALL => {
+            Opcode::OP_CALL => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -535,7 +592,7 @@ pub unsafe fn record(
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    (*cframe).env = JsValue::encode_object_value(scope);
+                    (*cframe).env = Some(scope);
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
@@ -548,7 +605,7 @@ pub unsafe fn record(
                     frame.push(result);
                 }
             }
-            Opcode::OP_NEW | Opcode::OP_TAILNEW => {
+            Opcode::OP_NEW => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -599,7 +656,7 @@ pub unsafe fn record(
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    (*cframe).env = JsValue::encode_object_value(scope);
+                    (*cframe).env = Some(scope);
                     (*cframe).ctor = true;
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
@@ -656,6 +713,23 @@ pub unsafe fn record(
                 let lhs = frame.pop();
                 let rhs = frame.pop();
                 frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
+            }
+            Opcode::OP_PUT_BY_VAL => {
+                let object = frame.pop();
+                let key = frame.pop().to_symbol(rt)?;
+                let value = frame.pop();
+                if likely(object.is_jsobject()) {
+                    let mut obj = object.get_jsobject();
+                    obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
+                }
+            }
+            Opcode::OP_GET_BY_VAL => {
+                let object = frame.pop();
+                let key = frame.pop().to_symbol(rt)?;
+                let mut slot = Slot::new();
+                let value = object.get_slot(rt, key, &mut slot)?;
+
+                frame.push(value);
             }
             Opcode::OP_INSTANCEOF => {
                 let lhs = frame.pop();
@@ -746,25 +820,6 @@ pub unsafe fn record(
                 let obj = JsObject::new_empty(rt);
                 frame.push(JsValue::encode_object_value(obj));
             }
-            Opcode::OP_PUT_BY_VAL => {
-                let object = frame.pop();
-                let key = frame.pop().to_symbol(rt)?;
-                let value = frame.pop();
-                if likely(object.is_jsobject()) {
-                    let mut obj = object.get_jsobject();
-                    obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
-                } else {
-                    eprintln!("Internal waning: PUT_BY_VAL on primitives is not implemented yet");
-                }
-            }
-            Opcode::OP_GET_BY_VAL => {
-                let object = frame.pop();
-                let key = frame.pop().to_symbol(rt)?;
-                let mut slot = Slot::new();
-                let value = object.get_slot(rt, key, &mut slot)?;
-
-                frame.push(value);
-            }
 
             Opcode::OP_PUSH_CATCH => {
                 let offset = ip.cast::<i32>().read();
@@ -803,14 +858,18 @@ pub unsafe fn record(
             }
 
             Opcode::OP_DECL_CONST => {
-                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
+                let ix = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let mut env = unwrap_unchecked(frame.env);
                 let val = frame.pop();
-                env.values.push((val, false));
+                env.values[ix as usize] = (val, false);
             }
             Opcode::OP_DECL_LET => {
-                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
+                let ix = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let mut env = unwrap_unchecked(frame.env);
                 let val = frame.pop();
-                env.values.push((val, true));
+                env.values[ix as usize] = (val, true);
                 //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
             }
 
@@ -845,13 +904,8 @@ pub unsafe fn record(
                 let func = JsVMFunction::new(
                     rt,
                     unwrap_unchecked(frame.code_block).codes[ix as usize],
-                    (*frame)
-                        .env
-                        .get_object()
-                        .downcast()
-                        .expect("corrupted environment"),
+                    unwrap_unchecked(frame.env),
                 );
-                assert!(func.is_callable());
 
                 frame.push(JsValue::encode_object_value(func));
                 // vm.space().undefer_gc();

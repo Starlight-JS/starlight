@@ -114,17 +114,27 @@ impl CodeBlock {
                         pc = pc.add(4);
                         writeln!(output, "get_function {}", ix)?;
                     }
-                    Opcode::OP_GET_VAR => {
-                        let name = pc.cast::<u32>().read_unaligned();
+                    Opcode::OP_GE0GL => {
+                        let ix = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
-
-                        writeln!(output, "get_var {}", name)?;
+                        writeln!(output, "get_environment 0->get_local {}", ix)?;
                     }
-                    Opcode::OP_SET_VAR => {
+                    Opcode::OP_GE0SL => {
+                        let ix = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+                        writeln!(output, "get_environment 0->set_local {}", ix)?;
+                    }
+                    Opcode::OP_GET_LOCAL => {
                         let name = pc.cast::<u32>().read_unaligned();
                         pc = pc.add(4);
 
-                        writeln!(output, "set_var {}", name,)?;
+                        writeln!(output, "get_local {}", name)?;
+                    }
+                    Opcode::OP_SET_LOCAL => {
+                        let name = pc.cast::<u32>().read_unaligned();
+                        pc = pc.add(4);
+
+                        writeln!(output, "set_local {}", name,)?;
                     }
 
                     Opcode::OP_NEWOBJECT => {

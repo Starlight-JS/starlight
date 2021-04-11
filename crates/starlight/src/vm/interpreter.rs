@@ -236,7 +236,7 @@ unsafe fn eval_internal(
     let mut frame = unwrap_unchecked(frame);
     (*frame).code_block = Some(code);
     (*frame).this = this;
-    (*frame).env = JsValue::encode_object_value(scope);
+    (*frame).env = Some(scope);
     (*frame).ctor = ctor;
     (*frame).exit_on_return = true;
     (*frame).ip = ip;
@@ -288,7 +288,33 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 "{}",
                 ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
             ),
-            Opcode::OP_GET_VAR => {
+            Opcode::OP_GE0GL => {
+                let index = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let env = unwrap_unchecked(frame.env);
+                debug_assert!(
+                    index < env.values.len() as u32,
+                    "invalid var index '{}' at pc: {}",
+                    index,
+                    ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
+                );
+
+                frame.push(env.values.get_unchecked(index as usize).0);
+            }
+            Opcode::OP_GE0SL => {
+                let index = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let mut env = unwrap_unchecked(frame.env);
+                debug_assert!(index < env.values.len() as u32);
+                let val = frame.pop();
+                if unlikely(!env.values[index as usize].1) {
+                    return Err(JsValue::new(
+                        rt.new_type_error(format!("Cannot assign to immutable variable")),
+                    ));
+                }
+                env.values.get_unchecked_mut(index as usize).0 = val;
+            }
+            Opcode::OP_GET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let env = frame.pop().get_object().downcast_unchecked::<Environment>();
@@ -301,7 +327,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 frame.push(env.values.get_unchecked(index as usize).0);
             }
-            Opcode::OP_SET_VAR => {
+            Opcode::OP_SET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = frame.pop().get_object().downcast_unchecked::<Environment>();
@@ -317,7 +343,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_GET_ENV => {
                 let mut depth = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = frame.env.get_object().downcast_unchecked::<Environment>();
+                let mut env = unwrap_unchecked(frame.env);
 
                 while depth != 0 {
                     env = unwrap_unchecked(env.parent);
@@ -792,7 +818,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    (*cframe).env = JsValue::encode_object_value(scope);
+                    (*cframe).env = Some(scope);
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
@@ -856,7 +882,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    (*cframe).env = JsValue::encode_object_value(scope);
+                    (*cframe).env = Some(scope);
                     (*cframe).ctor = true;
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
@@ -1060,14 +1086,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_DECL_CONST => {
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
+                let mut env = unwrap_unchecked(frame.env);
                 let val = frame.pop();
                 env.values[ix as usize] = (val, false);
             }
             Opcode::OP_DECL_LET => {
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
+                let mut env = unwrap_unchecked(frame.env);
                 let val = frame.pop();
                 env.values[ix as usize] = (val, true);
                 //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
@@ -1104,7 +1130,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let func = JsVMFunction::new(
                     rt,
                     unwrap_unchecked(frame.code_block).codes[ix as usize],
-                    (*frame).env.get_object().downcast_unchecked(),
+                    unwrap_unchecked(frame.env),
                 );
 
                 frame.push(JsValue::encode_object_value(func));
@@ -1175,127 +1201,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             x => panic!("{:?}", x),
         }
     }
-}
-fn get_env(rt: &mut Runtime, frame: &mut CallFrame, name: Symbol) -> Option<GcPointer<JsObject>> {
-    'search: loop {
-        let mut current = Some((*frame).env.get_jsobject());
-        while let Some(env) = current {
-            if (Env { record: env }).has_own_variable(rt, name) {
-                break 'search Some(env);
-            }
-            current = env.prototype().copied();
-        }
-        break 'search None;
-    }
-}
-#[inline(never)]
-pub unsafe fn get_var(
-    rt: &mut Runtime,
-    name: Symbol,
-    frame: &mut CallFrame,
-    fdbk: u32,
-) -> Result<JsValue, JsValue> {
-    let stack = rt.shadowstack();
-    let env = get_env(rt, frame, name);
-    root!(
-        env = stack,
-        match env {
-            Some(env) => env,
-            None => rt.global_object(),
-        }
-    );
-
-    if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
-        .feedback
-        .get_unchecked(fdbk as usize)
-    {
-        if let Some(structure) = structure.upgrade() {
-            if GcPointer::ptr_eq(&structure, &env.structure()) {
-                return Ok(*env.direct(*offset as usize));
-            }
-        }
-    }
-
-    let mut slot = Slot::new();
-    if likely(env.get_own_property_slot(rt, name, &mut slot)) {
-        if slot.is_load_cacheable() {
-            *unwrap_unchecked(frame.code_block)
-                .feedback
-                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                structure: rt.heap().make_weak(env.structure()),
-                offset: slot.offset(),
-            };
-        }
-
-        let value = slot.value();
-        // println!("{}", value.is_callable());
-        return Ok(value);
-    };
-    let msg = JsString::new(
-        rt,
-        format!("Undeclared variable '{}'", rt.description(name)),
-    );
-    Err(JsValue::encode_object_value(JsReferenceError::new(
-        rt, msg, None,
-    )))
-}
-#[inline(never)]
-pub unsafe fn set_var(
-    rt: &mut Runtime,
-    frame: &mut CallFrame,
-    name: Symbol,
-    fdbk: u32,
-    val: JsValue,
-) -> Result<(), JsValue> {
-    let stack = rt.shadowstack();
-    let env = get_env(rt, frame, name);
-    root!(
-        env = stack,
-        match env {
-            Some(env) => env,
-            None if likely(!unwrap_unchecked(frame.code_block).strict) => rt.global_object(),
-            _ => {
-                let msg = JsString::new(
-                    rt,
-                    format!("Unresolved reference '{}'", rt.description(name)),
-                );
-                return Err(JsValue::encode_object_value(JsReferenceError::new(
-                    rt, msg, None,
-                )));
-            }
-        }
-    );
-    if let TypeFeedBack::PropertyCache { structure, offset } = unwrap_unchecked(frame.code_block)
-        .feedback
-        .get_unchecked(fdbk as usize)
-    {
-        if let Some(structure) = structure.upgrade() {
-            if likely(GcPointer::ptr_eq(&structure, &env.structure())) {
-                *env.direct_mut(*offset as usize) = val;
-            }
-        }
-    }
-
-    let mut slot = Slot::new();
-    if GcPointer::ptr_eq(&env, &rt.global_object()) {
-        env.put(rt, name, val, unwrap_unchecked(frame.code_block).strict)?;
-        return Ok(());
-    }
-    assert!(env.get_own_property_slot(rt, name, &mut slot));
-    let slot = Env { record: *env }.set_variable(
-        rt,
-        name,
-        val,
-        unwrap_unchecked(frame.code_block).strict,
-    )?;
-    *unwrap_unchecked(frame.code_block)
-        .feedback
-        .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-        structure: rt.heap().make_weak(slot.0.structure()),
-        offset: slot.1.offset(),
-    };
-    //*env.direct_mut(slot.1.offset() as usize) = val;
-    Ok(())
 }
 
 /// Type used internally in JIT/interpreter to represent spread result.
