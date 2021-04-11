@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use crate::{bytecode::*, gc::cell::Tracer};
+use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
 pub mod frame;
@@ -426,17 +427,18 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(value);
             }
             Opcode::OP_ADD => {
-                // let profile = &mut *ip.cast::<ArithProfile>();
-                // ip = ip.add(size_of::<ArithProfile>());
+                let profile = &mut *ip.cast::<ArithProfile>();
+                ip = ip.add(4);
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-                // profile.observe_lhs_and_rhs(lhs, rhs);
+                profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_int32() && rhs.is_int32()) {
                     if let Some(val) = lhs.get_int32().checked_add(rhs.get_int32()) {
                         frame.push(JsValue::encode_int32(val));
                         continue;
                     }
+                    profile.set_observed_int32_overflow();
                 }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     let result = JsValue::new(lhs.get_number() + rhs.get_number());
@@ -479,17 +481,19 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 add_slowpath(rt, frame, lhs, rhs)?;
             }
             Opcode::OP_SUB => {
-                //let profile = &mut *ip.cast::<ArithProfile>();
-                //ip = ip.add(size_of::<ArithProfile>());
+                let profile = &mut *ip.cast::<ArithProfile>();
+                ip = ip.add(4);
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_int32() && rhs.is_int32()) {
                     let result = lhs.get_int32().checked_sub(rhs.get_int32());
                     if likely(result.is_some()) {
                         frame.push(JsValue::encode_int32(result.unwrap()));
                         continue;
                     }
+                    profile.set_observed_int32_overflow();
                 }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //profile.lhs_saw_number();
@@ -504,11 +508,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::new(lhs - rhs));
             }
             Opcode::OP_DIV => {
-                //let profile = &mut *ip.cast::<ArithProfile>();
-                //ip = ip.add(size_of::<ArithProfile>());
+                let profile = &mut *ip.cast::<ArithProfile>();
+                ip = ip.add(4);
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //    profile.lhs_saw_number();
                     //    profile.rhs_saw_number();
@@ -521,17 +526,19 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::new(lhs / rhs));
             }
             Opcode::OP_MUL => {
-                //let profile = &mut *ip.cast::<ArithProfile>();
-                //ip = ip.add(size_of::<ArithProfile>());
+                let profile = &mut *ip.cast::<ArithProfile>();
+                ip = ip.add(4);
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+                profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_int32() && rhs.is_int32()) {
                     let result = lhs.get_int32().checked_mul(rhs.get_int32());
                     if likely(result.is_some()) {
                         frame.push(JsValue::encode_int32(result.unwrap()));
                         continue;
                     }
+                    profile.set_observed_int32_overflow();
                 }
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //  profile.lhs_saw_number();
@@ -546,12 +553,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::new(lhs * rhs));
             }
             Opcode::OP_REM => {
-                //let profile = &mut *ip.cast::<ArithProfile>();
-                //ip = ip.add(size_of::<ArithProfile>());
+                let profile = &mut *ip.cast::<ArithProfile>();
+                ip = ip.add(4);
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
+                profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_number() && rhs.is_number()) {
                     //  profile.lhs_saw_number();
                     //  profile.rhs_saw_number();
@@ -941,8 +948,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(JsValue::encode_bool_value(!lhs.strict_equal(rhs)));
             }
             Opcode::OP_PUT_BY_VAL => {
+                let profile = &mut *ip.cast::<ByValProfile>();
+                ip = ip.add(4);
                 let object = frame.pop();
-                let key = frame.pop().to_symbol(rt)?;
+                let key = frame.pop();
+                profile.observe_key_and_object(key, object);
+                let key = key.to_symbol(rt)?;
                 let value = frame.pop();
                 if likely(object.is_jsobject()) {
                     let mut obj = object.get_jsobject();
@@ -950,8 +961,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
             }
             Opcode::OP_GET_BY_VAL => {
+                let profile = &mut *ip.cast::<ByValProfile>();
+                ip = ip.add(4);
+
                 let object = frame.pop();
-                let key = frame.pop().to_symbol(rt)?;
+                let key = frame.pop();
+                profile.observe_key_and_object(key, object);
+                let key = key.to_symbol(rt)?;
                 let mut slot = Slot::new();
                 let value = object.get_slot(rt, key, &mut slot)?;
 

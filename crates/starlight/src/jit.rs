@@ -140,3 +140,5 @@ unsafe fn mir_compile_c_module(
     }
     null_mut()
 }
+
+pub const STARLIGHT_JIT_RUNTIME: &'static str = include_str!("jit/rt.c");

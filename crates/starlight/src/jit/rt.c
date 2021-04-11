@@ -1,0 +1,105 @@
+#include <inttypes.h>
+#include <stdio.h>
+typedef union {
+  float f;
+  uint32_t bits;
+} f32bits;
+
+typedef union {
+  double f;
+  uint64_t bits;
+} f64bits;
+
+#define f32_to_bits(fval) (((f32bits){.f = fval}).bits)
+#define f32_from_bits(fval) (((f32bits){.bits = fval}).f)
+#define f64_to_bits(fval) (((f64bits){.f = fval}).bits)
+#define f64_from_bits(fval) (((f64bits){.bits = fval}).f)
+
+typedef uint64_t jsval;
+#define FIRST_TAG 0xfff9ull
+#define LAST_TAG 0xffffull
+#define EMPTY_INVALID_TAG FIRST_TAG
+#define UNDEFINED_NULL_TAG (FIRST_TAG + 1)
+#define BOOL_TAG (FIRST_TAG + 2)
+#define INT32_TAG (FIRST_TAG + 3)
+#define NATIVE_VALUE_TAG (FIRST_TAG + 4)
+#define STR_TAG (FIRST_TAG + 5)
+#define OBJECT_TAG (FIRST_TAG + 6)
+#define FIRST_PTR_TAG STR_TAG
+
+typedef enum {
+  ExtEmpty = EMPTY_INVALID_TAG * 2 + 1,
+  ExtUndefined = UNDEFINED_NULL_TAG * 2,
+  ExtNull = UNDEFINED_NULL_TAG * 2 + 1,
+  ExtBool = BOOL_TAG * 2,
+  ExtInt32 = INT32_TAG * 2,
+  ExtNative1 = NATIVE_VALUE_TAG * 2,
+  ExtNative2 = NATIVE_VALUE_TAG * 2 + 1,
+  ExtStr1 = STR_TAG * 2,
+  ExtStr2 = STR_TAG * 2 + 1,
+  ExtObject1 = OBJECT_TAG * 2,
+  ExtObject2 = OBJECT_TAG * 2 + 1,
+} ExtendedTag;
+
+#define NUM_TAG_EXP_BITS (uint64_t)16
+#define NUM_DATA_BITS (64 - NUM_TAG_EXP_BITS)
+#define TAG_WIDTH 4
+#define TAG_MASK ((1 << TAG_WIDTH) - 1)
+#define DATA_MASK (((uint64_t)1 << (uint64_t)NUM_DATA_BITS) - (uint64_t)1)
+#define ETAG_WIDTH 5
+#define ETAG_MASK ((1 << ETAG_WIDTH) - 1)
+
+extern uint64_t get_jscell_type_id(void *x);
+
+#define jsval_from_raw(x) (uint64_t) x
+#define jsval_get_tag(val) (uint32_t)(val >> NUM_DATA_BITS)
+#define jsval_get_etag(val) (uint32_t)((val >> (NUM_DATA_BITS - 1)))
+#define jsval_combine_tags(a, b) ((a & TAG_MASK) << TAG_WIDTH) | (b & TAG_MASK)
+#define jsval_new(val, tag) (jsval)(val | ((uint64_t)tag << NUM_DATA_BITS))
+#define jsval_new_ext(val, tag) (jsval)(val | (tag << (NUM_DATA_BITS - 1)))
+#define jsval_new_object(val) jsval_new((uint64_t)val, OBJECT_TAG)
+#define jsval_new_bool(x) jsval_new(x, BOOL_TAG)
+#define jsval_new_null() jsval_new_ext(0, ExtNull)
+#define jsval_new_int32(x) jsval_new((uint64_t)(int32_t)x, INT32_TAG)
+#define jsval_new_undef(x) jsval_new_ext(0, ExtUndefined)
+#define jsval_new_f64(x) f64_to_bits(x)
+#define jsval_new_nan(x) 0x7ff8000000000000ull
+#define jsval_new_untrusted_f64(x) (x != x ? jsval_new_nan() : jsval_new_f64(x))
+#define jsval_is_null(x) jsval_get_etag(x) == ExtNull
+#define jsval_is_undef(x) jsval_get_etag(x) == ExtUndefined
+#define jsval_is_empty(x) jsval_get_etag(x) == ExtEmpty
+#define jsval_is_int32(x) jsval_get_tag(x) == INT32_TAG
+#define jsval_is_bool(x) jsval_get_tag(x) == BOOL_TAG
+#define jsval_is_object(x) jsval_get_tag(x) == OBJECT_TAG
+#define jsval_is_double(x) x < ((FIRST_TAG) << NUM_DATA_BITS)
+#define jsval_get_int32(x) ((int32_t)x)
+#define jsval_get_double(x) f64_from_bits(x)
+#define jsval_get_bool(x) (x & 0x1)
+#define jsval_get_object(x) (void *)(x & DATA_MASK)
+#define jsval_get_number(x)                                                    \
+  (jsval_is_int32(x) ? (double)(jsval_get_int32(x)) : jsval_get_double(x))
+
+#define jsval_is_number(x) jsval_is_int32(x) || jsval_is_double(x)
+
+typedef struct {
+  jsval value;
+  uint8_t isErr;
+} result;
+double jsval_to_number(jsval val) {
+  if (jsval_is_int32(val)) {
+    return jsval_get_number(val);
+  }
+  if (jsval_is_double(val)) {
+    return jsval_get_double(val);
+  }
+  if (jsval_is_null(val)) {
+    return 0.0;
+  }
+  if (jsval_is_undef(val)) {
+    return f64_from_bits(0x7ff8000000000000);
+  }
+}
+int main() {
+  jsval val = jsval_new_int32(42);
+  printf("%f\n", jsval_get_number(val));
+}

@@ -103,7 +103,10 @@ pub trait GcCell: mopa::Any + Trace + Serializable {
 }
 
 mopafy!(GcCell);
-
+#[no_mangle]
+pub unsafe extern "C" fn get_jscell_type_id(x: *mut GcPointerBase) -> u64 {
+    transmute((*x).get_dyn().type_id())
+}
 #[repr(C)]
 pub struct GcPointerBase {
     pub vtable: usize,

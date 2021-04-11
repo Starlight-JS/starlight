@@ -51,6 +51,7 @@ impl CodeBlock {
                         writeln!(output, "pop")?;
                     }
                     Opcode::OP_GET_BY_VAL => {
+                        pc = pc.add(4);
                         writeln!(output, "get_by_val",)?;
                     }
                     Opcode::OP_GET_BY_ID => {
@@ -61,6 +62,7 @@ impl CodeBlock {
                         writeln!(output, "get_by_id {}, fdbk {}", name, feedback)?;
                     }
                     Opcode::OP_PUT_BY_VAL => {
+                        pc = pc.add(4);
                         writeln!(output, "put_by_val ",)?;
                     }
                     Opcode::OP_TRY_GET_BY_ID => {

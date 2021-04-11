@@ -125,6 +125,7 @@ impl ObservedResults {
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[repr(u32)]
 pub enum ArithProfile {
     ///- ObservedResults
     ///- ObservedType for right-hand-side
@@ -400,7 +401,9 @@ impl ArithProfile {
 
     pub fn observe_lhs(&mut self, val: JsValue) {
         let mut new_profile = *self;
-        if val.is_number() {
+        if val.is_int32() {
+            new_profile.lhs_saw_int32();
+        } else if val.is_number() {
             new_profile.lhs_saw_number();
         } else {
             new_profile.lhs_saw_non_number();
@@ -409,7 +412,9 @@ impl ArithProfile {
     }
     pub fn observe_rhs(&mut self, val: JsValue) {
         let mut new_profile = *self;
-        if val.is_number() {
+        if val.is_int32() {
+            new_profile.rhs_saw_int32();
+        } else if val.is_number() {
             new_profile.rhs_saw_number();
         } else {
             new_profile.rhs_saw_non_number();
@@ -424,5 +429,48 @@ impl ArithProfile {
 
     pub fn is_observed_type_empty(self) -> bool {
         self.lhs_observed_type().is_empty() && self.rhs_observed_type().is_empty()
+    }
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum ProfileState {
+    NotProfiled = 0,
+    Profiled,
+    DoNotProfile,
+}
+#[repr(C, align(32))]
+pub struct ByValProfile {
+    /// Value that is used as property name.
+    ///
+    ///
+    /// When value type is int32/number and object type is dense array then JIT will emit fast path for dense array load.
+    pub value_type: ObservedType,
+    pub is_dense_array: ProfileState,
+}
+
+impl ByValProfile {
+    #[inline]
+    pub fn observe_key_and_object(&mut self, key: JsValue, obj: JsValue) {
+        if self.is_dense_array == ProfileState::DoNotProfile {
+            return;
+        }
+        if key.is_int32() {
+            self.value_type.saw_int32();
+        } else if key.is_number() {
+            self.value_type.saw_number();
+        } else {
+            self.value_type.saw_non_number();
+        }
+        if !obj.is_jsobject() {
+            self.is_dense_array = ProfileState::DoNotProfile;
+            return;
+        }
+
+        let obj = obj.get_jsobject();
+        if !obj.indexed.dense() {
+            self.is_dense_array = ProfileState::DoNotProfile;
+            return;
+        }
+        self.is_dense_array = ProfileState::Profiled;
     }
 }

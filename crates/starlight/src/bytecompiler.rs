@@ -251,7 +251,7 @@ impl ByteCompiler {
                 let name = self.get_sym(name);
                 self.emit(Opcode::OP_PUT_BY_ID, &[name], true);
             }
-            Access::ByVal => self.emit(Opcode::OP_PUT_BY_VAL, &[], false),
+            Access::ByVal => self.emit(Opcode::OP_PUT_BY_VAL, &[0], false),
             _ => todo!(),
         }
     }
@@ -272,7 +272,7 @@ impl ByteCompiler {
                 let name = self.get_sym(name);
                 self.emit(Opcode::OP_GET_BY_ID, &[name], true);
             }
-            Access::ByVal => self.emit(Opcode::OP_GET_BY_VAL, &[], false),
+            Access::ByVal => self.emit(Opcode::OP_GET_BY_VAL, &[0], false),
             _ => todo!(),
         }
     }
@@ -861,7 +861,7 @@ impl ByteCompiler {
                                         self.emit(Opcode::OP_SWAP, &[], false);
                                         self.emit(Opcode::OP_PUSH_LITERAL, &[ix], false);
                                         self.emit(Opcode::OP_SWAP, &[], false);
-                                        self.emit(Opcode::OP_PUT_BY_VAL, &[], false);
+                                        self.emit(Opcode::OP_PUT_BY_VAL, &[0], false);
                                     }
                                     PropName::Num(n) => {
                                         let val = n.value;
@@ -873,14 +873,14 @@ impl ByteCompiler {
                                                 false,
                                             );
                                             self.emit(Opcode::OP_SWAP, &[], false);
-                                            self.emit(Opcode::OP_PUT_BY_VAL, &[], false);
+                                            self.emit(Opcode::OP_PUT_BY_VAL, &[0], false);
                                         } else {
                                             let ix =
                                                 self.get_val(&mut rt, Val::Float(val.to_bits()));
                                             self.emit(Opcode::OP_SWAP, &[], false);
                                             self.emit(Opcode::OP_PUSH_LITERAL, &[ix], false);
                                             self.emit(Opcode::OP_SWAP, &[], false);
-                                            self.emit(Opcode::OP_PUT_BY_VAL, &[], false);
+                                            self.emit(Opcode::OP_PUT_BY_VAL, &[0], false);
                                         }
                                     }
                                     _ => todo!(),
@@ -987,7 +987,7 @@ impl ByteCompiler {
                 if update.prefix {
                     self.expr(&update.arg, true, false);
                     self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
-                    self.emit(op, &[], false);
+                    self.emit(op, &[0], false);
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
@@ -1000,7 +1000,7 @@ impl ByteCompiler {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
                     self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
-                    self.emit(op, &[], false);
+                    self.emit(op, &[0], false);
                     let acc = self.compile_access(&update.arg, false);
                     self.access_set(acc);
                     //self.emit_store_expr(&update.arg);
@@ -1078,7 +1078,16 @@ impl ByteCompiler {
 
                         _ => todo!(),
                     };
-                    self.emit(op, &[], false);
+                    let additional: &'static [u32] = if op == Opcode::OP_ADD
+                        || op == Opcode::OP_MUL
+                        || op == Opcode::OP_REM
+                        || op == Opcode::OP_SUB
+                    {
+                        &[0u32]
+                    } else {
+                        &[]
+                    };
+                    self.emit(op, additional, false);
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
@@ -1128,18 +1137,18 @@ impl ByteCompiler {
 
                 match binary.op {
                     BinaryOp::Add => {
-                        self.emit(Opcode::OP_ADD, &[], false);
+                        self.emit(Opcode::OP_ADD, &[0], false);
                     }
                     BinaryOp::Sub => {
-                        self.emit(Opcode::OP_SUB, &[], false);
+                        self.emit(Opcode::OP_SUB, &[0], false);
                     }
                     BinaryOp::Mul => {
-                        self.emit(Opcode::OP_MUL, &[], false);
+                        self.emit(Opcode::OP_MUL, &[0], false);
                     }
                     BinaryOp::Div => {
-                        self.emit(Opcode::OP_DIV, &[], false);
+                        self.emit(Opcode::OP_DIV, &[0], false);
                     }
-                    BinaryOp::Mod => self.emit(Opcode::OP_REM, &[], false),
+                    BinaryOp::Mod => self.emit(Opcode::OP_REM, &[0], false),
                     BinaryOp::BitAnd => self.emit(Opcode::OP_AND, &[], false),
                     BinaryOp::BitOr => self.emit(Opcode::OP_OR, &[], false),
                     BinaryOp::BitXor => self.emit(Opcode::OP_XOR, &[], false),
