@@ -1,3 +1,7 @@
+//! Small runtime for Starlight's JIT. This file includes main functions that is
+//! used when starlight bytecode is transpiled to C. Some of constants here is
+//! passed by JIT itself (i.e `JSOBJECT_TYPEID`) so we do not invoke *two*
+//! functions to check types of objects.
 #include <inttypes.h>
 #include <stdio.h>
 typedef union {
@@ -48,8 +52,27 @@ typedef enum {
 #define DATA_MASK (((uint64_t)1 << (uint64_t)NUM_DATA_BITS) - (uint64_t)1)
 #define ETAG_WIDTH 5
 #define ETAG_MASK ((1 << ETAG_WIDTH) - 1)
+typedef struct {
+  jsval value;
+  uint8_t isErr;
+} result;
+
+typedef struct callframe_s {
+  struct callframe_s *prev;
+  jsval *sp;
+  jsval *limit;
+  jsval callee;
+  uint8_t *ip;
+  void *code_block;
+  jsval this;
+  uint8_t ctor;
+  uint8_t exit_on_return;
+  void *env;
+
+} callframe;
 
 extern uint64_t get_jscell_type_id(void *x);
+extern result jsval_to_number_slow(void *rt, jsval val);
 
 #define jsval_from_raw(x) (uint64_t) x
 #define jsval_get_tag(val) (uint32_t)(val >> NUM_DATA_BITS)
@@ -80,24 +103,35 @@ extern uint64_t get_jscell_type_id(void *x);
   (jsval_is_int32(x) ? (double)(jsval_get_int32(x)) : jsval_get_double(x))
 
 #define jsval_is_number(x) jsval_is_int32(x) || jsval_is_double(x)
+#define jsval_is_jsobject(x)                                                   \
+  (jsval_is_object(x)                                                          \
+       ? get_jscell_type_id(jsval_get_object(x)) == JSOBJECT_TYPEID            \
+       : false)
+#define jsval_is_jsstring(x)                                                   \
+  (jsval_is_object(x)                                                          \
+       ? get_jscell_type_id(jsval_get_object(x)) == JSSTRING_TYPEID            \
+       : false)
 
-typedef struct {
-  jsval value;
-  uint8_t isErr;
-} result;
-double jsval_to_number(jsval val) {
+#define result_ok(val) ((result){.isErr = 0, .value = val})
+
+/// Return value converted to double number or error if exception happened.
+result jsval_to_number(void *rt, jsval val) {
   if (jsval_is_int32(val)) {
-    return jsval_get_number(val);
+    return result_ok(jsval_new_f64(jsval_get_number(val)));
   }
   if (jsval_is_double(val)) {
-    return jsval_get_double(val);
+    return result_ok(jsval_new_f64(jsval_get_double(val)));
   }
   if (jsval_is_null(val)) {
-    return 0.0;
+    return result_ok(jsval_new_f64(0.0));
   }
   if (jsval_is_undef(val)) {
-    return f64_from_bits(0x7ff8000000000000);
+    return result_ok(jsval_new_nan());
   }
+  if (jsval_is_bool(val)) {
+    return result_ok((jsval_get_bool(val) ? 1.0 : 0.0));
+  }
+  return jsval_to_number_slow(rt, val);
 }
 int main() {
   jsval val = jsval_new_int32(42);

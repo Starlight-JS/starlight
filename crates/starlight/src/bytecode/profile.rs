@@ -125,7 +125,6 @@ impl ObservedResults {
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-#[repr(u32)]
 pub enum ArithProfile {
     ///- ObservedResults
     ///- ObservedType for right-hand-side

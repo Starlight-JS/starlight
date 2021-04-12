@@ -1082,6 +1082,7 @@ impl ByteCompiler {
                         || op == Opcode::OP_MUL
                         || op == Opcode::OP_REM
                         || op == Opcode::OP_SUB
+                        || op == Opcode::OP_DIV
                     {
                         &[0u32]
                     } else {

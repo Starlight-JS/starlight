@@ -4,19 +4,29 @@ use crate::prelude::*;
 
 pub struct Environment {
     pub parent: Option<GcPointer<Self>>,
+
     pub values: Vec<(JsValue, bool)>,
 }
 
 impl Environment {
     pub fn new(rt: &mut Runtime, cap: u32) -> GcPointer<Self> {
-        let mut vec = Vec::with_capacity(if cap != 0 { cap as _ } else { 4 });
+        let mut vec = Vec::with_capacity(cap as _);
         for _ in 0..cap {
             vec.push((JsValue::encode_undefined_value(), true));
         }
         rt.heap().allocate(Self {
             parent: None,
+
             values: vec,
         })
+    }
+
+    pub fn as_slice(&self) -> &[(JsValue, bool)] {
+        &self.values
+    }
+
+    pub fn as_slice_mut(&mut self) -> &mut [(JsValue, bool)] {
+        &mut self.values
     }
 }
 
@@ -38,6 +48,7 @@ unsafe impl Trace for Environment {
 impl Deserializable for Environment {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         let parent = Option::<GcPointer<Self>>::deserialize_inplace(deser);
+
         let values = Vec::<(JsValue, bool)>::deserialize_inplace(deser);
         Self { values, parent }
     }

@@ -49,7 +49,7 @@ impl Runtime {
                 .put(self, *p, args_.at(i), false)
                 .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
             */
-            nscope.values[i as usize].0 = args_.at(i);
+            nscope.as_slice_mut()[i as usize].0 = args_.at(i);
             i += 1;
         }
 
@@ -66,7 +66,7 @@ impl Runtime {
                 )?;
                 ai += 1;
             }
-            nscope.values[rest as usize].0 = JsValue::new(args_arr);
+            nscope.as_slice_mut()[rest as usize].0 = JsValue::new(args_arr);
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
 
@@ -91,7 +91,7 @@ impl Runtime {
                 JsValue::encode_object_value(args),
                 false,
             )?;*/
-            nscope.values[func.code.args_at as usize].0 = JsValue::new(args);
+            nscope.as_slice_mut()[func.code.args_at as usize].0 = JsValue::new(args);
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
@@ -144,7 +144,7 @@ impl Runtime {
                 .put(self, *p, args_.at(i), false)
                 .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
             */
-            nscope.values[i as usize].0 = args_.at(i);
+            nscope.as_slice_mut()[i as usize].0 = args_.at(i);
             i += 1;
         }
 
@@ -161,12 +161,12 @@ impl Runtime {
                 )?;
                 ai += 1;
             }
-            nscope.values[rest as usize].0 = JsValue::new(args_arr);
+            nscope.as_slice_mut()[rest as usize].0 = JsValue::new(args_arr);
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
 
         /*for j in 0..func.code.var_count {
-            vscope.values[j as usize + i as usize].0 = JsValue::encode_undefined_value();
+            vscope.as_slice_mut()[j as usize + i as usize].0 = JsValue::encode_undefined_value();
 
             //   vscope.put(self, *val, JsValue::encode_undefined_value(), false)?;
         }*/
@@ -191,7 +191,7 @@ impl Runtime {
                 JsValue::encode_object_value(args),
                 false,
             )?;*/
-            nscope.values[func.code.args_at as usize].0 = JsValue::new(args);
+            nscope.as_slice_mut()[func.code.args_at as usize].0 = JsValue::new(args);
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
@@ -284,62 +284,64 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
         {
             rt.perf.get_perf(opcode as u8);
         }
+        /*println!(
+            "exec block({:p}): {}: {:?}",
+            unwrap_unchecked(frame.code_block),
+            ip.sub(1).offset_from(&frame.code_block.unwrap().code[0]),
+            opcode
+        );*/
         match opcode {
-            Opcode::OP_NOP => unreachable!(
-                "{}",
-                ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
-            ),
             Opcode::OP_GE0GL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let env = unwrap_unchecked(frame.env);
                 debug_assert!(
-                    index < env.values.len() as u32,
+                    index < env.as_slice().len() as u32,
                     "invalid var index '{}' at pc: {}",
                     index,
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
-                frame.push(env.values.get_unchecked(index as usize).0);
+                frame.push(env.as_slice().get_unchecked(index as usize).0);
             }
             Opcode::OP_GE0SL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = unwrap_unchecked(frame.env);
-                debug_assert!(index < env.values.len() as u32);
+                debug_assert!(index < env.as_slice_mut().len() as u32);
                 let val = frame.pop();
-                if unlikely(!env.values[index as usize].1) {
+                if unlikely(!env.as_slice_mut()[index as usize].1) {
                     return Err(JsValue::new(
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
-                env.values.get_unchecked_mut(index as usize).0 = val;
+                env.as_slice_mut().get_unchecked_mut(index as usize).0 = val;
             }
             Opcode::OP_GET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let env = frame.pop().get_object().downcast_unchecked::<Environment>();
                 debug_assert!(
-                    index < env.values.len() as u32,
+                    index < env.as_slice().len() as u32,
                     "invalid var index '{}' at pc: {}",
                     index,
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
-                frame.push(env.values.get_unchecked(index as usize).0);
+                frame.push(env.as_slice().get_unchecked(index as usize).0);
             }
             Opcode::OP_SET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = frame.pop().get_object().downcast_unchecked::<Environment>();
-                debug_assert!(index < env.values.len() as u32);
+                debug_assert!(index < env.as_slice_mut().len() as u32);
                 let val = frame.pop();
-                if unlikely(!env.values[index as usize].1) {
+                if unlikely(!env.as_slice_mut()[index as usize].1) {
                     return Err(JsValue::new(
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
-                env.values.get_unchecked_mut(index as usize).0 = val;
+                env.as_slice_mut().get_unchecked_mut(index as usize).0 = val;
             }
             Opcode::OP_GET_ENV => {
                 let mut depth = ip.cast::<u32>().read_unaligned();
@@ -482,7 +484,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
             Opcode::OP_SUB => {
                 let profile = &mut *ip.cast::<ArithProfile>();
-                ip = ip.add(4);
+
+                ip = ip.offset(4);
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
@@ -1104,15 +1107,15 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let mut env = unwrap_unchecked(frame.env);
                 let val = frame.pop();
-                env.values[ix as usize] = (val, false);
+                env.as_slice_mut()[ix as usize] = (val, false);
             }
             Opcode::OP_DECL_LET => {
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = unwrap_unchecked(frame.env);
                 let val = frame.pop();
-                env.values[ix as usize] = (val, true);
-                //   println!("decl_let {}<-{}", env.values.len() - 1, val.to_string(rt)?);
+                env.as_slice_mut()[ix as usize] = (val, true);
+                //   println!("decl_let {}<-{}", env.as_slice_mut().len() - 1, val.to_string(rt)?);
             }
 
             Opcode::OP_DELETE_BY_ID => {

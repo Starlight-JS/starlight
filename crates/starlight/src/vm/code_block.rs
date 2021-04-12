@@ -191,18 +191,23 @@ impl CodeBlock {
                         writeln!(output, "ret")?;
                     }
                     Opcode::OP_ADD => {
+                        pc = pc.add(4);
                         writeln!(output, "add")?;
                     }
                     Opcode::OP_SUB => {
+                        pc = pc.add(4);
                         writeln!(output, "sub")?;
                     }
                     Opcode::OP_DIV => {
+                        pc = pc.add(4);
                         writeln!(output, "div")?;
                     }
                     Opcode::OP_MUL => {
+                        pc = pc.add(4);
                         writeln!(output, "mul")?;
                     }
                     Opcode::OP_REM => {
+                        pc = pc.add(4);
                         writeln!(output, "rem")?;
                     }
                     Opcode::OP_SHR => {

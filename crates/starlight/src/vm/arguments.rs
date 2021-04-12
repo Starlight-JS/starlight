@@ -144,7 +144,8 @@ impl JsArguments {
                                         desc.value(),
                                         throwable,
                                     )?;*/
-                                    arg.env.values[mapped.get_index() as usize].0 = desc.value();
+                                    arg.env.as_slice_mut()[mapped.get_index() as usize].0 =
+                                        desc.value();
                                 }
 
                                 if !data.is_writable_absent() && !data.is_writable() {
@@ -173,7 +174,7 @@ impl JsArguments {
         if arg.mapping.len() > index as usize {
             let mapped = arg.mapping[index as usize];
             if mapped != DUMMY_SYMBOL {
-                let val = arg.env.values[mapped.get_index() as usize].0;
+                let val = arg.env.as_slice()[mapped.get_index() as usize].0;
                 let attrs = slot.attributes();
                 slot.set(val, attrs);
                 return true;

@@ -1,20 +1,188 @@
+use crate::{prelude::*, vm::code_block::CodeBlock, vm::value::*};
+use libmir_sys::*;
+use once_cell::sync::Lazy;
 use std::{
+    any::TypeId,
+    cell::RefCell,
+    fmt::Write,
+    mem::transmute,
     mem::MaybeUninit,
+    ops::Try,
     ptr::{null, null_mut},
 };
 
-use libmir_sys::*;
+#[repr(C)]
+pub struct JITResult {
+    pub value: JsValue,
+    pub is_err: u8,
+}
+
+impl std::ops::Try for JITResult {
+    type Error = JsValue;
+    type Ok = JsValue;
+    fn from_error(v: Self::Error) -> Self {
+        Self {
+            value: v,
+            is_err: 1,
+        }
+    }
+    fn from_ok(v: Self::Ok) -> Self {
+        Self {
+            value: v,
+            is_err: 0,
+        }
+    }
+
+    fn into_result(self) -> Result<Self::Ok, Self::Error> {
+        if self.is_err == 0 {
+            Ok(self.value)
+        } else {
+            Err(self.value)
+        }
+    }
+}
+
+impl Into<Result<JsValue, JsValue>> for JITResult {
+    fn into(self) -> Result<JsValue, JsValue> {
+        self.into_result()
+    }
+}
+impl Into<JITResult> for Result<JsValue, JsValue> {
+    fn into(self) -> JITResult {
+        match self {
+            Ok(x) => JITResult::from_ok(x),
+            Err(x) => JITResult::from_error(x),
+        }
+    }
+}
+
+extern "C" fn jsval_to_num_slow(rt: &mut Runtime, val: JsValue) -> JITResult {
+    val.to_number(rt)
+        .map(|x| JsValue::encode_f64_value(x))
+        .into()
+}
+extern "C" fn op_add_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let lhs = lhs.to_primitive(rt, JsHint::None)?;
+    let rhs = rhs.to_primitive(rt, JsHint::None)?;
+    if lhs.is_int32() && rhs.is_int32() {
+        if let Some(res) = lhs.get_int32().checked_add(rhs.get_int32()) {
+            return Ok(JsValue::encode_int32(res)).into();
+        }
+    }
+    if lhs.is_number() && rhs.is_number() {
+        return Ok(JsValue::encode_f64_value(
+            lhs.get_number() + rhs.get_number(),
+        ))
+        .into();
+    }
+    if lhs.is_jsstring() || rhs.is_jsstring() {
+        #[inline(never)]
+        fn concat(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> Result<JsValue, JsValue> {
+            let lhs = lhs.to_string(rt)?;
+            let rhs = rhs.to_string(rt)?;
+            let string = format!("{}{}", lhs, rhs);
+            Ok(JsValue::encode_object_value(JsString::new(rt, string)))
+        }
+
+        let result = concat(rt, lhs, rhs)?;
+        return Ok(result).into();
+    } else {
+        let lhs = lhs.to_number(rt)?;
+        let rhs = rhs.to_number(rt)?;
+        return Ok(JsValue::new(lhs + rhs)).into();
+    }
+}
+
+pub extern "C" fn op_sub_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let lhs = lhs.to_number(rt)?;
+    let rhs = rhs.to_number(rt)?;
+    Ok(JsValue::new(lhs - rhs)).into()
+}
+
+pub extern "C" fn op_div_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let lhs = lhs.to_number(rt)?;
+    let rhs = rhs.to_number(rt)?;
+    Ok(JsValue::new(lhs / rhs)).into()
+}
+
+pub extern "C" fn op_mul_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let lhs = lhs.to_number(rt)?;
+    let rhs = rhs.to_number(rt)?;
+    Ok(JsValue::new(lhs * rhs)).into()
+}
+
+pub extern "C" fn op_rem_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let lhs = lhs.to_number(rt)?;
+    let rhs = rhs.to_number(rt)?;
+    Ok(JsValue::new(lhs % rhs)).into()
+}
+
+pub extern "C" fn op_shl_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let left = lhs.to_int32(rt)?;
+    let right = rhs.to_uint32(rt)?;
+    Ok(JsValue::new((left << (right & 0x1f)) as f64)).into()
+}
+
+pub extern "C" fn op_shr_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let left = lhs.to_int32(rt)?;
+    let right = rhs.to_uint32(rt)?;
+    Ok(JsValue::new((left >> (right & 0x1f)) as f64)).into()
+}
+
+pub extern "C" fn op_ushr_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    let left = lhs.to_uint32(rt)?;
+    let right = rhs.to_uint32(rt)?;
+    Ok(JsValue::new((left >> (right & 0x1f)) as f64)).into()
+}
+
+pub extern "C" fn op_less_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    Ok(JsValue::new(lhs.compare(rhs, true, rt)? == CMP_TRUE)).into()
+}
+pub extern "C" fn op_lesseq_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    Ok(JsValue::new(rhs.compare(lhs, false, rt)? == CMP_FALSE)).into()
+}
+
+pub extern "C" fn op_greater_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    Ok(JsValue::new(rhs.compare(lhs, false, rt)? == CMP_TRUE)).into()
+}
+pub extern "C" fn op_greatereq_slow(rt: &mut Runtime, lhs: JsValue, rhs: JsValue) -> JITResult {
+    Ok(JsValue::new(lhs.compare(rhs, true, rt)? == CMP_FALSE)).into()
+}
+
+/// Used by import resolver when compiling C module in C2MIR.
+pub static STARLIGHT_SYMBOLS: Lazy<&'static [(&'static str, usize)]> = Lazy::new(|| {
+    Box::leak(Box::new([
+        ("get_jscell_type_id", get_jscell_type_id as usize),
+        ("jsval_to_number_slow", jsval_to_num_slow as usize),
+        ("op_add_slow", op_add_slow as usize),
+        ("op_sub_slow", op_sub_slow as _),
+        ("op_div_slow", op_div_slow as _),
+        ("op_mul_slow", op_mul_slow as _),
+        ("op_rem_slow", op_rem_slow as _),
+        ("op_shl_slow", op_shl_slow as _),
+        ("op_shr_slow", op_shr_slow as _),
+        ("op_ushr_slow", op_ushr_slow as _),
+        ("op_less_slow", op_less_slow as _),
+        ("op_lesseq_slow", op_lesseq_slow as _),
+        ("op_greater_slow", op_greater_slow as _),
+        ("op_greatereq_slow", op_greatereq_slow as _),
+    ]))
+});
 
 pub struct JITState {
     pub(crate) ctx: MIR_context_t,
+    pub(crate) tmp_var_id: u32,
 }
 
 impl JITState {
     pub fn new() -> Self {
         let ctx = unsafe { MIR_init() };
-        Self { ctx }
+        Self { ctx, tmp_var_id: 0 }
     }
-
+    pub fn new_temp(&mut self) -> u32 {
+        self.tmp_var_id += 1;
+        self.tmp_var_id - 1
+    }
     pub fn prepare(&mut self, opt_level: i32) {
         unsafe {
             c2mir_init(self.ctx);
@@ -38,6 +206,8 @@ impl JITState {
             c2mir_finish(self.ctx);
         }
     }
+
+    fn compile_internal(&mut self, code_block: GcPointer<CodeBlock>) {}
 }
 
 unsafe fn mir_find_function(module: MIR_module_t, name: *const i8) -> MIR_item_t {
@@ -142,3 +312,31 @@ unsafe fn mir_compile_c_module(
 }
 
 pub const STARLIGHT_JIT_RUNTIME: &'static str = include_str!("jit/rt.c");
+/// Minimal string size that is preallocated for JIT compiler. When JIT finishes
+/// this string will be saved in thread-local state and its capacity will be shrinked
+/// down to JIT_STRING_CAPACITY again.
+pub const JIT_STRING_CAPACITY: usize = 8 * 1024;
+
+pub static JIT_RUNTIME: once_cell::sync::Lazy<String> = once_cell::sync::Lazy::new(|| unsafe {
+    let obj_type_id: u64 = transmute(TypeId::of::<JsObject>());
+    let str_type_id: u64 = transmute(TypeId::of::<JsString>());
+    let mut source = String::with_capacity(JIT_STRING_CAPACITY + 32);
+    writeln!(
+        &mut source,
+        "#define JSOBJECT_TYPEID {}\n #define JSSTRING_TYPEID {}\n{}",
+        obj_type_id, str_type_id, STARLIGHT_JIT_RUNTIME
+    )
+    .unwrap();
+    source
+});
+
+thread_local! {
+    static JIT_STORAGE: RefCell<Option<String>> = RefCell::new(Some(String::with_capacity(8*1024)));
+}
+
+pub(super) fn jit_take_storage() -> String {
+    JIT_STORAGE.with(|x| x.borrow_mut().take().unwrap())
+}
+pub(super) fn jit_put_storage(storage: String) {
+    JIT_STORAGE.with(|x| *x.borrow_mut() = Some(storage));
+}
