@@ -568,7 +568,7 @@ pub unsafe fn record(
 
                 root!(
                     args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, &mut args)
+                    Arguments::new(rt, this, &mut args)
                 );
                 frame.ip = ip;
                 frame.sp = args_start;
@@ -630,7 +630,7 @@ pub unsafe fn record(
                 let object = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
                 root!(
                     args_ = gcstack,
-                    Arguments::from_array_storage(rt, JsValue::new(object), &mut args)
+                    Arguments::new(rt, JsValue::new(object), &mut args)
                 );
                 args_.ctor_call = true;
                 frame.ip = ip;

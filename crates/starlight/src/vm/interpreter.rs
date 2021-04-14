@@ -426,6 +426,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 frame = &mut *prev.prev;
                 ip = frame.ip;
+
                 frame.push(value);
             }
             Opcode::OP_ADD => {
@@ -802,12 +803,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 root!(funcc = gcstack, *&*func_object);
                 let func = func_object.as_function_mut();
 
-                root!(
-                    args_ = gcstack,
-                    Arguments::from_array_storage(rt, this, &mut args)
-                );
+                root!(args_ = gcstack, Arguments::new(this, &mut args));
+
                 frame.ip = ip;
+                stack.cursor = frame.sp;
                 frame.sp = args_start;
+
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
@@ -817,7 +818,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
-                    if cframe.is_none() {
+                    if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
                             rt, msg, None,
@@ -866,8 +867,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let object = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
                 root!(
                     args_ = gcstack,
-                    Arguments::from_array_storage(rt, JsValue::new(object), &mut args)
+                    Arguments::new(JsValue::new(object), &mut args)
                 );
+
                 args_.ctor_call = true;
                 frame.ip = ip;
                 frame.sp = args_start;
@@ -1216,6 +1218,17 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 let str = JsString::new(rt, val.type_of());
                 frame.push(JsValue::new(str));
+            }
+            Opcode::OP_PUSH_ENV => {
+                let count = ip.cast::<u32>().read_unaligned();
+                ip = ip.add(4);
+                let mut env = Environment::new(rt, count);
+                env.parent = frame.env;
+                frame.env = Some(env);
+            }
+            Opcode::OP_POP_ENV => {
+                let env = unwrap_unchecked(frame.env);
+                frame.env = env.parent;
             }
             x => panic!("{:?}", x),
         }

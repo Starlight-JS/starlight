@@ -8,21 +8,37 @@ use crate::{
     gc::snapshot::deserializer::Deserializable,
 };
 use std::fmt::Write;
+
+/// A type representing single JS function bytecode.
 //#[derive(GcTrace)]
 pub struct CodeBlock {
+    /// Function name
     pub name: Symbol,
+    /// Variable count
     pub var_count: u32,
+    /// Parameters count
     pub param_count: u32,
+    /// Rest parameter position in argument list
     pub rest_at: Option<u32>,
+    /// Names
     pub names: Vec<Symbol>,
+    /// Bytecode
     pub code: Vec<u8>,
+    /// Is this code block a top level?
     pub top_level: bool,
+    /// Functions declared inside this code block.
     pub codes: Vec<GcPointer<Self>>,
+    /// Constant literals
     pub literals: Vec<JsValue>,
+    /// Feedback vector that is used for inline caching
     pub feedback: Vec<TypeFeedBack>,
+    /// Is this code block strict?
     pub strict: bool,
+    /// Does code internally use `arguments` variable?
     pub use_arguments: bool,
+    /// File name where JS code is located.
     pub file_name: String,
+    /// `arguments` location in variable array.
     pub args_at: u32,
 }
 
@@ -35,6 +51,7 @@ unsafe impl Trace for CodeBlock {
 }
 
 impl CodeBlock {
+    /// Print bytecode to `output`.
     pub fn display_to<T: Write>(&self, output: &mut T) -> std::fmt::Result {
         unsafe {
             writeln!(output, "is strict?={}", self.strict)?;
@@ -301,7 +318,7 @@ impl CodeBlock {
                     }
 
                     Opcode::OP_PUSH_ENV => {
-                        // pc = pc.add(4);
+                        pc = pc.add(4);
                         writeln!(output, "push_scope")?;
                     }
                     /* Opcode::OP_SET_GETTER_SETTER => {
@@ -385,6 +402,7 @@ impl CodeBlock {
             Ok(())
         }
     }
+    /// Create new empty code block.
     pub fn new(rt: &mut Runtime, name: Symbol, strict: bool) -> GcPointer<Self> {
         let this = Self {
             name,

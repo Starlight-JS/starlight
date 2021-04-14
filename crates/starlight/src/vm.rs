@@ -147,6 +147,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Collect stacktrace.
     pub fn stacktrace(&mut self) -> String {
         let mut result = String::new();
         let mut frame = self.stack.current;
@@ -154,7 +155,7 @@ impl Runtime {
             while !frame.is_null() {
                 if let Some(cb) = (*frame).code_block {
                     let name = self.description(cb.name);
-                    result.push_str(&format!("  at '{}'\n", name));
+                    result.push_str(&format!("  at '{}':'{}'\n", cb.file_name, name));
                 } else {
                     result.push_str(&format!(" at '<native code>\n"));
                 }
@@ -194,8 +195,7 @@ impl Runtime {
         };
         let mut vmref = RuntimeRef(self);
 
-        let mut code = ByteCompiler::compile_script(&mut *vmref, &script);
-        code.file_name = path.to_owned();
+        let mut code = ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned());
         code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
 
@@ -243,9 +243,13 @@ impl Runtime {
                 }
             };
             let mut vmref = RuntimeRef(self);
-            let mut code = ByteCompiler::compile_script(&mut *vmref, &script);
+            let mut code = ByteCompiler::compile_script(
+                &mut *vmref,
+                &script,
+                path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+            );
             code.strict = code.strict || force_strict;
-            code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
+            // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
             let stack = self.shadowstack();
 
@@ -361,7 +365,7 @@ impl Runtime {
         this.gc.collect_if_necessary();
         this
     }
-
+    /// Get stacktrace. If there was no error then returned string is empty.
     pub fn take_stacktrace(&mut self) -> String {
         std::mem::replace(&mut self.stacktrace, String::new())
     }
@@ -405,6 +409,7 @@ impl Runtime {
         Self::with_heap(default_heap(gc_params), options, external_references)
     }
 
+    /// Obtain global object reference.
     pub fn global_object(&self) -> GcPointer<JsObject> {
         unwrap_unchecked(self.global_object.clone())
     }

@@ -25,6 +25,7 @@ pub struct Arguments<'a> {
 }
 
 impl<'a> Arguments<'a> {
+    #[deprecated = "Use [Arguments::new](Arguments::new) instead."]
     pub fn from_array_storage(_rt: &mut Runtime, this: JsValue, values: &'a mut [JsValue]) -> Self {
         Self {
             this,
@@ -32,24 +33,11 @@ impl<'a> Arguments<'a> {
             ctor_call: false,
         }
     }
+    /// Return count of passed arguments.
     pub fn size(&self) -> usize {
         self.values.len() as _
     }
-    /* pub fn new(vm: &mut Runtime, this: JsValue, size: usize) -> Self {
-        let stack = vm.shadowstack();
-        crate::root!(
-            arr = stack,
-            ArrayStorage::with_size(vm, size as _, size as _)
-        );
-        for i in 0..size {
-            *arr.at_mut(i as _) = JsValue::encode_undefined_value();
-        }
-        Self {
-            this,
-            values: *arr,
-            ctor_call: false,
-        }
-    }*/
+    /// Create new argumens instance.
     pub fn new(this: JsValue, args: &'a mut [JsValue]) -> Self {
         Self {
             this,
@@ -57,6 +45,8 @@ impl<'a> Arguments<'a> {
             ctor_call: false,
         }
     }
+    /// Get mutable reference to argument at `index`. If there's no such argument then
+    /// this function panics with `"Out of bounds arguments"` message.
     pub fn at_mut(&mut self, x: usize) -> &mut JsValue {
         if x < self.size() {
             &mut self.values[x]
@@ -64,9 +54,10 @@ impl<'a> Arguments<'a> {
             panic!("Out of bounds arguments");
         }
     }
-    pub fn at(&self, x: usize) -> JsValue {
-        if x < self.size() {
-            self.values[x]
+    /// Get argument at `index`. If there's no such argument undefined is returned.
+    pub fn at(&self, index: usize) -> JsValue {
+        if index < self.size() {
+            self.values[index]
         } else {
             JsValue::encode_undefined_value()
         }

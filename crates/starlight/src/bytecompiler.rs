@@ -32,6 +32,19 @@ impl Scope {
                 kind: VariableKind::Var,
                 name,
                 index: ix,
+                dont_free: false,
+            },
+        );
+        ix
+    }
+    pub fn add_const_var(&mut self, name: Symbol, ix: u16) -> u16 {
+        self.variables.insert(
+            name,
+            Variable {
+                kind: VariableKind::Var,
+                name,
+                index: ix,
+                dont_free: true,
             },
         );
         ix
@@ -42,6 +55,7 @@ pub struct Variable {
     pub name: Symbol,
     pub index: u16,
     pub kind: VariableKind,
+    pub dont_free: bool,
 }
 
 pub enum VariableKind {
@@ -352,10 +366,10 @@ impl ByteCompiler {
             self.rt.perf.get_perf(crate::vm::perf::Perf::INVALID);
         }*/
     }
-    pub fn compile_script(mut vm: &mut Runtime, p: &Script) -> GcPointer<CodeBlock> {
+    pub fn compile_script(mut vm: &mut Runtime, p: &Script, fname: String) -> GcPointer<CodeBlock> {
         let name = "<script>".intern();
         let mut code = CodeBlock::new(&mut vm, name, false);
-
+        code.file_name = fname;
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
             top_level: true,
@@ -415,7 +429,8 @@ impl ByteCompiler {
 
         VisitFnDecl::visit(body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
-            let code = CodeBlock::new(&mut self.rt, name, false);
+            let mut code = CodeBlock::new(&mut self.rt, name, false);
+            code.file_name = self.code.file_name.clone();
             let ix = self.code.codes.len();
             self.code.codes.push(code);
             self.fmap.insert(name, ix as _);
@@ -456,7 +471,9 @@ impl ByteCompiler {
         let scope = self.scope.clone();
         self.scope = scope.borrow().parent.clone().expect("No scopes left");
         for var in scope.borrow().variables.iter() {
-            self.variable_freelist.push(var.1.index as u32);
+            if !var.1.dont_free {
+                self.variable_freelist.push(var.1.index as u32);
+            }
         }
     }
     pub fn push_lci(&mut self, _continue_target: u32, depth: u32) {
@@ -1188,7 +1205,7 @@ impl ByteCompiler {
                 };
                 let name = "<anonymous>".intern();
                 let mut code = CodeBlock::new(&mut self.rt, name, false);
-
+                code.file_name = self.code.file_name.clone();
                 let mut compiler = ByteCompiler {
                     lci: Vec::new(),
                     top_level: false,
@@ -1257,8 +1274,9 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             }
             Expr::Fn(fun) => {
-                //  self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                // self.emit(Opcode::OP_PUSH_ENV, &[10], false);
                 self.push_scope();
+                //self.scope.borrow_mut().depth += 1;
                 let name = fun
                     .ident
                     .as_ref()
@@ -1266,19 +1284,19 @@ impl ByteCompiler {
                     .unwrap_or_else(|| "<anonymous>".intern());
                 if name != "<anonymous>".intern() {
                     let ix = if let Some(ix) = self.variable_freelist.pop() {
-                        ix as u16
+                        ix
                     } else {
                         self.code.var_count += 1;
-                        self.code.var_count as u16 - 1
+                        self.code.var_count - 1
                     };
-                    let ix = self.scope.borrow_mut().add_var(name, ix);
+                    let ix = self.scope.borrow_mut().add_const_var(name, ix as _);
                     self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                     //self.emit(Opcode::OP_GET_ENV, &[0], false);
                     self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
                 }
                 let mut params = vec![];
                 let mut code = CodeBlock::new(&mut self.rt, name, false);
-
+                code.file_name = self.code.file_name.clone();
                 let mut compiler = ByteCompiler {
                     lci: Vec::new(),
                     top_level: false,

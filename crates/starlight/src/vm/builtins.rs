@@ -50,10 +50,7 @@ pub unsafe fn reflect_apply(
     root!(funcc = gcstack, func.get_jsobject());
     let func = func_object.as_function_mut();
 
-    root!(
-        args_ = gcstack,
-        Arguments::from_array_storage(rt, this, &mut argsv)
-    );
+    root!(args_ = gcstack, Arguments::new(this, &mut argsv));
     let result = if effect == 0 {
         func.call(rt, &mut args_, JsValue::new(*funcc))?
     } else {
