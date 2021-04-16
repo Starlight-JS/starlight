@@ -305,7 +305,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.push(env.as_slice().get(index as usize).copied().unwrap().0);
             }
             Opcode::OP_GE0SL => {
-                let pip = ip.sub(1);
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = frame.env;
@@ -813,7 +812,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 stack.cursor = frame.sp;
                 frame.sp = args_start;
 
-                if false && func.is_vm() {
+                if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
@@ -836,6 +835,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
+                    (*cframe).limit = args_start;
                     (*cframe).sp = args_start.add(argc as _);
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
@@ -880,7 +880,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 frame.ip = ip;
                 stack.cursor = frame.sp;
                 frame.sp = args_start;
-                if false && func.is_vm() {
+                if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
@@ -902,6 +902,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     (*cframe).this = this;
                     //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
+                    (*cframe).limit = args_start;
                     (*cframe).sp = args_start.add(argc as _);
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
