@@ -17,6 +17,14 @@ impl Stack {
     pub fn new() -> Self {
         let mut map =
             MmapMut::map_anon(STACK_SIZE * 8).expect("Failed to allocate interpreter stack memory");
+        unsafe {
+            let mut scan = map.as_mut_ptr().cast::<JsValue>();
+            let end = scan.add(STACK_SIZE);
+            while scan < end {
+                scan.write(JsValue::encode_undefined_value());
+                scan = scan.add(1);
+            }
+        }
         Self {
             start: map.as_mut_ptr().cast(),
             end: unsafe { map.as_mut_ptr().cast::<JsValue>().add(STACK_SIZE) },
@@ -25,7 +33,12 @@ impl Stack {
             map,
         }
     }
-    pub fn new_frame(&mut self, iloc_count: u32, _callee: JsValue) -> Option<*mut CallFrame> {
+    pub fn new_frame(
+        &mut self,
+        iloc_count: u32,
+        _callee: JsValue,
+        env: GcPointer<Environment>,
+    ) -> Option<*mut CallFrame> {
         unsafe {
             if self.cursor.add(iloc_count as _) >= self.end {
                 return None;
@@ -36,7 +49,7 @@ impl Stack {
                 ctor: false,
                 prev: self.current,
                 try_stack: vec![],
-                env: None,
+                env,
                 this: JsValue::encode_empty_value(),
                 sp: self.cursor.add(iloc_count as _),
                 limit: self.cursor.add(iloc_count as _),

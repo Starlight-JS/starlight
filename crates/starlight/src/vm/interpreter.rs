@@ -29,7 +29,7 @@ impl Runtime {
     ) -> Result<JsValue, JsValue> {
         let stack = self.shadowstack();
         root!(scope = stack, unsafe {
-            env.get_object().downcast_unchecked::<Environment>()
+            env.get_object().downcast::<Environment>().unwrap()
         });
 
         root!(
@@ -124,7 +124,7 @@ impl Runtime {
     ) -> Result<(JsValue, GcPointer<Environment>), JsValue> {
         let stack = self.shadowstack();
         root!(scope = stack, unsafe {
-            env.get_object().downcast_unchecked::<Environment>()
+            env.get_object().downcast::<Environment>().unwrap()
         });
 
         root!(
@@ -227,7 +227,7 @@ unsafe fn eval_internal(
     scope: GcPointer<Environment>,
     callee: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let frame = rt.stack.new_frame(0, callee);
+    let frame = rt.stack.new_frame(0, callee, scope);
     if frame.is_none() {
         let msg = JsString::new(rt, "stack overflow");
         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -237,7 +237,7 @@ unsafe fn eval_internal(
     let mut frame = unwrap_unchecked(frame);
     (*frame).code_block = Some(code);
     (*frame).this = this;
-    (*frame).env = Some(scope);
+    (*frame).env = scope;
     (*frame).ctor = ctor;
     (*frame).exit_on_return = true;
     (*frame).ip = ip;
@@ -250,7 +250,7 @@ unsafe fn eval_internal(
                 rt.stacktrace = rt.stacktrace();
                 loop {
                     if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
-                        (*frame).env = env;
+                        (*frame).env = env.unwrap();
                         (*frame).ip = ip;
                         (*frame).sp = sp;
                         (*frame).push(e);
@@ -294,7 +294,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_GE0GL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let env = unwrap_unchecked(frame.env);
+                let env = frame.env;
                 debug_assert!(
                     index < env.as_slice().len() as u32,
                     "invalid var index '{}' at pc: {}",
@@ -302,12 +302,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
-                frame.push(env.as_slice().get_unchecked(index as usize).0);
+                frame.push(env.as_slice().get(index as usize).copied().unwrap().0);
             }
             Opcode::OP_GE0SL => {
+                let pip = ip.sub(1);
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = unwrap_unchecked(frame.env);
+                let mut env = frame.env;
                 debug_assert!(index < env.as_slice_mut().len() as u32);
                 let val = frame.pop();
                 if unlikely(!env.as_slice_mut()[index as usize].1) {
@@ -315,12 +316,19 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
-                env.as_slice_mut().get_unchecked_mut(index as usize).0 = val;
+                if val.is_object() && val.get_pointer() as usize == 0xffffffffffffusize {
+                    panic!(
+                        "Panic at ip: {} (code block {:p}), invalid object",
+                        pip.offset_from(&unwrap_unchecked(frame.code_block).code[0]),
+                        unwrap_unchecked(frame.code_block)
+                    );
+                }
+                env.as_slice_mut().get_mut(index as usize).unwrap().0 = val;
             }
             Opcode::OP_GET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let env = frame.pop().get_object().downcast_unchecked::<Environment>();
+                let env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 debug_assert!(
                     index < env.as_slice().len() as u32,
                     "invalid var index '{}' at pc: {}",
@@ -328,12 +336,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
-                frame.push(env.as_slice().get_unchecked(index as usize).0);
+                frame.push(env.as_slice().get(index as usize).unwrap().0);
             }
             Opcode::OP_SET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = frame.pop().get_object().downcast_unchecked::<Environment>();
+                let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 debug_assert!(index < env.as_slice_mut().len() as u32);
                 let val = frame.pop();
                 if unlikely(!env.as_slice_mut()[index as usize].1) {
@@ -341,12 +349,15 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
-                env.as_slice_mut().get_unchecked_mut(index as usize).0 = val;
+                if val.is_object() && val.get_pointer() as usize == 0xffffffffffffusize {
+                    panic!("Panic at ip: {:p}, invalid object", ip);
+                }
+                env.as_slice_mut().get_mut(index as usize).unwrap().0 = val;
             }
             Opcode::OP_GET_ENV => {
                 let mut depth = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = unwrap_unchecked(frame.env);
+                let mut env = frame.env;
 
                 while depth != 0 {
                     env = unwrap_unchecked(env.parent);
@@ -490,6 +501,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 let lhs = frame.pop();
                 let rhs = frame.pop();
+
                 profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_int32() && rhs.is_int32()) {
                     let result = lhs.get_int32().checked_sub(rhs.get_int32());
@@ -809,7 +821,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 stack.cursor = frame.sp;
                 frame.sp = args_start;
 
-                if func.is_vm() {
+                if false && func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
@@ -817,7 +829,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     if opcode == Opcode::OP_TAILCALL {
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
                     }
-                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
+                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -829,9 +841,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    (*cframe).env = Some(scope);
+
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
+                    (*cframe).sp = args_start.add(argc as _);
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
 
@@ -871,10 +884,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 );
 
                 args_.ctor_call = true;
-                frame.ip = ip;
-                frame.sp = args_start;
 
-                if func.is_vm() {
+                frame.ip = ip;
+                stack.cursor = frame.sp;
+                frame.sp = args_start;
+                if false && func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
@@ -882,7 +896,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     if opcode == Opcode::OP_TAILNEW {
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
-                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc));
+                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if cframe.is_none() {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -894,8 +908,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    (*cframe).env = Some(scope);
+                    //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
+                    (*cframe).sp = args_start.add(argc as _);
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
@@ -1075,7 +1090,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 frame
                     .try_stack
-                    .push((env, ip.offset(offset as isize), frame.sp));
+                    .push((Some(env), ip.offset(offset as isize), frame.sp));
             }
             Opcode::OP_POP_CATCH => {
                 frame.try_stack.pop();
@@ -1107,14 +1122,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_DECL_CONST => {
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = unwrap_unchecked(frame.env);
+                let mut env = frame.env;
                 let val = frame.pop();
                 env.as_slice_mut()[ix as usize] = (val, false);
             }
             Opcode::OP_DECL_LET => {
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let mut env = unwrap_unchecked(frame.env);
+                let mut env = frame.env;
                 let val = frame.pop();
                 env.as_slice_mut()[ix as usize] = (val, true);
                 //   println!("decl_let {}<-{}", env.as_slice_mut().len() - 1, val.to_string(rt)?);
@@ -1151,7 +1166,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let func = JsVMFunction::new(
                     rt,
                     unwrap_unchecked(frame.code_block).codes[ix as usize],
-                    unwrap_unchecked(frame.env),
+                    frame.env,
                 );
 
                 frame.push(JsValue::encode_object_value(func));
@@ -1223,12 +1238,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let count = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = Environment::new(rt, count);
-                env.parent = frame.env;
-                frame.env = Some(env);
+                env.parent = Some(frame.env);
+                frame.env = env;
             }
             Opcode::OP_POP_ENV => {
-                let env = unwrap_unchecked(frame.env);
-                frame.env = env.parent;
+                let env = frame.env;
+                frame.env = env.parent.unwrap();
             }
             x => panic!("{:?}", x),
         }

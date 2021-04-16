@@ -1,8 +1,9 @@
 use crate::gc::cell::*;
 use cfg_if::cfg_if;
 use std::{
+    convert::TryFrom,
     hint::unreachable_unchecked,
-    intrinsics::{likely, unlikely},
+    intrinsics::{likely, transmute, unlikely},
 };
 
 use super::{
@@ -113,7 +114,8 @@ impl JsValue {
     }
     #[inline]
     pub fn encode_int32(x: i32) -> Self {
-        Self::internal_new(x as _, INT32_TAG)
+        //Self::encode_native_u32(x as _)
+        Self::internal_new(x as u32 as u64, INT32_TAG)
     }
     #[inline]
     pub const fn encode_undefined_value() -> Self {
@@ -249,6 +251,7 @@ impl JsValue {
         unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>(self.0 & Self::DATA_MASK) }.clone()
     }
 
+    /// Get number value from JS value.If value is int32 value then it is casted to f64.
     #[inline]
     pub fn get_number(&self) -> f64 {
         if self.is_int32() {
@@ -336,7 +339,7 @@ impl JsValue {
     }
     #[inline]
     pub fn encode_int32(x: i32) -> Self {
-        Self::internal_new(x as _, INT32_TAG)
+        Self::internal_new(x as u32 as u64, INT32_TAG)
     }
     #[inline]
     pub fn encode_undefined_value() -> Self {
@@ -394,7 +397,7 @@ impl JsValue {
 
     #[inline]
     pub fn is_int32(&self) -> bool {
-        self.get_tag() == INT32_TAG
+        self.is_native_value()
     }
 
     #[inline]
@@ -496,7 +499,7 @@ impl JsValue {
 
 unsafe impl Trace for JsValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
-        if self.is_object() && !self.is_empty() {
+        if self.is_object() && !self.is_empty() && !self.is_int32() {
             *self = JsValue::encode_object_value(visitor.visit(&mut self.get_object()));
         }
     }
@@ -1087,6 +1090,49 @@ impl From<Undefined> for JsValue {
     }
 }
 
+impl TryFrom<JsValue> for i32 {
+    type Error = &'static str;
+    fn try_from(value: JsValue) -> Result<Self, Self::Error> {
+        if value.is_number() {
+            Ok(value.get_int32())
+        } else if value.is_bool() {
+            Ok(value.get_bool() as _)
+        } else if value.is_null() {
+            Ok(0)
+        } else if value.is_jsstring() {
+            let string = value.get_jsstring();
+            string
+                .as_str()
+                .parse()
+                .map_err(|_| "failed to parse JS string")
+        } else {
+            Err("Can not convert JS value to i32")
+        }
+    }
+}
+
+impl TryFrom<JsValue> for f64 {
+    type Error = &'static str;
+    fn try_from(value: JsValue) -> Result<Self, Self::Error> {
+        if value.is_number() {
+            Ok(value.get_number())
+        } else if value.is_null() {
+            Ok(0.0)
+        } else if value.is_bool() {
+            Ok(value.get_bool() as i32 as f64)
+        } else if value.is_undefined() {
+            Ok(f64::NAN)
+        } else if value.is_jsstring() {
+            let string = value.get_jsstring();
+            string
+                .as_str()
+                .parse()
+                .map_err(|_| "failed to parse JS string")
+        } else {
+            Err("Can not convert JS value to i32")
+        }
+    }
+}
 impl JsValue {
     pub fn new<T: Into<Self>>(x: T) -> Self {
         T::into(x)

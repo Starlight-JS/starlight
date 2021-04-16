@@ -2,6 +2,8 @@ use starlight::gc::formatted_size;
 use starlight::prelude::*;
 use std::path::{Path, PathBuf};
 use structopt::*;
+
+#[cfg(not(debug_assertions))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

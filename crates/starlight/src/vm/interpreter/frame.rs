@@ -16,7 +16,7 @@ pub struct CallFrame {
     pub this: JsValue,
     pub ctor: bool,
     pub exit_on_return: bool,
-    pub env: Option<GcPointer<Environment>>,
+    pub env: GcPointer<Environment>,
     /// (Environment,Instruction) stack
     pub try_stack: Vec<(Option<GcPointer<Environment>>, *mut u8, *mut JsValue)>,
     pub locals_start: *mut JsValue,
