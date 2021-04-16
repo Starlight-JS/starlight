@@ -316,13 +316,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
-                if val.is_object() && val.get_pointer() as usize == 0xffffffffffffusize {
-                    panic!(
-                        "Panic at ip: {} (code block {:p}), invalid object",
-                        pip.offset_from(&unwrap_unchecked(frame.code_block).code[0]),
-                        unwrap_unchecked(frame.code_block)
-                    );
-                }
+
                 env.as_slice_mut().get_mut(index as usize).unwrap().0 = val;
             }
             Opcode::OP_GET_LOCAL => {
@@ -349,9 +343,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
-                if val.is_object() && val.get_pointer() as usize == 0xffffffffffffusize {
-                    panic!("Panic at ip: {:p}, invalid object", ip);
-                }
+
                 env.as_slice_mut().get_mut(index as usize).unwrap().0 = val;
             }
             Opcode::OP_GET_ENV => {
@@ -1245,7 +1237,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let env = frame.env;
                 frame.env = env.parent.unwrap();
             }
-            x => panic!("{:?}", x),
+            #[cfg(debug_assertions)]
+            x => {
+                panic!("NYI: {:?}", x);
+            }
+            #[cfg(not(debug_assertions))]
+            _ => {
+                std::hint::unreachable_unchecked();
+            }
         }
     }
 }
