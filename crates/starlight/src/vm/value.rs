@@ -3,7 +3,7 @@ use cfg_if::cfg_if;
 use std::{
     convert::TryFrom,
     hint::unreachable_unchecked,
-    intrinsics::{likely, transmute, unlikely},
+    intrinsics::{likely, unlikely},
 };
 
 use super::{

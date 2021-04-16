@@ -6,8 +6,8 @@ use crate::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_storage::ArrayStorage,
         attributes::*, code_block::CodeBlock, environment::Environment, error::*, function::*,
         global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*,
-        object::*, property_descriptor::*, string::*, structure::*, symbol_table::*, value::*,
-        Runtime,
+        object::*, property_descriptor::*, string::*, structure::*,
+        structure_chain::StructureChain, symbol_table::*, value::*, Runtime,
     },
 };
 
@@ -965,6 +965,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         math::math_ceil as _,
         math::math_exp as _,
         math::math_abs as _,
+        StructureChain::deserialize as _,
+        StructureChain::allocate as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

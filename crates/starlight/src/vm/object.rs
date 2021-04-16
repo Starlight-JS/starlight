@@ -572,6 +572,8 @@ impl JsObject {
         //assert!(stored.value() == desc.value());
         *obj.direct_mut(offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
+        slot.base = Some(obj.as_dyn());
+
         //println!("add");
         Ok(true)
     }

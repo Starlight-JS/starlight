@@ -466,6 +466,18 @@ impl Serializable for TypeFeedBack {
                 serializer.write_u8(0x02);
                 serializer.write_gcpointer(structure);
             }
+            &TypeFeedBack::PutByIdFeedBack {
+                new_structure,
+                old_structure,
+                offset,
+                structure_chain,
+            } => {
+                serializer.write_u8(0x03);
+                new_structure.serialize(serializer);
+                old_structure.serialize(serializer);
+                offset.serialize(serializer);
+                structure_chain.serialize(serializer);
+            }
             _ => {
                 // other type feedback is ignored
                 serializer.write_u8(0x0);
@@ -568,6 +580,8 @@ impl Serializable for Structure {
         self.prototype.serialize(serializer);
         self.calculated_size.serialize(serializer);
         self.transit_count.serialize(serializer);
+        self.has_been_flattened_before.serialize(serializer);
+        self.cached_prototype_chain.serialize(serializer);
     }
 }
 

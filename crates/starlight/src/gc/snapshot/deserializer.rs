@@ -26,6 +26,7 @@ use crate::{
             DeletedEntry, DeletedEntryHolder, MapEntry, Structure, TargetTable, Transition,
             TransitionKey, TransitionsTable,
         },
+        structure_chain::StructureChain,
         symbol_table::*,
         symbol_table::{JsSymbol, Symbol, SymbolID},
         value::*,
@@ -1221,6 +1222,9 @@ impl Deserializable for Structure {
 
         let calculated_size = deser.get_u32();
         let transit_count = deser.get_u32();
+        let has_been_flattened_before = bool::deserialize_inplace(deser);
+        let cached_prototype_chain =
+            Option::<GcPointer<StructureChain>>::deserialize_inplace(deser);
         Self {
             table,
             transitions,
@@ -1231,6 +1235,8 @@ impl Deserializable for Structure {
             calculated_size,
             transit_count,
             id: 0,
+            has_been_flattened_before,
+            cached_prototype_chain,
         }
     }
 
@@ -1339,6 +1345,19 @@ impl Deserializable for TypeFeedBack {
                 let structure = deser.get_reference();
                 Self::StructureCache {
                     structure: transmute(structure),
+                }
+            }
+            0x03 => {
+                let new_structure = Option::<GcPointer<Structure>>::deserialize_inplace(deser);
+                let old_structure = Option::<GcPointer<Structure>>::deserialize_inplace(deser);
+                let offset = u32::deserialize_inplace(deser);
+                let structure_chain =
+                    Option::<GcPointer<StructureChain>>::deserialize_inplace(deser);
+                TypeFeedBack::PutByIdFeedBack {
+                    new_structure,
+                    old_structure,
+                    offset,
+                    structure_chain,
                 }
             }
             0x0 => Self::None,

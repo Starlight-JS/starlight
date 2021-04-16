@@ -187,4 +187,5 @@ fn main() {
         );
     }
     drop(rt);
+    std::process::exit(0);
 }

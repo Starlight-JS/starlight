@@ -461,3 +461,11 @@ unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
         self.1.trace(visitor);
     }
 }
+
+impl<T: GcCell> PartialEq for GcPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.base == other.base
+    }
+}
+
+impl<T: GcCell> Eq for GcPointer<T> {}

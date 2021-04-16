@@ -739,51 +739,49 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let value = frame.pop();
                 if likely(object.is_jsobject()) {
                     let mut obj = object.get_jsobject();
+                    'exit: loop {
+                        'slowpath: loop {
+                            match unwrap_unchecked(frame.code_block).feedback[fdbk as usize] {
+                                TypeFeedBack::PutByIdFeedBack {
+                                    ref new_structure,
+                                    ref old_structure,
+                                    ref offset,
+                                    ref structure_chain,
+                                } => {
+                                    if Some(obj.structure()) != *old_structure {
+                                        break 'slowpath;
+                                    }
+                                    if let None = new_structure {
+                                        *obj.direct_mut(*offset as usize) = value;
+                                        break 'exit;
+                                    }
+                                    let vector = &structure_chain.unwrap().vector;
+                                    let mut i = 0;
 
-                    if let TypeFeedBack::PropertyCache { structure, offset } =
-                        unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked(fdbk as usize)
-                    {
-                        if let Some(structure) = structure.upgrade() {
-                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                *obj.direct_mut(*offset as usize) = value;
-                                continue;
+                                    let mut cur = old_structure.unwrap().prototype;
+                                    while let Some(proto) = cur {
+                                        let structure = proto.structure();
+                                        if !GcPointer::ptr_eq(&structure, &vector[i]) {
+                                            break 'slowpath;
+                                        }
+                                        i += 1;
+                                        cur = structure.prototype;
+                                    }
+
+                                    *obj.direct_mut(*offset as usize) = value;
+                                    break 'exit;
+                                }
+                                TypeFeedBack::None => {
+                                    break 'slowpath;
+                                }
+                                _ => unreachable!(),
                             }
                         }
+
+                        put_by_id_slow(rt, frame, &mut obj, name, value, fdbk)?;
+                        break 'exit;
                     }
-
-                    #[cold]
-                    #[inline(never)]
-                    unsafe fn slow_put_by_id(
-                        rt: &mut Runtime,
-                        frame: &mut CallFrame,
-                        obj: &mut GcPointer<JsObject>,
-                        name: Symbol,
-                        value: JsValue,
-                        fdbk: u32,
-                    ) -> Result<(), JsValue> {
-                        let mut slot = Slot::new();
-
-                        obj.put_slot(
-                            rt,
-                            name,
-                            value,
-                            &mut slot,
-                            unwrap_unchecked(frame.code_block).strict,
-                        )?;
-
-                        if slot.is_put_cacheable() {
-                            *unwrap_unchecked(frame.code_block)
-                                .feedback
-                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                                structure: rt.heap().make_weak(obj.structure()),
-                                offset: slot.offset(),
-                            };
-                        }
-                        Ok(())
-                    }
-                    slow_put_by_id(rt, frame, &mut obj, name, value, fdbk)?;
+                    continue;
                 }
             }
 
@@ -1289,4 +1287,82 @@ unsafe impl Trace for SpreadValue {
 pub fn get_by_id_slow(rt: &mut Runtime, name: Symbol, val: JsValue) -> Result<JsValue, JsValue> {
     let mut slot = Slot::new();
     val.get_slot(rt, name, &mut slot)
+}
+
+unsafe fn put_by_id_slow(
+    rt: &mut Runtime,
+    frame: &mut CallFrame,
+    obj: &mut GcPointer<JsObject>,
+    name: Symbol,
+    value: JsValue,
+    fdbk: u32,
+) -> Result<(), JsValue> {
+    let mut slot = Slot::new();
+    let old_structure = obj.structure();
+    obj.put_slot(
+        rt,
+        name,
+        value,
+        &mut slot,
+        unwrap_unchecked(frame.code_block).strict,
+    )?;
+
+    if slot.is_put_cacheable() && slot.base.is_some() {
+        let mut base_cell = *obj;
+        let mut new_structure = base_cell.structure();
+        let mut m_old_structure = None;
+        let mut m_offset = 0;
+        let mut m_new_structure = None;
+        let mut m_new_chain = None;
+
+        if GcPointer::ptr_eq(&base_cell, &slot.base.unwrap()) {
+            if slot.put_result_type() == PutResultType::New {
+                return Ok(());
+                // TODO
+                if !new_structure.is_unique()
+                    && new_structure
+                        .previous
+                        .map(|x| new_structure.storage_capacity() == x.storage_capacity())
+                        .unwrap_or(false)
+                {
+                    assert!(GcPointer::ptr_eq(
+                        &new_structure.previous.unwrap(),
+                        &old_structure
+                    ));
+                    if new_structure
+                        .previous
+                        .map(|x| GcPointer::ptr_eq(&old_structure, &x))
+                        .unwrap_or(false)
+                    {
+                        let (result, saw_poly_proto) =
+                            crate::vm::operations::normalize_prototype_chain(rt, &base_cell);
+
+                        if result != usize::MAX && !saw_poly_proto {
+                            m_old_structure = Some(old_structure);
+                            m_offset = slot.offset();
+                            m_new_structure = Some(new_structure);
+                            m_new_chain = Some(new_structure.prototype_chain(rt, base_cell));
+                        }
+                    }
+                }
+            } else {
+                m_old_structure = Some(new_structure);
+                m_offset = slot.offset();
+            }
+
+            unwrap_unchecked(frame.code_block).feedback[fdbk as usize] =
+                TypeFeedBack::PutByIdFeedBack {
+                    new_structure: m_new_structure,
+                    old_structure: m_old_structure,
+                    offset: m_offset,
+                    structure_chain: m_new_chain,
+                };
+            assert!(!matches!(
+                unwrap_unchecked(frame.code_block).feedback[fdbk as usize],
+                TypeFeedBack::None
+            ));
+        }
+    }
+
+    Ok(())
 }

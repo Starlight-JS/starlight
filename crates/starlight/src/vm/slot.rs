@@ -160,7 +160,7 @@ unsafe impl Trace for Slot {
         self.value.trace(tracer);
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(u32)]
 pub enum PutResultType {
     None = 0,

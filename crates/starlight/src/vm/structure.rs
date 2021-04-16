@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
-use wtf_rs::unwrap_unchecked;
-
-use super::{attributes::*, object::JsObject};
+use super::{attributes::*, object::JsObject, structure_chain::StructureChain};
 use super::{symbol_table::*, Runtime};
 use crate::gc::cell::{GcCell, GcPointer, Trace, WeakRef};
 use crate::gc::{cell::Tracer, snapshot::deserializer::Deserializable};
+use crate::prelude::*;
+use std::{collections::HashMap, intrinsics::likely};
+use wtf_rs::unwrap_unchecked;
 /// In JavaScript programs, it's common to have multiple objects with the same property keys. Such objects
 /// have the same *shape*.
 /// ```js
@@ -44,6 +43,8 @@ pub struct Structure {
     pub(crate) prototype: Option<GcPointer<JsObject>>,
     pub(crate) calculated_size: u32,
     pub(crate) transit_count: u32,
+    pub(crate) has_been_flattened_before: bool,
+    pub(crate) cached_prototype_chain: Option<GcPointer<StructureChain>>,
 }
 
 pub type StructureID = u32;
@@ -209,6 +210,14 @@ unsafe impl Trace for Structure {
 }
 
 impl Structure {
+    pub fn has_mono_proto(&self) -> bool {
+        self.prototype.is_some()
+    }
+
+    pub fn has_poly_proto(&self) -> bool {
+        self.prototype.is_none()
+    }
+
     pub fn id(&self) -> StructureID {
         self.id
     }
@@ -303,6 +312,8 @@ impl Structure {
             id: 0,
             calculated_size: 0,
             transit_count: 0,
+            has_been_flattened_before: previous.has_been_flattened_before,
+            cached_prototype_chain: None,
         });
         this.calculated_size = this.get_slots_size() as _;
         assert!(this.previous.is_some());
@@ -317,8 +328,10 @@ impl Structure {
     ) -> GcPointer<Self> {
         vm.heap().allocate(Structure {
             prototype,
+            cached_prototype_chain: None,
             previous: None,
             table: None,
+            has_been_flattened_before: false,
             transitions: TransitionsTable::new(!unique, indexed),
             deleted: DeletedEntryHolder {
                 entry: None,
@@ -356,6 +369,8 @@ impl Structure {
         let mut this = vm.heap().allocate(Structure {
             prototype: None,
             previous: None,
+            cached_prototype_chain: None,
+            has_been_flattened_before: false,
             table: Some(table),
             transitions: TransitionsTable::new(true, false),
             deleted: DeletedEntryHolder {
@@ -433,6 +448,75 @@ impl Structure {
 }
 
 impl GcPointer<Structure> {
+    fn is_valid(
+        &mut self,
+        rt: &mut Runtime,
+        cached_prototype_chain: Option<GcPointer<StructureChain>>,
+        base: GcPointer<JsObject>,
+    ) -> bool {
+        if let None = cached_prototype_chain {
+            return false;
+        }
+        let cached_prototype_chain = cached_prototype_chain.unwrap();
+
+        let mut prototype = self.stored_prototype(rt, &base);
+        let mut cached_structure;
+        let mut i = 0;
+        while i < cached_prototype_chain.vector.len() && !prototype.is_null() {
+            cached_structure = Some(cached_prototype_chain.vector[i]);
+            i += 1;
+            if !GcPointer::ptr_eq(
+                &prototype.get_jsobject().structure(),
+                &cached_structure.unwrap(),
+            ) {
+                return false;
+            }
+            prototype = prototype
+                .get_jsobject()
+                .structure()
+                .stored_prototype(rt, &prototype.get_jsobject());
+        }
+        prototype.is_null() && i >= cached_prototype_chain.vector.len()
+    }
+    pub fn prototype_chain(
+        &mut self,
+        rt: &mut Runtime,
+        base: GcPointer<JsObject>,
+    ) -> GcPointer<StructureChain> {
+        if !self.is_valid(rt, self.cached_prototype_chain.clone(), base) {
+            let prototype = self.stored_prototype(rt, &base);
+            self.cached_prototype_chain = Some(StructureChain::create(
+                rt,
+                if prototype.is_null() {
+                    None
+                } else {
+                    Some(prototype.get_jsobject())
+                },
+            ));
+        }
+        self.cached_prototype_chain.unwrap()
+    }
+    pub fn flatten_dictionary_structure(
+        &mut self,
+        _rt: &mut Runtime,
+        object: &GcPointer<JsObject>,
+    ) -> GcPointer<Structure> {
+        assert!(self.is_unique());
+        assert!(GcPointer::ptr_eq(&object.structure, self));
+        self.has_been_flattened_before = true;
+        self.flatten();
+        *self
+    }
+    pub fn stored_prototype(&mut self, rt: &mut Runtime, object: &GcPointer<JsObject>) -> JsValue {
+        if likely(self.has_mono_proto()) {
+            return JsValue::new(self.prototype.unwrap());
+        }
+        let entry = self.get(rt, "__proto__".intern());
+        if entry.is_not_found() {
+            return JsValue::encode_null_value();
+        }
+        *object.direct(entry.offset as usize)
+    }
     pub fn delete(&mut self, vm: &mut Runtime, name: Symbol) {
         let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();
         self.deleted.push(vm, it.offset);
@@ -527,6 +611,7 @@ impl GcPointer<Structure> {
     pub fn flatten(&mut self) {
         if self.is_unique() {
             self.transitions.enable_unique_transition();
+            self.has_been_flattened_before = true;
         }
     }
 
