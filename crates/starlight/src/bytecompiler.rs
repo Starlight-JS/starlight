@@ -911,23 +911,6 @@ impl ByteCompiler {
             }
 
             Expr::Call(call) => {
-                // self.emit(Opcode::OP_PUSH_EMPTY, &[], false);
-                let has_spread = call.args.iter().any(|x| x.spread.is_some());
-                if has_spread {
-                    for arg in call.args.iter().rev() {
-                        self.expr(&arg.expr, true, false);
-                        if arg.spread.is_some() {
-                            self.emit(Opcode::OP_SPREAD, &[], false);
-                        }
-                    }
-                    self.emit(Opcode::OP_NEWARRAY, &[call.args.len() as u32], false);
-                } else {
-                    for arg in call.args.iter() {
-                        self.expr(&arg.expr, true, false);
-                        assert!(arg.spread.is_none());
-                    }
-                }
-
                 match call.callee {
                     ExprOrSuper::Super(_) => todo!(), // todo super call
                     ExprOrSuper::Expr(ref expr) => match &**expr {
@@ -957,6 +940,23 @@ impl ByteCompiler {
                         }
                     },
                 }
+                // self.emit(Opcode::OP_PUSH_EMPTY, &[], false);
+                let has_spread = call.args.iter().any(|x| x.spread.is_some());
+                if has_spread {
+                    for arg in call.args.iter().rev() {
+                        self.expr(&arg.expr, true, false);
+                        if arg.spread.is_some() {
+                            self.emit(Opcode::OP_SPREAD, &[], false);
+                        }
+                    }
+                    self.emit(Opcode::OP_NEWARRAY, &[call.args.len() as u32], false);
+                } else {
+                    for arg in call.args.iter() {
+                        self.expr(&arg.expr, true, false);
+                        assert!(arg.spread.is_none());
+                    }
+                }
+
                 if !has_spread {
                     let op = if false && tail {
                         Opcode::OP_TAILCALL
@@ -1024,6 +1024,8 @@ impl ByteCompiler {
                 }
             }
             Expr::New(call) => {
+                self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                self.expr(&*call.callee, true, false);
                 let argc = call.args.as_ref().map(|x| x.len() as u32).unwrap_or(0);
                 let has_spread = if let Some(ref args) = call.args {
                     args.iter().any(|x| x.spread.is_some())
@@ -1047,8 +1049,6 @@ impl ByteCompiler {
                     }
                 }
 
-                self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
-                self.expr(&*call.callee, true, false);
                 if !has_spread {
                     let op = if tail && false {
                         Opcode::OP_TAILNEW

@@ -290,6 +290,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             ip.sub(1).offset_from(&frame.code_block.unwrap().code[0]),
             opcode
         );*/
+        stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_GE0GL => {
                 let index = ip.cast::<u32>().read_unaligned();
@@ -789,10 +790,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
-                let mut func = frame.pop();
-                let mut this = frame.pop();
 
                 let args_start = frame.sp.sub(argc as _);
+                frame.sp = args_start;
+                let mut func = frame.pop();
+                let mut this = frame.pop();
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
                 if !func.is_callable() {
                     let msg = JsString::new(rt, "not a callable object");
@@ -807,17 +809,16 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 root!(args_ = gcstack, Arguments::new(this, &mut args));
 
                 frame.ip = ip;
-                stack.cursor = frame.sp;
-                frame.sp = args_start;
+                //stack.cursor = frame.sp;
 
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-                    let mut exit = false;
-                    if opcode == Opcode::OP_TAILCALL {
+                    let exit = false;
+                    /*if opcode == Opcode::OP_TAILCALL {
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
-                    }
+                    }*/
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
@@ -826,22 +827,24 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         )));
                     }
 
-                    rt.stack.cursor = frame.sp;
+                    //rt.stack.cursor = frame.sp;
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
 
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
-                    (*cframe).limit = args_start;
+                    (*cframe).limit = args_start.add(argc as _);
                     (*cframe).sp = args_start.add(argc as _);
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
+                    //frame.sp = args_start;
+
                     frame = &mut *cframe;
 
                     ip = (*cframe).ip;
                 } else {
                     let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
-
+                    // frame.sp = args_start;
                     frame.push(result);
                 }
             }
@@ -850,10 +853,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
 
+                let args_start = frame.sp.sub(argc as _);
+                frame.sp = args_start;
                 let mut func = frame.pop();
                 let mut _this = frame.pop();
-
-                let args_start = frame.sp.sub(argc as _);
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
 
                 if unlikely(!func.is_callable()) {
@@ -876,31 +879,30 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 args_.ctor_call = true;
 
                 frame.ip = ip;
-                stack.cursor = frame.sp;
-                frame.sp = args_start;
+
+                //frame.sp = args_start;
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-                    let mut exit = false;
-                    if opcode == Opcode::OP_TAILNEW {
+                    let exit = false;
+                    /*if opcode == Opcode::OP_TAILNEW {
                         exit = stack.pop_frame().unwrap().exit_on_return;
-                    }
+                    }*/
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
-                    if cframe.is_none() {
+                    if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
                             rt, msg, None,
                         )));
                     }
 
-                    rt.stack.cursor = frame.sp;
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
                     //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
-                    (*cframe).limit = args_start;
+                    (*cframe).limit = args_start.add(argc as _);
                     (*cframe).sp = args_start.add(argc as _);
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;

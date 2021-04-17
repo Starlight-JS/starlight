@@ -19,9 +19,10 @@ pub unsafe fn reflect_apply(
     effect: u8,
 ) -> Result<(), JsValue> {
     let gcstack = rt.shadowstack();
+
+    let mut args = frame.pop();
     let mut func = frame.pop();
     let mut this = frame.pop();
-    let mut args = frame.pop();
     if !args.is_jsobject() {
         let msg = JsString::new(rt, "expected array as arguments");
         return Err(JsValue::encode_object_value(JsTypeError::new(
