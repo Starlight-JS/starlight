@@ -331,7 +331,7 @@ impl JsArguments {
         *obj.data::<JsArguments>() = ManuallyDrop::new(args);
         use super::attributes::*;
         let mut mapping = Vec::with_capacity(params.len());
-        for (i, param) in params.iter().enumerate() {
+        for (i, param) in params.iter().enumerate().take(init.len()) {
             let mut slot = Slot::new();
             let _ = obj.define_own_indexed_property_slot(
                 vm,

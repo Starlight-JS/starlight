@@ -809,7 +809,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 root!(args_ = gcstack, Arguments::new(this, &mut args));
 
                 frame.ip = ip;
-                //stack.cursor = frame.sp;
+                stack.cursor = frame.sp;
 
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();

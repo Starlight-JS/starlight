@@ -174,8 +174,6 @@ impl ByteCompiler {
     }
 
     pub fn decl_let(&mut self, name: Symbol) -> u16 {
-        //self.emit(Opcode::OP_GET_ENV, &[0], false);
-
         let ix = if let Some(ix) = self.variable_freelist.pop() {
             self.scope.borrow_mut().add_var(name, ix as _);
             ix as u16
@@ -186,7 +184,6 @@ impl ByteCompiler {
                 .add_var(name, self.code.var_count as u16 - 1)
         };
         self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
-        //self.emit_u16(ix);
         ix
     }
 
@@ -273,9 +270,6 @@ impl ByteCompiler {
         match acc {
             Access::Variable(index, depth) => {
                 self.emit_get_local(depth as _, index as _);
-                //self.emit(Opcode::OP_GET_ENV, &[depth], false);
-                //self.emit(Opcode::OP_GET_LOCAL, &[index as _], false);
-                //self.emit_u16(index);
             }
             Access::Global(x) => {
                 let name = self.get_sym(x);
