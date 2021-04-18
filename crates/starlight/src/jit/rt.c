@@ -57,17 +57,37 @@ typedef struct {
   uint8_t isErr;
 } result;
 
+typedef struct gcheader_s {
+  size_t vtable;
+  uint8_t cell_state;
+  uint32_t size;
+  uint8_t pad;
+  uint8_t pad1;
+  uint8_t pad2;
+} gcheader;
+
+typedef struct variable_s {
+  jsval value;
+  uint8_t mutable;
+} variable;
+
+typedef struct environment_s {
+  gcheader *parent;
+  variable *values_ptr;
+  uint32_t values_count;
+} environment;
+
 typedef struct callframe_s {
   struct callframe_s *prev;
   jsval *sp;
   jsval *limit;
   jsval callee;
   uint8_t *ip;
-  void *code_block;
+  gcheader *code_block;
   jsval this;
   uint8_t ctor;
   uint8_t exit_on_return;
-  void *env;
+  gcheader *env;
 
 } callframe;
 
@@ -83,7 +103,7 @@ extern result jsval_to_number_slow(void *rt, jsval val);
 #define jsval_new_object(val) jsval_new((uint64_t)val, OBJECT_TAG)
 #define jsval_new_bool(x) jsval_new(x, BOOL_TAG)
 #define jsval_new_null() jsval_new_ext(0, ExtNull)
-#define jsval_new_int32(x) jsval_new((uint64_t)(int32_t)x, INT32_TAG)
+#define jsval_new_int32(x) jsval_new((uint64_t)(uint32_t)(int32_t)x, INT32_TAG)
 #define jsval_new_undef(x) jsval_new_ext(0, ExtUndefined)
 #define jsval_new_f64(x) f64_to_bits(x)
 #define jsval_new_nan(x) 0x7ff8000000000000ull

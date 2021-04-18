@@ -32,7 +32,7 @@ impl MallocGC {
             weak_slots: Default::default(),
             allocations: Vec::with_capacity(256),
             allocated: 0,
-            threshold: 100 * 1024,
+            threshold: 256 * 1024,
             constraints: vec![],
             defers: 0,
         }

@@ -1044,7 +1044,7 @@ impl ByteCompiler {
                 }
 
                 if !has_spread {
-                    let op = if tail && false {
+                    let op = if false && tail {
                         Opcode::OP_TAILNEW
                     } else {
                         Opcode::OP_NEW
@@ -1379,11 +1379,11 @@ impl ByteCompiler {
             Expr::Cond(cond) => {
                 self.expr(&cond.test, true, false);
                 let jelse = self.cjmp(false);
-                self.expr(&cond.cons, used, false);
+                self.expr(&cond.cons, used, tail);
 
                 let jend = self.jmp();
                 jelse(self);
-                self.expr(&cond.alt, used, false);
+                self.expr(&cond.alt, used, tail);
                 jend(self);
             }
             Expr::Paren(p) => {

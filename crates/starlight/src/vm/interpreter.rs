@@ -45,11 +45,7 @@ impl Runtime {
         nscope.parent = Some(*scope);
         let mut i = 0;
         for _ in 0..func.code.param_count {
-            /*let _ = nscope
-                .put(self, *p, args_.at(i), false)
-                .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
-            */
-            nscope.as_slice_mut()[i as usize].0 = args_.at(i);
+            nscope.as_slice_mut()[i as usize].value = args_.at(i);
             i += 1;
         }
 
@@ -66,8 +62,7 @@ impl Runtime {
                 )?;
                 ai += 1;
             }
-            nscope.as_slice_mut()[rest as usize].0 = JsValue::new(args_arr);
-            //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
+            nscope.as_slice_mut()[rest as usize].value = JsValue::new(args_arr);
         }
 
         if func.code.use_arguments {
@@ -85,13 +80,7 @@ impl Runtime {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
             }
 
-            /*let _ = nscope.put(
-                self,
-                "arguments".intern(),
-                JsValue::encode_object_value(args),
-                false,
-            )?;*/
-            nscope.as_slice_mut()[func.code.args_at as usize].0 = JsValue::new(args);
+            nscope.as_slice_mut()[func.code.args_at as usize].value = JsValue::new(args);
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
@@ -144,7 +133,7 @@ impl Runtime {
                 .put(self, *p, args_.at(i), false)
                 .unwrap_or_else(|_| unsafe { unreachable_unchecked() });
             */
-            nscope.as_slice_mut()[i as usize].0 = args_.at(i);
+            nscope.as_slice_mut()[i as usize].value = args_.at(i);
             i += 1;
         }
 
@@ -161,7 +150,7 @@ impl Runtime {
                 )?;
                 ai += 1;
             }
-            nscope.as_slice_mut()[rest as usize].0 = JsValue::new(args_arr);
+            nscope.as_slice_mut()[rest as usize].value = JsValue::new(args_arr);
             //  nscope.put(self, rest, JsValue::encode_object_value(args_arr), false)?;
         }
 
@@ -185,13 +174,7 @@ impl Runtime {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
             }
 
-            /*let _ = nscope.put(
-                self,
-                "arguments".intern(),
-                JsValue::encode_object_value(args),
-                false,
-            )?;*/
-            nscope.as_slice_mut()[func.code.args_at as usize].0 = JsValue::new(args);
+            nscope.as_slice_mut()[func.code.args_at as usize].value = JsValue::new(args);
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
@@ -203,16 +186,6 @@ impl Runtime {
             }
         };
 
-        /*unsafe {
-            eval_internal(
-                self,
-                func.code,
-                &func.code.code[0] as *const u8 as *mut u8,
-                _this,
-                args_.ctor_call,
-                *nscope,
-            )
-        }*/
         Ok((_this, *nscope))
     }
 }
@@ -303,7 +276,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
-                frame.push(env.as_slice().get(index as usize).copied().unwrap().0);
+                frame.push(env.as_slice().get_unchecked(index as usize).value);
             }
             Opcode::OP_GE0SL => {
                 let index = ip.cast::<u32>().read_unaligned();
@@ -311,13 +284,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut env = frame.env;
                 debug_assert!(index < env.as_slice_mut().len() as u32);
                 let val = frame.pop();
-                if unlikely(!env.as_slice_mut()[index as usize].1) {
+                if unlikely(!env.as_slice_mut()[index as usize].mutable) {
                     return Err(JsValue::new(
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
 
-                env.as_slice_mut().get_mut(index as usize).unwrap().0 = val;
+                env.as_slice_mut().get_unchecked_mut(index as usize).value = val;
             }
             Opcode::OP_GET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
@@ -330,7 +303,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     ip as usize - &unwrap_unchecked(frame.code_block).code[0] as *const u8 as usize
                 );
 
-                frame.push(env.as_slice().get(index as usize).unwrap().0);
+                frame.push(env.as_slice().get_unchecked(index as usize).value);
             }
             Opcode::OP_SET_LOCAL => {
                 let index = ip.cast::<u32>().read_unaligned();
@@ -338,13 +311,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut env = frame.pop().get_object().downcast::<Environment>().unwrap();
                 debug_assert!(index < env.as_slice_mut().len() as u32);
                 let val = frame.pop();
-                if unlikely(!env.as_slice_mut()[index as usize].1) {
+                if unlikely(!env.as_slice_mut()[index as usize].mutable) {
                     return Err(JsValue::new(
                         rt.new_type_error(format!("Cannot assign to immutable variable")),
                     ));
                 }
 
-                env.as_slice_mut().get_mut(index as usize).unwrap().0 = val;
+                env.as_slice_mut().get_unchecked_mut(index as usize).value = val;
             }
             Opcode::OP_GET_ENV => {
                 let mut depth = ip.cast::<u32>().read_unaligned();
@@ -805,7 +778,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 root!(func_object = gcstack, func.get_jsobject());
                 root!(funcc = gcstack, *&*func_object);
                 let func = func_object.as_function_mut();
-
                 root!(args_ = gcstack, Arguments::new(this, &mut args));
 
                 frame.ip = ip;
@@ -815,10 +787,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-                    let exit = false;
-                    /*if opcode == Opcode::OP_TAILCALL {
+                    let mut exit = false;
+                    if false && opcode == Opcode::OP_TAILCALL {
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
-                    }*/
+                    }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
@@ -834,7 +806,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
-                    (*cframe).limit = args_start.add(argc as _);
+                    //(*cframe).limit = args_start;
                     (*cframe).sp = args_start.add(argc as _);
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     //frame.sp = args_start;
@@ -880,15 +852,15 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 frame.ip = ip;
 
-                //frame.sp = args_start;
+                frame.sp = args_start;
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
-                    let exit = false;
-                    /*if opcode == Opcode::OP_TAILNEW {
+                    let mut exit = false;
+                    if false && opcode == Opcode::OP_TAILNEW {
                         exit = stack.pop_frame().unwrap().exit_on_return;
-                    }*/
+                    }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
@@ -902,7 +874,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     (*cframe).this = this;
                     //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
-                    (*cframe).limit = args_start.add(argc as _);
+                    //(*cframe).limit = args_start;
                     (*cframe).sp = args_start.add(argc as _);
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
@@ -1117,15 +1089,20 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let mut env = frame.env;
                 let val = frame.pop();
-                env.as_slice_mut()[ix as usize] = (val, false);
+                env.as_slice_mut()[ix as usize] = Variable {
+                    value: val,
+                    mutable: false,
+                };
             }
             Opcode::OP_DECL_LET => {
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
                 let mut env = frame.env;
                 let val = frame.pop();
-                env.as_slice_mut()[ix as usize] = (val, true);
-                //   println!("decl_let {}<-{}", env.as_slice_mut().len() - 1, val.to_string(rt)?);
+                env.as_slice_mut()[ix as usize] = Variable {
+                    value: val,
+                    mutable: true,
+                };
             }
 
             Opcode::OP_DELETE_BY_ID => {

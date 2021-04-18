@@ -19,23 +19,10 @@ pub struct CallFrame {
     pub env: GcPointer<Environment>,
     /// (Environment,Instruction) stack
     pub try_stack: Vec<(Option<GcPointer<Environment>>, *mut u8, *mut JsValue)>,
-    pub locals_start: *mut JsValue,
 }
 impl CallFrame {
-    pub unsafe fn get_iloc(&self, at: u32) -> JsValue {
-        self.locals_start.add(at as usize).read()
-    }
-    pub unsafe fn get_iloc_ptr(&self, at: u32) -> *mut JsValue {
-        self.locals_start.add(at as usize)
-    }
-    pub unsafe fn set_iloc(&mut self, at: u32, val: JsValue) {
-        self.locals_start.add(at as usize).write(val);
-    }
     #[inline(always)]
     pub unsafe fn pop(&mut self) -> JsValue {
-        if self.sp <= self.limit {
-            //panic!("stack underflow");
-        }
         self.sp = self.sp.sub(1);
         self.sp.read()
     }

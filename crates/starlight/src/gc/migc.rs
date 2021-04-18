@@ -83,7 +83,7 @@ impl MiGC {
             defers: 0,
 
             allocated: 0,
-            max_heap_size: 100 * 1024,
+            max_heap_size: 256 * 1024,
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
         };
 

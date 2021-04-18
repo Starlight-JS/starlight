@@ -70,7 +70,6 @@ unsafe impl Trace for Arguments<'_> {
         for value in self.values.iter_mut() {
             value.trace(tracer);
         }
-        // self.values.trace(tracer);
     }
 }
 
@@ -135,7 +134,7 @@ impl JsArguments {
                                         desc.value(),
                                         throwable,
                                     )?;*/
-                                    arg.env.as_slice_mut()[mapped.get_index() as usize].0 =
+                                    arg.env.as_slice_mut()[mapped.get_index() as usize].value =
                                         desc.value();
                                 }
 
@@ -165,7 +164,7 @@ impl JsArguments {
         if arg.mapping.len() > index as usize {
             let mapped = arg.mapping[index as usize];
             if mapped != DUMMY_SYMBOL {
-                let val = arg.env.as_slice()[mapped.get_index() as usize].0;
+                let val = arg.env.as_slice()[mapped.get_index() as usize].value;
                 let attrs = slot.attributes();
                 slot.set(val, attrs);
                 return true;
@@ -347,8 +346,6 @@ impl JsArguments {
             );
 
             mapping.push(*param);
-
-            //let _ = obj.put(vm, Symbol::Indexed(i as _), JsValue::undefined(), false);
         }
         let _ = obj.put(vm, "length".intern(), JsValue::new(len as i32), false);
         obj.as_arguments_mut().mapping = mapping.into_boxed_slice();

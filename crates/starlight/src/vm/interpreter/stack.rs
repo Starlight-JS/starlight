@@ -56,7 +56,6 @@ impl Stack {
                 code_block: None,
                 callee: JsValue::encode_undefined_value(),
                 ip: null_mut(),
-                locals_start: self.cursor,
             }));
             self.current = frame;
 

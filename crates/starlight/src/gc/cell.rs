@@ -112,6 +112,9 @@ pub struct GcPointerBase {
     pub vtable: usize,
     pub cell_state: AtomicU8, //pub next: *mut Self,
     pub size: u32,
+    pub _pad: u8,
+    pub _pad1: u8,
+    pub _pad2: u8,
 }
 
 pub const POSSIBLY_BLACK: u8 = 0;
@@ -134,6 +137,9 @@ impl GcPointerBase {
         Self {
             vtable: vtable,
             size,
+            _pad: 0,
+            _pad1: 0,
+            _pad2: 0,
             cell_state: AtomicU8::new(DEFINETELY_WHITE),
             //  next: null_mut(),
             //mark: false,
