@@ -120,7 +120,7 @@ impl JsFunction {
         this_fn: JsValue,
     ) -> Result<JsValue, JsValue> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             structure = stack,
             structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false))
         );
@@ -143,7 +143,7 @@ impl JsFunction {
             }
             FuncType::Bound(ref mut x) => {
                 let stack = vm.shadowstack();
-                root!(
+                letroot!(
                     args = stack,
                     Arguments {
                         this: x.this,
@@ -423,7 +423,7 @@ impl JsNativeFunction {
     ) -> GcPointer<JsObject> {
         let vm = vm;
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             func = stack,
             JsFunction::new_with_struct(
                 vm,
@@ -494,8 +494,8 @@ impl JsVMFunction {
             scope: env,
         };
         vm.heap().defer();
-        root!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
-        root!(proto = stack, JsObject::new_empty(vm));
+        letroot!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
+        letroot!(proto = stack, JsObject::new_empty(vm));
         vm.heap().undefer();
         let _ = proto.define_own_property(
             vm,
@@ -504,7 +504,7 @@ impl JsVMFunction {
             false,
         );
         let desc = vm.description(code.name);
-        root!(s = stack, JsString::new(vm, desc));
+        letroot!(s = stack, JsString::new(vm, desc));
         let _ = this.define_own_property(
             vm,
             "prototype".intern(),
@@ -526,7 +526,7 @@ impl GcPointer<JsObject> {
         vm: &mut Runtime,
     ) -> Result<GcPointer<Structure>, JsValue> {
         let stack = vm.shadowstack();
-        root!(obj = stack, *self);
+        letroot!(obj = stack, *self);
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
 

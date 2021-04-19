@@ -799,8 +799,8 @@ pub fn ffi_library_open(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     }
     let stack = rt.shadowstack();
 
-    root!(rnames = stack, vec![]);
-    root!(names = stack, names.get_jsobject());
+    letroot!(rnames = stack, vec![]);
+    letroot!(names = stack, names.get_jsobject());
     let len = super::get_length(rt, &mut names)?;
 
     for i in 0..len {
@@ -835,7 +835,7 @@ pub fn ffi_function_attach(rt: &mut Runtime, args: &Arguments) -> Result<JsValue
         };
 
         let name = { args.at(1).to_string(rt)? };
-        root!(rnames = stack, vec![]);
+        letroot!(rnames = stack, vec![]);
         let args_ = {
             let names = args.at(2);
             if !names.is_jsobject() {
@@ -846,7 +846,7 @@ pub fn ffi_function_attach(rt: &mut Runtime, args: &Arguments) -> Result<JsValue
                 return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
             }
 
-            root!(names = stack, names.get_jsobject());
+            letroot!(names = stack, names.get_jsobject());
             let len = super::get_length(rt, &mut names)?;
 
             for i in 0..len {
@@ -877,7 +877,7 @@ pub fn ffi_function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
         }
         val
     };
-    root!(rnames = stack, vec![]);
+    letroot!(rnames = stack, vec![]);
 
     let args = {
         let names = args.at(0);
@@ -886,7 +886,7 @@ pub fn ffi_function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
             return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
         }
 
-        root!(names = stack, names.get_jsobject());
+        letroot!(names = stack, names.get_jsobject());
         let len = super::get_length(rt, &mut names)?;
 
         for i in 0..len {
@@ -894,7 +894,7 @@ pub fn ffi_function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
         }
         rnames
     };
-    root!(res = stack, unsafe {
+    letroot!(res = stack, unsafe {
         func.data::<FFIFunction>().call(rt, &args)
     });
 

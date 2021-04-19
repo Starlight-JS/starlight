@@ -29,7 +29,7 @@ pub unsafe fn reflect_apply(
             rt, msg, None,
         )));
     }
-    root!(args = gcstack, args.get_jsobject());
+    letroot!(args = gcstack, args.get_jsobject());
     if args.class() as *const _ != JsArray::get_class() as *const _ {
         let msg = JsString::new(rt, "not a callable object");
         return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -47,11 +47,11 @@ pub unsafe fn reflect_apply(
             rt, msg, None,
         )));
     }
-    root!(func_object = gcstack, func.get_jsobject());
-    root!(funcc = gcstack, func.get_jsobject());
+    letroot!(func_object = gcstack, func.get_jsobject());
+    letroot!(funcc = gcstack, func.get_jsobject());
     let func = func_object.as_function_mut();
 
-    root!(args_ = gcstack, Arguments::new(this, &mut argsv));
+    letroot!(args_ = gcstack, Arguments::new(this, &mut argsv));
     let result = if effect == 0 {
         func.call(rt, &mut args_, JsValue::new(*funcc))?
     } else {

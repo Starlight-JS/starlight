@@ -310,7 +310,7 @@ impl JsArguments {
         len: u32,
         init: &[JsValue],
     ) -> GcPointer<JsObject> {
-        root!(
+        letroot!(
             struct_ = vm.shadowstack(),
             vm.global_data().normal_arguments_structure.clone().unwrap()
         );

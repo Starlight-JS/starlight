@@ -75,12 +75,12 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     );
     let stack = rt.shadowstack();
 
-    root!(function = stack, function.expect("No function"));
-    root!(funcc = stack, *&*function);
+    letroot!(function = stack, function.expect("No function"));
+    letroot!(funcc = stack, *&*function);
     assert!(function.is_callable(), "Not a callable function");
 
     let global = rt.global_object();
-    root!(
+    letroot!(
         args = stack,
         Arguments::new(JsValue::encode_object_value(global), &mut [])
     );
@@ -111,7 +111,7 @@ pub mod prelude {
         cell::*, snapshot::deserializer::*, snapshot::serializer::*, snapshot::Snapshot, Heap,
         MarkingConstraint, SimpleMarkingConstraint,
     };
-    pub use super::root;
+    pub use super::letroot;
     pub use super::vm::{
         arguments::Arguments,
         array::JsArray,

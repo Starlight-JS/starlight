@@ -784,7 +784,7 @@ impl JsValue {
             Ok(f64::from_bits(0x7ff8000000000000))
         } else if self.is_object() && self.get_object().is::<JsObject>() {
             let stack = rt.shadowstack();
-            root!(obj = stack, unsafe {
+            letroot!(obj = stack, unsafe {
                 self.get_object().downcast_unchecked::<JsObject>()
             });
 
@@ -828,7 +828,7 @@ impl JsValue {
                 return Ok(jsstr.as_str().to_owned());
             } else if let Some(object) = object.downcast::<JsObject>() {
                 let stack = rt.shadowstack();
-                root!(object = stack, object);
+                letroot!(object = stack, object);
                 return match object.to_primitive(rt, JsHint::String) {
                     Ok(val) => val.to_string(rt),
                     Err(e) => Err(e),
@@ -966,13 +966,13 @@ impl JsValue {
                     }
                 }
             }
-            root!(proto = stack, self.get_primitive_proto(rt));
+            letroot!(proto = stack, self.get_primitive_proto(rt));
             if proto.get_property_slot(rt, name, slot) {
                 return slot.get(rt, self);
             }
             return Ok(JsValue::encode_undefined_value());
         }
-        root!(obj = stack, self.get_jsobject());
+        letroot!(obj = stack, self.get_jsobject());
         obj.get_slot(rt, name, slot)
     }
 

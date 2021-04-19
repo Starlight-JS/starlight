@@ -114,7 +114,7 @@ pub fn identity_clos<T, R>(x: T, clos: impl FnOnce(T) -> R) -> R {
 /// is `Pin<&mut T>`.
 ///
 #[macro_export]
-macro_rules! root {
+macro_rules! letroot {
     ($name: ident: $t: ty  = $stack: expr,$value: expr) => {
         let stack: &ShadowStack = &$stack;
         let value = $value;

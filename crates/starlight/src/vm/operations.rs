@@ -4,7 +4,7 @@ pub fn normalize_prototype_chain(rt: &mut Runtime, base: &GcPointer<JsObject>) -
     let mut saw_poly_proto = false;
     let mut count = 0;
     let stack = rt.shadowstack();
-    root!(current = stack, *base);
+    letroot!(current = stack, *base);
 
     loop {
         let mut structure = current.structure;

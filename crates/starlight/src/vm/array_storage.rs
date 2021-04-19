@@ -182,7 +182,7 @@ impl ArrayStorage {
     }
     pub fn with_size(rt: &mut Runtime, size: u32, capacity: u32) -> GcPointer<Self> {
         let stack = rt.shadowstack();
-        crate::root!(this = stack, Self::new(rt.heap(), capacity));
+        crate::letroot!(this = stack, Self::new(rt.heap(), capacity));
         this.resize_within_capacity(rt.heap(), size);
         *this
     }

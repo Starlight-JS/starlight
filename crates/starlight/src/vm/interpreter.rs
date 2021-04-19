@@ -4,7 +4,7 @@ use super::{
     function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString,
     symbol_table::*, value::*, Runtime,
 };
-use crate::root;
+use crate::letroot;
 use crate::{
     bytecode::opcodes::Opcode,
     gc::{
@@ -28,11 +28,11 @@ impl Runtime {
         callee: JsValue,
     ) -> Result<JsValue, JsValue> {
         let stack = self.shadowstack();
-        root!(scope = stack, unsafe {
+        letroot!(scope = stack, unsafe {
             env.get_object().downcast::<Environment>().unwrap()
         });
 
-        root!(
+        letroot!(
             nscope = stack,
             Environment::new(
                 self,
@@ -112,11 +112,11 @@ impl Runtime {
         args_: &Arguments,
     ) -> Result<(JsValue, GcPointer<Environment>), JsValue> {
         let stack = self.shadowstack();
-        root!(scope = stack, unsafe {
+        letroot!(scope = stack, unsafe {
             env.get_object().downcast::<Environment>().unwrap()
         });
 
-        root!(
+        letroot!(
             nscope = stack,
             Environment::new(
                 self,
@@ -622,7 +622,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let object = frame.pop();
                 if likely(object.is_jsobject()) {
-                    root!(obj = gcstack, object.get_jsobject());
+                    letroot!(obj = gcstack, object.get_jsobject());
 
                     if let TypeFeedBack::PropertyCache { structure, offset } =
                         unwrap_unchecked(frame.code_block)
@@ -764,10 +764,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         rt, msg, None,
                     )));
                 }
-                root!(func_object = gcstack, func.get_jsobject());
-                root!(funcc = gcstack, *&*func_object);
+                letroot!(func_object = gcstack, func.get_jsobject());
+                letroot!(funcc = gcstack, *&*func_object);
                 let func = func_object.as_function_mut();
-                root!(args_ = gcstack, Arguments::new(this, &mut args));
+                letroot!(args_ = gcstack, Arguments::new(this, &mut args));
 
                 frame.ip = ip;
                 stack.cursor = frame.sp;
@@ -827,12 +827,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )));
                 }
 
-                root!(func_object = gcstack, func.get_jsobject());
-                root!(funcc = gcstack, func.get_jsobject());
+                letroot!(func_object = gcstack, func.get_jsobject());
+                letroot!(funcc = gcstack, func.get_jsobject());
                 let map = func_object.func_construct_map(rt)?;
                 let func = func_object.as_function_mut();
                 let object = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
-                root!(
+                letroot!(
                     args_ = gcstack,
                     Arguments::new(JsValue::new(object), &mut args)
                 );
@@ -957,8 +957,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )));
                 }
 
-                root!(robj = gcstack, rhs.get_jsobject());
-                root!(robj2 = gcstack, *robj);
+                letroot!(robj = gcstack, rhs.get_jsobject());
+                letroot!(robj2 = gcstack, *robj);
                 if unlikely(!robj.is_callable()) {
                     let msg = JsString::new(rt, "'instanceof' requires constructor");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -1100,7 +1100,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let name = unwrap_unchecked(frame.code_block).names[name as usize];
                 let object = frame.pop();
                 object.check_object_coercible(rt)?;
-                root!(object = gcstack, object.to_object(rt)?);
+                letroot!(object = gcstack, object.to_object(rt)?);
                 frame.push(JsValue::new(object.delete(
                     rt,
                     name,
@@ -1111,7 +1111,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let object = frame.pop();
                 let name = frame.pop().to_symbol(rt)?;
                 object.check_object_coercible(rt)?;
-                root!(object = gcstack, object.to_object(rt)?);
+                letroot!(object = gcstack, object.to_object(rt)?);
                 frame.push(JsValue::new(object.delete(
                     rt,
                     name,
@@ -1139,12 +1139,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let count = ip.cast::<u32>().read_unaligned();
 
                 ip = ip.add(4);
-                root!(arr = gcstack, JsArray::new(rt, count));
+                letroot!(arr = gcstack, JsArray::new(rt, count));
                 let mut index = 0;
                 while index < count {
                     let value = frame.pop();
                     if unlikely(value.is_object() && value.get_object().is::<SpreadValue>()) {
-                        root!(
+                        letroot!(
                             spread = gcstack,
                             value.get_object().downcast_unchecked::<SpreadValue>()
                         );

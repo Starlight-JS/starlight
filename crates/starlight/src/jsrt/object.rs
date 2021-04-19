@@ -37,7 +37,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
         let stack = vm.shadowstack();
         let first = args.at(0);
         if first.is_object() || first.is_null() {
-            root!(
+            letroot!(
                 prototype = stack,
                 if first.is_jsobject() {
                     Some(unsafe { first.get_object().downcast_unchecked::<JsObject>() })
@@ -45,7 +45,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
                     None
                 }
             );
-            root!(
+            letroot!(
                 structure = stack,
                 Structure::new_unique_indexed(vm, *prototype, false)
             );
@@ -86,7 +86,7 @@ pub fn object_define_property(vm: &mut Runtime, args: &Arguments) -> Result<JsVa
     if args.size() != 0 {
         let first = args.at(0);
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
 
             let name = args.at(1).to_symbol(vm)?;
             let attr = args.at(2);
@@ -115,14 +115,14 @@ pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
     if args.size() != 0 {
         let first = args.at(0);
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
             let mut names = vec![];
             obj.get_own_property_names(
                 vm,
                 &mut |name, _| names.push(name),
                 EnumerationMode::Default,
             );
-            root!(arr = stack, JsArray::new(vm, names.len() as _));
+            letroot!(arr = stack, JsArray::new(vm, names.len() as _));
 
             for (i, name) in names.iter().enumerate() {
                 let desc = vm.description(*name);
@@ -143,7 +143,7 @@ pub fn object_freeze(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
         let first = args.at(0);
         let stack = vm.shadowstack();
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
             obj.freeze(vm)?;
             return Ok(JsValue::new(*obj));
         }
@@ -158,7 +158,7 @@ pub fn object_seal(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
         let first = args.at(0);
         let stack = vm.shadowstack();
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
             obj.seal(vm)?;
             return Ok(JsValue::new(*obj));
         }
@@ -172,7 +172,7 @@ pub fn object_prevent_extensions(vm: &mut Runtime, args: &Arguments) -> Result<J
         let first = args.at(0);
         let stack = vm.shadowstack();
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
             obj.change_extensible(vm, false);
             return Ok(JsValue::new(*obj));
         }
@@ -187,7 +187,7 @@ pub fn object_is_sealed(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
         let first = args.at(0);
         let stack = vm.shadowstack();
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
             let mut names = vec![];
             obj.get_own_property_names(
                 vm,
@@ -213,7 +213,7 @@ pub fn object_is_frozen(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
         let first = args.at(0);
         let stack = vm.shadowstack();
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
             let mut names = vec![];
             obj.get_own_property_names(
                 vm,
@@ -242,7 +242,7 @@ pub fn object_is_extensible(vm: &mut Runtime, args: &Arguments) -> Result<JsValu
         let first = args.at(0);
         let stack = vm.shadowstack();
         if first.is_jsobject() {
-            root!(obj = stack, first.get_jsobject());
+            letroot!(obj = stack, first.get_jsobject());
 
             return Ok(JsValue::new(obj.is_extensible()));
         }

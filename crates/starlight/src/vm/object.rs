@@ -248,7 +248,7 @@ impl JsObject {
         slot: &mut Slot,
     ) -> bool {
         let stack = vm.shadowstack();
-        root!(obj = stack, *obj);
+        letroot!(obj = stack, *obj);
         loop {
             if obj.get_own_non_indexed_property_slot(vm, name, slot) {
                 break true;
@@ -318,9 +318,9 @@ impl JsObject {
             }
 
             if slot.attributes().is_accessor() {
-                root!(ac = stack, slot.accessor());
+                letroot!(ac = stack, slot.accessor());
                 let mut tmp = [JsValue::encode_undefined_value()];
-                root!(
+                letroot!(
                     args = stack,
                     Arguments::new(JsValue::encode_object_value(*obj), &mut tmp)
                 );
@@ -423,9 +423,9 @@ impl JsObject {
             }
 
             if slot.attributes().is_accessor() {
-                root!(ac = stack, slot.accessor());
+                letroot!(ac = stack, slot.accessor());
                 let mut tmp = [JsValue::encode_undefined_value()];
-                root!(
+                letroot!(
                     args = stack,
                     Arguments::new(JsValue::encode_object_value(*obj), &mut tmp,)
                 );
@@ -459,7 +459,7 @@ impl JsObject {
         slot: &mut Slot,
     ) -> bool {
         let stack = vm.shadowstack();
-        root!(obj = stack, *obj);
+        letroot!(obj = stack, *obj);
         loop {
             if obj.get_own_indexed_property_slot(vm, index, slot) {
                 return true;
@@ -533,7 +533,7 @@ impl JsObject {
                             obj.structure = new_struct;
                             let s = &obj.structure;
                             let sz = s.get_slots_size();
-                            root!(slots = stack, obj.slots);
+                            letroot!(slots = stack, obj.slots);
                             //   println!("resize to {} from {}", s.get_slots_size(), obj.slots.size());
                             slots.mut_handle().resize(vm.heap(), sz as _);
                             obj.slots = *slots;
@@ -566,7 +566,7 @@ impl JsObject {
 
         let s = &obj.structure;
         let sz = s.get_slots_size();
-        root!(slots = stack, obj.slots);
+        letroot!(slots = stack, obj.slots);
         slots.mut_handle().resize(vm.heap(), sz as _);
         obj.slots = *slots;
         //assert!(stored.value() == desc.value());
@@ -805,7 +805,7 @@ impl JsObject {
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             args = stack,
             Arguments::new(JsValue::encode_object_value(obj.clone()), &mut [])
         );
@@ -850,7 +850,7 @@ impl JsObject {
     define_jsclass!(JsObject, Object);
     pub fn new_empty(vm: &mut Runtime) -> GcPointer<Self> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             structure = stack,
             vm.global_data().empty_object_struct.clone().unwrap()
         );
@@ -865,7 +865,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         let init = IndexedElements::new(vm);
         //root!(indexed = stack, vm.heap().allocate(init));
-        root!(
+        letroot!(
             storage = stack,
             ArrayStorage::with_size(
                 vm,
@@ -926,16 +926,16 @@ impl GcPointer<JsObject> {
         let stack = vm.shadowstack();
         let exotic_to_prim = self.get_method(vm, "toPrimitive".intern());
 
-        root!(obj = stack, self.clone());
+        letroot!(obj = stack, self.clone());
         match exotic_to_prim {
             Ok(val) => {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
-                root!(func = stack, unsafe {
+                letroot!(func = stack, unsafe {
                     val.get_object().downcast_unchecked::<JsObject>()
                 });
                 let f = func.as_function_mut();
                 let mut tmp = [JsValue::encode_undefined_value()];
-                root!(
+                letroot!(
                     args = stack,
                     Arguments::new(JsValue::encode_object_value(*obj), &mut tmp,)
                 );
@@ -1217,7 +1217,7 @@ impl GcPointer<JsObject> {
                 self.structure = s;
             }
             let stack = vm.shadowstack();
-            root!(vector = stack, self.indexed.vector);
+            letroot!(vector = stack, self.indexed.vector);
             vector.mut_handle().resize(vm.heap(), index + 1);
             self.indexed.vector = *vector;
             if !absent {
@@ -1553,7 +1553,7 @@ mod tests {
         let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
         let stack = rt.shadowstack();
 
-        root!(object = stack, JsObject::new_empty(&mut rt));
+        letroot!(object = stack, JsObject::new_empty(&mut rt));
 
         let result = object.put(&mut rt, "key".intern(), JsValue::new(42.4242), false);
         assert!(result.is_ok());
@@ -1575,7 +1575,7 @@ mod tests {
         let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
         let stack = rt.shadowstack();
 
-        root!(object = stack, JsObject::new_empty(&mut rt));
+        letroot!(object = stack, JsObject::new_empty(&mut rt));
         for i in 0..10000u32 {
             let result = object.put(&mut rt, Symbol::Index(i), JsValue::new(i), false);
             assert!(result.is_ok());

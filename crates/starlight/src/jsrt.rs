@@ -994,7 +994,7 @@ pub fn to_property_descriptor(
 
     let mut attr: u32 = DEFAULT;
     let stack = rt.shadowstack();
-    root!(obj = stack, target.get_jsobject());
+    letroot!(obj = stack, target.get_jsobject());
     let mut value = JsValue::encode_undefined_value();
     let mut getter = JsValue::encode_undefined_value();
     let mut setter = JsValue::encode_undefined_value();

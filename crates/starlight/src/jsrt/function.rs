@@ -1,5 +1,5 @@
 use crate::{
-    root,
+    letroot,
     vm::Runtime,
     vm::{
         arguments::Arguments,
@@ -17,7 +17,7 @@ pub fn function_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let stack = vm.shadowstack();
     let obj = &args.this;
     if obj.is_callable() {
-        root!(func = stack, obj.to_object(vm)?);
+        letroot!(func = stack, obj.to_object(vm)?);
         let mut slot = Slot::new();
         let mut fmt = "function ".to_string();
         if func.get_own_property_slot(vm, "name".intern(), &mut slot) {
@@ -49,10 +49,10 @@ pub fn function_prototype(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
 
 pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
-    root!(obj = stack, args.this);
+    letroot!(obj = stack, args.this);
 
     if obj.is_callable() {
-        root!(
+        letroot!(
             vals = stack,
             ArrayStorage::with_size(
                 vm,
@@ -91,16 +91,16 @@ pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
 
 pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    root!(this = stack, args.this);
+    letroot!(this = stack, args.this);
     if this.is_callable() {
-        root!(obj = stack, this.get_jsobject());
-        root!(objc = stack, *&*obj);
+        letroot!(obj = stack, this.get_jsobject());
+        letroot!(objc = stack, *&*obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
         let arg_array = args.at(1);
         if args_size == 1 || arg_array.is_null() || arg_array.is_undefined() {
-            root!(args = stack, Arguments::new(args.at(0), &mut []));
+            letroot!(args = stack, Arguments::new(args.at(0), &mut []));
             return func.call(rt, &mut args, JsValue::new(*objc));
         }
 
@@ -114,14 +114,14 @@ pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
             )));
         }
 
-        root!(arg_array = stack, arg_array.get_jsobject());
+        letroot!(arg_array = stack, arg_array.get_jsobject());
         let len = super::get_length(rt, &mut arg_array)?;
         let mut argsv = Vec::with_capacity(len as usize);
 
         for i in 0..len {
             argsv.push(arg_array.get(rt, Symbol::Index(i))?);
         }
-        crate::root!(args_ = stack, Arguments::new(args.at(0), &mut argsv));
+        crate::letroot!(args_ = stack, Arguments::new(args.at(0), &mut argsv));
         return func.call(rt, &mut args_, JsValue::new(*objc));
     }
 
@@ -135,8 +135,8 @@ pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
     let this = args.this;
     let stack = rt.shadowstack();
     if this.is_callable() {
-        root!(obj = stack, this.get_jsobject());
-        root!(objc = stack, *&*obj);
+        letroot!(obj = stack, this.get_jsobject());
+        letroot!(objc = stack, *&*obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
@@ -147,7 +147,7 @@ pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
                 //*args_.at_mut(i) = args.at(i + 1);
             }
         }
-        root!(args_ = stack, Arguments::new(args.at(0), &mut argsv,));
+        letroot!(args_ = stack, Arguments::new(args.at(0), &mut argsv,));
 
         return func.call(rt, &mut args_, JsValue::new(*objc));
     }

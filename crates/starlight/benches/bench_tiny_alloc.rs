@@ -7,7 +7,7 @@ use starlight::{
         snapshot::serializer::{Serializable, SnapshotSerializer},
         SimpleMarkingConstraint,
     },
-    root,
+    letroot,
     vm::GcParams,
     vtable_impl,
 };
@@ -39,11 +39,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("bench-alloc-f64", |b| {
         b.iter(|| {
             for _ in 0..10000 {
-                root!(x = stack, black_box(gc.allocate(42.42)));
+                letroot!(x = stack, black_box(gc.allocate(42.42)));
                 keep_on_stack!(&x);
-                root!(y = stack, black_box(gc.allocate(42.42)));
+                letroot!(y = stack, black_box(gc.allocate(42.42)));
                 keep_on_stack!(&y);
-                root!(z = stack, black_box(gc.allocate(42.42)));
+                letroot!(z = stack, black_box(gc.allocate(42.42)));
                 keep_on_stack!(&z);
                 gc.collect_if_necessary();
             }

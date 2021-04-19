@@ -121,7 +121,7 @@ fn main() {
     let string = std::fs::read_to_string(&options.file);
     match string {
         Ok(source) => {
-            root!(
+            letroot!(
                 function = gcstack,
                 match rt.compile(
                     options.file.as_os_str().to_str().unwrap(),
@@ -144,10 +144,10 @@ fn main() {
                     }
                 }
             );
-            root!(funcc = gcstack, *&*function);
+            letroot!(funcc = gcstack, *&*function);
             let global = rt.global_object();
 
-            root!(
+            letroot!(
                 args = gcstack,
                 Arguments::new(JsValue::encode_object_value(global), &mut [])
             );

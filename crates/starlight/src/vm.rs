@@ -255,10 +255,10 @@ impl Runtime {
             //code.display_to(&mut OutBuf).unwrap();
             let stack = self.shadowstack();
 
-            root!(env = stack, Environment::new(self, 0));
-            root!(fun = stack, JsVMFunction::new(self, code, *env));
-            root!(func = stack, *&*fun);
-            root!(
+            letroot!(env = stack, Environment::new(self, 0));
+            letroot!(fun = stack, JsVMFunction::new(self, code, *env));
+            letroot!(func = stack, *&*fun);
+            letroot!(
                 args = stack,
                 Arguments::new(JsValue::encode_undefined_value(), &mut [])
             );

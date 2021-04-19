@@ -35,7 +35,7 @@ unsafe impl Trace for JsGlobal {
 impl JsGlobal {
     pub fn new(vm: &mut Runtime) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             Structure::new_unique_with_proto(vm, None, false)
         );

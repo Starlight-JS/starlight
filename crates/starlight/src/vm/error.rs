@@ -18,7 +18,7 @@ impl JsError {
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap())
         );
@@ -51,7 +51,7 @@ impl JsEvalError {
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap())
         );
@@ -84,7 +84,7 @@ impl JsRangeError {
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap())
         );
@@ -117,7 +117,7 @@ impl JsReferenceError {
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             structure.unwrap_or_else(|| vm
                 .global_data()
@@ -154,7 +154,7 @@ impl JsSyntaxError {
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap())
         );
@@ -187,7 +187,7 @@ impl JsTypeError {
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
         let stack = vm.shadowstack();
-        root!(
+        letroot!(
             shape = stack,
             structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap())
         );

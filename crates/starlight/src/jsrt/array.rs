@@ -68,7 +68,7 @@ pub fn array_of(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> 
 
 pub fn array_from(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
-    root!(arg1 = stack, args.at(0).to_object(vm)?);
+    letroot!(arg1 = stack, args.at(0).to_object(vm)?);
     let len = arg1.get(vm, "length".intern())?;
     let len = if len.is_number() {
         let n = len.to_number(vm)?;
@@ -92,7 +92,7 @@ pub fn array_from(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
 }
 pub fn array_join(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
-    root!(obj = stack, args.this.to_object(vm)?);
+    letroot!(obj = stack, args.this.to_object(vm)?);
     let len = obj.get(vm, "length".intern())?.to_number(vm)?;
     let len = if len as u32 as f64 == len {
         len as u32
@@ -128,18 +128,18 @@ pub fn array_join(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
 }
 pub fn array_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
-    root!(this = stack, args.this.to_object(vm)?);
+    letroot!(this = stack, args.this.to_object(vm)?);
     let m = this.get_property(vm, "join".intern());
     if m.value().is_callable() {
-        root!(func = stack, unsafe {
+        letroot!(func = stack, unsafe {
             m.value().get_object().downcast_unchecked::<JsObject>()
         });
-        root!(f2 = stack, *&*func);
+        letroot!(f2 = stack, *&*func);
         let f = func.as_function_mut();
-        root!(args = stack, Arguments::new(args.this, &mut []));
+        letroot!(args = stack, Arguments::new(args.this, &mut []));
         return f.call(vm, &mut args, JsValue::new(*f2));
     }
-    root!(args = stack, Arguments::new(args.this, &mut []));
+    letroot!(args = stack, Arguments::new(args.this, &mut []));
     object_to_string(vm, &mut args)
 }
 
@@ -201,7 +201,7 @@ pub fn array_pop(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
 
 pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    root!(obj = stack, args.this.to_object(rt)?);
+    letroot!(obj = stack, args.this.to_object(rt)?);
     let len = get_length(rt, &mut obj)?;
     let arg_count = args.size();
     if arg_count == 0 || !args.at(0).is_callable() {
@@ -214,8 +214,8 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
 
-    root!(callbackf = stack, args.at(0).get_jsobject());
-    root!(cb = stack, *&*callbackf);
+    letroot!(callbackf = stack, args.at(0).get_jsobject());
+    letroot!(cb = stack, *&*callbackf);
     let callback = callbackf.as_function_mut();
     if len == 0 && arg_count <= 1 {
         let msg = JsString::new(
@@ -227,7 +227,7 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
     let mut k = 0;
-    root!(acc = stack, JsValue::encode_undefined_value());
+    letroot!(acc = stack, JsValue::encode_undefined_value());
     if arg_count > 1 {
         *acc = args.at(1);
     } else {
@@ -256,7 +256,7 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
     while k < len {
         if obj.has_property(rt, Symbol::Index(k)) {
             let mut tmp = [JsValue::encode_undefined_value(); 4];
-            root!(
+            letroot!(
                 args = stack,
                 Arguments::new(JsValue::encode_undefined_value(), &mut tmp)
             );
@@ -284,7 +284,7 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
     let stack = rt.shadowstack();
-    root!(this = stack, args.this.get_jsobject());
+    letroot!(this = stack, args.this.get_jsobject());
     let this_length = super::get_length(rt, &mut this)?;
 
     let mut new_values = JsArray::new(rt, this_length);
@@ -302,7 +302,7 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
                 rt, msg, None,
             )));
         }
-        root!(arg = stack, arg.get_jsobject());
+        letroot!(arg = stack, arg.get_jsobject());
         let len = super::get_length(rt, &mut arg)?;
         for n in 0..len {
             let val = arg.get(rt, Symbol::Index(n))?;
@@ -316,7 +316,7 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
 
 pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    root!(array = stack, args.this.to_object(rt)?);
+    letroot!(array = stack, args.this.to_object(rt)?);
     let length = super::get_length(rt, &mut array)?;
 
     let callback = args.at(0);
@@ -326,8 +326,8 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
         )));
     }
 
-    root!(callback = stack, callback.to_object(rt)?);
-    root!(cb2 = stack, *&*callback);
+    letroot!(callback = stack, callback.to_object(rt)?);
+    letroot!(cb2 = stack, *&*callback);
     let this_arg = args.at(1);
     let mut buf: [JsValue; 3] = [JsValue::encode_undefined_value(); 3];
     for i in 0..length {
@@ -336,7 +336,7 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
             buf[0] = element;
             buf[1] = JsValue::new(i);
             buf[2] = JsValue::new(*&*array);
-            root!(args = stack, Arguments::new(this_arg, &mut buf));
+            letroot!(args = stack, Arguments::new(this_arg, &mut buf));
 
             callback
                 .as_function_mut()
@@ -348,7 +348,7 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
 
 pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    root!(array = stack, args.this.to_object(rt)?);
+    letroot!(array = stack, args.this.to_object(rt)?);
     let length = super::get_length(rt, &mut array)?;
 
     let callback = args.at(0);
@@ -358,10 +358,10 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         )));
     }
 
-    root!(callback = stack, callback.to_object(rt)?);
-    root!(cb2 = stack, *&*callback);
-    root!(result = stack, JsArray::new(rt, 0));
-    root!(this_arg = stack, args.at(1));
+    letroot!(callback = stack, callback.to_object(rt)?);
+    letroot!(cb2 = stack, *&*callback);
+    letroot!(result = stack, JsArray::new(rt, 0));
+    letroot!(this_arg = stack, args.at(1));
 
     let mut next_index = 0;
     let mut buf = [JsValue::encode_undefined_value(); 3];
@@ -387,7 +387,7 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
 
 pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    root!(array = stack, args.this.to_object(rt)?);
+    letroot!(array = stack, args.this.to_object(rt)?);
     let length = super::get_length(rt, &mut array)?;
 
     let callback = args.at(0);
@@ -397,10 +397,10 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
         )));
     }
 
-    root!(callback = stack, callback.to_object(rt)?);
-    root!(cb2 = stack, *&*callback);
-    root!(result = stack, JsArray::new(rt, 0));
-    root!(this_arg = stack, args.at(1));
+    letroot!(callback = stack, callback.to_object(rt)?);
+    letroot!(cb2 = stack, *&*callback);
+    letroot!(result = stack, JsArray::new(rt, 0));
+    letroot!(this_arg = stack, args.at(1));
     let mut buf = [JsValue::encode_undefined_value(); 3];
     for i in 0..length {
         if !array.has_own_property(rt, Symbol::Index(i)) {
@@ -421,7 +421,7 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
 
 pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
-    root!(obj = stack, args.this.to_object(rt)?);
+    letroot!(obj = stack, args.this.to_object(rt)?);
 
     let len = super::get_length(rt, &mut obj)?;
     let mut k;
@@ -455,7 +455,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
     let result_len = if fin > k { fin - k } else { 0 };
 
     if result_len > (1024 << 6) {
-        root!(ary = stack, JsArray::new(rt, result_len));
+        letroot!(ary = stack, JsArray::new(rt, result_len));
 
         let mut n = 0;
         while k < fin {
@@ -471,7 +471,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
         }
         return Ok(JsValue::new(*&*ary));
     }
-    root!(ary = stack, JsArray::new(rt, result_len));
+    letroot!(ary = stack, JsArray::new(rt, result_len));
     let mut n = 0;
     while k < fin {
         if obj.has_property(rt, Symbol::Index(k)) {
