@@ -1205,6 +1205,7 @@ impl GcPointer<JsObject> {
     ) {
         if index < self.indexed.vector.size() {
             if !absent {
+                self.indexed.non_gc &= !val.is_object();
                 *self.indexed.vector.at_mut(index) = val;
             } else {
                 *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
@@ -1220,6 +1221,7 @@ impl GcPointer<JsObject> {
             vector.mut_handle().resize(vm.heap(), index + 1);
             self.indexed.vector = *vector;
             if !absent {
+                self.indexed.non_gc &= !val.is_object();
                 *self.indexed.vector.at_mut(index) = val;
             } else {
                 *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
@@ -1266,6 +1268,7 @@ impl GcPointer<JsObject> {
                         && !self.indexed.vector.at(index).is_empty()
                     {
                         if !desc.is_value_absent() {
+                            self.indexed.non_gc &= !desc.value().is_object();
                             *self.indexed.vector.at_mut(index) = desc.value();
                         }
                         return Ok(true);
@@ -1283,6 +1286,7 @@ impl GcPointer<JsObject> {
             Some(entry) => {
                 let mut returned = false;
                 if entry.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
+                    self.indexed.non_gc &= !desc.value().is_object();
                     entry.merge(vm, desc);
                 }
                 Ok(returned)
@@ -1304,6 +1308,7 @@ impl GcPointer<JsObject> {
                 if index >= self.indexed.length() {
                     self.indexed.set_length(index + 1);
                 }
+                self.indexed.non_gc &= !desc.value().is_object();
                 sparse.insert(index, StoredSlot::new(vm, desc));
                 Ok(true)
             }

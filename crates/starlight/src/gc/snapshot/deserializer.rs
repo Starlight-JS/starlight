@@ -796,6 +796,7 @@ impl Deserializable for IndexedElements {
             map,
             length,
             flags,
+            non_gc: true,
         }
     }
 

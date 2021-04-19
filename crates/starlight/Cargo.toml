@@ -31,7 +31,7 @@ num = "0.3.1"
 mimalloc = "0.1.25"
 libloading = "0.7.0"
 const-random = "0.1.13"
-libmir-sys = { path = "../libmir-sys" }
+#libmir-sys = { path = "../libmir-sys" }
 [features]
 val-as-f64 = []
 val-as-u64 = []

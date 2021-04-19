@@ -17,10 +17,10 @@ pub fn normalize_prototype_chain(rt: &mut Runtime, base: &GcPointer<JsObject>) -
         *current = prototype.get_jsobject();
         structure = current.structure;
         if structure.is_unique() {
-            if structure.has_been_flattened_before {
-                return (usize::MAX, saw_poly_proto);
+            if !structure.has_been_flattened_before {
+                structure.flatten_dictionary_structure(rt, &current);
+                //return (usize::MAX, saw_poly_proto);
             }
-            structure.flatten_dictionary_structure(rt, &current);
         }
         count += 1;
     }

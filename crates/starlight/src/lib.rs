@@ -30,7 +30,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
-pub mod jit;
+//pub mod jit;
 pub mod jsrt;
 //pub mod tracingjit;
 pub mod vm;

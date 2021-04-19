@@ -1,5 +1,5 @@
 use crate::{
-    gc::cell::{GcPointer, Trace, Tracer, WeakRef},
+    gc::cell::{GcPointer, Trace, Tracer},
     vm::{structure::Structure, structure_chain::StructureChain},
 };
 
@@ -7,16 +7,12 @@ pub mod opcodes;
 pub mod opcodes_v2;
 pub mod profile;
 
-pub enum ObservedType {
-    Number,
-}
-
 pub enum TypeFeedBack {
     StructureCache {
         structure: GcPointer<Structure>,
     },
     PropertyCache {
-        structure: WeakRef<Structure>,
+        structure: GcPointer<Structure>,
         offset: u32,
     },
     PutByIdFeedBack {

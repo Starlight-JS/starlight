@@ -496,12 +496,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let rhs = frame.pop();
                 profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_number() && rhs.is_number()) {
-                    //    profile.lhs_saw_number();
-                    //    profile.rhs_saw_number();
                     frame.push(JsValue::new(lhs.get_number() / rhs.get_number()));
                     continue;
                 }
-                //profile.observe_lhs_and_rhs(lhs, rhs);
+
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
                 frame.push(JsValue::new(lhs / rhs));
@@ -522,13 +520,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     profile.set_observed_int32_overflow();
                 }
                 if likely(lhs.is_number() && rhs.is_number()) {
-                    //  profile.lhs_saw_number();
-                    //  profile.rhs_saw_number();
-
                     frame.push(JsValue::new(lhs.get_number() * rhs.get_number()));
                     continue;
                 }
-                //profile.observe_lhs_and_rhs(lhs, rhs);
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
                 frame.push(JsValue::new(lhs * rhs));
@@ -541,12 +535,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let rhs = frame.pop();
                 profile.observe_lhs_and_rhs(lhs, rhs);
                 if likely(lhs.is_number() && rhs.is_number()) {
-                    //  profile.lhs_saw_number();
-                    //  profile.rhs_saw_number();
                     frame.push(JsValue::new(lhs.get_number() % rhs.get_number()));
                     continue;
                 }
-                // profile.observe_lhs_and_rhs(lhs, rhs);
                 let lhs = lhs.to_number(rt)?;
                 let rhs = rhs.to_number(rt)?;
                 frame.push(JsValue::new(lhs % rhs));
@@ -638,12 +629,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             .feedback
                             .get_unchecked(fdbk as usize)
                     {
-                        if let Some(structure) = structure.upgrade() {
-                            if GcPointer::ptr_eq(&structure, &obj.structure()) {
-                                frame.push(*obj.direct(*offset as _));
+                        if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                            frame.push(*obj.direct(*offset as _));
 
-                                continue;
-                            }
+                            continue;
                         }
                     }
 
@@ -663,12 +652,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
                                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                                structure: rt.heap().make_weak(
-                                    slot.base()
-                                        .unwrap()
-                                        .downcast_unchecked::<JsObject>()
-                                        .structure(),
-                                ),
+                                structure: slot
+                                    .base()
+                                    .unwrap()
+                                    .downcast_unchecked::<JsObject>()
+                                    .structure(),
 
                                 offset: slot.offset(),
                             }
@@ -729,6 +717,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                         *obj.direct_mut(*offset as usize) = value;
                                         break 'exit;
                                     }
+
                                     let vector = &structure_chain.unwrap().vector;
                                     let mut i = 0;
 
@@ -1296,8 +1285,6 @@ unsafe fn put_by_id_slow(
 
         if GcPointer::ptr_eq(&base_cell, &slot.base.unwrap()) {
             if slot.put_result_type() == PutResultType::New {
-                return Ok(());
-                // TODO
                 if !new_structure.is_unique()
                     && new_structure
                         .previous

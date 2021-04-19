@@ -23,6 +23,7 @@ pub struct IndexedElements {
     pub(crate) vector: GcPointer<DenseArrayMap>,
     pub(crate) length: u32,
     pub(crate) flags: u32,
+    pub(crate) non_gc: bool,
 }
 
 impl IndexedElements {
@@ -91,6 +92,7 @@ impl IndexedElements {
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,
             vector: ArrayStorage::new(_vm.heap(), 0),
             map: None,
+            non_gc: true,
         }
     }
 }
