@@ -1,3 +1,8 @@
+use crate::{
+    gc::snapshot::{deserializer::Deserializable, serializer::Serializable},
+    prelude::SnapshotSerializer,
+};
+use mopa::mopafy;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -6,14 +11,9 @@ use std::{
     mem::transmute,
     ops::{Deref, DerefMut},
     ptr::NonNull,
-    sync::atomic::{AtomicU8, Ordering},
+    sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
-use ctor::ctor;
-use crate::{
-    gc::snapshot::{deserializer::Deserializable, serializer::Serializable},
-    prelude::SnapshotSerializer,
-};
-use mopa::mopafy;
+use tagged_box::*;
 
 pub trait Tracer {
     fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell>;
@@ -109,12 +109,8 @@ pub unsafe extern "C" fn get_jscell_type_id(x: *mut GcPointerBase) -> u64 {
 }
 #[repr(C)]
 pub struct GcPointerBase {
-    pub vtable: usize,
-    pub cell_state: AtomicU8, //pub next: *mut Self,
-    pub size: u32,
-    pub _pad: u8,
-    pub _pad1: u8,
-    pub _pad2: u8,
+    pub vtable: TaggedPointer,
+    pub type_id: TypeId,
 }
 
 pub const POSSIBLY_BLACK: u8 = 0;
@@ -126,50 +122,35 @@ impl GcPointerBase {
         offsetof!(GcPointerBase.vtable)
     }
 
-    pub fn size_offsetof() -> usize {
-        offsetof!(GcPointerBase.size)
-    }
-
-    pub fn state_offsetof() -> usize {
-        offsetof!(GcPointerBase.cell_state)
-    }
-    pub fn new(vtable: usize, size: u32) -> Self {
+    pub fn new(vtable: usize, type_id: TypeId) -> Self {
         Self {
-            vtable: vtable,
-            size,
-            _pad: 0,
-            _pad1: 0,
-            _pad2: 0,
-            cell_state: AtomicU8::new(DEFINETELY_WHITE),
-            //  next: null_mut(),
-            //mark: false,
-            // dead: true,
+            vtable: unsafe { TaggedPointer::new_unchecked(vtable, DEFINETELY_WHITE) },
+            type_id,
         }
     }
 
-    pub fn set_allocated(&mut self) {
-        self.vtable |= 1 << 0;
-    }
-
-    pub fn is_allocated(&self) -> bool {
-        (self.vtable >> 0) & 1 != 0
-    }
-
-    pub fn deallocate(&mut self) {
-        self.vtable &= !(1 << 0);
-    }
-
     pub fn state(&self) -> u8 {
-        self.cell_state.load(Ordering::Acquire)
+        self.vtable.discriminant()
+        //self.cell_state.load(Ordering::Acquire)
     }
 
-    pub fn set_state(&self, from: u8, to: u8) -> bool {
-        self.cell_state
-            .compare_exchange_weak(from, to, Ordering::AcqRel, Ordering::Relaxed)
-            == Ok(from)
+    pub fn set_state(&mut self, from: u8, to: u8) -> bool {
+        /*self.cell_state
+        .compare_exchange_weak(from, to, Ordering::AcqRel, Ordering::Relaxed)
+        == Ok(from)*/
+        unsafe {
+            if self.state() != from {
+                return false;
+            }
+            self.vtable = TaggedPointer::new_unchecked(self.vtable.as_ptr::<()>() as usize, to);
+            true
+        }
     }
-    pub fn force_set_state(&self, to: u8) {
-        self.cell_state.store(to, Ordering::AcqRel);
+    pub fn force_set_state(&mut self, to: u8) {
+        unsafe {
+            self.vtable = TaggedPointer::new_unchecked(self.vtable.as_ptr::<()>() as usize, to);
+        }
+        //self.cell_state.store(to, Ordering::AcqRel);
     }
     pub fn data<T>(&self) -> *mut T {
         unsafe {
@@ -179,27 +160,28 @@ impl GcPointerBase {
         }
     }
     pub fn raw(&self) -> usize {
-        self.vtable
+        self.vtable.as_raw_usize()
     }
 
     pub fn get_dyn(&self) -> &mut dyn GcCell {
         unsafe {
             std::mem::transmute(mopa::TraitObject {
-                vtable: (self.vtable & !(1 << 0)) as *mut (),
+                vtable: self.vtable() as _,
                 data: self.data::<u8>() as _,
             })
         }
     }
 
     pub fn vtable(&self) -> usize {
-        (self.vtable & !(1 << 0)) as usize
+        self.vtable.as_ptr::<()>() as _
+        // (self.vtable & !(1 << 0)) as usize
     }
 }
 pub fn vtable_of<T: GcCell>(x: *const T) -> usize {
     unsafe { core::mem::transmute::<_, mopa::TraitObject>(x as *const dyn GcCell).vtable as _ }
 }
 
-pub  fn vtable_of_type<T: GcCell + Sized>() -> usize {
+pub fn vtable_of_type<T: GcCell + Sized>() -> usize {
     vtable_of(core::ptr::null::<T>())
 }
 
@@ -233,7 +215,7 @@ impl<T: GcCell + ?Sized> GcPointer<T> {
 impl<T: GcCell + ?Sized> GcPointer<T> {
     #[inline]
     pub fn is<U: GcCell>(self) -> bool {
-        unsafe { (*self.base.as_ptr()).get_dyn().type_id() == TypeId::of::<U>() }
+        unsafe { (*self.base.as_ptr()).type_id == TypeId::of::<U>() }
     }
 
     #[inline]
@@ -488,10 +470,17 @@ pub trait GetVTable {
 
 impl<T: GcCell> GetVTable for T {
     fn vtable() -> &'static ObjectVTable {
-        static mut VTABLE: ObjectVTable = ObjectVTable{
+        static mut VTABLE: ObjectVTable = ObjectVTable {
             real_vtable: 0 as _,
             type_id: TypeId::of::<()>(),
-        };unsafe {VTABLE.real_vtable = vtable_of_type::<Self>() as _;VTABLE.type_id = TypeId::of::<T>()};
-       unsafe { &VTABLE }
+        };
+        unsafe {
+            VTABLE.real_vtable = vtable_of_type::<Self>() as _;
+            VTABLE.type_id = TypeId::of::<T>()
+        };
+        unsafe { &VTABLE }
     }
-}pub fn vtable_of_i32() -> &'static ObjectVTable { i32::vtable() }
+}
+pub fn vtable_of_i32() -> &'static ObjectVTable {
+    i32::vtable()
+}

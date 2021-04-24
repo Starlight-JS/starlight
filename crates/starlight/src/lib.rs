@@ -5,7 +5,8 @@
     linked_list_cursors,
     destructuring_assignment,
     const_raw_ptr_to_usize_cast,
-    try_trait,const_type_id
+    try_trait,
+    const_type_id
 )]
 #![allow(unused_unsafe, unused_mut)]
 
@@ -30,7 +31,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
-//pub mod jit;
+pub mod jit;
 pub mod jsrt;
 //pub mod tracingjit;
 pub mod vm;

@@ -114,7 +114,7 @@ impl JsValue {
     }
     #[inline]
     pub fn encode_int32(x: i32) -> Self {
-        //Self::encode_native_u32(x as _)
+
         Self::internal_new(x as u32 as u64, INT32_TAG)
     }
     #[inline]

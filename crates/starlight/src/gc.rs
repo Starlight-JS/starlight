@@ -9,7 +9,7 @@ use crate::{
     },
     vm::GcParams,
 };
-use std::{cmp::Ordering, fmt, marker::PhantomData};
+use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
     mem::size_of,
     ptr::{null_mut, NonNull},
@@ -52,7 +52,6 @@ pub mod cell;
 pub mod snapshot;
 pub const K: usize = 1024;
 pub mod accounting;
-pub mod bitmap_ms;
 pub mod bump;
 pub mod freelist;
 pub mod malloc_gc;
@@ -117,7 +116,12 @@ pub trait GarbageCollector {
     ///
     ///
     /// ***NOTE*** This function must not trigger garbage collection cycle.
-    fn allocate(&mut self, size: usize, vtable: usize) -> Option<NonNull<GcPointerBase>>;
+    fn allocate(
+        &mut self,
+        size: usize,
+        vtable: usize,
+        type_id: TypeId,
+    ) -> Option<NonNull<GcPointerBase>>;
     fn gc(&mut self);
     fn collect_if_necessary(&mut self);
     fn stats(&self) -> GcStats;
@@ -151,15 +155,20 @@ impl Heap {
         self.gc.defer();
     }
     #[inline]
-    pub fn allocate_raw(&mut self, vtable: *mut (), size: usize) -> *mut GcPointerBase {
+    pub fn allocate_raw(
+        &mut self,
+        vtable: *mut (),
+        size: usize,
+        type_id: TypeId,
+    ) -> *mut GcPointerBase {
         let real_size = size + size_of::<GcPointerBase>();
-        let memory = self.gc.allocate(real_size, vtable as _);
+        let memory = self.gc.allocate(real_size, vtable as _, type_id);
         memory.map(|x| x.as_ptr()).unwrap_or_else(|| null_mut())
     }
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
         let size = value.compute_size();
-        let memory = self.allocate_raw(vtable_of(&value) as _, size);
+        let memory = self.allocate_raw(vtable_of(&value) as _, size, TypeId::of::<T>());
         unsafe {
             (*memory).data::<T>().write(value);
             GcPointer {
@@ -258,10 +267,10 @@ pub unsafe fn fill_with_free(from: usize, to: usize) {
     let mut scan = from;
     while scan < to {
         let addr = scan as *mut GcPointerBase;
-        (*addr).vtable = 0;
-        (*addr)
-            .cell_state
-            .store(DEFINETELY_WHITE, std::sync::atomic::Ordering::Relaxed);
+        //  (*addr).vtable = 0;
+        //(*addr)
+        //  .cell_state
+        //.store(DEFINETELY_WHITE, std::sync::atomic::Ordering::Relaxed);
         scan += size_of::<GcPointerBase>();
     }
 }

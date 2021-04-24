@@ -303,9 +303,9 @@ impl MiGC {
     ) {
         if libmimalloc_sys::mi_heap_check_owned(self.mi_heap, ptr.cast()) {
             if libmimalloc_sys::mi_heap_contains_block(self.mi_heap, ptr.cast()) {
-                if (*ptr.cast::<GcPointerBase>()).is_allocated() {
+                /*if (*ptr.cast::<GcPointerBase>()).is_allocated() {
                     f(self, ptr.cast());
-                }
+                }*/
             }
         }
     }
@@ -337,7 +337,12 @@ impl GarbageCollector for MiGC {
             self.weak_slots.back_mut().unwrap() as *mut _
         }
     }
-    fn allocate(&mut self, size: usize, vtable: usize) -> Option<NonNull<GcPointerBase>> {
+    fn allocate(
+        &mut self,
+        size: usize,
+        vtable: usize,
+        type_id: TypeId,
+    ) -> Option<NonNull<GcPointerBase>> {
         unsafe {
             let pointer = if size <= libmimalloc_sys::MI_SMALL_SIZE_MAX {
                 libmimalloc_sys::mi_heap_malloc_small(self.mi_heap, size)
@@ -346,7 +351,7 @@ impl GarbageCollector for MiGC {
             }
             .cast::<GcPointerBase>();
 
-            pointer.write(GcPointerBase::new(vtable, size as _));
+            pointer.write(GcPointerBase::new(vtable, type_id));
             self.allocated += size;
             Some(NonNull::new_unchecked(pointer))
         }
@@ -419,7 +424,7 @@ unsafe extern "C" fn sweep(
     let ptr = block.cast::<GcPointerBase>();
     if (*ptr).state() == DEFINETELY_WHITE {
         std::ptr::drop_in_place((*ptr).get_dyn());
-        (*ptr).deallocate();
+        //  (*ptr).deallocate();
         libmimalloc_sys::mi_free(ptr.cast());
     } else {
         gc.allocated += block_sz;

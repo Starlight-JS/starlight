@@ -93,7 +93,18 @@ typedef struct callframe_s {
 
 extern uint64_t get_jscell_type_id(void *x);
 extern result jsval_to_number_slow(void *rt, jsval val);
-
+extern result op_add_slow(void *, jsval, jsval);
+extern result op_sub_slow(void *, jsval, jsval);
+extern result op_div_slow(void *, jsval, jsval);
+extern result op_mul_slow(void *, jsval, jsval);
+extern result op_rem_slow(void *, jsval, jsval);
+extern result op_shl_slow(void *, jsval, jsval);
+extern result op_shr_slow(void *, jsval, jsval);
+extern result op_ushr_slow(void *, jsval, jsval);
+extern result op_less_slow(void *, jsval, jsval);
+extern result op_lesseq_slow(void *, jsval, jsval);
+extern result op_greater_slow(void *, jsval, jsval);
+extern result op_greatereq_slow(void *, jsval, jsval);
 #define jsval_from_raw(x) (uint64_t) x
 #define jsval_get_tag(val) (uint32_t)(val >> NUM_DATA_BITS)
 #define jsval_get_etag(val) (uint32_t)((val >> (NUM_DATA_BITS - 1)))

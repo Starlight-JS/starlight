@@ -169,6 +169,18 @@ pub static STARLIGHT_SYMBOLS: Lazy<&'static [(&'static str, usize)]> = Lazy::new
     ]))
 });
 
+extern "C" fn import_resolver(name: *const i8) -> *mut libc::c_void {
+    unsafe {
+        let name = std::ffi::CStr::from_ptr(name);
+        for (fname, func) in STARLIGHT_SYMBOLS.iter() {
+            if *fname == name.to_str().unwrap() {
+                return (*func) as _;
+            }
+        }
+        null_mut()
+    }
+}
+
 pub struct JITState {
     pub(crate) ctx: MIR_context_t,
     pub(crate) tmp_var_id: u32,
@@ -305,7 +317,7 @@ unsafe fn mir_compile_c_module(
     }
     if ret_code == 0 && !module.is_null() {
         MIR_load_module(ctx, module);
-        MIR_link(ctx, Some(MIR_set_gen_interface), None);
+        MIR_link(ctx, Some(MIR_set_gen_interface), Some(import_resolver));
         return module;
     }
     null_mut()

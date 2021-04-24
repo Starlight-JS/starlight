@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{any::TypeId, mem::size_of};
 
 use crate::gc::cell::GcPointer;
 
@@ -73,8 +73,11 @@ impl Deserializable for StructureChain {
     }
 
     unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
-        rt.heap()
-            .allocate_raw(vtable_of_type::<Self>() as _, size_of::<Self>())
+        rt.heap().allocate_raw(
+            vtable_of_type::<Self>() as _,
+            size_of::<Self>(),
+            TypeId::of::<Self>(),
+        )
     }
 }
 

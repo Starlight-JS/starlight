@@ -52,7 +52,7 @@ impl MallocGC {
         self.allocations.retain(|pointer| unsafe {
             let object = &mut **pointer;
             if !object.set_state(POSSIBLY_BLACK, DEFINETELY_WHITE) {
-                allocated -= object.size as usize;
+                allocated -= (*object).get_dyn().compute_size() + 16;
                 std::ptr::drop_in_place(object.get_dyn());
 
                 libc::free(object as *mut GcPointerBase as *mut _);
@@ -197,13 +197,16 @@ impl GarbageCollector for MallocGC {
         self.collect();
     }
 
-    fn allocate(&mut self, size: usize, vtable: usize) -> Option<NonNull<GcPointerBase>> {
+    fn allocate(
+        &mut self,
+        size: usize,
+        vtable: usize,
+        type_id: TypeId,
+    ) -> Option<NonNull<GcPointerBase>> {
         let ptr = self.malloc(size).to_mut_ptr::<GcPointerBase>();
         unsafe {
-            ptr.write(GcPointerBase::new(vtable, size as _));
-            (*ptr)
-                .cell_state
-                .store(DEFINETELY_WHITE, atomic::Ordering::Relaxed);
+            ptr.write(GcPointerBase::new(vtable, type_id));
+
             //(*ptr).set_allocated();
             Some(NonNull::new_unchecked(ptr))
         }
@@ -235,7 +238,7 @@ impl GarbageCollector for MallocGC {
 
     fn walk(&mut self, callback: &mut dyn FnMut(*mut GcPointerBase, usize) -> bool) {
         self.allocations.iter().for_each(|x| unsafe {
-            callback(*x, (**x).size as usize);
+            callback(*x, (**x).get_dyn().compute_size() + 16);
         });
     }
 }
