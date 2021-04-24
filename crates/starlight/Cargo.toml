@@ -10,6 +10,7 @@ edition = "2018"
 mopa = "0.2"
 wtf-rs = { path = "../wtf-rs" }
 rand = "0.8"
+ctor = "*"
 memmap2 = "0.2"
 cfg-if = "1.0"
 once_cell = "1.7"
@@ -31,7 +32,7 @@ num = "0.3.1"
 mimalloc = "0.1.25"
 libloading = "0.7.0"
 const-random = "0.1.13"
-#libmir-sys = { path = "../libmir-sys" }
+libmir-sys = { path = "../libmir-sys" }
 [features]
 val-as-f64 = []
 val-as-u64 = []

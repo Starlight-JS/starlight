@@ -1,7 +1,5 @@
 fn main() {
-    cc::Build::new()
-        .files(&["mir/mir.c", "mir/c2mir/c2mir.c", "mir/mir-gen.c"])
-        .includes(&[
+    cc::Build::new().includes(&[
             "mir",
             "mir/mir-utils",
             "mir/c2mir/",
@@ -10,6 +8,7 @@ fn main() {
             "mir/c2mir/ppc64",
             "mir/c2mir/s390x",
         ])
+        .files(&["mir/mir.c", "mir/c2mir/c2mir.c", "mir/mir-gen.c"])
         .flag_if_supported("-Wall")
         .opt_level(3)
         .compile("mir-sys");

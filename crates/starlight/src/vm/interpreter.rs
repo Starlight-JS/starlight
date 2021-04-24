@@ -758,7 +758,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut func = frame.pop();
                 let mut this = frame.pop();
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
-                if !func.is_callable() {
+                if unlikely(!func.is_callable()) {
                     let msg = JsString::new(rt, "not a callable object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,

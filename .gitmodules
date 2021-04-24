@@ -1,0 +1,3 @@
+[submodule "mir"]
+    path = crates/libmir-sys/mir
+    url = https://github.com/vnmakarov/mir

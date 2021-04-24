@@ -8,7 +8,7 @@ use std::{
     ptr::NonNull,
     sync::atomic::{AtomicU8, Ordering},
 };
-
+use ctor::ctor;
 use crate::{
     gc::snapshot::{deserializer::Deserializable, serializer::Serializable},
     prelude::SnapshotSerializer,
@@ -199,7 +199,7 @@ pub fn vtable_of<T: GcCell>(x: *const T) -> usize {
     unsafe { core::mem::transmute::<_, mopa::TraitObject>(x as *const dyn GcCell).vtable as _ }
 }
 
-pub fn vtable_of_type<T: GcCell + Sized>() -> usize {
+pub  fn vtable_of_type<T: GcCell + Sized>() -> usize {
     vtable_of(core::ptr::null::<T>())
 }
 
@@ -475,3 +475,23 @@ impl<T: GcCell> PartialEq for GcPointer<T> {
 }
 
 impl<T: GcCell> Eq for GcPointer<T> {}
+
+#[repr(C)]
+pub struct ObjectVTable {
+    pub real_vtable: *const (),
+    pub type_id: TypeId,
+}
+
+pub trait GetVTable {
+    fn vtable() -> &'static ObjectVTable;
+}
+
+impl<T: GcCell> GetVTable for T {
+    fn vtable() -> &'static ObjectVTable {
+        static mut VTABLE: ObjectVTable = ObjectVTable{
+            real_vtable: 0 as _,
+            type_id: TypeId::of::<()>(),
+        };unsafe {VTABLE.real_vtable = vtable_of_type::<Self>() as _;VTABLE.type_id = TypeId::of::<T>()};
+       unsafe { &VTABLE }
+    }
+}pub fn vtable_of_i32() -> &'static ObjectVTable { i32::vtable() }

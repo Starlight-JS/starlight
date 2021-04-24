@@ -5,7 +5,7 @@
     linked_list_cursors,
     destructuring_assignment,
     const_raw_ptr_to_usize_cast,
-    try_trait
+    try_trait,const_type_id
 )]
 #![allow(unused_unsafe, unused_mut)]
 

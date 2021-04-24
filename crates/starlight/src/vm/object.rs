@@ -848,6 +848,7 @@ impl JsObject {
     }*/
 
     define_jsclass!(JsObject, Object);
+    /// create new empty JS object instance.
     pub fn new_empty(vm: &mut Runtime) -> GcPointer<Self> {
         let stack = vm.shadowstack();
         letroot!(
@@ -856,6 +857,7 @@ impl JsObject {
         );
         Self::new(vm, &structure, Self::get_class(), ObjectTag::Ordinary)
     }
+    /// Create new JS object instance with provided class, structure and tag.
     pub fn new(
         vm: &mut Runtime,
         structure: &GcPointer<Structure>,
