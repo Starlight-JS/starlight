@@ -1,4 +1,5 @@
 use crate::{
+    bytecompiler::*,
     letroot,
     vm::Runtime,
     vm::{
@@ -42,9 +43,19 @@ pub fn function_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
 }
 
 pub fn function_prototype(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let _ = vm;
-    let _ = args;
-    Ok(JsValue::encode_undefined_value())
+    let mut params = vec![];
+    if args.size() >= 2 {
+        for i in 0..args.size() - 1 {
+            params.push(args.at(i).to_string(vm)?);
+        }
+    }
+    let body = if args.size() == 0 {
+        "{ }".to_owned()
+    } else {
+        format!("{{ {} }}", args.at(args.size() - 1).to_string(vm)?)
+    };
+
+    Ok(ByteCompiler::compile_code(vm, &params, body)?)
 }
 
 pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {

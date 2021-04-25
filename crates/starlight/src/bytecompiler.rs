@@ -1,10 +1,16 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
+use crate::vm::*;
 use crate::{
     bytecode::{opcodes::Opcode, TypeFeedBack},
     prelude::*,
     vm::{code_block::CodeBlock, RuntimeRef},
 };
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use swc_common::{
+    errors::{DiagnosticBuilder, Emitter, Handler},
+    sync::Lrc,
+};
+use swc_common::{FileName, SourceMap};
+use swc_ecmascript::parser::*;
 pub struct LoopControlInfo {
     breaks: Vec<Box<dyn FnOnce(&mut ByteCompiler)>>,
     continues: Vec<Box<dyn FnOnce(&mut ByteCompiler)>>,
@@ -360,6 +366,90 @@ impl ByteCompiler {
         {
             self.rt.perf.get_perf(crate::vm::perf::Perf::INVALID);
         }*/
+    }
+    pub fn compile_code(
+        mut vm: &mut Runtime,
+        params_: &[String],
+        body: String,
+    ) -> Result<JsValue, JsValue> {
+        let mut params = vec![];
+        let mut rat = None;
+        let scope = Rc::new(RefCell::new(Scope {
+            variables: HashMap::new(),
+            parent: None,
+            depth: 0,
+        }));
+        let mut code = CodeBlock::new(vm, "<anonymous>".intern(), false);
+        let mut compiler = ByteCompiler {
+            lci: Vec::new(),
+            variable_freelist: Vec::with_capacity(4),
+            code,
+            tail_pos: false,
+            fmap: HashMap::new(),
+            val_map: HashMap::new(),
+            name_map: HashMap::new(),
+            top_level: false,
+            scope,
+            rt: RuntimeRef(&mut *vm),
+        };
+        let mut p = 0;
+        for x in params_.iter() {
+            params.push(x.intern());
+            p += 1;
+            compiler.scope.borrow_mut().add_var(x.intern(), p - 1);
+        }
+        code.param_count = params.len() as _;
+        code.var_count = p as _;
+        code.rest_at = rat;
+        let cm: Lrc<SourceMap> = Default::default();
+        let _e = BufferedError::default();
+
+        let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+
+        let fm = cm.new_source_file(FileName::Custom("<anonymous>".into()), body);
+
+        let mut parser = Parser::new(
+            Syntax::Es(Default::default()),
+            StringInput::from(&*fm),
+            None,
+        );
+
+        for e in parser.take_errors() {
+            e.into_diagnostic(&handler).emit();
+        }
+
+        let script = match parser.parse_script() {
+            Ok(script) => script,
+            Err(e) => {
+                let msg = JsString::new(vm, e.kind().msg());
+                return Err(JsValue::encode_object_value(JsSyntaxError::new(
+                    vm, msg, None,
+                )));
+            }
+        };
+
+        let is_strict = if script.body.is_empty() {
+            false
+        } else {
+            script.body[0].is_use_strict()
+        };
+
+        compiler.code.strict = is_strict;
+
+        compiler.compile(&script.body);
+
+        //self.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
+        compiler.emit(Opcode::OP_RET, &[], false);
+        //compiler.compile(&script.body);
+        let mut code = compiler.finish(&mut vm);
+
+        //let mut code = ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned());
+
+        //code.display_to(&mut OutBuf).unwrap();
+
+        let env = crate::vm::environment::Environment::new(vm, 0);
+        let fun = JsVMFunction::new(vm, code, env);
+        Ok(JsValue::new(fun))
     }
     pub fn compile_script(mut vm: &mut Runtime, p: &Script, fname: String) -> GcPointer<CodeBlock> {
         let name = "<script>".intern();

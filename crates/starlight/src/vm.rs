@@ -538,7 +538,7 @@ impl Display for BufferedError {
     }
 }
 #[derive(Clone, Default)]
-struct MyEmiter(BufferedError);
+pub struct MyEmiter(BufferedError);
 impl Emitter for MyEmiter {
     fn emit(&mut self, db: &DiagnosticBuilder<'_>) {
         let z = &(self.0).0;
@@ -547,7 +547,7 @@ impl Emitter for MyEmiter {
         }
     }
 }
-struct OutBuf;
+pub struct OutBuf;
 
 impl std::fmt::Write for OutBuf {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
