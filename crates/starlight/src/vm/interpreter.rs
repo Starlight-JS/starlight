@@ -841,7 +841,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 frame.ip = ip;
 
-                frame.sp = args_start;
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
@@ -861,6 +860,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
+                    assert!(GcPointer::ptr_eq(&this.get_object(), &object));
                     //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
                     //(*cframe).limit = args_start;

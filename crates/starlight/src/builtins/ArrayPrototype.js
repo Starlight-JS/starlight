@@ -353,8 +353,9 @@ Array.prototype.sort = function (comparator) {
     if (isStringSort) {
         sorted = new Array(compacted.length);
         sortBucketSort(sorted, 0, compacted, 0);
-    } else
+    } else {
         sorted = sortMergeSort(compacted, comparator);
+    }
     sortCommit(receiver, receiverLength, sorted, undefinedCount);
     return receiver;
 }

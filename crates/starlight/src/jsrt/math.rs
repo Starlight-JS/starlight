@@ -110,7 +110,7 @@ pub fn math_log(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> 
     }
 }
 
-pub fn math_random(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_random(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(rand::random::<f64>()))
 }
 
