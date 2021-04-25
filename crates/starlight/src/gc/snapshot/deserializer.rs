@@ -1362,7 +1362,7 @@ impl Deserializable for CodeBlock {
             names,
             top_level,
             strict,
-
+            literals_ptr: literals.as_ptr(),
             code,
             feedback,
             literals,
@@ -1404,7 +1404,6 @@ impl GcCell for TypeFeedBack {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!();
 }
 
 impl Deserializable for TypeFeedBack {

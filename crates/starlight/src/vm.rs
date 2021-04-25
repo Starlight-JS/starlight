@@ -57,6 +57,7 @@ use value::*;
 
 pub struct GcParams {
     pub(crate) nmarkers: u32,
+    #[allow(dead_code)]
     pub(crate) heap_size: usize,
     pub(crate) conservative_marking: bool,
     #[allow(dead_code)]

@@ -180,7 +180,7 @@ impl GcCell for JsObject {
     fn compute_size(&self) -> usize {
         object_size_with_tag(self.tag, self.class)
     }
-    vtable_impl!();
+    
 }
 impl Drop for JsObject {
     fn drop(&mut self) {

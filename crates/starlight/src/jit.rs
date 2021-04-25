@@ -1,4 +1,4 @@
-use crate::{prelude::*, vm::code_block::CodeBlock, vm::value::*};
+use crate::{bytecode::opcodes::Opcode, prelude::*, vm::code_block::CodeBlock, vm::value::*};
 use libmir_sys::*;
 use once_cell::sync::Lazy;
 use std::{
@@ -184,12 +184,17 @@ extern "C" fn import_resolver(name: *const i8) -> *mut libc::c_void {
 pub struct JITState {
     pub(crate) ctx: MIR_context_t,
     pub(crate) tmp_var_id: u32,
+    pub(crate) buffer: String,
 }
 
 impl JITState {
     pub fn new() -> Self {
         let ctx = unsafe { MIR_init() };
-        Self { ctx, tmp_var_id: 0 }
+        Self {
+            ctx,
+            tmp_var_id: 0,
+            buffer: jit_take_storage(),
+        }
     }
     pub fn new_temp(&mut self) -> u32 {
         self.tmp_var_id += 1;
@@ -219,7 +224,117 @@ impl JITState {
         }
     }
 
-    fn compile_internal(&mut self, code_block: GcPointer<CodeBlock>) {}
+    unsafe fn compile_internal(&mut self, code_block: GcPointer<CodeBlock>) -> std::fmt::Result {
+        writeln!(
+            self.buffer,
+            "result _jit(void* rt,callframe* cf,uint8_t strict,uint32_t pc) {{"
+        )?;
+        let start = &code_block.code[0] as *const u8;
+        let mut ip = &code_block.code[0] as *const u8;
+        let end = code_block.code.last().unwrap() as *const u8;
+        writeln!(self.buffer, "\tjsval* literals = cf->code_block->literals;")?;
+        writeln!(self.buffer, "jsval t1,t2,t3,t4,t5,t6,t7,t8,t9;")?;
+        let mut ip_to_label = std::collections::HashMap::new();
+        writeln!(self.buffer, "switch (pc) {{ ")?;
+        let mut pc = 0;
+        while ip < end {
+            let op = ip.cast::<Opcode>().read();
+            ip_to_label.insert(ip, pc);
+            writeln!(self.buffer, "  case {}:", pc)?;
+            writeln!(self.buffer, "_{}:", (ip as usize - start as usize))?;
+            pc += 1;
+            ip = ip.add(1);
+            match op {
+                Opcode::OP_PUSH_LITERAL => {
+                    let index = ip.cast::<u32>().read_unaligned();
+                    ip = ip.add(4);
+                    writeln!(self.buffer, "cf_push(Cf,literals+{});", index)?;
+                }
+                Opcode::OP_GE0GL => {
+                    let index = ip.cast::<u32>().read_unaligned();
+                    ip = ip.add(4);
+                    writeln!(
+                        self.buffer,
+                        "cf_push(cf,(gcdata(environment,cf->env)->variables+{})->value);",
+                        index
+                    )?;
+                }
+                Opcode::OP_GE0SL => {
+                    let index = ip.cast::<u32>().read_unaligned();
+                    ip = ip.add(4);
+                    writeln!(
+                        self.buffer,
+                        "cf_pop(cf,t1);\n
+                        (gcdata(environment,cf->env)->variables+{})->value = t1;",
+                        index
+                    )?;
+                }
+                Opcode::OP_GET_LOCAL => {
+                    let index = ip.cast::<u32>().read_unaligned();
+                    ip = ip.add(4);
+                    writeln!(
+                        self.buffer,
+                        r#"
+                    {{
+                        cf_pop(cf,t1);
+                        environment* env = gcdata(environment,jsval_get_object(t1));
+                        t1 = (env->values+{})->value;
+                        cf_push(cf,t1);
+                    }}
+                    
+                    "#,
+                        index
+                    )?;
+                }
+                Opcode::OP_SET_LOCAL => {
+                    let index = ip.cast::<u32>().read_unaligned();
+                    ip = ip.add(4);
+                    writeln!(
+                        self.buffer,
+                        r#"
+                    {{
+                        cf_pop(cf,t1);
+                        cf_pop(cf,t2);
+                        environment* env = gcdata(environment,jsval_get_object(t1));
+                        (env->values+{})->value = t2;
+                    }}
+                    
+                    "#,
+                        index
+                    )?;
+                }
+                Opcode::OP_GET_ENV => {
+                    let depth = ip.cast::<u32>().read_unaligned();
+                    ip = ip.add(4);
+                    writeln!(
+                        self.buffer,
+                        r#"
+                        {{
+                            int depth = {};
+                            environment* env = gcdata(environment,cf->env);
+                            while (depth--) 
+                                env = gcdata(environment,env->parent);
+                            
+                            cf_push(cf,jsval_new_object(gcptr(env)));
+                        }}
+                        "#,
+                        depth
+                    )?;
+                }
+                Opcode::OP_JMP => {
+                    let offset = ip.cast::<i32>().read_unaligned();
+                    ip = ip.add(4);
+                    let new_ip = ip.offset(offset as _);
+                    writeln!(self.buffer, "goto _{};", (new_ip as usize - start as usize))?;
+                }
+                Opcode::OP_JMP_IF_FALSE => {}
+                _ => todo!("NYI"),
+            }
+        }
+        writeln!(self.buffer, "default: }}")?;
+
+        Ok(())
+    }
 }
 
 unsafe fn mir_find_function(module: MIR_module_t, name: *const i8) -> MIR_item_t {

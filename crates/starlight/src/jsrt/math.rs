@@ -110,6 +110,10 @@ pub fn math_log(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> 
     }
 }
 
+pub fn math_random(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    Ok(JsValue::new(rand::random::<f64>()))
+}
+
 impl Runtime {
     pub(crate) fn init_math(&mut self) {
         let mut init = || -> Result<(), JsValue> {
@@ -126,6 +130,7 @@ impl Runtime {
             def_native_method!(self, math, ceil, math_ceil, 1)?;
             def_native_method!(self, math, exp, math_exp, 1)?;
             def_native_method!(self, math, abs, math_abs, 1)?;
+            def_native_method!(self, math, random, math_random, 0)?;
             self.global_object()
                 .put(self, "Math".intern(), JsValue::new(math), false)?;
             let source = include_str!("../builtins/Math.js");

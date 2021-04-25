@@ -965,6 +965,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         math::math_ceil as _,
         math::math_exp as _,
         math::math_abs as _,
+        math::math_random as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
     ];

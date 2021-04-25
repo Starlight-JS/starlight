@@ -35,6 +35,11 @@ struct Options {
         help = "Dump various statistics at the end of execution"
     )]
     dump_stats: bool,
+    #[structopt(
+        long = "conservative-marking",
+        help = "Enable conservative pointer marking (works only for MiGC)"
+    )]
+    cons_gc: bool,
 }
 
 use const_random::const_random;
@@ -51,6 +56,7 @@ fn main() {
     } else {
         GcParams::default().with_parallel_marking(false)
     };
+    let gc = gc.with_conservative_marking(options.cons_gc);
     let heap = if options.use_malloc_gc {
         Heap::new(starlight::gc::malloc_gc::MallocGC::new(gc))
     } else {

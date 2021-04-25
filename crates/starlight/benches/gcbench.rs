@@ -7,7 +7,7 @@ use starlight::{
         snapshot::serializer::{Serializable, SnapshotSerializer},
     },
     vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime, RuntimeParams},
-    vtable_impl, Platform,
+    Platform,
 };
 use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
@@ -156,7 +156,6 @@ impl GcCell for Node {
     fn deser_pair(&self) -> (usize, usize) {
         (0, 0)
     }
-    vtable_impl!();
 }
 impl Serializable for Node {
     fn serialize(&self, _serializer: &mut SnapshotSerializer) {}

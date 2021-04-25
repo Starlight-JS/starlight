@@ -54,6 +54,7 @@ impl Stack {
                 sp: self.cursor.add(iloc_count as _),
                 limit: self.cursor.add(iloc_count as _),
                 code_block: None,
+
                 callee: JsValue::encode_undefined_value(),
                 ip: null_mut(),
             }));

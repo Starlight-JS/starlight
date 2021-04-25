@@ -926,9 +926,24 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let object = frame.pop();
                 let key = frame.pop();
-                profile.observe_key_and_object(key, object);
-                let key = key.to_symbol(rt)?;
                 let value = frame.pop();
+                profile.observe_key_and_object(key, object);
+                if key.is_number() && object.is_jsobject() {
+                    let index = if likely(key.is_int32()) {
+                        key.get_int32() as u32
+                    } else {
+                        key.get_double().floor() as u32
+                    };
+                    let mut object = object.get_jsobject();
+                    if likely(object.indexed.dense()) {
+                        if likely(index < object.indexed.length()) {
+                            *object.indexed.vector.at_mut(index) = value;
+                            continue;
+                        }
+                    }
+                }
+                let key = key.to_symbol(rt)?;
+
                 if likely(object.is_jsobject()) {
                     let mut obj = object.get_jsobject();
                     obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
@@ -941,6 +956,22 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let object = frame.pop();
                 let key = frame.pop();
                 profile.observe_key_and_object(key, object);
+                if key.is_number() && object.is_jsobject() {
+                    let index = if likely(key.is_int32()) {
+                        key.get_int32() as usize
+                    } else {
+                        key.get_double().floor() as usize
+                    };
+                    let object = object.get_jsobject();
+                    if likely(object.indexed.dense()) {
+                        if likely(index < object.indexed.length() as usize) {
+                            if likely(!object.indexed.vector.at(index as _).is_empty()) {
+                                frame.push(*object.indexed.vector.at(index as _));
+                                continue;
+                            }
+                        }
+                    }
+                }
                 let key = key.to_symbol(rt)?;
                 let mut slot = Slot::new();
                 let value = object.get_slot(rt, key, &mut slot)?;
@@ -1244,7 +1275,6 @@ impl GcCell for SpreadValue {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!();
 }
 unsafe impl Trace for SpreadValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {

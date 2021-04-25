@@ -327,6 +327,7 @@ impl ByteCompiler {
             self.code.display_to(&mut buf).unwrap();
             eprintln!("Code block '{}' at {:p}: \n {}", name, self.code, buf);
         }
+        self.code.literals_ptr = self.code.literals.as_ptr();
         self.code
     }
     pub fn compile_fn(&mut self, fun: &Function) {

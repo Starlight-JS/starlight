@@ -11,7 +11,9 @@ use std::fmt::Write;
 
 /// A type representing single JS function bytecode.
 //#[derive(GcTrace)]
+#[repr(C)]
 pub struct CodeBlock {
+    pub literals_ptr: *const JsValue,
     /// Function name
     pub name: Symbol,
     /// Variable count
@@ -30,10 +32,12 @@ pub struct CodeBlock {
     pub codes: Vec<GcPointer<Self>>,
     /// Constant literals
     pub literals: Vec<JsValue>,
-    /// Feedback vector that is used for inline caching
-    pub feedback: Vec<TypeFeedBack>,
+
     /// Is this code block strict?
     pub strict: bool,
+    /// Feedback vector that is used for inline caching
+    pub feedback: Vec<TypeFeedBack>,
+
     /// Does code internally use `arguments` variable?
     pub use_arguments: bool,
     /// File name where JS code is located.
@@ -414,6 +418,7 @@ impl CodeBlock {
             args_at: 0,
             code: vec![],
             rest_at: None,
+            literals_ptr: core::ptr::null_mut(),
             use_arguments: false,
             literals: vec![],
             feedback: vec![],
@@ -429,5 +434,5 @@ impl GcCell for CodeBlock {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!();
+    
 }

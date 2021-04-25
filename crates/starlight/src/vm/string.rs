@@ -52,7 +52,6 @@ impl GcCell for JsString {
     fn compute_size(&self) -> usize {
         size_of::<Self>()
     }
-    vtable_impl!();
 }
 
 pub struct JsStringObject {

@@ -727,11 +727,25 @@ impl JsValue {
             return Ok(Self::number_compare(px.get_number(), py.get_number()));
         }
         if likely(px.is_jsstring() && py.is_jsstring()) {
-            if px.get_string().as_str().len() < py.get_string().as_str().len() {
-                Ok(CMP_TRUE)
-            } else {
-                Ok(CMP_FALSE)
+            #[inline(never)]
+            fn slow_string_cmp(x: &str, y: &str) -> Result<i32, JsValue> {
+                if x.starts_with(y) {
+                    return Ok(CMP_FALSE);
+                }
+                if y.starts_with(x) {
+                    return Ok(CMP_TRUE);
+                }
+                for (x, y) in x.chars().zip(y.chars()) {
+                    if x != y {
+                        return Ok(if x < y { CMP_TRUE } else { CMP_FALSE });
+                    }
+                }
+                unreachable!()
             }
+            let x = px.get_string();
+            let y = py.get_string();
+            let (x, y) = (x.as_str(), y.as_str());
+            return slow_string_cmp(x, y);
         } else {
             let nx = px.to_number(rt)?;
             let ny = py.to_number(rt)?;
@@ -1012,7 +1026,6 @@ impl GcCell for JsValue {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!();
 }
 
 pub fn print_value(x: JsValue) {

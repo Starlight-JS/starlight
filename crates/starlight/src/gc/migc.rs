@@ -239,7 +239,7 @@ impl MiGC {
                 if scan > to {
                     std::mem::swap(&mut scan, &mut to);
                 }
-                if self.collect_conservative {
+                if core::intrinsics::unlikely(self.collect_conservative) {
                     while scan < to {
                         let ptr = *scan;
                         if ptr.is_null() {
@@ -252,6 +252,7 @@ impl MiGC {
                             visitor.visit_raw(&mut ptr);
                             found = true;
                         });
+                        #[cfg(target_pointer_width = "64")]
                         if !found {
                             let value = transmute::<_, crate::vm::value::JsValue>(ptr);
                             if value.is_object() {
@@ -289,7 +290,7 @@ impl MiGC {
             }
         }
     }
-    /// Tried to find GC object for marking at `ptr`.
+    /// Tries to find GC object for marking at `ptr`.
     ///
     ///
     /// TODO: Interior pointers. Right now this function just checks if `ptr` is a block allocated inside mimalloc gc.
@@ -303,9 +304,7 @@ impl MiGC {
     ) {
         if libmimalloc_sys::mi_heap_check_owned(self.mi_heap, ptr.cast()) {
             if libmimalloc_sys::mi_heap_contains_block(self.mi_heap, ptr.cast()) {
-                /*if (*ptr.cast::<GcPointerBase>()).is_allocated() {
-                    f(self, ptr.cast());
-                }*/
+                f(self, ptr.cast());
             }
         }
     }
@@ -424,7 +423,6 @@ unsafe extern "C" fn sweep(
     let ptr = block.cast::<GcPointerBase>();
     if (*ptr).state() == DEFINETELY_WHITE {
         std::ptr::drop_in_place((*ptr).get_dyn());
-        //  (*ptr).deallocate();
         libmimalloc_sys::mi_free(ptr.cast());
     } else {
         gc.allocated += block_sz;

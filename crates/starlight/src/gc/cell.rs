@@ -11,7 +11,6 @@ use std::{
     mem::transmute,
     ops::{Deref, DerefMut},
     ptr::NonNull,
-    sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
 use tagged_box::*;
 
@@ -59,28 +58,6 @@ pub unsafe trait Trace {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         let _ = visitor;
     }
-}
-
-/*
-#[repr(C)]
-pub struct VTable {
-    pub compute_size: fn(VRef<VTable>) -> usize,
-    pub type_name: fn(VRef<VTable>) -> &'static str,
-    pub deser_pair: fn(VRef<VTable>) -> (usize, usize),
-    pub trace: fn(VRef<VTable>, &mut SlotVisitor),
-}*/
-
-/// Implement `vtable(&self) -> &'static VTable` method for GcCell automatically.
-#[macro_export]
-macro_rules! vtable_impl {
-    ($this: ty) => {
-        /*fn vtable(&self) -> *const u8 {
-            $crate::gc::cell::vtable_of_type::<Self>() as _
-        }*/
-    };
-    () => {
-        vtable_impl!(Self);
-    };
 }
 
 /// `GcCell` is a type that can be allocated in GC gc and passed to JavaScript environment.
@@ -286,7 +263,7 @@ macro_rules! impl_prim {
                 fn deser_pair(&self) -> (usize,usize) {
                     (Self::deserialize as usize,Self::allocate as usize)
                 }
-                vtable_impl!($t);
+
             }
         )*
     };
@@ -347,7 +324,6 @@ impl<T: GcCell> GcCell for WeakRef<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!(WeakRef<T>);
 }
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
@@ -379,7 +355,6 @@ impl<
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!(HashMap<K,V>);
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
@@ -395,20 +370,17 @@ impl<T: GcCell + Serializable + 'static + Deserializable> GcCell for Vec<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as usize, Self::allocate as usize)
     }
-    vtable_impl!();
 }
 impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!(Self);
 }
 
 impl<T: GcCell + Serializable + Deserializable + 'static> GcCell for Option<T> {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    vtable_impl!();
 }
 
 impl<T: GcCell> Copy for WeakRef<T> {}

@@ -9,7 +9,6 @@ use starlight::{
     },
     letroot,
     vm::GcParams,
-    vtable_impl,
 };
 use wtf_rs::keep_on_stack;
 struct Large([u8; 8192]);
@@ -18,7 +17,6 @@ impl GcCell for Large {
     fn deser_pair(&self) -> (usize, usize) {
         (0, 0)
     }
-    vtable_impl!();
 }
 
 impl Serializable for Large {

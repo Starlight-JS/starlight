@@ -3,6 +3,7 @@
 //! passed by JIT itself (i.e `JSOBJECT_TYPEID`) so we do not invoke *two*
 //! functions to check types of objects.
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 typedef union {
   float f;
@@ -13,6 +14,14 @@ typedef union {
   double f;
   uint64_t bits;
 } f64bits;
+
+#ifndef JSSTRING_TYPEID
+#define JSSTRING_TYPEID 0
+#endif
+
+#ifndef JSOBJECT_TYPEID
+#define JSOBJECT_TYPEID 0
+#endif
 
 #define f32_to_bits(fval) (((f32bits){.f = fval}).bits)
 #define f32_from_bits(fval) (((f32bits){.bits = fval}).f)
@@ -58,12 +67,8 @@ typedef struct {
 } result;
 
 typedef struct gcheader_s {
-  size_t vtable;
-  uint8_t cell_state;
-  uint32_t size;
-  uint8_t pad;
-  uint8_t pad1;
-  uint8_t pad2;
+  uint64_t vtable;
+  uint64_t type_id;
 } gcheader;
 
 typedef struct variable_s {
@@ -72,10 +77,15 @@ typedef struct variable_s {
 } variable;
 
 typedef struct environment_s {
+
   gcheader *parent;
-  variable *values_ptr;
+  variable *variables;
   uint32_t values_count;
 } environment;
+
+typedef struct code_block_s {
+  jsval *literals;
+} code_block;
 
 typedef struct callframe_s {
   struct callframe_s *prev;
@@ -88,7 +98,6 @@ typedef struct callframe_s {
   uint8_t ctor;
   uint8_t exit_on_return;
   gcheader *env;
-
 } callframe;
 
 extern uint64_t get_jscell_type_id(void *x);
@@ -105,6 +114,21 @@ extern result op_less_slow(void *, jsval, jsval);
 extern result op_lesseq_slow(void *, jsval, jsval);
 extern result op_greater_slow(void *, jsval, jsval);
 extern result op_greatereq_slow(void *, jsval, jsval);
+
+#define cf_push(cf, value)                                                     \
+  do {                                                                         \
+    *cf->sp = value;                                                           \
+    cf->sp++;                                                                  \
+  } while (0)
+
+#define cf_pop(cf, value)                                                      \
+  do {                                                                         \
+    cf->sp--;                                                                  \
+    value = *cf->sp;                                                           \
+  } while (0)
+
+#define gcptr(ptr) ((gcheader *)(ptr - sizeof(gcheader)))
+#define gcdata(type, ptr) (type)(((void *)ptr) + sizeof(gcheader))
 #define jsval_from_raw(x) (uint64_t) x
 #define jsval_get_tag(val) (uint32_t)(val >> NUM_DATA_BITS)
 #define jsval_get_etag(val) (uint32_t)((val >> (NUM_DATA_BITS - 1)))
@@ -129,22 +153,18 @@ extern result op_greatereq_slow(void *, jsval, jsval);
 #define jsval_get_int32(x) ((int32_t)x)
 #define jsval_get_double(x) f64_from_bits(x)
 #define jsval_get_bool(x) (x & 0x1)
-#define jsval_get_object(x) (void *)(x & DATA_MASK)
+#define jsval_get_object(x) ((gcheader *)(x & DATA_MASK))
 #define jsval_get_number(x)                                                    \
   (jsval_is_int32(x) ? (double)(jsval_get_int32(x)) : jsval_get_double(x))
 
 #define jsval_is_number(x) jsval_is_int32(x) || jsval_is_double(x)
 #define jsval_is_jsobject(x)                                                   \
-  (jsval_is_object(x)                                                          \
-       ? get_jscell_type_id(jsval_get_object(x)) == JSOBJECT_TYPEID            \
-       : false)
+  (jsval_is_object(x) ? jsval_get_object(x)->type_id == JSOBJECT_TYPEID : false)
 #define jsval_is_jsstring(x)                                                   \
-  (jsval_is_object(x)                                                          \
-       ? get_jscell_type_id(jsval_get_object(x)) == JSSTRING_TYPEID            \
-       : false)
+  (jsval_is_object(x) ? jsval_get_object(x)->type_id == JSSTRING_TYPEID : false)
 
 #define result_ok(val) ((result){.isErr = 0, .value = val})
-
+#define result_err(val) ((result){.isErr = 1, .value = val})
 /// Return value converted to double number or error if exception happened.
 result jsval_to_number(void *rt, jsval val) {
   if (jsval_is_int32(val)) {
@@ -164,6 +184,15 @@ result jsval_to_number(void *rt, jsval val) {
   }
   return jsval_to_number_slow(rt, val);
 }
+
+uint8_t jsval_to_boolean(jsval val) {
+  if (jsval_is_number(val)) {
+    double num = jsval_get_number(val);
+    return num != 0.0 && !(num != num);
+  } else if (jsval_is_jsstring(val)) {
+  }
+}
+
 int main() {
   jsval val = jsval_new_int32(42);
   printf("%f\n", jsval_get_number(val));
