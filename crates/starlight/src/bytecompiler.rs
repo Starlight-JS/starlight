@@ -5,10 +5,7 @@ use crate::{
     vm::{code_block::CodeBlock, RuntimeRef},
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use swc_common::{
-    errors::{DiagnosticBuilder, Emitter, Handler},
-    sync::Lrc,
-};
+use swc_common::{errors::Handler, sync::Lrc};
 use swc_common::{FileName, SourceMap};
 use swc_ecmascript::parser::*;
 pub struct LoopControlInfo {
@@ -1043,7 +1040,7 @@ impl ByteCompiler {
                 }
 
                 if !has_spread {
-                    let op = if false && tail {
+                    let op = if tail {
                         Opcode::OP_TAILCALL
                     } else {
                         Opcode::OP_CALL
@@ -1135,7 +1132,7 @@ impl ByteCompiler {
                 }
 
                 if !has_spread {
-                    let op = if false && tail {
+                    let op = if tail {
                         Opcode::OP_TAILNEW
                     } else {
                         Opcode::OP_NEW

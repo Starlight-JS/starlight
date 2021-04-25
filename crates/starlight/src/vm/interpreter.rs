@@ -748,7 +748,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
             }
 
-            Opcode::OP_CALL => {
+            Opcode::OP_CALL | Opcode::OP_TAILCALL => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -777,10 +777,18 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if false && opcode == Opcode::OP_TAILCALL {
+                    let cframe = if opcode == Opcode::OP_TAILCALL {
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
-                    }
-                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
+
+                        let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope).unwrap();
+                        /*std::ptr::copy_nonoverlapping(args_start, (*cframe).sp, argc as _);
+                        let at = (*cframe).sp;
+                        (*cframe).sp = (*cframe).sp.add(argc as _);
+                        args_.values = std::slice::from_raw_parts_mut(at, argc as _);*/
+                        Some(cframe)
+                    } else {
+                        rt.stack.new_frame(0, JsValue::new(*funcc), scope)
+                    };
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -796,7 +804,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
                     //(*cframe).limit = args_start;
-                    (*cframe).sp = args_start.add(argc as _);
+                    //(*cframe).sp = args_start.add(argc as _);
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     //frame.sp = args_start;
 
@@ -809,7 +817,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(result);
                 }
             }
-            Opcode::OP_NEW => {
+            Opcode::OP_NEW | Opcode::OP_TAILNEW => {
                 rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
@@ -838,7 +846,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 );
 
                 args_.ctor_call = true;
-
                 frame.ip = ip;
 
                 if func.is_vm() {
@@ -846,7 +853,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if false && opcode == Opcode::OP_TAILNEW {
+                    if opcode == Opcode::OP_TAILNEW {
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
@@ -860,11 +867,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-                    assert!(GcPointer::ptr_eq(&this.get_object(), &object));
+
                     //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
                     //(*cframe).limit = args_start;
-                    (*cframe).sp = args_start.add(argc as _);
+                    //(*cframe).sp = args_start.add(argc as _);
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
@@ -874,9 +881,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                     frame.push(result);
                 }
-                /*let result = func.construct(rt, &mut args_, Some(map))?;
-
-                frame.push(result);*/
             }
 
             Opcode::OP_DUP => {
