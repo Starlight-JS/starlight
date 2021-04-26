@@ -88,7 +88,7 @@ function Network(options) {
 
 Network.prototype.init = function (numberSensors, numberNodes) {
     for (var i = 0; i < numberSensors; i++) {
-        var s = new Neuron;
+        var s = new Neuron();
         this.sensors.push(s);
     }
     for (var i = 0; i < numberNodes; i++) {
@@ -143,9 +143,8 @@ Network.prototype.test = function (inputs) {
 
 var net = new Network({
     scale: 1, // scaling
-    gamma: 1  // learning constant
-    // act: (x) => x // custom activation function
-    // actDer: (x) => 1 // derivative of custom activation function
+    gamma: 1,  // learning constant
+
 });
 
 net.init(2, 3);
@@ -156,7 +155,6 @@ function test() {
         net.test([1, 0]) + ' ' +
         net.test([1, 1]);
 }
-
 
 print(test());
 

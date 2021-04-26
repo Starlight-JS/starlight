@@ -869,7 +869,7 @@ impl Deserializable for Accessor {
 
 impl Deserializable for SpreadValue {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
-        let arr = deser.get_reference();
+        let arr = Vec::<JsValue>::deserialize_inplace(deser);
         Self {
             array: transmute(arr),
         }

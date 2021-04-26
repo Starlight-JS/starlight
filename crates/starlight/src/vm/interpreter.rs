@@ -259,11 +259,24 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             rt.perf.get_perf(opcode as u8);
         }
         /*println!(
-            "exec block({:p}): {}: {:?}",
+            "exec block({:p}): {}: {:?} (sp {})",
             unwrap_unchecked(frame.code_block),
             ip.sub(1).offset_from(&frame.code_block.unwrap().code[0]),
-            opcode
-        );*/
+            opcode,
+            frame.sp.offset_from(frame.limit)
+        );
+        let mut scan = frame.limit;
+        print!("Stack: [");
+        while scan < frame.sp {
+            print!(
+                " ({}) ",
+                scan.read()
+                    .to_string(rt)
+                    .unwrap_or_else(|_| "<unknown>".to_string())
+            );
+            scan = scan.add(1);
+        }
+        print!("]\n");*/
         stack.cursor = frame.sp;
         match opcode {
             Opcode::OP_GE0GL => {
@@ -755,6 +768,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
 
                 let args_start = frame.sp.sub(argc as _);
+
                 frame.sp = args_start;
                 let mut func = frame.pop();
                 let mut this = frame.pop();
@@ -1029,6 +1043,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 if enumerable.is_null() || enumerable.is_undefined() {
                     ip = ip.offset(offset as _);
+                    frame.push(JsValue::encode_empty_value());
                     continue;
                 }
 
@@ -1053,6 +1068,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let desc = rt.description(sym);
                     frame.push(JsValue::new(JsString::new(rt, desc)));
                 } else {
+                    frame.push(JsValue::encode_empty_value());
                     ip = ip.offset(offset as _);
                 }
             }
@@ -1156,6 +1172,21 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     unwrap_unchecked(frame.code_block).strict,
                 )?));
             }
+            Opcode::OP_AND => {
+                let lhs = frame.pop().to_int32(rt)?;
+                let rhs = frame.pop().to_int32(rt)?;
+                frame.push(JsValue::new(lhs & rhs));
+            }
+            Opcode::OP_OR => {
+                let lhs = frame.pop().to_int32(rt)?;
+                let rhs = frame.pop().to_int32(rt)?;
+                frame.push(JsValue::new(lhs | rhs));
+            }
+            Opcode::OP_XOR => {
+                let lhs = frame.pop().to_int32(rt)?;
+                let rhs = frame.pop().to_int32(rt)?;
+                frame.push(JsValue::new(lhs ^ rhs));
+            }
             Opcode::OP_GET_FUNCTION => {
                 //vm.space().defer_gc();
                 let ix = ip.cast::<u32>().read_unaligned();
@@ -1179,15 +1210,16 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 letroot!(arr = gcstack, JsArray::new(rt, count));
                 let mut index = 0;
-                while index < count {
+                let mut did_put = 0;
+                while did_put < count {
                     let value = frame.pop();
                     if unlikely(value.is_object() && value.get_object().is::<SpreadValue>()) {
                         letroot!(
                             spread = gcstack,
                             value.get_object().downcast_unchecked::<SpreadValue>()
                         );
-                        for i in 0..spread.array.get(rt, "length".intern())?.get_number() as usize {
-                            let real_arg = spread.array.get(rt, Symbol::Index(i as _))?;
+                        for i in 0..spread.array.len() {
+                            let real_arg = spread.array[i];
                             arr.put(rt, Symbol::Index(index), real_arg, false)?;
                             index += 1;
                         }
@@ -1195,6 +1227,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         arr.put(rt, Symbol::Index(index), value, false)?;
                         index += 1;
                     }
+                    did_put += 1;
                 }
                 frame.push(JsValue::encode_object_value(*arr));
             }
@@ -1242,13 +1275,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let env = frame.env;
                 frame.env = env.parent.unwrap();
             }
-            #[cfg(debug_assertions)]
+
             x => {
                 panic!("NYI: {:?}", x);
-            }
-            #[cfg(not(debug_assertions))]
-            _ => {
-                std::hint::unreachable_unchecked();
             }
         }
     }
@@ -1256,7 +1285,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
 /// Type used internally in JIT/interpreter to represent spread result.
 pub struct SpreadValue {
-    pub(crate) array: GcPointer<JsObject>,
+    pub(crate) array: Vec<JsValue>,
 }
 
 impl SpreadValue {
@@ -1264,9 +1293,12 @@ impl SpreadValue {
         unsafe {
             if value.is_jsobject() {
                 if value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array {
-                    return Ok(rt.heap().allocate(Self {
-                        array: value.get_object().downcast_unchecked(),
-                    }));
+                    let mut object = value.get_jsobject();
+                    let mut arr = vec![];
+                    for i in 0..crate::jsrt::get_length(rt, &mut object)? {
+                        arr.push(object.get(rt, Symbol::Index(i))?);
+                    }
+                    return Ok(rt.heap().allocate(Self { array: arr }));
                 }
             }
 

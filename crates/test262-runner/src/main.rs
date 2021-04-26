@@ -65,9 +65,27 @@ fn main() {
                     None,
                     |_, _| {},
                 );
-
+                let has_assert = test
+                    .desc
+                    .includes
+                    .iter()
+                    .any(|x| x.contains("test262/harness/assert.js"));
+                let has_sta = test
+                    .desc
+                    .includes
+                    .iter()
+                    .any(|x| x.contains("test262/harness/sta.js"));
+                if !has_assert {
+                    let path = "test262/harness/assert.js";
+                    format.push_str(&std::fs::read_to_string(path).unwrap());
+                }
+                if !has_sta {
+                    format.push_str(&std::fs::read_to_string("test262/harness/sta.js").unwrap());
+                }
                 for inc in test.desc.includes.iter() {
-                    format.push_str(inc);
+                    format.push_str(
+                        &std::fs::read_to_string(&format!("test262/harness/{}", inc)).unwrap(),
+                    );
                 }
                 format.push_str(&source);
 
@@ -107,7 +125,11 @@ fn main() {
                             write_succ(&format!("Test '{}' passed\n", test.path.display()));
                             return;
                         } else {
-                            write_fail(&format!("Test '{}' failed\n", test.path.display()));
+                            write_fail(&format!(
+                                "Test '{}' failed (error '{}' unexpected)\n",
+                                test.path.display(),
+                                e.to_string(&mut rt).unwrap_or_else(|_| String::new())
+                            ));
                             return;
                         }
                     }

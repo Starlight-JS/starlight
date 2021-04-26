@@ -1,9 +1,12 @@
-use crate::gc::{
-    cell::*,
-    snapshot::{
-        deserializer::Deserializer,
-        serializer::{Serializable, SnapshotSerializer},
+use crate::{
+    gc::{
+        cell::*,
+        snapshot::{
+            deserializer::Deserializer,
+            serializer::{Serializable, SnapshotSerializer},
+        },
     },
+    vm::interpreter::SpreadValue,
 };
 use cfg_if::cfg_if;
 use std::{
@@ -863,7 +866,9 @@ impl JsValue {
                     Err(e) => Err(e),
                 };
             }
-
+            if object.is::<SpreadValue>() {
+                return Ok("spread".to_string());
+            }
             todo!()
         } else {
             unreachable!()

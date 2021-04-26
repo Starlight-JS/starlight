@@ -20,6 +20,8 @@ Array.prototype.find = function find(callback, thisArg) {
     "use strict";
     var array = ___toObject(this, "Array.prototype.find requires that |this| not be null or undefined");
     var length = array.length;
+    if (length >= 4294967295)
+        throw new RangeError("Out of memory for array elements.")
 
     for (var i = 0; i < length; i += 1) {
         var kValue = array[i];
@@ -34,6 +36,8 @@ Array.prototype.findIndex = function findIndex(callback, thisArg) {
     "use strict";
     var array = ___toObject(this, "Array.prototype.fromIndex requires that |this| not be null or undefined");
     var length = ___toLength(array.length);
+    if (length >= 4294967295)
+        throw new RangeError("Out of memory for array elements.")
 
     for (var i = 0; i < length; i += 1) {
         var kValue = array[i];
@@ -48,6 +52,9 @@ Array.prototype.includes = function includes(searchElement, fromIndex_) {
     "use strict";
     var array = ___toObject(this, "Array.prototype.includes requires that |this| not be null or undefined");
     var length = ___toLength(array.length);
+    if (length >= 4294967295)
+        throw new RangeError("Out of memory for array elements.")
+
     if (length === 0) {
         return false;
     }
@@ -86,6 +93,8 @@ Array.prototype.map = function map(callback, thisArg) {
     var array = ___toObject(this, "Array.prototype.map requires that |this| not be null or undefined");
 
     var length = array.length;
+    if (length >= 4294967295)
+        throw new RangeError("Out of memory for array elements.")
 
     var result = new Array(length);
     for (var i = 0; i < length; i += 1) {
@@ -105,6 +114,9 @@ Array.prototype.forEach = function forEach(callback, thisArg) {
     var array = ___toObject(this, "Array.prototype.forEach requires that |this| not be null or undefined");
 
     var length = ___toLength(array.length);
+    if (length >= 4294967295)
+        throw new RangeError("Out of memory for array elements.")
+
     for (var i = 0; i < length; i++) {
         if (i in array) {
             callback.call(thisArg, array[i], i, array);
