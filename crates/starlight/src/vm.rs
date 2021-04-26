@@ -36,6 +36,7 @@ pub mod function;
 pub mod global;
 pub mod indexed_elements;
 pub mod interpreter;
+pub mod map;
 pub mod native_iterator;
 pub mod number;
 pub mod object;
@@ -279,7 +280,9 @@ impl Runtime {
     /// Return [Symbol](crate::vm::symbol_table::Symbol) description.
     pub fn description(&self, sym: Symbol) -> String {
         match sym {
-            Symbol::Key(key) => symbol_table::symbol_table().description(key).to_owned(),
+            Symbol::Key(key) | Symbol::Private(key) => {
+                symbol_table::symbol_table().description(key).to_owned()
+            }
             Symbol::Index(x) => x.to_string(),
         }
     }
@@ -488,6 +491,10 @@ pub struct GlobalData {
     pub(crate) type_error_structure: Option<GcPointer<Structure>>,
     pub(crate) uri_error_structure: Option<GcPointer<Structure>>,
     pub(crate) eval_error_structure: Option<GcPointer<Structure>>,
+    pub(crate) map_structure: Option<GcPointer<Structure>>,
+    pub(crate) set_structure: Option<GcPointer<Structure>>,
+    pub(crate) map_prototype: Option<GcPointer<JsObject>>,
+    pub(crate) set_prototype: Option<GcPointer<JsObject>>,
 }
 
 impl GlobalData {

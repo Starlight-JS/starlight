@@ -1,9 +1,17 @@
-use crate::gc::cell::*;
+use crate::gc::{
+    cell::*,
+    snapshot::{
+        deserializer::Deserializer,
+        serializer::{Serializable, SnapshotSerializer},
+    },
+};
 use cfg_if::cfg_if;
 use std::{
+    any::TypeId,
     convert::TryFrom,
+    hash::{Hash, Hasher},
     hint::unreachable_unchecked,
-    intrinsics::{likely, unlikely},
+    intrinsics::{likely, size_of, unlikely},
 };
 
 use super::{
@@ -1167,5 +1175,76 @@ mod tests {
         let val = JsValue::new(f64::NAN);
         assert!(val.is_number());
         assert!(val.get_number().is_nan());
+    }
+}
+
+pub struct HashValueZero(pub JsValue);
+
+impl Hash for HashValueZero {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let value = self.0;
+        if value.is_int32() {
+            return value.get_int32().hash(state);
+        }
+
+        if value.is_number() {
+            let d = value.get_number();
+            if d.is_nan() {
+                return std::f64::NAN.to_bits().hash(state);
+            }
+            if d == 0.0 {
+                return 0i32.hash(state);
+            }
+            return d.to_bits().hash(state);
+        }
+
+        if value.is_jsstring() {
+            let string = value.get_jsstring();
+            return string.as_str().hash(state);
+        }
+
+        value.get_raw().hash(state);
+    }
+}
+
+impl PartialEq for HashValueZero {
+    fn eq(&self, other: &Self) -> bool {
+        JsValue::same_value_zero(self.0, other.0)
+    }
+}
+
+impl Eq for HashValueZero {}
+
+unsafe impl Trace for HashValueZero {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.0.trace(visitor);
+    }
+}
+
+impl GcCell for HashValueZero {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
+
+impl Deserializable for HashValueZero {
+    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
+        Self(JsValue::deserialize_inplace(deser))
+    }
+    unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
+        at.cast::<Self>().write(Self::deserialize_inplace(deser));
+    }
+    unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+        rt.heap().allocate_raw(
+            vtable_of_type::<Self>() as _,
+            size_of::<Self>(),
+            TypeId::of::<Self>(),
+        )
+    }
+}
+
+impl Serializable for HashValueZero {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.0.serialize(serializer);
     }
 }

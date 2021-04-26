@@ -574,6 +574,36 @@ impl ByteCompiler {
     }
     pub fn stmt(&mut self, stmt: &Stmt) {
         match stmt {
+            Stmt::Switch(switch) => {
+                let d = self.scope.borrow().depth;
+                self.push_lci(0, d);
+                self.expr(&switch.discriminant, true, false);
+
+                for case in switch.cases.iter() {
+                    match case.test {
+                        Some(ref expr) => {
+                            self.emit(Opcode::OP_DUP, &[], false);
+                            self.expr(&expr, true, false);
+                            self.emit(Opcode::OP_EQ, &[], false);
+                            let fail = self.cjmp(false);
+
+                            for stmt in case.cons.iter() {
+                                self.stmt(stmt);
+                            }
+
+                            fail(self);
+                        }
+                        None => {
+                            for stmt in case.cons.iter() {
+                                self.stmt(stmt);
+                            }
+                            break;
+                        }
+                    }
+                }
+                self.pop_lci();
+                self.emit(Opcode::OP_POP, &[], false);
+            }
             Stmt::Expr(expr) => {
                 self.expr(&expr.expr, false, false);
             }

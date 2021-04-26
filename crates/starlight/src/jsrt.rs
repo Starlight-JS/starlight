@@ -968,6 +968,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         math::math_random as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
+        HashValueZero::deserialize as _,
+        HashValueZero::allocate as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

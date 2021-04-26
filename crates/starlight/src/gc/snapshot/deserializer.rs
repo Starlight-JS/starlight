@@ -236,6 +236,10 @@ impl<'a> Deserializer<'a> {
             type_error_structure: self.read_opt_gc(),
             uri_error_structure: self.read_opt_gc(),
             eval_error_structure: self.read_opt_gc(),
+            map_prototype: self.read_opt_gc(),
+            map_structure: self.read_opt_gc(),
+            set_prototype: self.read_opt_gc(),
+            set_structure: self.read_opt_gc(),
         }
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
@@ -447,6 +451,11 @@ impl Deserializable for Symbol {
                 let ix = deser.get_u32();
                 at.cast::<Symbol>()
                     .write(*deser.symbol_map.get_unchecked(ix as usize));
+            }
+            0x3f => {
+                let ix = deser.get_u32();
+                at.cast::<Symbol>()
+                    .write(deser.symbol_map.get_unchecked(ix as usize).private());
             }
             _ => unreachable_unchecked(),
         }

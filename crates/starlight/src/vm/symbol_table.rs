@@ -66,9 +66,16 @@ pub enum Symbol {
     /// Represents index value, this variant is used when you can definetely put array
     /// index inside u32 so it does not take space in interner gc.
     Key(SymbolID),
+    Private(SymbolID),
     Index(u32),
 }
 impl Symbol {
+    pub fn private(self) -> Self {
+        match self {
+            Self::Key(x) => Self::Private(x),
+            _ => unreachable!(),
+        }
+    }
     pub fn is_index(self) -> bool {
         match self {
             Self::Index(_) => true,
@@ -89,7 +96,6 @@ impl GcCell for Symbol {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 unsafe impl Trace for Symbol {}
 
@@ -155,7 +161,6 @@ impl GcCell for JsSymbol {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 
 impl std::fmt::Display for SymbolID {

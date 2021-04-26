@@ -221,6 +221,11 @@ impl SnapshotSerializer {
                     self.write_u32(index);
                 }
             }
+            Symbol::Private(id) => {
+                self.write_u8(0x3f);
+                let index = self.symbol_map.get(&Symbol::Key(id)).copied().unwrap();
+                self.write_u32(index);
+            }
         }
     }
     pub fn write_weakref<T: GcCell + Sized>(&mut self, weak_ref: WeakRef<T>) {
@@ -748,6 +753,10 @@ impl Serializable for GlobalData {
         self.type_error_structure.serialize(serializer);
         self.uri_error_structure.serialize(serializer);
         self.eval_error_structure.serialize(serializer);
+        self.map_prototype.serialize(serializer);
+        self.map_structure.serialize(serializer);
+        self.set_prototype.serialize(serializer);
+        self.set_structure.serialize(serializer);
     }
 }
 
