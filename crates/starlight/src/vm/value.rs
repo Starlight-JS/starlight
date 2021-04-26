@@ -655,6 +655,9 @@ impl JsValue {
         let mut rhs = other;
 
         loop {
+            if likely(lhs.is_int32() && rhs.is_int32()) {
+                return Ok(self.get_int32() == rhs.get_int32());
+            }
             if likely(lhs.is_number() && rhs.is_number()) {
                 return Ok(self.get_number() == rhs.get_number());
             }
@@ -675,6 +678,10 @@ impl JsValue {
             }
             if lhs.is_number() && rhs.is_jsstring() {
                 rhs = JsValue::new(rhs.to_number(rt)?);
+                continue;
+            }
+            if lhs.is_jsstring() && rhs.is_number() {
+                lhs = JsValue::new(lhs.to_number(rt)?);
                 continue;
             }
 

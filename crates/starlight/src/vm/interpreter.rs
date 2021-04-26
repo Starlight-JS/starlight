@@ -220,6 +220,7 @@ unsafe fn eval_internal(
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {
+                frame = &mut *rt.stack.current;
                 rt.stacktrace = rt.stacktrace();
                 loop {
                     if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
@@ -777,14 +778,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    let cframe = if opcode == Opcode::OP_TAILCALL {
+                    let cframe = if opcode == Opcode::OP_TAILCALL
+                        || (ip.cast::<Opcode>().read() == Opcode::OP_POP
+                            && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET)
+                    {
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
 
                         let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope).unwrap();
-                        /*std::ptr::copy_nonoverlapping(args_start, (*cframe).sp, argc as _);
-                        let at = (*cframe).sp;
-                        (*cframe).sp = (*cframe).sp.add(argc as _);
-                        args_.values = std::slice::from_raw_parts_mut(at, argc as _);*/
                         Some(cframe)
                     } else {
                         rt.stack.new_frame(0, JsValue::new(*funcc), scope)
@@ -853,7 +853,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if opcode == Opcode::OP_TAILNEW {
+                    if opcode == Opcode::OP_TAILNEW
+                        || (ip.cast::<Opcode>().read() == Opcode::OP_POP
+                            && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET)
+                    {
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
@@ -1319,6 +1322,7 @@ unsafe fn put_by_id_slow(
 
         if GcPointer::ptr_eq(&base_cell, &slot.base.unwrap()) {
             if slot.put_result_type() == PutResultType::New {
+                return Ok(());
                 if !new_structure.is_unique()
                     && new_structure
                         .previous

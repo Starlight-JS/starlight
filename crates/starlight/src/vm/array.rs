@@ -1,6 +1,12 @@
+use std::intrinsics::unlikely;
+
 use super::{
-    attributes::*, error::JsTypeError, indexed_elements::MAX_VECTOR_SIZE, object::*,
-    string::JsString, Runtime,
+    attributes::*,
+    error::{JsRangeError, JsTypeError},
+    indexed_elements::MAX_VECTOR_SIZE,
+    object::*,
+    string::JsString,
+    Runtime,
 };
 use super::{
     method_table::*,
@@ -313,6 +319,10 @@ impl GcPointer<JsObject> {
         len: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
+        if unlikely(len >= 4294967295) {
+            let msg = JsString::new(ctx, "Out of memory for array values");
+            return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
+        }
         let mut old = self.indexed.length();
         if len >= old {
             self.indexed.set_length(len);

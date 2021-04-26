@@ -1,3 +1,5 @@
+use std::intrinsics::unlikely;
+
 use super::{get_length, object::object_to_string};
 use crate::{
     vm::Runtime,
@@ -442,6 +444,10 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
             fin = len;
         } else {
             let relative_end = args.at(1).to_int32(rt)?;
+            if unlikely(relative_end as u32 >= 4294967295) {
+                let msg = JsString::new(rt, "Out of memory for array values");
+                return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+            }
             if relative_end < 0 {
                 fin = (relative_end + len as i32).max(0) as u32;
             } else {
@@ -453,7 +459,10 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
     }
 
     let result_len = if fin > k { fin - k } else { 0 };
-
+    if unlikely(result_len as u32 >= 4294967295 || len >= 4294967295) {
+        let msg = JsString::new(rt, "Out of memory for array values");
+        return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+    }
     if result_len > (1024 << 6) {
         letroot!(ary = stack, JsArray::new(rt, result_len));
 
