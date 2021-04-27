@@ -72,6 +72,7 @@ pub enum Access {
     Variable(u16, u32),
     Global(Symbol),
     ById(Symbol),
+    ArrayPat(Vec<(usize, Access)>),
     ByVal,
     This,
 }
@@ -199,6 +200,20 @@ impl ByteCompiler {
         for decl in var.decls.iter() {
             match &decl.name {
                 Pat::Ident(name) => {
+                    let name_ = Self::ident_to_sym(&name.id);
+                    let ix = if let VarDeclKind::Var = var.kind {
+                        None
+                    } else {
+                        Some(if let Some(ix) = self.variable_freelist.pop() {
+                            self.scope.borrow_mut().add_var(name_, ix as _);
+                            ix as u16
+                        } else {
+                            self.code.var_count += 1;
+                            self.scope
+                                .borrow_mut()
+                                .add_var(name_, self.code.var_count as u16 - 1)
+                        })
+                    };
                     match &decl.init {
                         Some(ref init) => {
                             self.expr(init, true, false);
@@ -211,10 +226,11 @@ impl ByteCompiler {
 
                     match var.kind {
                         VarDeclKind::Const => {
-                            self.decl_const(Self::ident_to_sym(&name.id));
+                            self.emit(Opcode::OP_DECL_CONST, &[ix.unwrap() as _], false);
+                            // self.decl_const(Self::ident_to_sym(&name.id));
                         }
                         VarDeclKind::Let => {
-                            self.decl_let(Self::ident_to_sym(&name.id));
+                            self.emit(Opcode::OP_DECL_LET, &[ix.unwrap() as _], false);
                         }
                         VarDeclKind::Var => {
                             let acc = self.access_var(Self::ident_to_sym(&name.id));
@@ -266,6 +282,11 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_PUT_BY_ID, &[name], true);
             }
             Access::ByVal => self.emit(Opcode::OP_PUT_BY_VAL, &[0], false),
+            Access::ArrayPat(x) => {
+                for (_, acc) in x {
+                    self.access_set(acc);
+                }
+            }
             _ => todo!(),
         }
     }
@@ -284,6 +305,11 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_GET_BY_ID, &[name], true);
             }
             Access::ByVal => self.emit(Opcode::OP_GET_BY_VAL, &[0], false),
+            Access::ArrayPat(acc) => {
+                for (_, acc) in acc {
+                    todo!()
+                }
+            }
             _ => todo!(),
         }
     }
@@ -895,10 +921,67 @@ impl ByteCompiler {
             x => todo!("{:?}", x),
         }
     }
+
+    pub fn compile_pat_decl(&mut self, pat: &Pat) {
+        match pat {
+            Pat::Array(pat) => {
+                for pat in pat.elems.iter() {
+                    match pat {
+                        Some(pat) => self.compile_pat_decl(pat),
+                        _ => (),
+                    }
+                }
+            }
+            Pat::Ident(x) => {
+                self.decl_let(Self::ident_to_sym(&x.id));
+            }
+            Pat::Object(object) => {
+                for case in object.props.iter() {
+                    match case {
+                        ObjectPatProp::KeyValue(ref keyvalue) => match keyvalue.key {
+                            PropName::Ident(ref id) => {
+                                self.decl_let(Self::ident_to_sym(&id));
+                            }
+                            PropName::Str(ref x) => {
+                                self.decl_let(x.value.intern());
+                            }
+                            _ => (),
+                        },
+                        ObjectPatProp::Assign(x) => {
+                            self.decl_let(Self::ident_to_sym(&x.key));
+                        }
+                        ObjectPatProp::Rest(x) => {
+                            self.compile_pat_decl(&x.arg);
+                        }
+                    }
+                }
+            }
+            Pat::Rest(x) => {
+                self.compile_pat_decl(&x.arg);
+            }
+            Pat::Assign(x) => {
+                self.compile_pat_decl(&x.left);
+            }
+            _ => todo!(),
+        }
+    }
     pub fn compile_access_pat(&mut self, pat: &Pat, dup: bool) -> Access {
         match pat {
             Pat::Ident(id) => self.access_var(Self::ident_to_sym(&id.id)),
             Pat::Expr(expr) => self.compile_access(expr, dup),
+            Pat::Array(array) => {
+                let mut acc = vec![];
+                for (index, pat) in array.elems.iter().enumerate() {
+                    match pat {
+                        Some(pat) => {
+                            let access = self.compile_access_pat(pat, false);
+                            acc.push((index, access));
+                        }
+                        _ => (),
+                    }
+                }
+                return Access::ArrayPat(acc);
+            }
             _ => todo!(),
         }
     }
@@ -1362,6 +1445,18 @@ impl ByteCompiler {
                             }
                             _ => unreachable!(),
                         },
+                        Pat::Array(array) => {
+                            p += 1;
+                            let tmp = format!("@arg{}", p - 1);
+                            let arg = compiler.scope.borrow_mut().add_var(tmp.intern(), p - 1);
+
+                            for (index, pat) in array.elems.iter().enumerate() {
+                                if let Some(pat) = pat {
+                                    self.compile_pat_decl(pat);
+                                    let access = self.compile_access_pat(&pat, false);
+                                }
+                            }
+                        }
                         _ => todo!(),
                     }
                 }
