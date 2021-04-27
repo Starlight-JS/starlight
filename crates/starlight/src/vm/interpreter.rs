@@ -637,7 +637,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let object = frame.pop();
                 if likely(object.is_jsobject()) {
                     letroot!(obj = gcstack, object.get_jsobject());
-
+                    #[cfg(not(feature = "no-inline-caching"))]
                     if let TypeFeedBack::PropertyCache { structure, offset } =
                         unwrap_unchecked(frame.code_block)
                             .feedback
@@ -662,6 +662,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     ) -> Result<(), JsValue> {
                         let mut slot = Slot::new();
                         let found = obj.get_property_slot(rt, name, &mut slot);
+                        #[cfg(not(feature = "no-inline-caching"))]
                         if slot.is_load_cacheable() {
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
@@ -718,6 +719,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     'exit: loop {
                         'slowpath: loop {
                             match unwrap_unchecked(frame.code_block).feedback[fdbk as usize] {
+                                #[cfg(not(feature = "no-inline-caching"))]
                                 TypeFeedBack::PutByIdFeedBack {
                                     ref new_structure,
                                     ref old_structure,
@@ -1343,7 +1345,7 @@ unsafe fn put_by_id_slow(
         &mut slot,
         unwrap_unchecked(frame.code_block).strict,
     )?;
-
+    #[cfg(not(feature = "no-inline-caching"))]
     if slot.is_put_cacheable() && slot.base.is_some() {
         let mut base_cell = *obj;
         let mut new_structure = base_cell.structure();

@@ -925,6 +925,7 @@ impl ByteCompiler {
     pub fn compile_pat_decl(&mut self, pat: &Pat) {
         match pat {
             Pat::Array(pat) => {
+                todo!();
                 for pat in pat.elems.iter() {
                     match pat {
                         Some(pat) => self.compile_pat_decl(pat),
@@ -970,6 +971,7 @@ impl ByteCompiler {
             Pat::Ident(id) => self.access_var(Self::ident_to_sym(&id.id)),
             Pat::Expr(expr) => self.compile_access(expr, dup),
             Pat::Array(array) => {
+                todo!();
                 let mut acc = vec![];
                 for (index, pat) in array.elems.iter().enumerate() {
                     match pat {
@@ -1446,6 +1448,7 @@ impl ByteCompiler {
                             _ => unreachable!(),
                         },
                         Pat::Array(array) => {
+                            todo!();
                             p += 1;
                             let tmp = format!("@arg{}", p - 1);
                             let arg = compiler.scope.borrow_mut().add_var(tmp.intern(), p - 1);
