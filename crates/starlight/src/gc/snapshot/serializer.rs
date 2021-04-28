@@ -757,6 +757,8 @@ impl Serializable for GlobalData {
         self.map_structure.serialize(serializer);
         self.set_prototype.serialize(serializer);
         self.set_structure.serialize(serializer);
+        self.regexp_structure.serialize(serializer);
+        self.regexp_object.serialize(serializer);
     }
 }
 

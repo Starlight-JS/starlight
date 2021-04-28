@@ -1,3 +1,164 @@
+//! # Starlight's VM bytecode definition.
+//!
+//! Bytecode instruction consists of 1-byte opcode, optionally followed by N 32 bit operands.
+//!
+//!
+//!  Stack diagrams follow the syntax and semantics of: [Forth stack diagrams](http://everything2.com/title/Forth+stack+diagrams).
+//!
+//!
+//! We use the following extension in terminology:
+//! - `T`: try stack
+//! - `A`: opcode operands aka arguments
+//!
+//!
+//!
+//!
+//! # Opcode descritpion
+//!
+//! - **nop**:
+//!     no-operation
+//! - **swap**: Swap the top two items on the stack. `(a b -- b a)`
+//! - **push_literal**: Pushes a value from literal table onto the stack.
+//!
+//!     
+//!     The opcode has 1 operand that is index to literal table in code block.
+//!
+//!
+//!     `(-- a)`
+//! - **push_int**: Pushes a new int32 value onto the stack.
+//!
+//!     
+//!     The opcode has 1 int32 operand.
+//!
+//!
+//!     `(-- a)`
+//!
+//! - **push_true**: Pushes `true` value onto the stack.
+//!
+//!
+//!     `(-- a)`
+//! - **push_false**: Pushes `false` value onto the stack.
+//!
+//!
+//!     `(-- a)`
+//!
+//! - **push_undef**: Pushes `undefined` value onto the stack.
+//!
+//!
+//!     `(-- a)`
+//! - **push_null**: Pushes `null` value onto the stack.
+//!
+//!
+//!     `(-- a)`
+//!
+//! - **push_nan**: Pushes `NaN` value onto the stack.
+//!
+//!
+//!     `(-- a)`
+//!
+//! - **get_function**: Pushes function from code block function table onto the stack.
+//!
+//!
+//!     Opcode has 1 operand that is index to function table.
+//!
+//!
+//!     `(-- a)`
+//!
+//! - **loophint**: no-op opcode indicating loop body start.
+//! - **call**: Takes the number of arguments as parameter.
+//!
+//!
+//!     Pops N function arguments from stack, then pops function, then pops `this`.
+//!     Calls a function and pushes result to the stack.
+//!
+//!     
+//!     `( this f a0 a1 ... aN -- f(a0,a1,...) )`  
+//!  - **tailcall**: same as **call** but pops the current call frame.
+//!  - **new**: same as **call** but invokes object constructor.
+//!  - **tailnew**: same as **tailcall** but works like **new**.
+//!  - **call_builtin**: call to builtin function.
+//!
+//!     Has 1 operand, index of builtin. Stack is manipulated in builtins.
+//!  - **newarray**: Takes the number of arguments from the stack and creates new array instance.
+//!
+//!
+//!     Pops N arguments from stack and creates array instance.
+//!
+//!
+//!     `( a0 a1 ... aN -- [a0,a1,...])`
+//!  - **newobject**: Pushes new empty object onto the stack.
+//!
+//!     
+//!     `( -- a )`
+//!
+//! - **ret**: Returns value from the current function.
+//!
+//!     If stack is empty will return `undefined` value, if constructor was called
+//!     will try to pop value from stack and if it is object return it, otherwise will return `this` value.
+//!
+//!  - **jmp**: Unconditional jump.
+//!  - **jmp_if_true**: Takes one value from the stack and performs a jump if conversion of
+//!     that values to boolean results in `true`.
+//!
+//!     `( a -- )`
+//!
+//!  - **jmp_if_false**: Takes one value from the stack and performs a jump if conversion of
+//!     that values to boolean results in `false`.
+//!
+//!     `( a -- )`
+//!  ## Binary operations
+//! Takes 2 values from the stack and performs corresponding actions to execute binary operation.
+//!
+//! `( a b -- a <op> b)
+//!  - **add**
+//!  - **sub**
+//!  - **div**
+//!  - **mul**
+//!  - **rem**
+//!  - **shr**
+//!  - **shl**
+//!  - **ushr**
+//!  - **or**
+//!  - **and**
+//!  - **xor**
+//!  - **in**
+//!  - **eq**
+//!  - **stricteq**
+//!  - **neq**
+//!  - **nstricteq**
+//!  - **greater**
+//!  - **greatereq**
+//!  - **less**
+//!  - **lesseq**
+//!  - **instanceof**
+//!
+//!
+//! - **typeof**: Takes a value from stack and pushes its type as string to the stack.
+//!
+//!  `(a -- typeof(a))`
+//!
+//! ## Unary operations
+//! Takes 1 value from the stack and performs unary operation pushing result onto the stack.
+//!
+//!  
+//! `(a -- <op> a)`
+//!
+//! - **not**
+//! - **logical_not**
+//! - **pos**
+//! - **new**
+//!
+//!
+//! - **throw**: Takes a value from the stack and throws it.
+//!
+//!
+//!    `(a -- )
+//!
+//! - **push_catch**: Push catch block address to catch stack.
+//! - **pop_catch**: Pop catch block address from catch_stack.
+//!
+//! - **get_by_id**: Takes object from the stack and loads the value by ID.
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]

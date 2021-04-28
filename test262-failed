@@ -17122,7 +17122,7 @@ Test 'test262/test/built-ins/Object/keys/15.2.3.14-1-2.js' failed (error 'TypeEr
 
 Test 'test262/test/built-ins/Object/keys/15.2.3.14-1-3.js' failed (error 'TypeError: Object.keys requires object argument' unexpected)
 
-Test 'test262/test/built-ins/Object/keys/15.2.3.14-2-8.js' failed (error '' unexpected)
+Test 'test262/test/built-ins/Object/keys/15.2.3.14-3-1.js' failed (error '' unexpected)
 
 Test 'test262/test/built-ins/Object/keys/15.2.3.14-3-4.js' failed (error '' unexpected)
 
@@ -53048,6 +53048,8 @@ Test 'test262/test/language/statements/const/function-local-use-before-initializ
 
 Test 'test262/test/language/statements/const/global-closure-get-before-initialization.js' failed (error '' unexpected)
 
+Test 'test262/test/language/statements/const/global-use-before-initialization-in-declaration-statement.js' should fail
+
 Test 'test262/test/language/statements/const/syntax/const-invalid-assignment-statement-body-for-of.js' panicked
 
 Test 'test262/test/language/statements/continue/S12.7_A1_T1.js' panicked
@@ -56726,6 +56728,8 @@ Test 'test262/test/language/statements/let/global-closure-get-before-initializat
 
 Test 'test262/test/language/statements/let/global-closure-set-before-initialization.js' failed (error '' unexpected)
 
+Test 'test262/test/language/statements/let/global-use-before-initialization-in-declaration-statement.js' should fail
+
 Test 'test262/test/language/statements/let/syntax/let-closure-inside-condition.js' panicked
 
 Test 'test262/test/language/statements/let/syntax/let-closure-inside-initialization.js' failed (error 'TypeError: not a callable object' unexpected)
@@ -57912,9 +57916,7 @@ Test 'test262/tools/lint/test/fixtures/valid_esid.js' failed (error 'SyntaxError
 
 Test 'test262/tools/lint/test/fixtures/valid_esid_alternate.js' failed (error 'SyntaxError: Expected ';', '}' or <eof>' unexpected)
 
-est262/test/language/statements/class/dstr/private-gen-meth-dflt-obj-ptrn-id-init-fn-name-cover.js' failed (error 'ReferenceError: Property 'C' not found' unexpected)
-
-Test 'test262/test/language/statements/class/dstr/private-gen-meth-dflt-obj-ptrn-id-init-fn-name-fn.js' failed (error 'ReferenceError: Property 'C' not found' unexpected)
+t-obj-ptrn-id-init-fn-name-fn.js' failed (error 'ReferenceError: Property 'C' not found' unexpected)
 
 Test 'test262/test/language/statements/class/dstr/private-gen-meth-dflt-obj-ptrn-id-init-fn-name-gen.js' failed (error 'ReferenceError: Property 'C' not found' unexpected)
 

@@ -18,6 +18,16 @@ use crate::gc::cell::GcPointer;
 pub struct JsArray;
 #[allow(non_snake_case)]
 impl JsArray {
+    pub fn from_slice(vm: &mut Runtime, slice: &[JsValue]) -> GcPointer<JsObject> {
+        let mut this = Self::new(vm, slice.len() as _);
+
+        for i in 0..slice.len() {
+            let val = slice[i];
+            let _ = this.put(vm, Symbol::Index(i as _), val, false);
+        }
+
+        this
+    }
     pub fn new(vm: &mut Runtime, n: u32) -> GcPointer<JsObject> {
         let mut arr = JsObject::new(
             vm,

@@ -19,6 +19,7 @@ pub mod global;
 pub mod math;
 pub mod number;
 pub mod object;
+pub mod regexp;
 pub mod string;
 
 use array::*;
@@ -970,6 +971,10 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         StructureChain::allocate as _,
         HashValueZero::deserialize as _,
         HashValueZero::allocate as _,
+        regexp::regexp_constructor as _,
+        regexp::regexp_exec as _,
+        regexp::regexp_test as _,
+        regexp::regexp_to_string as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

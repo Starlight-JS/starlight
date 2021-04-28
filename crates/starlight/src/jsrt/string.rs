@@ -4,7 +4,7 @@ use crate::{
         arguments::Arguments,
         array::JsArray,
         attributes::*,
-        error::JsTypeError,
+        error::{JsRangeError, JsTypeError},
         function::JsNativeFunction,
         object::JsObject,
         property_descriptor::DataDescriptor,
@@ -15,6 +15,13 @@ use crate::{
         Runtime,
     },
 };
+use std::{
+    char::{decode_utf16, from_u32},
+    cmp::{max, min},
+    intrinsics::unlikely,
+};
+
+use super::regexp::RegExp;
 
 pub fn string_to_string(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
@@ -34,6 +41,191 @@ pub fn string_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
 
 pub fn string_value_of(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
+}
+
+pub fn string_char_at(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let pos = args.at(0).to_int32(rt)?;
+    if pos < 0 || pos >= primitive_val.len() as i32 {
+        return Ok(JsValue::encode_undefined_value());
+    }
+
+    if let Some(utf16_val) = primitive_val.encode_utf16().nth(pos as usize) {
+        Ok(JsValue::new(JsString::new(
+            rt,
+            from_u32(utf16_val as u32).unwrap().to_string(),
+        )))
+    } else {
+        Ok(JsValue::new(JsString::new(rt, "")))
+    }
+}
+
+pub fn string_code_point_at(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let pos = args.at(0).to_int32(rt)?;
+    if pos < 0 || pos >= primitive_val.len() as i32 {
+        return Ok(JsValue::encode_undefined_value());
+    }
+    if let Some((code_point, _, _)) = code_point_at(&primitive_val, pos as _) {
+        Ok(JsValue::new(code_point))
+    } else {
+        Ok(JsValue::encode_undefined_value())
+    }
+}
+
+pub fn string_char_code_at(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let pos = args.at(0).to_int32(rt)?;
+    if pos < 0 || pos >= primitive_val.len() as i32 {
+        return Ok(JsValue::encode_nan_value());
+    }
+
+    if let Some(utf16_val) = primitive_val.encode_utf16().nth(pos as _) {
+        return Ok(JsValue::new(utf16_val));
+    } else {
+        return Ok(JsValue::encode_nan_value());
+    }
+}
+
+pub fn string_repeat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    args.this.check_object_coercible(rt)?;
+    let object = args.this.to_string(rt)?;
+    if args.size() > 0 {
+        let n = args.at(0).to_int32(rt)?;
+        if unlikely(n < 0) {
+            let msg = JsString::new(rt, "repeat count cannot be a negative number");
+            return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+        }
+
+        if unlikely(n as usize * object.len() >= u32::MAX as usize - 1) {
+            let msg = JsString::new(rt, "repeat count must not overflow max string length");
+            return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+        }
+        Ok(JsValue::new(JsString::new(rt, object.repeat(n as _))))
+    } else {
+        Ok(JsValue::new(JsString::new(rt, "")))
+    }
+}
+
+pub fn string_starts_with(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let arg = args.at(0);
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
+        let msg = JsString::new(
+            rt,
+            "First argument to String.prototype.endsWith must not be a regular expression",
+        );
+        return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+    }
+    let search_string = arg.to_string(rt)?;
+    let length = primitive_val.chars().count() as i32;
+    let search_length = search_string.chars().count() as i32;
+    let position = if args.size() < 2 {
+        0
+    } else {
+        args.at(1).to_int32(rt)?
+    };
+
+    let start = min(max(position, 0), length);
+    let end = start.wrapping_add(search_length);
+    if end > length {
+        Ok(JsValue::new(false))
+    } else {
+        let this_string = primitive_val
+            .chars()
+            .skip(start as usize)
+            .collect::<String>();
+        Ok(JsValue::new(
+            this_string.starts_with(search_string.as_str()),
+        ))
+    }
+}
+
+pub fn string_ends_with(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let arg = args.at(0);
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
+        let msg = JsString::new(
+            rt,
+            "First argument to String.prototype.startsWith must not be a regular expression",
+        );
+        return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+    }
+    let search_string = arg.to_string(rt)?;
+    let length = primitive_val.chars().count() as i32;
+    let search_length = search_string.chars().count() as i32;
+    let position = if args.size() < 2 {
+        0
+    } else {
+        args.at(1).to_int32(rt)?
+    };
+
+    let start = min(max(position, 0), length);
+    let end = start.wrapping_add(search_length);
+    if end > length {
+        Ok(JsValue::new(false))
+    } else {
+        let this_string = primitive_val
+            .chars()
+            .skip(start as usize)
+            .collect::<String>();
+        Ok(JsValue::new(
+            this_string.starts_with(search_string.as_str()),
+        ))
+    }
+}
+
+pub fn string_includes(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let arg = args.at(0);
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
+        let msg = JsString::new(
+            rt,
+            "First argument to String.prototype.startsWith must not be a regular expression",
+        );
+        return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+    }
+    let search_string = arg.to_string(rt)?;
+    let length = primitive_val.chars().count() as i32;
+
+    let position = if args.size() < 2 {
+        0
+    } else {
+        args.at(1).to_int32(rt)?
+    };
+
+    let start = min(max(position, 0), length);
+    let this_string = primitive_val.chars().skip(start as _).collect::<String>();
+    Ok(JsValue::new(this_string.contains(search_string.as_str())))
+}
+pub fn string_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let length = primitive_val.chars().count() as i32;
+    let start = args.at(0).to_int32(rt)?;
+    let end = if args.size() > 1 {
+        args.at(1).to_int32(rt)?
+    } else {
+        length as i32
+    };
+    let from = if start < 0 {
+        max(length.wrapping_add(start as i32), 0)
+    } else {
+        min(start, length as i32)
+    };
+    let to = if end < 0 {
+        max(length.wrapping_add(end as _), 0)
+    } else {
+        min(end, length as i32)
+    };
+
+    let span = max(to.wrapping_sub(from), 0);
+
+    let new_str = primitive_val
+        .chars()
+        .skip(from as usize)
+        .take(span as usize)
+        .collect::<String>();
+    Ok(JsValue::new(JsString::new(rt, new_str)))
 }
 
 pub fn string_split(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -178,4 +370,53 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         )
         .unwrap_or_else(|_| panic!());
     rt.global_data.string_prototype = Some(proto);
+}
+pub(crate) fn code_point_at(string: &str, position: i32) -> Option<(u32, u8, bool)> {
+    let size = string.encode_utf16().count() as i32;
+    if position < 0 || position >= size {
+        return None;
+    }
+    let mut encoded = string.encode_utf16();
+    let first = encoded.nth(position as usize)?;
+    if !is_leading_surrogate(first) && !is_trailing_surrogate(first) {
+        return Some((first as u32, 1, false));
+    }
+    if is_trailing_surrogate(first) || position + 1 == size {
+        return Some((first as u32, 1, true));
+    }
+    let second = encoded.next()?;
+    if !is_trailing_surrogate(second) {
+        return Some((first as u32, 1, true));
+    }
+    let cp = (first as u32 - 0xD800) * 0x400 + (second as u32 - 0xDC00) + 0x10000;
+    Some((cp, 2, false))
+}
+
+/// Helper function to check if a `char` is trimmable.
+#[inline]
+pub(crate) fn is_trimmable_whitespace(c: char) -> bool {
+    // The rust implementation of `trim` does not regard the same characters whitespace as ecma standard does
+    //
+    // Rust uses \p{White_Space} by default, which also includes:
+    // `\u{0085}' (next line)
+    // And does not include:
+    // '\u{FEFF}' (zero width non-breaking space)
+    // Explicit whitespace: https://tc39.es/ecma262/#sec-white-space
+    matches!(
+        c,
+        '\u{0009}' | '\u{000B}' | '\u{000C}' | '\u{0020}' | '\u{00A0}' | '\u{FEFF}' |
+    // Unicode Space_Separator category
+    '\u{1680}' | '\u{2000}'
+            ..='\u{200A}' | '\u{202F}' | '\u{205F}' | '\u{3000}' |
+    // Line terminators: https://tc39.es/ecma262/#sec-line-terminators
+    '\u{000A}' | '\u{000D}' | '\u{2028}' | '\u{2029}'
+    )
+}
+
+fn is_leading_surrogate(value: u16) -> bool {
+    (0xD800..=0xDBFF).contains(&value)
+}
+
+fn is_trailing_surrogate(value: u16) -> bool {
+    (0xDC00..=0xDFFF).contains(&value)
 }

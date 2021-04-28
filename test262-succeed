@@ -3570,7 +3570,7 @@ Test 'test262/test/built-ins/Object/keys/15.2.3.14-2-6.js' passed
 
 Test 'test262/test/built-ins/Object/keys/15.2.3.14-2-7.js' passed
 
-Test 'test262/test/built-ins/Object/keys/15.2.3.14-3-1.js' passed
+Test 'test262/test/built-ins/Object/keys/15.2.3.14-2-8.js' passed
 
 Test 'test262/test/built-ins/Object/keys/15.2.3.14-3-2.js' passed
 
@@ -10808,8 +10808,6 @@ Test 'test262/test/language/statements/const/dstr/ary-ptrn-rest-not-final-id.js'
 
 Test 'test262/test/language/statements/const/dstr/ary-ptrn-rest-not-final-obj.js' passed
 
-Test 'test262/test/language/statements/const/global-use-before-initialization-in-declaration-statement.js' passed
-
 Test 'test262/test/language/statements/const/global-use-before-initialization-in-prior-statement.js' passed
 
 Test 'test262/test/language/statements/const/redeclaration-error-from-within-strict-mode-function-const.js' passed
@@ -11794,8 +11792,6 @@ Test 'test262/test/language/statements/let/dstr/ary-ptrn-rest-not-final-id.js' p
 
 Test 'test262/test/language/statements/let/dstr/ary-ptrn-rest-not-final-obj.js' passed
 
-Test 'test262/test/language/statements/let/global-use-before-initialization-in-declaration-statement.js' passed
-
 Test 'test262/test/language/statements/let/global-use-before-initialization-in-prior-statement.js' passed
 
 Test 'test262/test/language/statements/let/redeclaration-error-from-within-strict-mode-function.js' passed
@@ -12529,6 +12525,14 @@ Test 'test262/tools/lint/test/fixtures/negative_parse_throw_bad_value.js' passed
 Test 'test262/tools/lint/test/fixtures/negative_parse_throw_missing.js' passed
 
 Test 'test262/tools/lint/test/fixtures/negative_raw_call.js' passed
+
+Test 'test262/tools/lint/test/fixtures/negative_raw_wrong_call.js' passed
+
+Test 'test262/tools/lint/test/fixtures/negative_valid_parse.js' passed
+
+Test 'test262/tools/lint/test/fixtures/negative_valid_runtime.js' passed
+
+assed
 
 Test 'test262/tools/lint/test/fixtures/negative_raw_wrong_call.js' passed
 

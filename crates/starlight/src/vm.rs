@@ -4,7 +4,7 @@ use crate::{
     gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
-    jsrt::object::*,
+    jsrt::{object::*, regexp::RegExp},
 };
 use arguments::Arguments;
 use environment::Environment;
@@ -367,6 +367,7 @@ impl Runtime {
             false,
         );
         this.init_self_hosted();
+        RegExp::init(&mut this, proto);
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -495,6 +496,8 @@ pub struct GlobalData {
     pub(crate) set_structure: Option<GcPointer<Structure>>,
     pub(crate) map_prototype: Option<GcPointer<JsObject>>,
     pub(crate) set_prototype: Option<GcPointer<JsObject>>,
+    pub(crate) regexp_structure: Option<GcPointer<Structure>>,
+    pub(crate) regexp_object: Option<GcPointer<JsObject>>,
 }
 
 impl GlobalData {
