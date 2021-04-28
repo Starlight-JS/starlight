@@ -869,12 +869,19 @@ impl JsValue {
             if object.is::<SpreadValue>() {
                 return Ok("spread".to_string());
             }
+            if object.is::<JsSymbol>() {
+                let desc = rt.description(object.downcast::<JsSymbol>().unwrap().symbol());
+                return Ok(desc);
+            }
             todo!()
         } else {
             unreachable!()
         }
     }
     pub fn to_symbol(self, rt: &mut Runtime) -> Result<Symbol, JsValue> {
+        if self.is_object() && self.get_object().is::<JsSymbol>() {
+            return Ok(self.get_object().downcast::<JsSymbol>().unwrap().symbol());
+        }
         if self.is_number() {
             let n = self.get_number();
             if n as u32 as f64 == n {

@@ -4,13 +4,16 @@ use crate::{
     gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
-    jsrt::{object::*, regexp::RegExp},
+    jsrt::{self, object::*, regexp::RegExp},
 };
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
 use function::JsVMFunction;
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
 use swc_common::{
@@ -145,6 +148,7 @@ pub struct Runtime {
     pub(crate) options: RuntimeParams,
     pub(crate) shadowstack: ShadowStack,
     pub(crate) stacktrace: String,
+    pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
 
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
@@ -307,6 +311,7 @@ impl Runtime {
             shadowstack: ShadowStack::new(),
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
+            symbol_table: HashMap::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -368,6 +373,7 @@ impl Runtime {
         );
         this.init_self_hosted();
         RegExp::init(&mut this, proto);
+        jsrt::symbol::symbol_init(&mut this);
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -392,6 +398,7 @@ impl Runtime {
             shadowstack: ShadowStack::new(),
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
+            symbol_table: HashMap::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -459,7 +466,7 @@ use self::{
     interpreter::stack::Stack,
     object::JsObject,
     structure::Structure,
-    symbol_table::{Internable, Symbol},
+    symbol_table::{Internable, JsSymbol, Symbol},
 };
 
 /// Global JS data that is used internally in Starlight.

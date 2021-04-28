@@ -766,5 +766,6 @@ impl Serializable for Runtime {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.global_data.serialize(serializer);
         self.global_object.serialize(serializer);
+        self.symbol_table.serialize(serializer);
     }
 }
