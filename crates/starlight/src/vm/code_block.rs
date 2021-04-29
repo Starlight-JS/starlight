@@ -44,6 +44,8 @@ pub struct CodeBlock {
     pub file_name: String,
     /// `arguments` location in variable array.
     pub args_at: u32,
+
+    pub is_constructor: bool,
 }
 
 unsafe impl Trace for CodeBlock {
@@ -426,6 +428,7 @@ impl CodeBlock {
             names: vec![],
             args_at: 0,
             code: vec![],
+            is_constructor: true,
             rest_at: None,
             literals_ptr: core::ptr::null_mut(),
             use_arguments: false,

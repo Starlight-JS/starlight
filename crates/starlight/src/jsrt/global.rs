@@ -176,3 +176,16 @@ pub fn __breakpoint(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsV
 pub fn __breakpoint_noop(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::encode_undefined_value())
 }
+
+pub fn ___is_constructor(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let arg = args.at(0);
+    if arg.is_callable() {
+        let fun = arg.get_jsobject();
+        return Ok(JsValue::new(
+            fun.as_function().is_native()
+                || (fun.as_function().is_vm() && fun.as_function().as_vm().code.is_constructor),
+        ));
+    }
+
+    Ok(JsValue::new(false))
+}

@@ -1367,6 +1367,7 @@ impl Deserializable for CodeBlock {
         let var_count = u32::deserialize_inplace(deser);
         let param_count = u32::deserialize_inplace(deser);
         let args_at = u32::deserialize_inplace(deser);
+        let is_constructor = bool::deserialize_inplace(deser);
         Self {
             args_at,
             use_arguments,
@@ -1383,6 +1384,7 @@ impl Deserializable for CodeBlock {
             rest_at,
             var_count,
             param_count,
+            is_constructor,
         }
     }
 

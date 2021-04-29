@@ -510,6 +510,7 @@ impl Serializable for CodeBlock {
         self.var_count.serialize(serializer);
         self.param_count.serialize(serializer);
         self.args_at.serialize(serializer);
+        self.is_constructor.serialize(serializer);
     }
 }
 

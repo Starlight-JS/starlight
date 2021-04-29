@@ -462,7 +462,7 @@ Array.from = function (items, mapFn, thisArg) {
     if (iteratorMethod) {
         if (!___isCallable(iteratorMethod))
             throw new TypeError("Array.from requires that the property of the first argument, items[Symbol.iterator], when exists, be a function")
-        var result = this !== Array ? new this() : [];
+        var result = ___isConstructor(this) ? new this() : [];
         var k = 0;
         var iterator = iteratorMethod.call(items);
         while (!iterator.done) {
@@ -485,7 +485,7 @@ Array.from = function (items, mapFn, thisArg) {
 
     var arrayLikeLength = ___toLength(arrayLike.length);
 
-    var result = this !== Array ? new this(arrayLikeLength) : new Array(arrayLikeLength)
+    var result = this !== Array && ___isConstructor(this) ? new this(arrayLikeLength) : new Array(arrayLikeLength)
 
     var k = 0;
     while (k < arrayLikeLength) {
