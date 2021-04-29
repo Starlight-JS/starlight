@@ -163,7 +163,6 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let proto = rt.global_data().regexp_object.unwrap();
     let structure = Structure::new_indexed(rt, Some(proto), false);
 
-    let mut this = JsObject::new(rt, &structure, RegExp::get_class(), ObjectTag::Regex);
     let arg = args.at(0);
 
     let (regex_body, mut regex_flags) = match arg {
@@ -250,6 +249,7 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         original_source: regex_body,
         original_flags: regex_flags,
     };
+    let mut this = JsObject::new(rt, &structure, RegExp::get_class(), ObjectTag::Regex);
     *this.data::<RegExp>() = ManuallyDrop::new(regexp);
     let f = JsString::new(rt, sorted_flags);
     this.put(rt, "flags".intern(), JsValue::new(f), false)?;

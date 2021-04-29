@@ -125,15 +125,6 @@ impl JsArguments {
                             if desc.is_data() {
                                 let data = DataDescriptor { parent: *desc };
                                 if !data.is_value_absent() {
-                                    /*Env {
-                                        record: arg.env.clone(),
-                                    }
-                                    .set_localiable(
-                                        vm,
-                                        mapped,
-                                        desc.value(),
-                                        throwable,
-                                    )?;*/
                                     arg.env.as_slice_mut()[mapped.get_index() as usize].value =
                                         desc.value();
                                 }
@@ -167,7 +158,6 @@ impl JsArguments {
                 let val = arg.env.as_slice()[mapped.get_index() as usize].value;
                 let attrs = slot.attributes();
                 slot.set(val, attrs);
-                return true;
             }
         }
         true

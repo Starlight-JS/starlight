@@ -306,6 +306,11 @@ pub fn array_concat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         }
         letroot!(arg = stack, arg.get_jsobject());
         let len = super::get_length(rt, &mut arg)?;
+        if unlikely(len >= u32::MAX - 1) {
+            return Err(JsValue::new(rt.new_type_error(
+                "Array-like object length exceeds array length limit in Array.prototype.concat",
+            )));
+        }
         for n in 0..len {
             let val = arg.get(rt, Symbol::Index(n))?;
             new_values.put(rt, Symbol::Index(ix), val, false)?;

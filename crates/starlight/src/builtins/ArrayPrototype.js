@@ -448,6 +448,7 @@ Array.prototype.at = function at(index) {
 
     return (k >= 0 && k < length) ? array[k] : undefined;
 }
+/*
 Array.from = function (items, mapFn, thisArg) {
     "use strict";
     if (mapFn !== undefined) {
@@ -500,4 +501,65 @@ Array.from = function (items, mapFn, thisArg) {
 
     result.length = arrayLikeLength;
     return result;
-}
+}*/
+/*
+Array.from = (function v() {
+    var toStr = Object.prototype.toString;
+    // Свойство length метода from равно 1.
+    return function from(arrayLike, mapFn, thisArg) {
+        // 1. Положим C равным значению this.
+        var C = this;
+
+        // 2. Положим items равным ToObject(arrayLike).
+        var items = Object(arrayLike);
+
+        // 3. ReturnIfAbrupt(items).
+        if (arrayLike == null) {
+            throw new TypeError('Array.from requires an array-like object - not null or undefined');
+        }
+
+        // 4. Если mapfn равен undefined, положим mapping равным false.
+
+        var T;
+        if (typeof mapFn !== 'undefined') {
+            // 5. иначе
+            // 5. a. Если вызов IsCallable(mapfn) равен false, выкидываем исключение TypeError.
+            if (!___isCallable(mapFn)) {
+                throw new TypeError('Array.from: when provided, the second argument must be a function');
+            }
+
+            // 5. b. Если thisArg присутствует, положим T равным thisArg; иначе положим T равным undefined.
+            if (thisArg) {
+                T = thisArg;
+            }
+        }
+
+        // 10. Положим lenValue равным Get(items, "length").
+        // 11. Положим len равным ToLength(lenValue).
+        var len = ___toLength(items.length);
+
+        // 13. Если IsConstructor(C) равен true, то
+        // 13. a. Положим A равным результату вызова внутреннего метода [[Construct]]
+        //     объекта C со списком аргументов, содержащим единственный элемент len.
+        // 14. a. Иначе, положим A равным ArrayCreate(len).
+        var A = ___isCallable(C) ? Object(new C(len)) : new Array(len);
+
+        // 16. Положим k равным 0.
+        var k = 0;
+        // 17. Пока k < len, будем повторять... (шаги с a по h)
+        var kValue;
+        while (k < len) {
+            kValue = items[k];
+            if (mapFn) {
+                A[k] = typeof T === 'undefined' ? mapFn(kValue, k) : mapFn.call(T, kValue, k);
+            } else {
+                A[k] = kValue;
+            }
+            k += 1;
+        }
+        // 18. Положим putStatus равным Put(A, "length", len, true).
+        A.length = len;
+        // 20. Вернём A.
+        return A;
+    };
+}());*/

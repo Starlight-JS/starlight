@@ -21,7 +21,10 @@ use swc_common::{
     sync::Lrc,
 };
 use swc_common::{FileName, SourceMap};
-use swc_ecmascript::parser::*;
+use swc_ecmascript::{
+    ast::Program,
+    parser::{error::Error, *},
+};
 #[macro_use]
 pub mod class;
 #[macro_use]
@@ -351,7 +354,7 @@ impl Runtime {
         this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
-        jsrt::symbol::symbol_init(&mut this,proto);
+        jsrt::symbol::symbol_init(&mut this, proto);
 
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
@@ -374,8 +377,7 @@ impl Runtime {
         );
         RegExp::init(&mut this, proto);
         this.init_self_hosted();
-        
-        
+
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -582,4 +584,36 @@ impl Drop for Runtime {
             self.perf.print_perf();
         }
     }
+}
+
+pub fn parse(script: &str, strict_mode: bool) -> Result<Program, Error> {
+    let cm: Lrc<SourceMap> = Default::default();
+    let _e = BufferedError::default();
+
+    let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+    let script = if strict_mode {
+        format!("\"use strict\";\n{}", script)
+    } else {
+        script.to_string()
+    };
+    let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
+
+    let mut parser = Parser::new(
+        Syntax::Es(Default::default()),
+        StringInput::from(&*fm),
+        None,
+    );
+
+    for e in parser.take_errors() {
+        e.into_diagnostic(&handler).emit();
+    }
+
+    let script = match parser.parse_program() {
+        Ok(script) => script,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    Ok(script)
 }

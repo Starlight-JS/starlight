@@ -258,6 +258,7 @@ impl JsValue {
 
     #[inline]
     pub fn get_object(&self) -> GcPointer<dyn GcCell> {
+
         assert!(self.is_object());
         unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>(self.0 & Self::DATA_MASK) }.clone()
     }
@@ -824,6 +825,10 @@ impl JsValue {
                 Ok(val) => val.to_number(rt),
                 Err(e) => Err(e),
             }
+        } else if unlikely(self.is_symbol()) {
+            return Err(JsValue::new(
+                rt.new_type_error("Cannot convert Symbol to number"),
+            ));
         } else {
             unsafe { unreachable_unchecked() }
         }

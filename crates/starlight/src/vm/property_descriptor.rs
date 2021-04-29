@@ -293,6 +293,7 @@ impl StoredSlot {
         throwable: bool,
         returned: &mut bool,
     ) -> Result<bool, JsValue> {
+        *returned = true;
         macro_rules! reject {
             ($str: expr) => {{
                 *returned = false;

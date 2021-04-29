@@ -180,7 +180,6 @@ impl GcCell for JsObject {
     fn compute_size(&self) -> usize {
         object_size_with_tag(self.tag, self.class)
     }
-    
 }
 impl Drop for JsObject {
     fn drop(&mut self) {
@@ -1326,7 +1325,7 @@ impl GcPointer<JsObject> {
         throwable: bool,
     ) -> Result<bool, JsValue> {
         if let Symbol::Index(index) = name {
-            self.define_own_indexed_property_internal(vm, index, desc, throwable)
+            self.define_own_indexed_property_slot(vm, index, desc, slot, throwable)
         } else {
             self.define_own_non_indexed_property_slot(vm, name, desc, slot, throwable)
         }

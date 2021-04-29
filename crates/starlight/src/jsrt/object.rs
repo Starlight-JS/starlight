@@ -91,6 +91,7 @@ pub fn object_define_property(vm: &mut Runtime, args: &Arguments) -> Result<JsVa
             let name = args.at(1).to_symbol(vm)?;
             let attr = args.at(2);
             let desc = super::to_property_descriptor(vm, attr)?;
+
             obj.define_own_property(vm, name, &desc, true)?;
             return Ok(JsValue::new(*&*obj));
         }
