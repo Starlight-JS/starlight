@@ -141,7 +141,13 @@ impl RegExp {
             def_native_method!(rt, proto, exec, regexp_exec, 1)?;
             def_native_method!(rt, proto, test, regexp_test, 1)?;
             def_native_method!(rt, proto, toString, regexp_to_string, 0)?;
-
+            let mut sym = rt
+                .global_object()
+                .get(rt, "Symbol".intern())?
+                .get_jsobject();
+            let sym_match = sym.get(rt, "match".intern())?.to_symbol(rt)?;
+            let f = JsNativeFunction::new(rt, sym_match, regexp_match, 1);
+            proto.put(rt, sym_match, JsValue::new(f), false)?;
             rt.global_data.regexp_object = Some(proto);
             Ok(())
         };
@@ -157,7 +163,7 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let proto = rt.global_data().regexp_object.unwrap();
     let structure = Structure::new_indexed(rt, Some(proto), false);
 
-    let this = JsObject::new(rt, &structure, RegExp::get_class(), ObjectTag::Regex);
+    let mut this = JsObject::new(rt, &structure, RegExp::get_class(), ObjectTag::Regex);
     let arg = args.at(0);
 
     let (regex_body, mut regex_flags) = match arg {
@@ -234,7 +240,7 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let regexp = RegExp {
         matcher,
         use_last_index: global || sticky,
-        flags: sorted_flags.into_boxed_str(),
+        flags: sorted_flags.clone().into_boxed_str(),
         dot_all,
         global,
         ignore_case,
@@ -245,6 +251,8 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         original_flags: regex_flags,
     };
     *this.data::<RegExp>() = ManuallyDrop::new(regexp);
+    let f = JsString::new(rt, sorted_flags);
+    this.put(rt, "flags".intern(), JsValue::new(f), false)?;
     Ok(JsValue::new(this))
 }
 

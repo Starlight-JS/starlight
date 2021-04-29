@@ -972,7 +972,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
                 }
             }
-            Opcode::OP_GET_BY_VAL => {
+            Opcode::OP_GET_BY_VAL | Opcode::OP_GET_BY_VAL_PUSH_OBJ => {
                 let profile = &mut *ip.cast::<ByValProfile>();
                 ip = ip.add(4);
 
@@ -989,7 +989,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     if likely(object.indexed.dense()) {
                         if likely(index < object.indexed.length() as usize) {
                             if likely(!object.indexed.vector.at(index as _).is_empty()) {
+                                if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
+                                    frame.push(JsValue::new(object));
+                                }
                                 frame.push(*object.indexed.vector.at(index as _));
+
                                 continue;
                             }
                         }
@@ -998,7 +1002,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let key = key.to_symbol(rt)?;
                 let mut slot = Slot::new();
                 let value = object.get_slot(rt, key, &mut slot)?;
-
+                if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
+                    frame.push(JsValue::new(object));
+                }
                 frame.push(value);
             }
             Opcode::OP_INSTANCEOF => {

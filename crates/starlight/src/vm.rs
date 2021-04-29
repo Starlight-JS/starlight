@@ -351,6 +351,7 @@ impl Runtime {
         this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
+        jsrt::symbol::symbol_init(&mut this,proto);
 
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
@@ -371,9 +372,10 @@ impl Runtime {
             JsValue::encode_object_value(global),
             false,
         );
-        this.init_self_hosted();
         RegExp::init(&mut this, proto);
-        jsrt::symbol::symbol_init(&mut this);
+        this.init_self_hosted();
+        
+        
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this

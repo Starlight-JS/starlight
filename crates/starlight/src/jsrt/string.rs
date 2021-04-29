@@ -369,6 +369,22 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
             false,
         )
         .unwrap_or_else(|_| panic!());
+
+    let mut init = || -> Result<(), JsValue> {
+        def_native_method!(rt, proto, charCodeAt, string_char_code_at, 1)?;
+        def_native_method!(rt, proto, codePointAt, string_code_point_at, 1)?;
+        def_native_method!(rt, proto, repeat, string_repeat, 1)?;
+        def_native_method!(rt, proto, startsWith, string_starts_with, 1)?;
+        def_native_method!(rt, proto, endsWith, string_ends_with, 1)?;
+        def_native_method!(rt, proto, includes, string_includes, 1)?;
+        def_native_method!(rt, proto, slice, string_slice, 1)?;
+        Ok(())
+    };
+
+    match init() {
+        Ok(_) => (),
+        _ => unreachable!(),
+    }
     rt.global_data.string_prototype = Some(proto);
 }
 pub(crate) fn code_point_at(string: &str, position: i32) -> Option<(u32, u8, bool)> {

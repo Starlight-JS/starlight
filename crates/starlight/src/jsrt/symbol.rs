@@ -32,9 +32,8 @@ macro_rules! def_symbols {
     }
 }
 
-pub(crate) fn symbol_init(rt: &mut Runtime) {
+pub(crate) fn symbol_init(rt: &mut Runtime,proto: GcPointer<JsObject>) {
     let mut init = || -> Result<(), JsValue> {
-        let proto = rt.global_data().object_prototype.unwrap();
         let structure = Structure::new_indexed(rt, Some(proto), false);
         let mut sym_proto =
             JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);

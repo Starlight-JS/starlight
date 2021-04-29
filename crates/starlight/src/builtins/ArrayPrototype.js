@@ -448,3 +448,56 @@ Array.prototype.at = function at(index) {
 
     return (k >= 0 && k < length) ? array[k] : undefined;
 }
+Array.from = function (items, mapFn, thisArg) {
+    "use strict";
+    if (mapFn !== undefined) {
+        if (!___isCallable(mapFn))
+            throw new TypeError("Array.from requires that the second argument, when provided, be a function")
+    }
+
+    var arrayLike = ___toObject(items, "Array.from requires an array-like object - not null or undefined");
+
+    var iteratorMethod = items[Symbol.iterator];
+
+    if (iteratorMethod) {
+        if (!___isCallable(iteratorMethod))
+            throw new TypeError("Array.from requires that the property of the first argument, items[Symbol.iterator], when exists, be a function")
+        var result = this !== Array ? new this() : [];
+        var k = 0;
+        var iterator = iteratorMethod.call(items);
+        while (!iterator.done) {
+            let value = iterator.value;
+            if (k >= 4294967295)
+                throw new TypeError("Length exceeded the maximum array length")
+            //@throwTypeError("Length exceeded the maximum array length");
+            if (mapFn)
+                result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
+            else
+                result[k] = value;
+
+            k += 1;
+            iterator = iteratorMethod.call(items)
+        }
+
+        result.length = k;
+        return result;
+    }
+
+    var arrayLikeLength = ___toLength(arrayLike.length);
+
+    var result = this !== Array ? new this(arrayLikeLength) : new Array(arrayLikeLength)
+
+    var k = 0;
+    while (k < arrayLikeLength) {
+        var value = arrayLike[k];
+        if (mapFn)
+            result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
+
+        else
+            result[k] = value;
+        k += 1;
+    }
+
+    result.length = arrayLikeLength;
+    return result;
+}

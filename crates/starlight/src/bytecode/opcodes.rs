@@ -221,6 +221,7 @@ pub enum Opcode {
     OP_GET_BY_ID,
     OP_TRY_GET_BY_ID,
     OP_GET_BY_VAL,
+    OP_GET_BY_VAL_PUSH_OBJ,
     OP_PUT_BY_ID,
     OP_PUT_BY_VAL,
 

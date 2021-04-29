@@ -71,7 +71,7 @@ impl CodeBlock {
                     Opcode::OP_POP => {
                         writeln!(output, "pop")?;
                     }
-                    Opcode::OP_GET_BY_VAL => {
+                    Opcode::OP_GET_BY_VAL | Opcode::OP_GET_BY_VAL_PUSH_OBJ => {
                         pc = pc.add(4);
                         writeln!(output, "get_by_val",)?;
                     }
@@ -400,6 +400,15 @@ impl CodeBlock {
                     Opcode::OP_LOOPHINT => {
                         writeln!(output, "loophint")?;
                     }
+                    Opcode::OP_OR => {
+                        writeln!(output, "or")?;
+                    }
+                    Opcode::OP_AND => {
+                        writeln!(output, "and")?;
+                    }
+                    Opcode::OP_XOR => {
+                        writeln!(output, "xor")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }
@@ -434,5 +443,4 @@ impl GcCell for CodeBlock {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }

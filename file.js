@@ -1,9 +1,6 @@
-let re = new RegExp("javascript", "ig")
-let str = 'blah blah JavaScript sucks';
-let result;
+let re = new RegExp("[0-9]+", "g")
 
-print(re)
-while (result = re.exec(str)) {
-    print(result);
-    print(result.index)
-}
+
+const str = '2016-01-02|2019-03-07';
+const result = re[Symbol.matchAll](str);
+Array.from(result, (x) => print(x))

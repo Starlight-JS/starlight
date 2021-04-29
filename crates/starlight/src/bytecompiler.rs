@@ -1115,21 +1115,27 @@ impl ByteCompiler {
                             let name = if let Expr::Ident(id) = &*member.prop {
                                 let s: &str = &id.sym;
                                 let name = s.intern();
-                                self.get_sym(name)
+                                Some(self.get_sym(name))
                             } else {
-                                unreachable!()
+                                self.expr(&member.prop, true, false);
+                                None
                             };
                             match member.obj {
                                 ExprOrSuper::Expr(ref expr) => {
                                     self.expr(expr, true, false);
-                                    self.emit(Opcode::OP_DUP, &[], false);
+                                    if name.is_some() {
+                                        self.emit(Opcode::OP_DUP, &[], false);
+                                    }
                                 }
                                 ExprOrSuper::Super(_super) => {
                                     todo!()
                                 }
                             }
-
-                            self.emit(Opcode::OP_GET_BY_ID, &[name], true);
+                            if let Some(name) = name {
+                                self.emit(Opcode::OP_GET_BY_ID, &[name], true);
+                            } else {
+                                self.emit(Opcode::OP_GET_BY_VAL_PUSH_OBJ, &[0], false);
+                            }
                         }
                         _ => {
                             self.emit(Opcode::OP_PUSH_UNDEF, &[], false);

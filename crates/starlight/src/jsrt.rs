@@ -59,6 +59,12 @@ impl Runtime {
         string::initialize(self, self.global_data().object_prototype.unwrap());
 
         let mut global = self.global_object();
+        let _ = global.put(
+            self,
+            "undefined".intern(),
+            JsValue::encode_undefined_value(),
+            false,
+        );
         let func = JsNativeFunction::new(self, "isFinite".intern(), global::is_finite, 1);
         let _ = global.put(
             self,
@@ -137,6 +143,18 @@ impl Runtime {
         eval(
             "builtins/ArrayPrototype.js",
             include_str!("builtins/ArrayPrototype.js"),
+        );
+        eval(
+            "builtins/StringPrototype.js",
+            include_str!("builtins/StringPrototype.js"),
+        );
+        eval(
+            "builtins/RegExpStringIterator.js",
+            include_str!("builtins/RegExpStringIterator.js"),
+        );
+        eval(
+            "builtins/RegExpPrototype.js",
+            include_str!("builtins/RegExpPrototype.js"),
         );
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
@@ -943,6 +961,13 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         string::string_constructor as _,
         string::string_to_string as _,
         string::string_value_of as _,
+        string::string_char_code_at as _,
+        string::string_code_point_at as _,
+        string::string_starts_with as _,
+        string::string_ends_with as _,
+        string::string_repeat as _,
+        string::string_includes as _,
+        string::string_slice as _,
         JsStringObject::get_class() as *const _ as usize,
         NumberObject::get_class() as *const _ as usize,
         Environment::deserialize as _,
@@ -976,6 +1001,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         regexp::regexp_exec as _,
         regexp::regexp_test as _,
         regexp::regexp_to_string as _,
+        regexp::regexp_match as _,
         symbol::symbol_ctor as _,
         symbol::symbol_for as _,
         symbol::symbol_key_for as _,
@@ -983,6 +1009,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         symbol::symbol_value_of as _,
         JsSymbol::deserialize as _,
         JsSymbol::allocate as _,
+        Accessor::deserialize as _,
+        Accessor::allocate as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();
