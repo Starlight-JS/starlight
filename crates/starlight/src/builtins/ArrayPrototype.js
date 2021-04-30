@@ -502,3 +502,21 @@ Array.from = function from(items, mapFn, thisArg) {
     A.length = k;
     return A;
 }
+
+
+Array.prototype.values = function () {
+    return new ___ArrayIterator(this, "value");
+}
+
+Array.prototype.keys = function () {
+    return new ___ArrayIterator(this, "key");
+}
+
+Array.prototype.entries = function () {
+    return new ___ArrayIterator(this, "key+value");
+}
+Object.defineProperty(Array.prototype, Symbol.iterator, {
+    get: function () {
+        return new ___ArrayIterator(this, "value");
+    }
+})

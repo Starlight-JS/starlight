@@ -1192,7 +1192,10 @@ impl ByteCompiler {
                     UnaryOp::Tilde => self.emit(Opcode::OP_NOT, &[], false),
                     UnaryOp::Bang => self.emit(Opcode::OP_LOGICAL_NOT, &[], false),
                     UnaryOp::TypeOf => self.emit(Opcode::OP_TYPEOF, &[], false),
-
+                    UnaryOp::Void => {
+                        self.emit(Opcode::OP_POP, &[], false);
+                        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                    }
                     _ => todo!("{:?}", unary.op),
                 }
                 if !used {

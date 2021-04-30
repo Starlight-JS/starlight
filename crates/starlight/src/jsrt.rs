@@ -168,6 +168,10 @@ impl Runtime {
             "builtins/RegExpPrototype.js",
             include_str!("builtins/RegExpPrototype.js"),
         );
+        eval(
+            "builtins/ArrayIterator.js",
+            include_str!("builtins/ArrayIterator.js"),
+        );
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
