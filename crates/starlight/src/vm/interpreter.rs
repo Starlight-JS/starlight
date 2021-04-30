@@ -220,8 +220,8 @@ unsafe fn eval_internal(
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {
-                frame = &mut *rt.stack.current;
                 rt.stacktrace = rt.stacktrace();
+                frame = &mut *rt.stack.current;
                 loop {
                     if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
                         (*frame).env = env.unwrap();

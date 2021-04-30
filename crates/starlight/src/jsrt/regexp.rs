@@ -15,7 +15,7 @@ pub struct RegExp {
     use_last_index: bool,
 
     /// String of parsed flags.
-    flags: Box<str>,
+    pub(crate) flags: Box<str>,
 
     /// Flag 's' - dot matches newline characters.
     dot_all: bool,
@@ -36,7 +36,7 @@ pub struct RegExp {
     unicode: bool,
 
     pub(crate) original_source: Box<str>,
-    original_flags: Box<str>,
+    pub(crate) original_flags: Box<str>,
 }
 extern "C" fn drop_regexp_fn(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<RegExp>()) }
@@ -230,7 +230,10 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
 
     let matcher = match Regex::with_flags(&regex_body, sorted_flags.as_str()) {
         Err(error) => {
-            let msg = JsString::new(rt, format!("failed to create matcher: {}", error.text));
+            let msg = JsString::new(
+                rt,
+                format!("failed to create matcher: {} in {}", error.text, regex_body),
+            );
             return Err(JsValue::new(JsSyntaxError::new(rt, msg, None)));
         }
         Ok(val) => val,
@@ -253,6 +256,9 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     *this.data::<RegExp>() = ManuallyDrop::new(regexp);
     let f = JsString::new(rt, sorted_flags);
     this.put(rt, "flags".intern(), JsValue::new(f), false)?;
+    this.put(rt, "global".intern(), JsValue::new(global), false)?;
+    this.put(rt, "unicode".intern(), JsValue::new(unicode), false)?;
+
     Ok(JsValue::new(this))
 }
 

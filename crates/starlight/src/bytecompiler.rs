@@ -110,6 +110,12 @@ impl ByteCompiler {
         self.val_map.insert(val, ix as _);
         ix as _
     }
+    pub fn get_val2(&mut self, vm: &mut Runtime, val: JsValue) -> u32 {
+        let ix = self.code.literals.len();
+        self.code.literals.push(val);
+
+        ix as _
+    }
     pub fn get_sym(&mut self, name: Symbol) -> u32 {
         if let Some(ix) = self.name_map.get(&name) {
             return *ix;
@@ -689,12 +695,14 @@ impl ByteCompiler {
                 }
 
                 self.goto(head as _);
-                self.pop_lci();
+
                 for_in_enumerate(self);
                 for_in_setup(self);
+
                 // self.emit(Opcode::OP_POP_ENV, &[], false);
                 self.pop_scope();
                 self.emit(Opcode::OP_FORIN_LEAVE, &[], false);
+                self.pop_lci();
             }
             Stmt::ForOf(for_of) => {
                 let depth = self.push_scope();
@@ -739,10 +747,11 @@ impl ByteCompiler {
                 }
 
                 self.goto(head as _);
-                self.pop_lci();
+
                 end(self);
                 self.pop_scope();
                 self.emit(Opcode::OP_POP, &[], false);
+                self.pop_lci();
             }
             Stmt::For(for_stmt) => {
                 let _env = self.push_scope();
@@ -1073,7 +1082,23 @@ impl ByteCompiler {
                         let str = self.get_val(&mut vm, Val::Str(str.value.to_string()));
                         self.emit(Opcode::OP_PUSH_LITERAL, &[str], false);
                     }
-                    _ => todo!(),
+                    Lit::Regex(regex) => {
+                        let exp = regex.exp.to_string();
+                        let flags = regex.flags.to_string();
+                        let exp = JsString::new(&mut self.rt, exp);
+                        let flags = JsString::new(&mut self.rt, flags);
+                        let mut args = [JsValue::new(exp), JsValue::new(flags)];
+                        let args = Arguments::new(JsValue::encode_undefined_value(), &mut args);
+                        let regexp = crate::jsrt::regexp::regexp_constructor(&mut self.rt, &args)
+                            .unwrap_or_else(|e| match e.to_string(&mut self.rt) {
+                                Ok(x) => panic!("{}", x),
+                                _ => unreachable!(),
+                            });
+                        let mut rt = self.rt;
+                        let val = self.get_val2(&mut rt, regexp);
+                        self.emit(Opcode::OP_PUSH_LITERAL, &[val], false);
+                    }
+                    x => todo!("{:?}", x),
                 }
                 if !used {
                     self.emit(Opcode::OP_POP, &[], false);
@@ -1539,6 +1564,12 @@ impl ByteCompiler {
                 self.code.codes.push(code);
                 let _nix = self.get_sym(name);
                 self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
+            }
+            Expr::Seq(seq) => {
+                let mut last = seq.exprs.len() - 1;
+                for (i, expr) in seq.exprs.iter().enumerate() {
+                    self.expr(expr, used && (last == i), tail);
+                }
             }
             Expr::Fn(fun) => {
                 // self.emit(Opcode::OP_PUSH_ENV, &[10], false);

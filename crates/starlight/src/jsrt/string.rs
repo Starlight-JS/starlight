@@ -1,3 +1,5 @@
+use regress::Regex;
+
 use crate::{
     gc::cell::GcPointer,
     vm::{
@@ -85,6 +87,157 @@ pub fn string_char_code_at(rt: &mut Runtime, args: &Arguments) -> Result<JsValue
     } else {
         return Ok(JsValue::encode_nan_value());
     }
+}
+
+pub fn string_replace(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    if args.size() == 0 {
+        return Ok(JsValue::new(JsString::new(rt, primitive_val)));
+    }
+
+    let (regex_body, flags) = get_regex_string(rt, args.at(0))?;
+    let re = Regex::with_flags(&regex_body, flags.as_str())
+        .expect("unable to convert regex to regex object");
+
+    let mat = match re.find(&primitive_val) {
+        Some(mat) => mat,
+        None => return Ok(JsValue::new(JsString::new(rt, primitive_val))),
+    };
+    let caps = re
+        .find(&primitive_val)
+        .expect("unable to get capture groups from text")
+        .captures;
+
+    let replace_value = if args.size() > 1 {
+        // replace_object could be a string or function or not exist at all
+        let replace_object: JsValue = args.at(1);
+        match replace_object {
+            val if val.is_jsstring() => {
+                let val = val.get_jsstring().string.clone();
+                // https://tc39.es/ecma262/#table-45
+                let mut result = String::new();
+                let mut chars = val.chars().peekable();
+
+                let m = caps.len();
+
+                while let Some(first) = chars.next() {
+                    if first == '$' {
+                        let second = chars.next();
+                        let second_is_digit = second.map_or(false, |ch| ch.is_digit(10));
+                        // we use peek so that it is still in the iterator if not used
+                        let third = if second_is_digit { chars.peek() } else { None };
+                        let third_is_digit = third.map_or(false, |ch| ch.is_digit(10));
+
+                        match (second, third) {
+                            (Some('$'), _) => {
+                                // $$
+                                result.push('$');
+                            }
+                            (Some('&'), _) => {
+                                // $&
+                                result.push_str(&primitive_val[mat.range()]);
+                            }
+                            (Some('`'), _) => {
+                                // $`
+                                let start_of_match = mat.start();
+                                result.push_str(&primitive_val[..start_of_match]);
+                            }
+                            (Some('\''), _) => {
+                                // $'
+                                let end_of_match = mat.end();
+                                result.push_str(&primitive_val[end_of_match..]);
+                            }
+                            (Some(second), Some(third)) if second_is_digit && third_is_digit => {
+                                // $nn
+                                let tens = second.to_digit(10).unwrap() as usize;
+                                let units = third.to_digit(10).unwrap() as usize;
+                                let nn = 10 * tens + units;
+                                if nn == 0 || nn > m {
+                                    result.push(first);
+                                    result.push(second);
+                                    if let Some(ch) = chars.next() {
+                                        result.push(ch);
+                                    }
+                                } else {
+                                    let group = match mat.group(nn) {
+                                        Some(range) => &primitive_val[range.clone()],
+                                        _ => "",
+                                    };
+                                    result.push_str(group);
+                                    chars.next(); // consume third
+                                }
+                            }
+                            (Some(second), _) if second_is_digit => {
+                                // $n
+                                let n = second.to_digit(10).unwrap() as usize;
+                                if n == 0 || n > m {
+                                    result.push(first);
+                                    result.push(second);
+                                } else {
+                                    let group = match mat.group(n) {
+                                        Some(range) => &primitive_val[range.clone()],
+                                        _ => "",
+                                    };
+                                    result.push_str(group);
+                                }
+                            }
+                            (Some('<'), _) => {
+                                // $<
+                                // TODO: named capture groups
+                                result.push_str("$<");
+                            }
+                            _ => {
+                                // $?, ? is none of the above
+                                // we can consume second because it isn't $
+                                result.push(first);
+                                if let Some(second) = second {
+                                    result.push(second);
+                                }
+                            }
+                        }
+                    } else {
+                        result.push(first);
+                    }
+                }
+
+                result
+            }
+            val if val.is_jsobject() => {
+                let mut results: Vec<JsValue> = mat
+                    .groups()
+                    .map(|group| match group {
+                        Some(range) => JsValue::new(JsString::new(rt, &primitive_val[range])),
+                        None => JsValue::encode_undefined_value(),
+                    })
+                    .collect(); // Returns the starting byte offset of the match
+                let start = mat.start();
+                results.push(JsValue::new(start as u32));
+                // Push the whole string being examined
+                results.push(JsValue::new(JsString::new(rt, &primitive_val)));
+
+                if !val.is_callable() {
+                    return Err(JsValue::new(
+                        rt.new_type_error("replace object is not callable"),
+                    ));
+                }
+                let mut arguments = Arguments::new(args.this, &mut results);
+                let result =
+                    val.get_jsobject()
+                        .as_function_mut()
+                        .call(rt, &mut arguments, args.this)?;
+
+                result.to_string(rt)?.to_string()
+            }
+            _ => "undefined".to_string(),
+        }
+    } else {
+        "undefined".to_string()
+    };
+    println!("{} {}", replace_value, &primitive_val[mat.range()]);
+    Ok(JsValue::new(JsString::new(
+        rt,
+        primitive_val.replace(&primitive_val[mat.range()], &replace_value),
+    )))
 }
 
 pub fn string_repeat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -378,6 +531,7 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, endsWith, string_ends_with, 1)?;
         def_native_method!(rt, proto, includes, string_includes, 1)?;
         def_native_method!(rt, proto, slice, string_slice, 1)?;
+        def_native_method!(rt, proto, replace, string_replace, 2)?;
         Ok(())
     };
 
@@ -435,4 +589,20 @@ fn is_leading_surrogate(value: u16) -> bool {
 
 fn is_trailing_surrogate(value: u16) -> bool {
     (0xDC00..=0xDFFF).contains(&value)
+}
+
+fn get_regex_string(rt: &mut Runtime, val: JsValue) -> Result<(String, String), JsValue> {
+    if val.is_jsstring() {
+        return Ok((val.get_jsstring().string.clone(), String::new()));
+    }
+    if val.is_jsobject() {
+        let obj = val.get_jsobject();
+        if obj.is_class(RegExp::get_class()) {
+            return Ok((
+                obj.data::<RegExp>().original_source.to_string(),
+                obj.data::<RegExp>().original_flags.to_string(),
+            ));
+        }
+    }
+    return Ok(("undefined".to_string(), "".to_string()));
 }
