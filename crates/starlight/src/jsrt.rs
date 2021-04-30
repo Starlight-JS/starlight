@@ -172,6 +172,10 @@ impl Runtime {
             "builtins/ArrayIterator.js",
             include_str!("builtins/ArrayIterator.js"),
         );
+        eval(
+            "builtins/StringIterator.js",
+            include_str!("builtins/StringIterator.js"),
+        );
     }
     pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
