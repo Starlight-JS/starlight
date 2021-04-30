@@ -508,13 +508,15 @@ Array.from = function from(items, mapFn, thisArg) {
 Array.prototype.keys = function () {
     return new ___ArrayIterator(this, "key");
 }
+
+
+Array.prototype.entries = function () {
+    return new ___ArrayIterator(this, "key+value");
+}
 let values = function values() {
     return new ___ArrayIterator(this, "value");
 }
 Array.prototype.values = values;
-Array.prototype.entries = function () {
-    return new ___ArrayIterator(this, "key+value");
-}
 Object.defineProperty(Array.prototype, Symbol.iterator, {
     get: function () {
         return values;

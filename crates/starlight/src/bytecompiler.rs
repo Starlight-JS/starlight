@@ -689,7 +689,7 @@ impl ByteCompiler {
                 }
 
                 self.goto(head as _);
-
+                self.pop_lci();
                 for_in_enumerate(self);
                 for_in_setup(self);
                 // self.emit(Opcode::OP_POP_ENV, &[], false);
@@ -712,8 +712,37 @@ impl ByteCompiler {
                 };
                 let iterator_id = "Symbol.iterator".intern().private();
                 let iterator = self.get_sym(iterator_id);
+                let next = self.get_sym("next".intern());
+                let done = self.get_sym("done".intern());
+                let value = self.get_sym("value".intern());
                 self.expr(&for_of.right, true, false);
+                self.emit(Opcode::OP_DUP, &[], false);
                 self.emit(Opcode::OP_GET_BY_ID, &[iterator], true);
+                self.emit(Opcode::OP_CALL, &[0], false);
+
+                let head = self.code.code.len();
+                self.push_lci(head as _, depth);
+                // iterator is on stack, dup it twice to invoke `next` on it.
+                self.emit(Opcode::OP_DUP, &[], false);
+                self.emit(Opcode::OP_DUP, &[], false);
+                self.emit(Opcode::OP_GET_BY_ID, &[next], true);
+                self.emit(Opcode::OP_CALL, &[0], false);
+                self.emit(Opcode::OP_DUP, &[], false);
+                self.emit(Opcode::OP_GET_BY_ID, &[done], true);
+                let end = self.cjmp(true);
+                self.emit(Opcode::OP_GET_BY_ID, &[value], true);
+                let acc = self.access_var(name);
+                self.access_set(acc);
+                self.stmt(&for_of.body);
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
+
+                self.goto(head as _);
+                self.pop_lci();
+                end(self);
+                self.pop_scope();
+                self.emit(Opcode::OP_POP, &[], false);
             }
             Stmt::For(for_stmt) => {
                 let _env = self.push_scope();
