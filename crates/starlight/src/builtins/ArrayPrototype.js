@@ -448,118 +448,57 @@ Array.prototype.at = function at(index) {
 
     return (k >= 0 && k < length) ? array[k] : undefined;
 }
+
 /*
-Array.from = function (items, mapFn, thisArg) {
-    "use strict";
-    if (mapFn !== undefined) {
+* TODO: This implementation is wrong. We should implement GetIterator from ECMA262 spec and use it when we see iterator.
+*/
+Array.from = function from(items, mapFn, thisArg) {
+    var mapping;
+    if (!mapFn) {
+        mapping = false;
+    } else {
         if (!___isCallable(mapFn))
-            throw new TypeError("Array.from requires that the second argument, when provided, be a function")
+            throw new TypeError("mapFn when provided to Array.from should be callable")
+        mapping = true;
     }
 
-    var arrayLike = ___toObject(items, "Array.from requires an array-like object - not null or undefined");
+    var usingIterator = items[Symbol.iterator];
+    if (usingIterator !== undefined) {
+        var A = ___isConstructor(this) ? new this() : [];
 
-    var iteratorMethod = items[Symbol.iterator];
+        let iterator = usingIterator;
+        let k = 0;
+        while (true) {
+            if (k >= Number.MAX_SAFE_INTEGER)
+                throw new RangeError("max k reached")
 
-    if (iteratorMethod) {
-        if (!___isCallable(iteratorMethod))
-            throw new TypeError("Array.from requires that the property of the first argument, items[Symbol.iterator], when exists, be a function")
-        var result = ___isConstructor(this) ? new this() : [];
-        var k = 0;
-        var iterator = iteratorMethod.call(items);
-        while (!iterator.done) {
-            let value = iterator.value;
-            if (k >= 4294967295)
-                throw new TypeError("Length exceeded the maximum array length")
-            //@throwTypeError("Length exceeded the maximum array length");
-            if (mapFn)
-                result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
-            else
-                result[k] = value;
-
+            let next = iterator.next();
+            if (next.done) {
+                A.length = k;
+                return A;
+            }
+            let value = next.value;
+            if (mapping) {
+                value = thisArg === undefined ? mapFn(value) : mapFn.call(thisArg, value)
+            }
+            A[k] = value;
             k += 1;
-            iterator = iteratorMethod.call(items)
         }
-
-        result.length = k;
-        return result;
     }
 
-    var arrayLikeLength = ___toLength(arrayLike.length);
-
-    var result = this !== Array && ___isConstructor(this) ? new this(arrayLikeLength) : new Array(arrayLikeLength)
-
-    var k = 0;
-    while (k < arrayLikeLength) {
-        var value = arrayLike[k];
-        if (mapFn)
-            result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
-
-        else
-            result[k] = value;
+    let arrayLike = ___toObject(items, "Array-like object expected in Array.from");
+    let len = ___toLength(arrayLike.length);
+    var A = ___isConstructor(this) ? new this() : [];
+    let k = 0;
+    while (k < len) {
+        let kValue = arrayLike[k];
+        if (mapping) {
+            A[k] = thisArg === undefined ? mapFn(kValue) : mapFn.call(thisArg, kValue)
+        } else {
+            A[k] = kValue;
+        }
         k += 1;
     }
-
-    result.length = arrayLikeLength;
-    return result;
-}*/
-/*
-Array.from = (function v() {
-    var toStr = Object.prototype.toString;
-    // Свойство length метода from равно 1.
-    return function from(arrayLike, mapFn, thisArg) {
-        // 1. Положим C равным значению this.
-        var C = this;
-
-        // 2. Положим items равным ToObject(arrayLike).
-        var items = Object(arrayLike);
-
-        // 3. ReturnIfAbrupt(items).
-        if (arrayLike == null) {
-            throw new TypeError('Array.from requires an array-like object - not null or undefined');
-        }
-
-        // 4. Если mapfn равен undefined, положим mapping равным false.
-
-        var T;
-        if (typeof mapFn !== 'undefined') {
-            // 5. иначе
-            // 5. a. Если вызов IsCallable(mapfn) равен false, выкидываем исключение TypeError.
-            if (!___isCallable(mapFn)) {
-                throw new TypeError('Array.from: when provided, the second argument must be a function');
-            }
-
-            // 5. b. Если thisArg присутствует, положим T равным thisArg; иначе положим T равным undefined.
-            if (thisArg) {
-                T = thisArg;
-            }
-        }
-
-        // 10. Положим lenValue равным Get(items, "length").
-        // 11. Положим len равным ToLength(lenValue).
-        var len = ___toLength(items.length);
-
-        // 13. Если IsConstructor(C) равен true, то
-        // 13. a. Положим A равным результату вызова внутреннего метода [[Construct]]
-        //     объекта C со списком аргументов, содержащим единственный элемент len.
-        // 14. a. Иначе, положим A равным ArrayCreate(len).
-        var A = ___isCallable(C) ? Object(new C(len)) : new Array(len);
-
-        // 16. Положим k равным 0.
-        var k = 0;
-        // 17. Пока k < len, будем повторять... (шаги с a по h)
-        var kValue;
-        while (k < len) {
-            kValue = items[k];
-            if (mapFn) {
-                A[k] = typeof T === 'undefined' ? mapFn(kValue, k) : mapFn.call(T, kValue, k);
-            } else {
-                A[k] = kValue;
-            }
-            k += 1;
-        }
-        // 18. Положим putStatus равным Put(A, "length", len, true).
-        A.length = len;
-        // 20. Вернём A.
-        return A;
-    };
-}());*/
+    A.length = k;
+    return A;
+}

@@ -533,7 +533,7 @@ impl JsObject {
                             let s = &obj.structure;
                             let sz = s.get_slots_size();
                             letroot!(slots = stack, obj.slots);
-                            //   println!("resize to {} from {}", s.get_slots_size(), obj.slots.size());
+
                             slots.mut_handle().resize(vm.heap(), sz as _);
                             obj.slots = *slots;
                             *obj.direct_mut(offset as _) = slot.value();
@@ -568,12 +568,11 @@ impl JsObject {
         letroot!(slots = stack, obj.slots);
         slots.mut_handle().resize(vm.heap(), sz as _);
         obj.slots = *slots;
-        //assert!(stored.value() == desc.value());
+
         *obj.direct_mut(offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
         slot.base = Some(obj.as_dyn());
 
-        //println!("add");
         Ok(true)
     }
 

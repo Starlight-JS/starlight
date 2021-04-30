@@ -1,14 +1,5 @@
-var argObj = (function (a, b, c) {
-    return arguments;
-})(1, 2, 3);
-var accessed = false;
+let re = new RegExp("[0-9]+", "g");
 
-Object.defineProperty(argObj, 0, {
-    get: function () {
-        print("getter");
-        accessed = true;
-        return 12;
-    }
-});
-print(argObj[0]);
-print(accessed);
+let str = "2016-01-04";
+
+print(Array.from(re[Symbol.matchAll](str)))

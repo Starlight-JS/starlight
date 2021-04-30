@@ -970,6 +970,26 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if likely(object.is_jsobject()) {
                     let mut obj = object.get_jsobject();
                     obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
+                } else {
+                    #[inline(never)]
+                    unsafe fn slow(
+                        rt: &mut Runtime,
+                        object: JsValue,
+                        key: Symbol,
+                        value: JsValue,
+                        strict: bool,
+                    ) -> Result<JsValue, JsValue> {
+                        object.to_object(rt)?.put(rt, key, value, strict)?;
+                        Ok(JsValue::encode_undefined_value())
+                    }
+
+                    slow(
+                        rt,
+                        object,
+                        key,
+                        value,
+                        unwrap_unchecked(frame.code_block).strict,
+                    )?;
                 }
             }
             Opcode::OP_GET_BY_VAL | Opcode::OP_GET_BY_VAL_PUSH_OBJ => {
@@ -1001,7 +1021,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 let key = key.to_symbol(rt)?;
                 let mut slot = Slot::new();
-                let value = object.get_slot(rt, key, &mut slot)?;
+                let _ = object.get_slot(rt, key, &mut slot)?;
+
+                let value = slot.get(rt, JsValue::new(object))?;
+
                 if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
                     frame.push(JsValue::new(object));
                 }

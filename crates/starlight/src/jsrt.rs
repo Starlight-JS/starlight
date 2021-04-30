@@ -1113,6 +1113,7 @@ pub fn to_property_descriptor(
             if !r.is_undefined() {
                 getter = r;
             }
+
             attr &= !UNDEF_GETTER;
         }
     }
@@ -1142,6 +1143,7 @@ pub fn to_property_descriptor(
     }
 
     if (attr & ACCESSOR) != 0 {
+        attr &= !DATA;
         return Ok(*AccessorDescriptor::new(getter, setter, attr));
     } else if (attr & DATA) != 0 {
         return Ok(*DataDescriptor::new(value, attr));

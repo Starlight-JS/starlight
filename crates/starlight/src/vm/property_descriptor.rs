@@ -269,11 +269,10 @@ impl StoredSlot {
     }
     #[allow(unused_variables)]
     pub fn get(&self, context: &mut Runtime, this_binding: JsValue) -> Result<JsValue, JsValue> {
-        if self.attributes.is_data() {
-            return Ok(self.value);
+        if self.attributes.is_accessor() {
+            return self.accessor().invoke_getter(context, this_binding);
         }
-
-        self.accessor().invoke_getter(context, this_binding)
+        return Ok(self.value);
     }
 
     pub fn accessor(&self) -> GcPointer<Accessor> {
