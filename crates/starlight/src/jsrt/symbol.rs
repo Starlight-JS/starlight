@@ -25,14 +25,14 @@ macro_rules! def_symbols {
     ($rt: expr,$ctor: expr,$($name : literal),*) => {
         $(
             let name = format!("Symbol.{}",$name);
-            let sym = JsSymbol::new($rt,name.intern());
+            let sym = JsSymbol::new($rt,name.intern().private());
 
             $ctor.define_own_property($rt,$name.intern(),&*DataDescriptor::new(JsValue::new(sym),NONE),false)?;
         )*
     }
 }
 
-pub(crate) fn symbol_init(rt: &mut Runtime,proto: GcPointer<JsObject>) {
+pub(crate) fn symbol_init(rt: &mut Runtime, proto: GcPointer<JsObject>) {
     let mut init = || -> Result<(), JsValue> {
         let structure = Structure::new_indexed(rt, Some(proto), false);
         let mut sym_proto =

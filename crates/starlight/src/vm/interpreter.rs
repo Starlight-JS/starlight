@@ -1067,6 +1067,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     rhs.get_jsobject().has_own_property(rt, sym),
                 ));
             }
+
             Opcode::OP_FORIN_SETUP => {
                 let offset = ip.cast::<i32>().read_unaligned();
                 ip = ip.add(4);

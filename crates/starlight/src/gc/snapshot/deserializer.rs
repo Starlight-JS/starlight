@@ -472,7 +472,11 @@ impl Deserializable for Symbol {
                 let ix = deser.get_u32();
                 *deser.symbol_map.get_unchecked(ix as usize)
             }
-            _ => unreachable_unchecked(),
+            0x3f => {
+                let ix = deser.get_u32();
+                deser.symbol_map.get_unchecked(ix as usize).private()
+            }
+            _ => unreachable!("unknown symbol {:x}", ty),
         }
     }
 

@@ -253,6 +253,10 @@ pub enum Opcode {
     OP_FORIN_ENUMERATE,
     OP_FORIN_LEAVE,
 
+    OP_FOROF_SETUP,
+    OP_FOROF_ENUMERATE,
+    OP_FOROF_LEAVE,
+
     /// get_env 0 get_local
     OP_GE0GL,
     /// get_env 0 set_local

@@ -696,6 +696,25 @@ impl ByteCompiler {
                 self.pop_scope();
                 self.emit(Opcode::OP_FORIN_LEAVE, &[], false);
             }
+            Stmt::ForOf(for_of) => {
+                let depth = self.push_scope();
+                // self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                let name = match for_of.left {
+                    VarDeclOrPat::VarDecl(ref var_decl) => self.var_decl(var_decl)[0],
+                    VarDeclOrPat::Pat(Pat::Ident(ref ident)) => {
+                        let sym = Self::ident_to_sym(&ident.id);
+                        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                        self.emit(Opcode::OP_GET_ENV, &[0], false);
+                        self.decl_let(sym);
+                        sym
+                    }
+                    _ => unreachable!(),
+                };
+                let iterator_id = "Symbol.iterator".intern().private();
+                let iterator = self.get_sym(iterator_id);
+                self.expr(&for_of.right, true, false);
+                self.emit(Opcode::OP_GET_BY_ID, &[iterator], true);
+            }
             Stmt::For(for_stmt) => {
                 let _env = self.push_scope();
                 // self.emit(Opcode::OP_PUSH_ENV, &[], false);
