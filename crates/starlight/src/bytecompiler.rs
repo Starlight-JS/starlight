@@ -629,7 +629,6 @@ impl ByteCompiler {
                             for stmt in case.cons.iter() {
                                 self.stmt(stmt);
                             }
-                            break;
                         }
                     }
                 }

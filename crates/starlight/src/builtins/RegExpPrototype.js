@@ -1,3 +1,10 @@
+let RegExpCtor = RegExp;
+let strIncludes = String.prototype.includes;
+let strIndexOf = String.prototype.indexOf;
+let strCharCodeAt = String.prototype.charCodeAt;
+let strSubstring = String.prototype.substring;
+let arrayPush = Array.prototype.push;
+let regexExec = RegExp.prototype.exec;
 RegExp.prototype[Symbol.matchAll] = function matchAll(strArg) {
     "use strict";
 
@@ -9,11 +16,11 @@ RegExp.prototype[Symbol.matchAll] = function matchAll(strArg) {
     //var Matcher = @speciesConstructor(regExp, @RegExp);
 
     var flags = regExp.flags + "";
-    var matcher = new RegExp(regExp, flags);
+    var matcher = new RegExpCtor(regExp, flags);
     matcher.lastIndex = ___toLength(regExp.lastIndex);
 
-    var global = flags.includes("g");
-    var fullUnicode = string.includes("u");
+    var global = strIncludes.call(string, "g");
+    var fullUnicode = strIncludes.call(string, "u");//string.includes("u");
 
     return new RegExpStringIterator(matcher, string, global, fullUnicode);
 }
@@ -29,9 +36,10 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
     var result = "";
     var lastStart = 0;
 
-    for (var start = 0; start = replacement.indexOf("$", lastStart), start !== -1; lastStart = start) {
+    for (var start = 0; start = strIndexOf.call(replacement, "$", lastStart) /*replacement.indexOf("$", lastStart)*/, start !== -1; lastStart = start) {
+
         if (start - lastStart > 0)
-            result = result + replacement.substring(lastStart, start)
+            result = result + strSubstring.call(replacement, lastStart, start) //replacement.substring(lastStart, start)
         start++;
         if (start >= replacementLength)
             result = result + "$";
@@ -48,20 +56,20 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
                     break;
                 case "`":
                     if (position > 0)
-                        result = result + str.substring(0, position)//@stringSubstringInternal.@call(str, 0, position);
+                        result = result + strSubstring.call(str, 0, position) //str.substring(0, position)//@stringSubstringInternal.@call(str, 0, position);
                     start++;
                     break;
                 case "'":
                     if (tailPos < stringLength)
-                        result = result + str.substring(tailPos)//@stringSubstringInternal.@call(str, tailPos);
+                        result = result + strSubstring.call(str, tailPos) //str.substring(tailPos)//@stringSubstringInternal.@call(str, tailPos);
                     start++;
                     break;
                 case "<":
                     if (namedCaptures !== undefined) {
                         var groupNameStartIndex = start + 1;
-                        var groupNameEndIndex = replacement.indexOf(">", groupNameStartIndex)//@stringIndexOfInternal.@call(replacement, ">", groupNameStartIndex);
+                        var groupNameEndIndex = strIndexOf.call(replacement, ">", groupNameStartIndex) //@stringIndexOfInternal.@call(replacement, ">", groupNameStartIndex);
                         if (groupNameEndIndex !== -1) {
-                            var groupName = replacement.substring(groupNameStartIndex, groupNameEndIndex) //@stringSubstringInternal.@call(replacement, groupNameStartIndex, groupNameEndIndex);
+                            var groupName = strSubstring.call(replacement, groupNameStartIndex, groupNameEndIndex) //@stringSubstringInternal.@call(replacement, groupNameStartIndex, groupNameEndIndex);
                             var capture = namedCaptures[groupName];
                             if (capture !== undefined)
                                 result = result + capture;
@@ -75,19 +83,19 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
                     start++;
                     break;
                 default:
-                    var chCode = ch.charCodeAt(0);
+                    var chCode = strCharCodeAt.call(ch, 0) //ch.charCodeAt(0);
                     if (chCode >= 0x30 && chCode <= 0x39) {
                         var originalStart = start - 1;
                         start++;
 
                         var n = chCode - 0x30;
                         if (n > m) {
-                            result = result + replacement.substring(originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
+                            result = result + strSubstring.call(replacement, originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
                             break;
                         }
 
                         if (start < replacementLength) {
-                            var nextChCode = replacement.charCodeAt(start);
+                            var nextChCode = strCharCodeAt.call(replacement, start) //replacement.charCodeAt(start);
                             if (nextChCode >= 0x30 && nextChCode <= 0x39) {
                                 var nn = 10 * n + nextChCode - 0x30;
                                 if (nn <= m) {
@@ -98,7 +106,7 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
                         }
 
                         if (n == 0) {
-                            result = result + replacement.substring(originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
+                            result = result + strSubstring.call(replacement, originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
                             break;
                         }
 
@@ -112,10 +120,8 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
         }
     }
 
-    return result + replacement.substring(lastStart);
+    return result + strSubstring.call(replacement, lastStart) //replacement.substring(lastStart);
 }
-
-
 RegExp.prototype[Symbol.replace] = function (strArg, replace) {
     "use strict";
 
@@ -138,7 +144,8 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
     var done = false;
 
     while (!done) {
-        result = regexp.exec(str);
+
+        result = regexExec.call(regexp, str) // regexp.exec(str);
         if (result === null)
             done = true;
         else {
@@ -170,10 +177,11 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
 
         var captures = [];
         for (var n = 1; n <= nCaptures; n++) {
+
             var capN = result[n];
             if (capN !== undefined)
                 capN = capN + "";
-            captures.push(capN);// @arrayPush(captures, capN);
+            arrayPush.call(captures, capN) //captures.push(capN);// @arrayPush(captures, capN);
         }
 
         var replacement;
@@ -182,15 +190,18 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
         if (functionalReplace) {
             var replacerArgs = [matched];
             for (var j = 0; j < captures.length; j++)
-                replacerArgs.push(captures[j]);
-            // @arrayPush(replacerArgs, captures[j]);
+                arrayPush.call(replacerArgs, captures[j]);
 
-            replacerArgs.push(position);
-            replacerArgs.push(str);
+            // @arrayPush(replacerArgs, captures[j]);
+            arrayPush.call(replacerArgs, position);
+            arrayPush.call(replacerArgs, str);
+            //replacerArgs.push(position);
+            //replacerArgs.push(str);
 
 
             if (namedCaptures !== undefined)
-                replacerArgs.push(namedCaptures)//@arrayPush(replacerArgs, namedCaptures);
+                arrayPush.call(replacerArgs, namedCaptures);
+            //replacerArgs.push(namedCaptures)//@arrayPush(replacerArgs, namedCaptures);
 
             var replValue = replace.apply(undefined, replacerArgs);
             replacement = replValue + "";
@@ -202,7 +213,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
         }
 
         if (position >= nextSourcePosition) {
-            accumulatedResult = accumulatedResult + str.substring(nextSourcePosition, position) + replacement//@stringSubstringInternal.@call(str, nextSourcePosition, position) + replacement;
+            accumulatedResult = accumulatedResult + strSubstring.call(str, nextSourcePosition, position) + replacement//@stringSubstringInternal.@call(str, nextSourcePosition, position) + replacement;
             nextSourcePosition = position + matchLength;
         }
     }
@@ -210,6 +221,5 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
     if (nextSourcePosition >= stringLength)
         return accumulatedResult;
 
-    return accumulatedResult + str.substring(nextSourcePosition)// @stringSubstringInternal.@call(str, nextSourcePosition);
+    return accumulatedResult + strSubstring.call(str, nextSourcePosition)// @stringSubstringInternal.@call(str, nextSourcePosition);
 }
-

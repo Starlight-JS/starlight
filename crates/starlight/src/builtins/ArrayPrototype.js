@@ -371,7 +371,7 @@ Array.prototype.sort = function (comparator) {
     sortCommit(receiver, receiverLength, sorted, undefinedCount);
     return receiver;
 }
-var flatIntoArray = function flatIntoArray(target, source, sourceLength, targetIndex, depth) {
+let flatIntoArray = function flatIntoArray(target, source, sourceLength, targetIndex, depth) {
     "use strict";
 
     for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {
@@ -403,7 +403,7 @@ Array.prototype.flat = function (depth) {
     flatIntoArray(result, array, length, 0, depthNum);
     return result;
 }
-var flatIntoArrayWithCallback = function flatIntoArrayWithCallback(target, source, sourceLength, targetIndex, callback, thisArg) {
+let flatIntoArrayWithCallback = function flatIntoArrayWithCallback(target, source, sourceLength, targetIndex, callback, thisArg) {
     "use strict";
 
     for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {

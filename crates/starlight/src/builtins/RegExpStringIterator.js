@@ -1,32 +1,38 @@
+let defineProperty = Object.defineProperty;
+let charCodeAt = String.charCodeAt;
+let regexExec = RegExp.prototype.exec;
 function RegExpStringIterator(regexp, string, global, fullUnicode) {
     "use strict";
-    Object.defineProperty(this, "regExpStringIteratorRegExp", {
+    defineProperty(this, "regExpStringIteratorRegExp", {
         value: regexp,
         writable: false,
         configurable: false,
         enumerable: false
     });
-    Object.defineProperty(this, "regExpStringIteratorString", {
+    defineProperty(this, "regExpStringIteratorString", {
         value: string,
         writable: false,
         configurable: false,
         enumerable: false
     });
-    Object.defineProperty(this, "regExpStringIteratorGlobal", {
+    defineProperty(this, "regExpStringIteratorGlobal", {
         value: global,
         writable: false,
         configurable: false,
         enumerable: false
     });
-    Object.defineProperty(this, "regExpStringIteratorUnicode", {
+    defineProperty(this, "regExpStringIteratorUnicode", {
         value: fullUnicode,
         writable: false,
         configurable: false,
         enumerable: false
     });
 
-    Object.defineProperty(this, "regExpStringIteratorDone", {
-        value: false, writable: true, configurable: false, enumerable: false
+    defineProperty(this, "regExpStringIteratorDone", {
+        value: false,
+        writable: true,
+        configurable: false,
+        enumerable: false
     });
 }
 
@@ -40,11 +46,11 @@ function ___advanceStringIndex(string, index, unicode) {
     if (index + 1 >= string.length)
         return index + 1;
 
-    var first = string.charCodeAt(index);
+    var first = charCodeAt.call(string, index);
     if (first < 0xD800 || first > 0xDBFF)
         return index + 1;
 
-    var second = string.charCodeAt(index + 1);
+    var second = charCodeAt.call(string, index + 1); //string.charCodeAt(index + 1);
     if (second < 0xDC00 || second > 0xDFFF)
         return index + 1;
 
@@ -70,7 +76,7 @@ RegExpStringIterator.prototype.next = function next() {
     var string = this.regExpStringIteratorString;
     var global = this.regExpStringIteratorGlobal;
     var fullUnicode = this.regExpStringIteratorUnicode
-    var match = regExp.exec(string);
+    var match = regexExec.call(regExp, string); //regExp.exec(string);
     if (match === null) {
         this.regExpStringIteratorDone = true;
         return { value: undefined, done: true }

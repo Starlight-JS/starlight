@@ -1,1 +1,3 @@
-print(/a/[Symbol.replace]('abc', 'A'));
+
+
+print(/a/[Symbol.replace]('abc', 'B'));
