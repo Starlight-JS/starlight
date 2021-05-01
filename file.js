@@ -1,3 +1,1 @@
-for (let value of "Hello,World!") {
-    print(value);
-}
+print(/a/[Symbol.replace]('abc', 'A'));

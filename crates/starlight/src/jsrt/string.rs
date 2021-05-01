@@ -233,11 +233,38 @@ pub fn string_replace(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
     } else {
         "undefined".to_string()
     };
-    println!("{} {}", replace_value, &primitive_val[mat.range()]);
+
     Ok(JsValue::new(JsString::new(
         rt,
         primitive_val.replace(&primitive_val[mat.range()], &replace_value),
     )))
+}
+
+pub fn string_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    args.this.check_object_coercible(rt)?;
+    let string = args.this.to_string(rt)?;
+    let search_string = args.at(0).to_string(rt)?;
+
+    let length = string.chars().count();
+
+    let start = if args.size() > 1 {
+        args.at(1).to_int32(rt)?
+    } else {
+        0
+    };
+    let start = start.max(0).min(length as i32);
+
+    if search_string.is_empty() {
+        return Ok(JsValue::new(start.min(length as _)));
+    }
+
+    if start < length as i32 {
+        if let Some(pos) = string.find(search_string.as_str()) {
+            return Ok(JsValue::new(string[..pos].chars().count() as u32));
+        }
+    }
+
+    Ok(JsValue::new(-1))
 }
 
 pub fn string_repeat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -379,6 +406,76 @@ pub fn string_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         .take(span as usize)
         .collect::<String>();
     Ok(JsValue::new(JsString::new(rt, new_str)))
+}
+pub fn string_substring(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let start = if args.size() == 0 {
+        0
+    } else {
+        args.at(0).to_int32(rt)?
+    };
+
+    let length = primitive_val.encode_utf16().count() as i32;
+    let end = if args.size() < 2 {
+        length
+    } else {
+        args.at(1).to_int32(rt)?
+    };
+
+    let final_start = min(max(start, 0), length);
+    let final_end = min(max(end, 0), length);
+    let from = min(final_start, final_end) as usize;
+    let to = max(final_start, final_end) as usize;
+
+    let extracted_string: Result<String, _> = decode_utf16(
+        primitive_val
+            .encode_utf16()
+            .skip(from)
+            .take(to.wrapping_sub(from)),
+    )
+    .collect();
+
+    match extracted_string {
+        Ok(val) => return Ok(JsValue::new(JsString::new(rt, val))),
+        Err(e) => {
+            let decode_err = JsString::new(rt, format!("{}", e));
+            Err(JsValue::new(decode_err))
+        }
+    }
+}
+
+pub fn string_substr(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let primitive_val = args.this.to_string(rt)?;
+    let mut start = if args.size() == 0 {
+        0
+    } else {
+        args.at(0).to_int32(rt)?
+    };
+
+    let length = primitive_val.chars().count() as i32;
+
+    let end = if args.size() < 2 {
+        i32::MAX
+    } else {
+        args.at(1).to_int32(rt)?
+    };
+
+    if start < 0 {
+        start = max(length.wrapping_add(start), 0);
+    }
+
+    let result_length = min(max(end, 0), length.wrapping_sub(start));
+
+    if result_length <= 0 {
+        return Ok(JsValue::new(JsString::new(rt, "")));
+    }
+
+    let extracted_string: String = primitive_val
+        .chars()
+        .skip(start as _)
+        .take(result_length as _)
+        .collect();
+    Ok(JsValue::new(JsString::new(rt, extracted_string)))
 }
 
 pub fn string_split(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -525,6 +622,9 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
 
     let mut init = || -> Result<(), JsValue> {
         def_native_method!(rt, proto, charCodeAt, string_char_code_at, 1)?;
+        def_native_method!(rt, proto, indexOf, string_index_of, 2)?;
+        def_native_method!(rt, proto, substr, string_substr, 2)?;
+        def_native_method!(rt, proto, substring, string_substring, 2)?;
         def_native_method!(rt, proto, codePointAt, string_code_point_at, 1)?;
         def_native_method!(rt, proto, repeat, string_repeat, 1)?;
         def_native_method!(rt, proto, startsWith, string_starts_with, 1)?;
