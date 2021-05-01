@@ -497,3 +497,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
     }
     return Ok(JsValue::new(*&*ary));
 }
+
+pub fn array_shift(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    todo!()
+}

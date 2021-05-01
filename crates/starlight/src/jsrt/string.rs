@@ -109,131 +109,96 @@ pub fn string_replace(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
         .captures;
 
     let replace_value = if args.size() > 1 {
-        // replace_object could be a string or function or not exist at all
-        let replace_object: JsValue = args.at(1);
-        match replace_object {
-            val if val.is_jsstring() => {
-                let val = val.get_jsstring().string.clone();
-                // https://tc39.es/ecma262/#table-45
-                let mut result = String::new();
-                let mut chars = val.chars().peekable();
+        let val = args.at(1).to_string(rt)?;
+        let mut result = String::new();
+        let mut chars = val.chars().peekable();
 
-                let m = caps.len();
+        let m = caps.len();
 
-                while let Some(first) = chars.next() {
-                    if first == '$' {
-                        let second = chars.next();
-                        let second_is_digit = second.map_or(false, |ch| ch.is_digit(10));
-                        // we use peek so that it is still in the iterator if not used
-                        let third = if second_is_digit { chars.peek() } else { None };
-                        let third_is_digit = third.map_or(false, |ch| ch.is_digit(10));
+        while let Some(first) = chars.next() {
+            if first == '$' {
+                let second = chars.next();
+                let second_is_digit = second.map_or(false, |ch| ch.is_digit(10));
+                // we use peek so that it is still in the iterator if not used
+                let third = if second_is_digit { chars.peek() } else { None };
+                let third_is_digit = third.map_or(false, |ch| ch.is_digit(10));
 
-                        match (second, third) {
-                            (Some('$'), _) => {
-                                // $$
-                                result.push('$');
+                match (second, third) {
+                    (Some('$'), _) => {
+                        // $$
+                        result.push('$');
+                    }
+                    (Some('&'), _) => {
+                        // $&
+                        result.push_str(&primitive_val[mat.range()]);
+                    }
+                    (Some('`'), _) => {
+                        // $`
+                        let start_of_match = mat.start();
+                        result.push_str(&primitive_val[..start_of_match]);
+                    }
+                    (Some('\''), _) => {
+                        // $'
+                        let end_of_match = mat.end();
+                        result.push_str(&primitive_val[end_of_match..]);
+                    }
+                    (Some(second), Some(third)) if second_is_digit && third_is_digit => {
+                        // $nn
+                        let tens = second.to_digit(10).unwrap() as usize;
+                        let units = third.to_digit(10).unwrap() as usize;
+                        let nn = 10 * tens + units;
+                        if nn == 0 || nn > m {
+                            result.push(first);
+                            result.push(second);
+                            if let Some(ch) = chars.next() {
+                                result.push(ch);
                             }
-                            (Some('&'), _) => {
-                                // $&
-                                result.push_str(&primitive_val[mat.range()]);
-                            }
-                            (Some('`'), _) => {
-                                // $`
-                                let start_of_match = mat.start();
-                                result.push_str(&primitive_val[..start_of_match]);
-                            }
-                            (Some('\''), _) => {
-                                // $'
-                                let end_of_match = mat.end();
-                                result.push_str(&primitive_val[end_of_match..]);
-                            }
-                            (Some(second), Some(third)) if second_is_digit && third_is_digit => {
-                                // $nn
-                                let tens = second.to_digit(10).unwrap() as usize;
-                                let units = third.to_digit(10).unwrap() as usize;
-                                let nn = 10 * tens + units;
-                                if nn == 0 || nn > m {
-                                    result.push(first);
-                                    result.push(second);
-                                    if let Some(ch) = chars.next() {
-                                        result.push(ch);
-                                    }
-                                } else {
-                                    let group = match mat.group(nn) {
-                                        Some(range) => &primitive_val[range.clone()],
-                                        _ => "",
-                                    };
-                                    result.push_str(group);
-                                    chars.next(); // consume third
-                                }
-                            }
-                            (Some(second), _) if second_is_digit => {
-                                // $n
-                                let n = second.to_digit(10).unwrap() as usize;
-                                if n == 0 || n > m {
-                                    result.push(first);
-                                    result.push(second);
-                                } else {
-                                    let group = match mat.group(n) {
-                                        Some(range) => &primitive_val[range.clone()],
-                                        _ => "",
-                                    };
-                                    result.push_str(group);
-                                }
-                            }
-                            (Some('<'), _) => {
-                                // $<
-                                // TODO: named capture groups
-                                result.push_str("$<");
-                            }
-                            _ => {
-                                // $?, ? is none of the above
-                                // we can consume second because it isn't $
-                                result.push(first);
-                                if let Some(second) = second {
-                                    result.push(second);
-                                }
-                            }
+                        } else {
+                            let group = match mat.group(nn) {
+                                Some(range) => &primitive_val[range.clone()],
+                                _ => "",
+                            };
+                            result.push_str(group);
+                            chars.next(); // consume third
                         }
-                    } else {
+                    }
+                    (Some(second), _) if second_is_digit => {
+                        // $n
+                        let n = second.to_digit(10).unwrap() as usize;
+                        if n == 0 || n > m {
+                            result.push(first);
+                            result.push(second);
+                        } else {
+                            let group = match mat.group(n) {
+                                Some(range) => &primitive_val[range.clone()],
+                                _ => "",
+                            };
+                            result.push_str(group);
+                        }
+                    }
+                    (Some('<'), _) => {
+                        // $<
+                        // TODO: named capture groups
+                        result.push_str("$<");
+                    }
+                    _ => {
+                        // $?, ? is none of the above
+                        // we can consume second because it isn't $
                         result.push(first);
+                        if let Some(second) = second {
+                            result.push(second);
+                        }
                     }
                 }
-
-                result
+            } else {
+                result.push(first);
             }
-            val if val.is_jsobject() => {
-                let mut results: Vec<JsValue> = mat
-                    .groups()
-                    .map(|group| match group {
-                        Some(range) => JsValue::new(JsString::new(rt, &primitive_val[range])),
-                        None => JsValue::encode_undefined_value(),
-                    })
-                    .collect(); // Returns the starting byte offset of the match
-                let start = mat.start();
-                results.push(JsValue::new(start as u32));
-                // Push the whole string being examined
-                results.push(JsValue::new(JsString::new(rt, &primitive_val)));
-
-                if !val.is_callable() {
-                    return Err(JsValue::new(
-                        rt.new_type_error("replace object is not callable"),
-                    ));
-                }
-                let mut arguments = Arguments::new(args.this, &mut results);
-                let result =
-                    val.get_jsobject()
-                        .as_function_mut()
-                        .call(rt, &mut arguments, args.this)?;
-
-                result.to_string(rt)?.to_string()
-            }
-            _ => "undefined".to_string(),
         }
+
+        result
     } else {
         "undefined".to_string()
     };
-
     Ok(JsValue::new(JsString::new(
         rt,
         primitive_val.replace(&primitive_val[mat.range()], &replace_value),
@@ -600,11 +565,11 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         )
         .unwrap_or_else(|_| panic!());
 
-    let func = JsNativeFunction::new(rt, "split".intern(), string_split, 0);
+    let func = JsNativeFunction::new(rt, "___splitFast".intern(), string_split, 0);
     proto
         .put(
             rt,
-            "split".intern(),
+            "___splitFast".intern(),
             JsValue::encode_object_value(func),
             false,
         )
@@ -631,7 +596,7 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, endsWith, string_ends_with, 1)?;
         def_native_method!(rt, proto, includes, string_includes, 1)?;
         def_native_method!(rt, proto, slice, string_slice, 1)?;
-        def_native_method!(rt, proto, replace, string_replace, 2)?;
+        def_native_method!(rt, ctor, ___replace, string_replace, 2)?;
         Ok(())
     };
 

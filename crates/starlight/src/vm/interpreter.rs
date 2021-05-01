@@ -794,42 +794,32 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    let cframe = if opcode == Opcode::OP_TAILCALL
+                    if opcode == Opcode::OP_TAILCALL
                         || (ip.cast::<Opcode>().read() == Opcode::OP_POP
                             && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET)
                     {
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
-
-                        let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope).unwrap();
-                        Some(cframe)
-                    } else {
-                        rt.stack.new_frame(0, JsValue::new(*funcc), scope)
-                    };
+                    }
+                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(rt, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
                             rt, msg, None,
                         )));
                     }
-
-                    //rt.stack.cursor = frame.sp;
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
 
                     (*cframe).ctor = false;
                     (*cframe).exit_on_return = exit;
-                    //(*cframe).limit = args_start;
-                    //(*cframe).sp = args_start.add(argc as _);
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
-                    //frame.sp = args_start;
 
                     frame = &mut *cframe;
 
                     ip = (*cframe).ip;
                 } else {
                     let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
-                    // frame.sp = args_start;
                     frame.push(result);
                 }
             }
@@ -886,11 +876,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let cframe = unwrap_unchecked(cframe);
                     (*cframe).code_block = Some(vm_fn.code);
                     (*cframe).this = this;
-
-                    //(*cframe).env = Some(scope);
                     (*cframe).ctor = true;
-                    //(*cframe).limit = args_start;
-                    //(*cframe).sp = args_start.add(argc as _);
                     (*cframe).exit_on_return = exit;
                     (*cframe).ip = &vm_fn.code.code[0] as *const u8 as *mut u8;
                     frame = &mut *cframe;
@@ -1285,7 +1271,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     This opcode creates internal interpreter only value that is used to indicate that some argument is spread value
                     and if interpreter sees it then it tried to use `array` value from `SpreadValue`.
                     User code can't get access to this value, if it does this should be reported.
-
                 */
                 let value = frame.pop();
                 let spread = SpreadValue::new(rt, value)?;
@@ -1386,6 +1371,8 @@ unsafe fn put_by_id_slow(
 
         if GcPointer::ptr_eq(&base_cell, &slot.base.unwrap()) {
             if slot.put_result_type() == PutResultType::New {
+                // TODO: This kind of IC does not work yet so it is not enabled to not waste time on
+                // trying to setup new IC entry.
                 return Ok(());
                 if !new_structure.is_unique()
                     && new_structure
@@ -1397,10 +1384,7 @@ unsafe fn put_by_id_slow(
                         &new_structure.previous.unwrap(),
                         &old_structure
                     ));
-                    if new_structure
-                        .previous
-                        .map(|x| GcPointer::ptr_eq(&old_structure, &x))
-                        .unwrap_or(false)
+
                     {
                         let (result, saw_poly_proto) =
                             crate::vm::operations::normalize_prototype_chain(rt, &base_cell);
@@ -1425,7 +1409,7 @@ unsafe fn put_by_id_slow(
                     offset: m_offset,
                     structure_chain: m_new_chain,
                 };
-            assert!(!matches!(
+            debug_assert!(!matches!(
                 unwrap_unchecked(frame.code_block).feedback[fdbk as usize],
                 TypeFeedBack::None
             ));

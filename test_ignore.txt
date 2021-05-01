@@ -20,3 +20,5 @@ subst-capture-idx-1
 subst-capture-idx-2
 subst-dollar
 subst-matched
+// segfaults, probably stack overflow
+not-a-constructor

@@ -103,8 +103,10 @@ impl Test {
     fn run_once(&self, harness: &Harness, strict: bool, verbose: u8) -> TestResult {
         if verbose > 1 {
             println!(
-                "Starting `{}`{}",
+                "Starting `{}` \nDescription: {}\nesid: {:?}\n {}",
                 self.name,
+                self.description,
+                self.esid,
                 if strict { " (strict mode)" } else { "" }
             );
         }

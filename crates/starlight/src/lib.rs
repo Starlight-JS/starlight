@@ -6,7 +6,8 @@
     destructuring_assignment,
     const_raw_ptr_to_usize_cast,
     try_trait,
-    const_type_id
+    const_type_id,
+    pattern
 )]
 #![allow(unused_unsafe, unused_mut)]
 

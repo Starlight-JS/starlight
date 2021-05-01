@@ -138,6 +138,7 @@ impl RegExp {
             constructor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
 
             proto.put(rt, "constructor".intern(), JsValue::new(constructor), false)?;
+            def_native_method!(rt, constructor, ___splitFast, regexp_split_fast, 3)?;
             def_native_method!(rt, proto, exec, regexp_exec, 1)?;
             def_native_method!(rt, proto, test, regexp_test, 1)?;
             def_native_method!(rt, proto, toString, regexp_to_string, 0)?;
@@ -158,7 +159,53 @@ impl RegExp {
         }
     }
 }
+pub fn regexp_split_fast(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    if unlikely(!args.at(0).is_jsobject()) {
+        return Err(JsValue::new(rt.new_type_error(
+            "Regex.@@splitFast requires regexp object as first argument",
+        )));
+    }
+    let re = args.at(0).get_jsobject();
+    let regexp = re.data::<RegExp>();
+    if unlikely(!re.is_class(RegExp::get_class())) {
+        return Err(JsValue::new(rt.new_type_error(
+            "Regex.@@splitFast requires regexp object as first argument",
+        )));
+    }
+    let input = args.at(1).to_string(rt)?;
+    let limit = if args.at(2).is_undefined() {
+        u32::MAX - 1
+    } else {
+        args.at(2).to_uint32(rt)?
+    };
 
+    let mut result = JsArray::new(rt, 0);
+    //let mut result_length = 0;
+    // let input_size = input.len();
+
+    //let mut position = 0;
+    if limit == 0 {
+        return Ok(JsValue::new(result));
+    }
+
+    if input.is_empty() {
+        let match_result = regexp.matcher.find(&input);
+        if match_result.is_none() {
+            let str = JsString::new(rt, input);
+            result.put(rt, Symbol::Index(0), JsValue::new(str), false)?;
+        }
+        return Ok(JsValue::new(result));
+    }
+    //let mut match_position = position;
+    // let regexp_is_sticky = regexp.sticky;
+    //let regexp_is_unicode = regexp.unicode;
+    let iter = input.splitn(limit as _, RegexPattern(&regexp.matcher));
+    for (i, r) in iter.enumerate() {
+        let str = JsString::new(rt, r);
+        result.put(rt, Symbol::Index(i as _), JsValue::new(str), false)?;
+    }
+    Ok(JsValue::new(result))
+}
 pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let proto = rt.global_data().regexp_object.unwrap();
     let structure = Structure::new_indexed(rt, Some(proto), false);
@@ -258,7 +305,7 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     this.put(rt, "flags".intern(), JsValue::new(f), false)?;
     this.put(rt, "global".intern(), JsValue::new(global), false)?;
     this.put(rt, "unicode".intern(), JsValue::new(unicode), false)?;
-
+    this.put(rt, "lastIndex".intern(), JsValue::new(0), false)?;
     Ok(JsValue::new(this))
 }
 
@@ -428,4 +475,67 @@ pub fn regexp_match(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
 
     let result = JsArray::from_slice(rt, &matches);
     Ok(JsValue::new(result))
+}
+
+use std::str::pattern::{Pattern, SearchStep, Searcher};
+
+use regress::Matches;
+
+pub struct RegexSearcher<'r, 't> {
+    haystack: &'t str,
+    it: Matches<'r, 't>,
+    last_step_end: usize,
+    next_match: Option<(usize, usize)>,
+}
+pub struct RegexPattern<'r>(&'r Regex);
+impl<'r, 't> Pattern<'t> for RegexPattern<'r> {
+    type Searcher = RegexSearcher<'r, 't>;
+
+    fn into_searcher(self, haystack: &'t str) -> RegexSearcher<'r, 't> {
+        RegexSearcher {
+            haystack: haystack,
+            it: self.0.find_iter(haystack),
+            last_step_end: 0,
+            next_match: None,
+        }
+    }
+}
+
+unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
+    #[inline]
+    fn haystack(&self) -> &'t str {
+        self.haystack
+    }
+
+    #[inline]
+    fn next(&mut self) -> SearchStep {
+        if let Some((s, e)) = self.next_match {
+            self.next_match = None;
+            self.last_step_end = e;
+            return SearchStep::Match(s, e);
+        }
+        match self.it.next() {
+            None => {
+                if self.last_step_end < self.haystack().len() {
+                    let last = self.last_step_end;
+                    self.last_step_end = self.haystack().len();
+                    SearchStep::Reject(last, self.haystack().len())
+                } else {
+                    SearchStep::Done
+                }
+            }
+            Some(m) => {
+                let (s, e) = (m.start(), m.end());
+                if s == self.last_step_end {
+                    self.last_step_end = e;
+                    SearchStep::Match(s, e)
+                } else {
+                    self.next_match = Some((s, e));
+                    let last = self.last_step_end;
+                    self.last_step_end = s;
+                    SearchStep::Reject(last, s)
+                }
+            }
+        }
+    }
 }

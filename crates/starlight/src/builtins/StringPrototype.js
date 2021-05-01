@@ -1,3 +1,7 @@
+let RegExpCtor = RegExp;
+let RegExpReplace = RegExp.prototype[Symbol.replace];
+let symReplace = Symbol.replace;
+let __replace = String.___replace;
 String.prototype.match = function match(regexp) {
     "use strict";
     if (this === null | this === undefined) {
@@ -37,11 +41,45 @@ String.prototype.matchAll = function matchAll(arg) {
     return regExp[Symbol.matchAll](string);
 }
 
-let hasObservableSideEffects = function (regexp, replacer) {
+let hasObservableSideEffectsForStringReplace = function (regexp, replacer) {
     "use strict";
-    if (!(regexp instanceof RegExp)) {
-        return false;
+    if (!(regexp instanceof RegExpCtor)) {
+        return true;
+    }
+    if (replacer !== RegExpReplace) {
+        return true;
     }
 
     return typeof regexp.lastIndex !== "number";
+}
+String.prototype.replace = function replace(search, replace) {
+    "use strict";
+
+    if (this == undefined | this == null)
+        throw new TypeError("String.prototype.replace requires that |this| not be null or undefined");
+
+    if (search !== undefined & search !== null) {
+        var replacer = search[symReplace];
+        if (replacer) {
+            return replacer.call(search, this, replace);
+        }
+    }
+
+    return __replace.call(this, search, replace);
+}
+let split_sym = Symbol.split;
+let fastSplit = String.prototype.___splitFast;
+
+String.prototype.split = function (separator, limit) {
+    "use strict";
+    if (this === undefined | this === null)
+        throw new TypeError("String.prototype.split requires that |this| not be null or undefined")
+
+    if (separator !== undefined & separator !== null) {
+        var splitter = separator[split_sym];
+        if (splitter !== undefined & splitter !== null) {
+            return splitter.call(separator, this, limit);
+        }
+    }
+    return fastSplit.call(this, separator, limit);
 }

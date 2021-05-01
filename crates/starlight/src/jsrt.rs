@@ -1027,6 +1027,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         regexp::regexp_test as _,
         regexp::regexp_to_string as _,
         regexp::regexp_match as _,
+        regexp::regexp_split_fast as _,
         symbol::symbol_ctor as _,
         symbol::symbol_for as _,
         symbol::symbol_key_for as _,
