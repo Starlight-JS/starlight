@@ -1,6 +1,5 @@
 #![feature(
     core_intrinsics,
-    btree_retain,
     llvm_asm,
     linked_list_cursors,
     destructuring_assignment,
@@ -32,6 +31,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
+#[cfg(unix)]
 pub mod jit;
 pub mod jsrt;
 pub mod vm;

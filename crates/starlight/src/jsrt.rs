@@ -991,6 +991,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         string::string_starts_with as _,
         string::string_ends_with as _,
         string::string_repeat as _,
+        string::string_to_lowercase as _,
+        string::string_to_uppercase as _,
         string::string_includes as _,
         string::string_slice as _,
         JsStringObject::get_class() as *const _ as usize,

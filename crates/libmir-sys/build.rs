@@ -16,6 +16,8 @@ fn main() {
     println!("cargo:rustc-link-lib=mir-sys");
     let bindings = bindgen::builder()
         .detect_include_paths(true)
+        .clang_arg("-Imir/")
+        .clang_arg("-Imir/c2mir")
         .header("mir/mir.h")
         .header("mir/mir-gen.h")
         .header("mir/c2mir/c2mir.h")

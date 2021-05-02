@@ -251,7 +251,15 @@ pub fn string_repeat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
         Ok(JsValue::new(JsString::new(rt, "")))
     }
 }
+pub fn string_to_lowercase(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {
+    let this = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt,this.to_lowercase())))
+}
 
+pub fn string_to_uppercase(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {
+    let this = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt,this.to_uppercase())))
+}
 pub fn string_starts_with(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(rt)?;
     let arg = args.at(0);
@@ -587,6 +595,8 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
 
     let mut init = || -> Result<(), JsValue> {
         def_native_method!(rt, proto, charCodeAt, string_char_code_at, 1)?;
+        def_native_method!(rt,proto,toUpperCase,string_to_uppercase,0)?;
+        def_native_method!(rt,proto,toLowerCase,string_to_lowercase,0)?;
         def_native_method!(rt, proto, indexOf, string_index_of, 2)?;
         def_native_method!(rt, proto, substr, string_substr, 2)?;
         def_native_method!(rt, proto, substring, string_substring, 2)?;
