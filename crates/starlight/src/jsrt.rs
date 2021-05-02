@@ -80,14 +80,21 @@ impl Runtime {
             JsValue::encode_object_value(func),
             false,
         );
-
+        
         let func = JsNativeFunction::new(self, "parseInt".intern(), global::parse_int, 1);
         let _ = global.put(
             self,
             "parseInt".intern(),
             JsValue::encode_object_value(func),
             false,
+        );let func = JsNativeFunction::new(self, "readLine".intern(), global::read_line, 1);
+        let _ = global.put(
+            self,
+            "readLine".intern(),
+            JsValue::encode_object_value(func),
+            false,
         );
+
 
         let func = JsNativeFunction::new(self, "parseFloat".intern(), global::parse_float, 1);
         let _ = global.put(
@@ -325,6 +332,7 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(slice), W | C | E),
             false,
         );
+        let _ = (|| -> Result<(),JsValue> {def_native_method!(self,proto,shift,array::array_shift,0)})();
         /*let name = "forEach".intern();
         let for_each = JsNativeFunction::new(self, name, array_for_each, 1);
         let _ = proto.define_own_property(
@@ -959,6 +967,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array::array_for_each as _,
         array::array_filter as _,
         array::array_map as _,
+        array::array_shift as _,
         array::array_slice as _,
         error::error_constructor as usize,
         error::error_to_string as usize,
@@ -972,6 +981,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         global::is_nan as _,
         global::parse_float as _,
         global::parse_int as _,
+        global::read_line as _,
         global::gc as _,
         global::___is_constructor as _,
         global::___is_callable as _,
