@@ -1,3 +1,6 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 //! MallocGC. Very simple and dumb garbage collector that uses libc::malloc and libc::free functions.
 //! Note that this GC scheme should be used *only* for debugging purposes, it is not designed to be fast or
 //! to have small memory usage.

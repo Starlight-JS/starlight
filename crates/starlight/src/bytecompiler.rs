@@ -604,6 +604,79 @@ impl ByteCompiler {
             break_(self);
         }
     }
+    pub fn decl(&mut self,decl: &Decl,export: bool) {
+        match decl {
+        Decl::Var(var) => {
+            self.var_decl(var);
+        }
+        Decl::Fn(fun) => {
+            let name = Self::ident_to_sym(&fun.ident);
+            let mut _rest = None;
+            let mut params = vec![];
+            let mut rat = None;
+            let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
+            let scope = Rc::new(RefCell::new(Scope {
+                variables: HashMap::new(),
+                parent: Some(self.scope.clone()),
+                depth: self.scope.borrow().depth + 1,
+            }));
+
+            let mut compiler = ByteCompiler {
+                lci: Vec::new(),
+                variable_freelist: Vec::with_capacity(4),
+                code,
+                tail_pos: false,
+                fmap: HashMap::new(),
+                val_map: HashMap::new(),
+                name_map: HashMap::new(),
+                top_level: false,
+                scope,
+                rt: RuntimeRef(&mut *self.rt),
+            };
+            let mut p = 0;
+            for x in fun.function.params.iter() {
+                match x.pat {
+                    Pat::Ident(ref x) => {
+                        params.push(Self::ident_to_sym(&x.id));
+                        p += 1;
+                        compiler
+                            .scope
+                            .borrow_mut()
+                            .add_var(Self::ident_to_sym(&x.id), p - 1);
+                    }
+                    Pat::Rest(ref r) => match &*r.arg {
+                        Pat::Ident(ref id) => {
+                            p += 1;
+                            _rest = Some(Self::ident_to_sym(&id.id));
+                            rat = Some(
+                                compiler
+                                    .scope
+                                    .borrow_mut()
+                                    .add_var(Self::ident_to_sym(&id.id), p - 1)
+                                    as u32,
+                            );
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => todo!(),
+                }
+            }
+
+            code.param_count = params.len() as _;
+            code.var_count = p as _;
+            code.rest_at = rat;
+            compiler.compile_fn(&fun.function);
+            compiler.finish(&mut self.rt);
+            let s: &str = &fun.ident.sym;
+            let sym = s.intern();
+            let ix = *self.fmap.get(&sym).unwrap();
+            self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
+            let var = self.access_var(sym);
+            self.access_set(var);
+            // self.emit(Opcode::OP_SET_LOCAL, &[nix], true);
+        }
+        _ => (),
+    }}
     pub fn stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Switch(switch) => {
@@ -828,79 +901,7 @@ impl ByteCompiler {
                     }
                 }
             }
-            Stmt::Decl(decl) => match decl {
-                Decl::Var(var) => {
-                    self.var_decl(var);
-                }
-                Decl::Fn(fun) => {
-                    let name = Self::ident_to_sym(&fun.ident);
-                    let mut _rest = None;
-                    let mut params = vec![];
-                    let mut rat = None;
-                    let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
-                    let scope = Rc::new(RefCell::new(Scope {
-                        variables: HashMap::new(),
-                        parent: Some(self.scope.clone()),
-                        depth: self.scope.borrow().depth + 1,
-                    }));
-
-                    let mut compiler = ByteCompiler {
-                        lci: Vec::new(),
-                        variable_freelist: Vec::with_capacity(4),
-                        code,
-                        tail_pos: false,
-                        fmap: HashMap::new(),
-                        val_map: HashMap::new(),
-                        name_map: HashMap::new(),
-                        top_level: false,
-                        scope,
-                        rt: RuntimeRef(&mut *self.rt),
-                    };
-                    let mut p = 0;
-                    for x in fun.function.params.iter() {
-                        match x.pat {
-                            Pat::Ident(ref x) => {
-                                params.push(Self::ident_to_sym(&x.id));
-                                p += 1;
-                                compiler
-                                    .scope
-                                    .borrow_mut()
-                                    .add_var(Self::ident_to_sym(&x.id), p - 1);
-                            }
-                            Pat::Rest(ref r) => match &*r.arg {
-                                Pat::Ident(ref id) => {
-                                    p += 1;
-                                    _rest = Some(Self::ident_to_sym(&id.id));
-                                    rat = Some(
-                                        compiler
-                                            .scope
-                                            .borrow_mut()
-                                            .add_var(Self::ident_to_sym(&id.id), p - 1)
-                                            as u32,
-                                    );
-                                }
-                                _ => unreachable!(),
-                            },
-                            _ => todo!(),
-                        }
-                    }
-
-                    code.param_count = params.len() as _;
-                    code.var_count = p as _;
-                    code.rest_at = rat;
-                    compiler.compile_fn(&fun.function);
-                    compiler.finish(&mut self.rt);
-                    let s: &str = &fun.ident.sym;
-                    let sym = s.intern();
-                    let ix = *self.fmap.get(&sym).unwrap();
-                    self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
-                    let var = self.access_var(sym);
-                    self.access_set(var);
-                    // self.emit(Opcode::OP_SET_LOCAL, &[nix], true);
-                }
-                _ => (),
-            },
-
+            Stmt::Decl(decl) => self.decl(decl,false),
             Stmt::Empty(_) => {}
             Stmt::Throw(throw) => {
                 self.expr(&throw.arg, true, false);

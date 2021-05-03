@@ -3,7 +3,6 @@ members = [
     "crates/starlight",
     "crates/wtf-rs",
     "crates/starlight-derive",
-    "crates/libmir-sys",
     "crates/test262-runner",
 ]
 default-members = ["crates/starlight", "crates/test262-runner"]
