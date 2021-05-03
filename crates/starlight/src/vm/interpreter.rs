@@ -1,3 +1,6 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use self::{frame::CallFrame, stack::Stack};
 use super::{
     arguments::*, array::*, code_block::CodeBlock, environment::*, error::JsTypeError, error::*,
@@ -215,7 +218,7 @@ unsafe fn eval_internal(
     (*frame).exit_on_return = true;
     (*frame).ip = ip;
 
-    'interp: loop {
+     loop {
         let result = eval(rt, frame);
         match result {
             Ok(value) => return Ok(value),
