@@ -80,21 +80,21 @@ impl Runtime {
             JsValue::encode_object_value(func),
             false,
         );
-        
+
         let func = JsNativeFunction::new(self, "parseInt".intern(), global::parse_int, 1);
         let _ = global.put(
             self,
             "parseInt".intern(),
             JsValue::encode_object_value(func),
             false,
-        );let func = JsNativeFunction::new(self, "readLine".intern(), global::read_line, 1);
+        );
+        let func = JsNativeFunction::new(self, "readLine".intern(), global::read_line, 1);
         let _ = global.put(
             self,
             "readLine".intern(),
             JsValue::encode_object_value(func),
             false,
         );
-
 
         let func = JsNativeFunction::new(self, "parseFloat".intern(), global::parse_float, 1);
         let _ = global.put(
@@ -332,7 +332,9 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(slice), W | C | E),
             false,
         );
-        let _ = (|| -> Result<(),JsValue> {def_native_method!(self,proto,shift,array::array_shift,0)})();
+        let _ = (|| -> Result<(), JsValue> {
+            def_native_method!(self, proto, shift, array::array_shift, 0)
+        })();
         /*let name = "forEach".intern();
         let for_each = JsNativeFunction::new(self, name, array_for_each, 1);
         let _ = proto.define_own_property(

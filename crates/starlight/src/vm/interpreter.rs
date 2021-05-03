@@ -221,23 +221,17 @@ unsafe fn eval_internal(
             Ok(value) => return Ok(value),
             Err(e) => {
                 rt.stacktrace = rt.stacktrace();
-                frame = &mut *rt.stack.current;
-                loop {
-                    if let Some((env, ip, sp)) = (*frame).try_stack.pop() {
-                        (*frame).env = env.unwrap();
-                        (*frame).ip = ip;
-                        (*frame).sp = sp;
-                        (*frame).push(e);
-                        continue 'interp;
-                    } else if !(*frame).exit_on_return {
-                        frame = (*frame).prev;
-                        rt.stack.pop_frame().unwrap();
-                        continue;
-                    }
-                    break;
-                }
 
-                return Err(e);
+                if let Some(unwind_frame) = rt.unwind() {
+                    let (env, ip, sp) = (*unwind_frame).try_stack.pop().unwrap();
+                    frame = unwind_frame;
+                    (*frame).env = env.unwrap();
+                    (*frame).ip = ip;
+                    (*frame).sp = sp;
+                    (*frame).push(e);
+                } else {
+                    return Err(e);
+                }
             }
         }
     }
@@ -794,10 +788,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if opcode == Opcode::OP_TAILCALL
-                        || (ip.cast::<Opcode>().read() == Opcode::OP_POP
-                            && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET)
+                    if !frame.exit_on_return
+                        && (opcode == Opcode::OP_TAILCALL
+                            || (ip.cast::<Opcode>().read() == Opcode::OP_POP
+                                && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
+                       // rt.stack.pop_frame().unwrap();
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
@@ -859,10 +855,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if opcode == Opcode::OP_TAILNEW
-                        || (ip.cast::<Opcode>().read() == Opcode::OP_POP
-                            && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET)
+                    if !frame.exit_on_return
+                        && (opcode == Opcode::OP_TAILNEW
+                            || (ip.cast::<Opcode>().read() == Opcode::OP_POP
+                                && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
+                       // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
@@ -1119,7 +1117,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     .push((Some(env), ip.offset(offset as isize), frame.sp));
             }
             Opcode::OP_POP_CATCH => {
-                frame.try_stack.pop();
+                frame.try_stack.pop().unwrap();
             }
 
             Opcode::OP_LOGICAL_NOT => {

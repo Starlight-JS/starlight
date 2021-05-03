@@ -908,32 +908,21 @@ impl ByteCompiler {
             }
             Stmt::Try(try_stmt) => {
                 let try_push = self.try_();
-                if !try_stmt.block.stmts.is_empty() {
-                    if let Some(lci) = self.lci.last_mut() {
-                        lci.scope_depth += 1;
-                    }
-                    //     self.emit(Opcode::OP_PUSH_ENV, &[], false);
-                }
+
                 for stmt in try_stmt.block.stmts.iter() {
                     self.stmt(stmt);
                 }
-                if !try_stmt.block.stmts.is_empty() {
-                    //self.emit(Opcode::OP_POP_ENV, &[], false);
-                }
+                self.emit(Opcode::OP_POP_CATCH, &[], false);
                 let jfinally = self.jmp();
                 try_push(self);
                 let jcatch_finally = match try_stmt.handler {
                     Some(ref catch) => {
                         self.push_scope();
-                        if !catch.body.stmts.is_empty() {
-                            //             self.emit(Opcode::OP_PUSH_ENV, &[], false);
-                        }
+
                         match catch.param {
                             Some(ref pat) => {
                                 let acc = self.compile_access_pat(pat, false);
                                 self.access_set(acc);
-
-                                //self.generate_pat_store(pat, true, true);
                             }
                             None => {
                                 self.emit(Opcode::OP_POP, &[], false);
@@ -941,9 +930,6 @@ impl ByteCompiler {
                         }
                         for stmt in catch.body.stmts.iter() {
                             self.stmt(stmt);
-                        }
-                        if !catch.body.stmts.is_empty() {
-                            //  self.emit(Opcode::OP_POP_ENV, &[], false);
                         }
                         self.pop_scope();
                         self.jmp()
@@ -959,15 +945,11 @@ impl ByteCompiler {
                 match try_stmt.finalizer {
                     Some(ref block) => {
                         self.push_scope();
-                        if !block.stmts.is_empty() {
-                            //             self.emit(Opcode::OP_PUSH_ENV, &[], false);
-                        }
+
                         for stmt in block.stmts.iter() {
                             self.stmt(stmt);
                         }
-                        if !block.stmts.is_empty() {
-                            // self.emit(Opcode::OP_POP_ENV, &[], false);
-                        }
+
                         self.pop_scope();
                     }
                     None => {}

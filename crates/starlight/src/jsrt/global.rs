@@ -190,7 +190,7 @@ pub fn ___is_constructor(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     Ok(JsValue::new(false))
 }
 
-pub fn read_line(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {
+pub fn read_line(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let prompt = if args.size() > 0 {
         Some(args.at(0).to_string(rt)?)
     } else {
@@ -198,11 +198,11 @@ pub fn read_line(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {
     };
 
     if let Some(prompt) = prompt {
-        print!("{}",prompt);
+        print!("{}", prompt);
         std::io::stdout().flush().unwrap();
     }
 
     let mut buf = String::new();
     std::io::stdin().read_line(&mut buf).unwrap();
-    Ok(JsValue::new(JsString::new(rt,buf)))
+    Ok(JsValue::new(JsString::new(rt, buf)))
 }

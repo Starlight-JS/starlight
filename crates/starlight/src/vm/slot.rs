@@ -150,7 +150,6 @@ impl GcCell for Slot {
     fn deser_pair(&self) -> (usize, usize) {
         unreachable!()
     }
-    
 }
 unsafe impl Trace for Slot {
     fn trace(&mut self, tracer: &mut dyn Tracer) {

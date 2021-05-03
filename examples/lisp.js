@@ -29,6 +29,9 @@ function readFrom(tokens) {
 }
 
 
+/*
+* Constructs new variable environment.
+*/
 function Env(params, args, outer) {
     for (let i = 0; i < params.length; i++) {
         this[params[i]] = args[i];
@@ -43,15 +46,9 @@ Env.prototype.get = function envGet(name) {
     if (this.outer !== undefined) {
         return this.outer.get(name);
     }
+    throw "Variable '" + name + "' not found";
 }
-
-let env = new Env(["x", "y"], [1, 2]);
-
-
 let global_env = new Env([], []);
-
-
-
 
 function eval(x, env) {
     if (!env)
@@ -120,10 +117,10 @@ function repl() {
             if (val)
                 print(val)
         } catch (e) {
-            print(e);
             if (e instanceof Exit) {
                 return;
             }
+            print('Error: ', e);
         }
     }
 }

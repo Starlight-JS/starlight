@@ -72,7 +72,6 @@ impl GcCell for MapEntry {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 unsafe impl Trace for MapEntry {}
 
@@ -86,7 +85,6 @@ impl GcCell for TransitionKey {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 unsafe impl Trace for TransitionKey {}
 
@@ -192,7 +190,6 @@ impl GcCell for Structure {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 unsafe impl Trace for Structure {
     fn trace(&mut self, tracer: &mut dyn Tracer) {
@@ -281,13 +278,11 @@ impl GcCell for DeletedEntryHolder {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 impl GcCell for DeletedEntry {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
     }
-    
 }
 
 impl Structure {

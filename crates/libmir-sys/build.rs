@@ -1,5 +1,6 @@
 fn main() {
-    cc::Build::new().includes(&[
+    cc::Build::new()
+        .includes(&[
             "mir",
             "mir/mir-utils",
             "mir/c2mir/",

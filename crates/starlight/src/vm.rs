@@ -158,6 +158,29 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Find call frame that has try catch block in it. (Does not clean the stack!)
+    pub(crate) unsafe fn unwind(&mut self) -> Option<*mut CallFrame> {
+        let mut frame = self.stack.current;
+        while !frame.is_null() {
+            if !(*frame).try_stack.is_empty() {
+                return Some(frame);
+            }
+            let p = self.stack.pop_frame().unwrap();
+            // if `exit_on_return` is true then this frame was created from native code.
+            if p.exit_on_return {  
+                break;
+            }
+            frame = self.stack.current;
+        }
+        None
+    }
+
+    pub(crate) unsafe fn pop_until(&mut self, frame: *mut CallFrame) {
+        debug_assert!(!frame.is_null());
+        while self.stack.current != frame {
+            self.stack.pop_frame().unwrap();
+        }
+    }
     /// Collect stacktrace.
     pub fn stacktrace(&mut self) -> String {
         let mut result = String::new();
@@ -467,7 +490,7 @@ use self::{
     error::{JsReferenceError, JsTypeError},
     function::JsNativeFunction,
     global::JsGlobal,
-    interpreter::stack::Stack,
+    interpreter::{frame::CallFrame, stack::Stack},
     object::JsObject,
     structure::Structure,
     symbol_table::{Internable, JsSymbol, Symbol},

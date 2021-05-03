@@ -501,26 +501,31 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
 pub fn array_shift(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let mut obj = args.this.to_object(rt)?;
 
-    let length = super::get_length(rt,&mut obj)?;
+    let length = super::get_length(rt, &mut obj)?;
     if length == 0 {
-        obj.put(rt,"length".intern(),JsValue::new(0),false)?;
+        obj.put(rt, "length".intern(), JsValue::new(0), false)?;
         return Ok(JsValue::encode_undefined_value());
-    }   
+    }
 
-    let first = obj.get(rt,Symbol::Index(0))?;
+    let first = obj.get(rt, Symbol::Index(0))?;
     for k in 1..length {
         let from = k;
-        let to=k.wrapping_sub(1);
-        let from_value = obj.get(rt,Symbol::Index(from as u32))?;
+        let to = k.wrapping_sub(1);
+        let from_value = obj.get(rt, Symbol::Index(from as u32))?;
         if from_value.is_undefined() {
-            obj.delete(rt,Symbol::Index(to as _),false)?;
+            obj.delete(rt, Symbol::Index(to as _), false)?;
         } else {
-            obj.put(rt,Symbol::Index(to as _),from_value,false)?;
+            obj.put(rt, Symbol::Index(to as _), from_value, false)?;
         }
     }
 
-    let final_index=length.wrapping_sub(1);
-    obj.delete(rt,Symbol::Index(final_index as _),false)?;
-    obj.put(rt,"length".intern(),JsValue::new(final_index as u32),false)?;
+    let final_index = length.wrapping_sub(1);
+    obj.delete(rt, Symbol::Index(final_index as _), false)?;
+    obj.put(
+        rt,
+        "length".intern(),
+        JsValue::new(final_index as u32),
+        false,
+    )?;
     Ok(first)
 }

@@ -233,5 +233,4 @@ impl GcCell for ArrayStorage {
     fn compute_size(&self) -> usize {
         (self.capacity as usize * size_of::<JsValue>()) + size_of::<Self>()
     }
-    
 }

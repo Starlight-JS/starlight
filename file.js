@@ -29,6 +29,9 @@ function readFrom(tokens) {
 }
 
 
+/*
+* Constructs new variable environment.
+*/
 function Env(params, args, outer) {
     for (let i = 0; i < params.length; i++) {
         this[params[i]] = args[i];
@@ -43,15 +46,9 @@ Env.prototype.get = function envGet(name) {
     if (this.outer !== undefined) {
         return this.outer.get(name);
     }
+    throw "Variable '" + name + "' not found";
 }
-
-let env = new Env(["x", "y"], [1, 2]);
-
-
 let global_env = new Env([], []);
-
-
-
 
 function eval(x, env) {
     if (!env)
@@ -96,7 +93,6 @@ function eval(x, env) {
         }
 
         proc = exprs.shift();
-
         return proc(...exprs);
     }
 }
@@ -104,11 +100,17 @@ function Exit() {
 
 }
 
-global_env['+'] = (...args) => args[0] + args[1]
+global_env['+'] = (...args) => {
+    let sum = 0;
+    for (item of args)
+        sum += item;
+
+    return sum;
+}
 global_env['-'] = (...args) => args[0] - args[1];
 global_env['*'] = (...args) => args[0] * args[1];
 global_env['/'] = (...args) => args[0] / args[1];
-global_env['exit'] = (...args) => { throw new Exit() }
+global_env['exit'] = function exit() { throw new Exit() }
 global_env['<'] = (...args) => args[0] < args[1]
 global_env['>'] = (...args) => args[0] > args[1]
 global_env['<='] = (...args) => args[0] <= args[1]
@@ -120,10 +122,11 @@ function repl() {
             if (val)
                 print(val)
         } catch (e) {
-            print(e);
             if (e instanceof Exit) {
+                print("exit repl");
                 return;
             }
+            print('Error: ', e);
         }
     }
 }

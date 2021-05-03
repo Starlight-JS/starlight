@@ -68,7 +68,6 @@ macro_rules! def_enum {
 
 js_class_list!(def_enum);
 
-
 /// Simple tpe that is used to implement custom JS objects.
 pub struct Class {
     /// Class name. `Object.prototype.toString` will print this name.

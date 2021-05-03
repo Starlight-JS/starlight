@@ -411,6 +411,9 @@ impl CodeBlock {
                     Opcode::OP_XOR => {
                         writeln!(output, "xor")?;
                     }
+                    Opcode::OP_POP_CATCH => {
+                        writeln!(output, "pop_catch")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }
