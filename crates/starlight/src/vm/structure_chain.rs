@@ -1,10 +1,10 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use std::{any::TypeId, mem::size_of};
-use crate::gc::cell::GcPointer;
 use super::structure::Structure;
+use crate::gc::cell::GcPointer;
 use crate::prelude::*;
+use std::{any::TypeId, mem::size_of};
 pub struct StructureChain {
     pub(super) vector: Box<[GcPointer<Structure>]>,
 }

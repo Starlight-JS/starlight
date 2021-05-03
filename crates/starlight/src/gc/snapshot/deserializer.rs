@@ -17,7 +17,7 @@ use crate::{
         self,
         arguments::JsArguments,
         array_storage::ArrayStorage,
-        code_block::CodeBlock,
+        code_block::{CodeBlock, FileLocation},
         function::{FuncType, JsBoundFunction, JsNativeFunction, JsVMFunction},
         global::JsGlobal,
         indexed_elements::{IndexedElements, SparseArrayMap},
@@ -1375,7 +1375,17 @@ impl Deserializable for CodeBlock {
         let param_count = u32::deserialize_inplace(deser);
         let args_at = u32::deserialize_inplace(deser);
         let is_constructor = bool::deserialize_inplace(deser);
+        let len = u32::deserialize_inplace(deser);
+        let mut loc = Vec::with_capacity(len as _);
+        for _ in 0..len {
+            let start = u32::deserialize_inplace(deser) as usize;
+            let end = u32::deserialize_inplace(deser) as usize;
+            let line = u32::deserialize_inplace(deser);
+            let col = u32::deserialize_inplace(deser);
+            loc.push((start..end, FileLocation { line, col }));
+        }
         Self {
+            loc,
             args_at,
             use_arguments,
             name,

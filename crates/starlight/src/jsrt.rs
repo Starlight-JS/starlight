@@ -1,7 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use std::collections::HashMap;
 use crate::{
     gc::cell::{GcPointer, WeakRef},
     vm::{
@@ -12,6 +11,7 @@ use crate::{
         structure_chain::StructureChain, symbol_table::*, value::*, Runtime,
     },
 };
+use std::collections::HashMap;
 
 pub mod array;
 pub mod error;
@@ -150,7 +150,7 @@ impl Runtime {
     }
     pub(crate) fn init_self_hosted(&mut self) {
         let mut eval = |path, source| {
-            self.eval(Some(path), false, source)
+            self.eval(Some(path), false, source, true)
                 .unwrap_or_else(|error| match error.to_string(self) {
                     Ok(str) => panic!("Failed to initialize builtins: {}", str),
                     Err(_) => panic!("Failed to initialize builtins"),

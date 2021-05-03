@@ -33,6 +33,7 @@ fn main() {
             opts.input.as_os_str().to_str().unwrap(),
             "<script>",
             &string,
+            false,
         )
         .unwrap_or_else(|error| match error.to_string(&mut rt) {
             Ok(s) => {

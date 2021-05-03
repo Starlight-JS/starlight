@@ -162,7 +162,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
                 var matchStr = result[0] + "";
                 if (!matchStr.length) {
                     var thisIndex = ___toLength(regexp.lastIndex);
-                    regexp.lastIndex = ___advanceStringIndex(str, thisIndex, unicode);
+                    regexp.lastIndex = __advanceStringIndex__(str, thisIndex, unicode);
                 }
             }
         }
@@ -282,7 +282,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
         var matches = regexExec.call(splitter, str);
         // c. If z is null, let q be AdvanceStringIndex(S, q, unicodeMatching).
         if (matches === null)
-            matchPosition = ___advanceStringIndex(str, matchPosition, unicodeMatching);
+            matchPosition = __advanceStringIndex__(str, matchPosition, unicodeMatching);
         // d. Else z is not null,
         else {
             // i. Let e be ? ToLength(? Get(splitter, "lastIndex")).
@@ -291,7 +291,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
             endPosition = (endPosition <= size) ? endPosition : size;
             // iii. If e = p, let q be AdvanceStringIndex(S, q, unicodeMatching).
             if (endPosition === position)
-                matchPosition = ___advanceStringIndex(str, matchPosition, unicodeMatching);
+                matchPosition = __advanceStringIndex__(str, matchPosition, unicodeMatching);
             // iv. Else e != p,
             else {
                 // 1. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through q (exclusive).

@@ -269,4 +269,10 @@ pub enum Opcode {
     OP_GE0DL,
     /// get_env 0 decl_const
     OP_GE0DC,
+
+    OP_TO_OBJECT,
+    OP_TO_LENGTH,
+    OP_TO_INTEGER_OR_INFINITY,
+    OP_IS_CALLABLE,
+    OP_IS_CTOR,
 }

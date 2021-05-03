@@ -135,7 +135,8 @@ fn main() {
                 match rt.compile(
                     options.file.as_os_str().to_str().unwrap(),
                     "<script>",
-                    &source
+                    &source,
+                    false
                 ) {
                     Ok(function) => function.get_jsobject(),
                     Err(e) => {

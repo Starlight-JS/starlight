@@ -10,7 +10,12 @@ use crate::{
     gc::cell::{GcCell, Trace},
     gc::snapshot::deserializer::Deserializable,
 };
-use std::fmt::Write;
+use std::{fmt::Write, ops::Range};
+
+pub struct FileLocation {
+    pub line: u32,
+    pub col: u32,
+}
 
 /// A type representing single JS function bytecode.
 //#[derive(GcTrace)]
@@ -49,6 +54,8 @@ pub struct CodeBlock {
     pub args_at: u32,
 
     pub is_constructor: bool,
+
+    pub loc: Vec<(Range<usize>, FileLocation)>,
 }
 
 unsafe impl Trace for CodeBlock {
@@ -417,6 +424,21 @@ impl CodeBlock {
                     Opcode::OP_POP_CATCH => {
                         writeln!(output, "pop_catch")?;
                     }
+                    Opcode::OP_TO_OBJECT => {
+                        writeln!(output, "to_object")?;
+                    }
+                    Opcode::OP_TO_LENGTH => {
+                        writeln!(output, "to_length")?;
+                    }
+                    Opcode::OP_TO_INTEGER_OR_INFINITY => {
+                        writeln!(output, "to_integer_or_inf")?;
+                    }
+                    Opcode::OP_IS_CALLABLE => {
+                        writeln!(output, "is_callable")?;
+                    }
+                    Opcode::OP_IS_CTOR => {
+                        writeln!(output,"is_constructor")?;
+                    }
                     _ => todo!("{:?}", op),
                 }
             }
@@ -427,6 +449,7 @@ impl CodeBlock {
     pub fn new(rt: &mut Runtime, name: Symbol, strict: bool) -> GcPointer<Self> {
         let this = Self {
             name,
+            loc: vec![],
             file_name: String::new(),
             strict,
             codes: vec![],

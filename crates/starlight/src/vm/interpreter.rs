@@ -218,7 +218,7 @@ unsafe fn eval_internal(
     (*frame).exit_on_return = true;
     (*frame).ip = ip;
 
-     loop {
+    loop {
         let result = eval(rt, frame);
         match result {
             Ok(value) => return Ok(value),
@@ -1282,16 +1282,27 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let str = JsString::new(rt, val.type_of());
                 frame.push(JsValue::new(str));
             }
-            Opcode::OP_PUSH_ENV => {
-                let count = ip.cast::<u32>().read_unaligned();
-                ip = ip.add(4);
-                let mut env = Environment::new(rt, count);
-                env.parent = Some(frame.env);
-                frame.env = env;
+            Opcode::OP_TO_INTEGER_OR_INFINITY | Opcode::OP_TO_LENGTH => {
+                let number = frame.pop().to_number(rt)?;
+                if number.is_nan() || number == 0.0 {
+                    frame.push(JsValue::encode_int32(0));
+                } else {
+                    frame.push(JsValue::new(number.trunc()));
+                }
             }
-            Opcode::OP_POP_ENV => {
-                let env = frame.env;
-                frame.env = env.parent.unwrap();
+            Opcode::OP_TO_OBJECT => {
+                let target = frame.pop();
+                let message = frame.pop();
+                if unlikely( target.is_null() || target.is_undefined()) {
+                    let msg = message.to_string(rt)?;
+                    return Err(JsValue::new(rt.new_type_error(msg)));
+                }
+                frame.push(JsValue::new(target.to_object(rt)?));
+
+            }
+            Opcode::OP_IS_CALLABLE | Opcode::OP_IS_CTOR=> {
+                let val =frame.pop();
+                frame.push(JsValue::new(val.is_callable()));
             }
 
             x => {

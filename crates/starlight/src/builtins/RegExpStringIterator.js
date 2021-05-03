@@ -39,7 +39,7 @@ function RegExpStringIterator(regexp, string, global, fullUnicode) {
     });
 }
 
-function ___advanceStringIndex(string, index, unicode) {
+function __advanceStringIndex__(string, index, unicode) {
     // This function implements AdvanceStringIndex described in ES6 21.2.5.2.3.
     "use strict";
 
@@ -89,7 +89,7 @@ RegExpStringIterator.prototype.next = function next() {
         var matchStr = match[0] + "";
         if (matchStr === "") {
             var thisIndex = ___toLength(regExp.lastIndex);
-            regExp.lastIndex = ___advanceStringIndex(string, thisIndex, fullUnicode);
+            regExp.lastIndex = __advanceStringIndex__(string, thisIndex, fullUnicode);
         }
     } else {
         this.regExpStringIteratorDone = true;

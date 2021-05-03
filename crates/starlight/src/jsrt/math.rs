@@ -135,7 +135,7 @@ impl Runtime {
                 .put(self, "Math".intern(), JsValue::new(math), false)?;
             let source = include_str!("../builtins/Math.js");
 
-            self.eval(Some("../builtins/Math.js"), false, source)?;
+            self.eval(Some("../builtins/Math.js"), false, source, true)?;
 
             Ok(())
         };

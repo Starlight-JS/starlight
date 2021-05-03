@@ -1,20 +1,19 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::vm::*;
+use crate::vm::{code_block::FileLocation, *};
 use crate::{
     bytecode::{opcodes::Opcode, TypeFeedBack},
     prelude::*,
     vm::{code_block::CodeBlock, RuntimeRef},
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 use swc_common::{errors::Handler, sync::Lrc};
 use swc_common::{FileName, SourceMap};
 use swc_ecmascript::parser::*;
 pub struct LoopControlInfo {
     breaks: Vec<Box<dyn FnOnce(&mut ByteCompiler)>>,
     continues: Vec<Box<dyn FnOnce(&mut ByteCompiler)>>,
-    scope_depth: i32,
 }
 use super::codegen::BindingKind;
 use super::codegen::Scope as Analyzer;
@@ -22,6 +21,7 @@ use swc_common::DUMMY_SP;
 use swc_ecmascript::visit::Node;
 use swc_ecmascript::visit::Visit;
 use swc_ecmascript::visit::VisitWith;
+
 use swc_ecmascript::{ast::*, visit::noop_visit_type};
 pub type ScopeRef = Rc<RefCell<Scope>>;
 /// JS variable scope representation at compile-time.
@@ -85,6 +85,7 @@ pub enum Val {
     Str(String),
 }
 pub struct ByteCompiler {
+    pub builtins: bool,
     pub code: GcPointer<CodeBlock>,
     pub scope: Rc<RefCell<Scope>>,
     pub rt: RuntimeRef,
@@ -96,6 +97,8 @@ pub struct ByteCompiler {
     pub tail_pos: bool,
     /// Freelist of unused variable indexes
     pub variable_freelist: Vec<u32>,
+
+    pub info: Option<Vec<(Range<usize>, FileLocation)>>,
 }
 
 impl ByteCompiler {
@@ -315,7 +318,7 @@ impl ByteCompiler {
             }
             Access::ByVal => self.emit(Opcode::OP_GET_BY_VAL, &[0], false),
             Access::ArrayPat(acc) => {
-                for (_, acc) in acc {
+                for (_, _) in acc {
                     todo!()
                 }
             }
@@ -403,6 +406,7 @@ impl ByteCompiler {
         mut vm: &mut Runtime,
         params_: &[String],
         body: String,
+        builtins: bool,
     ) -> Result<JsValue, JsValue> {
         let mut params = vec![];
         let mut rat = None;
@@ -414,9 +418,11 @@ impl ByteCompiler {
         let mut code = CodeBlock::new(vm, "<anonymous>".intern(), false);
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
+            builtins,
             variable_freelist: Vec::with_capacity(4),
             code,
             tail_pos: false,
+            info: None,
             fmap: HashMap::new(),
             val_map: HashMap::new(),
             name_map: HashMap::new(),
@@ -483,14 +489,21 @@ impl ByteCompiler {
         let fun = JsVMFunction::new(vm, code, env);
         Ok(JsValue::new(fun))
     }
-    pub fn compile_script(mut vm: &mut Runtime, p: &Script, fname: String) -> GcPointer<CodeBlock> {
+    pub fn compile_script(
+        mut vm: &mut Runtime,
+        p: &Script,
+        fname: String,
+        builtins: bool,
+    ) -> GcPointer<CodeBlock> {
         let name = "<script>".intern();
         let mut code = CodeBlock::new(&mut vm, name, false);
         code.file_name = fname;
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
             top_level: true,
+            info: None,
             tail_pos: false,
+            builtins: builtins,
             scope: Rc::new(RefCell::new(Scope {
                 parent: None,
                 variables: Default::default(),
@@ -597,7 +610,6 @@ impl ByteCompiler {
         self.lci.push(LoopControlInfo {
             continues: vec![],
             breaks: vec![],
-            scope_depth: depth as _,
         });
     }
 
@@ -607,79 +619,82 @@ impl ByteCompiler {
             break_(self);
         }
     }
-    pub fn decl(&mut self,decl: &Decl,export: bool) {
+    pub fn decl(&mut self, decl: &Decl, _export: bool) {
         match decl {
-        Decl::Var(var) => {
-            self.var_decl(var);
-        }
-        Decl::Fn(fun) => {
-            let name = Self::ident_to_sym(&fun.ident);
-            let mut _rest = None;
-            let mut params = vec![];
-            let mut rat = None;
-            let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
-            let scope = Rc::new(RefCell::new(Scope {
-                variables: HashMap::new(),
-                parent: Some(self.scope.clone()),
-                depth: self.scope.borrow().depth + 1,
-            }));
-
-            let mut compiler = ByteCompiler {
-                lci: Vec::new(),
-                variable_freelist: Vec::with_capacity(4),
-                code,
-                tail_pos: false,
-                fmap: HashMap::new(),
-                val_map: HashMap::new(),
-                name_map: HashMap::new(),
-                top_level: false,
-                scope,
-                rt: RuntimeRef(&mut *self.rt),
-            };
-            let mut p = 0;
-            for x in fun.function.params.iter() {
-                match x.pat {
-                    Pat::Ident(ref x) => {
-                        params.push(Self::ident_to_sym(&x.id));
-                        p += 1;
-                        compiler
-                            .scope
-                            .borrow_mut()
-                            .add_var(Self::ident_to_sym(&x.id), p - 1);
-                    }
-                    Pat::Rest(ref r) => match &*r.arg {
-                        Pat::Ident(ref id) => {
-                            p += 1;
-                            _rest = Some(Self::ident_to_sym(&id.id));
-                            rat = Some(
-                                compiler
-                                    .scope
-                                    .borrow_mut()
-                                    .add_var(Self::ident_to_sym(&id.id), p - 1)
-                                    as u32,
-                            );
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => todo!(),
-                }
+            Decl::Var(var) => {
+                self.var_decl(var);
             }
+            Decl::Fn(fun) => {
+                let name = Self::ident_to_sym(&fun.ident);
+                let mut _rest = None;
+                let mut params = vec![];
+                let mut rat = None;
+                let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
+                let scope = Rc::new(RefCell::new(Scope {
+                    variables: HashMap::new(),
+                    parent: Some(self.scope.clone()),
+                    depth: self.scope.borrow().depth + 1,
+                }));
 
-            code.param_count = params.len() as _;
-            code.var_count = p as _;
-            code.rest_at = rat;
-            compiler.compile_fn(&fun.function);
-            compiler.finish(&mut self.rt);
-            let s: &str = &fun.ident.sym;
-            let sym = s.intern();
-            let ix = *self.fmap.get(&sym).unwrap();
-            self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
-            let var = self.access_var(sym);
-            self.access_set(var);
-            // self.emit(Opcode::OP_SET_LOCAL, &[nix], true);
+                let mut compiler = ByteCompiler {
+                    lci: Vec::new(),
+                    builtins: self.builtins,
+                    variable_freelist: Vec::with_capacity(4),
+                    code,
+                    info: None,
+                    tail_pos: false,
+                    fmap: HashMap::new(),
+                    val_map: HashMap::new(),
+                    name_map: HashMap::new(),
+                    top_level: false,
+                    scope,
+                    rt: RuntimeRef(&mut *self.rt),
+                };
+                let mut p = 0;
+                for x in fun.function.params.iter() {
+                    match x.pat {
+                        Pat::Ident(ref x) => {
+                            params.push(Self::ident_to_sym(&x.id));
+                            p += 1;
+                            compiler
+                                .scope
+                                .borrow_mut()
+                                .add_var(Self::ident_to_sym(&x.id), p - 1);
+                        }
+                        Pat::Rest(ref r) => match &*r.arg {
+                            Pat::Ident(ref id) => {
+                                p += 1;
+                                _rest = Some(Self::ident_to_sym(&id.id));
+                                rat = Some(
+                                    compiler
+                                        .scope
+                                        .borrow_mut()
+                                        .add_var(Self::ident_to_sym(&id.id), p - 1)
+                                        as u32,
+                                );
+                            }
+                            _ => unreachable!(),
+                        },
+                        _ => todo!(),
+                    }
+                }
+
+                code.param_count = params.len() as _;
+                code.var_count = p as _;
+                code.rest_at = rat;
+                compiler.compile_fn(&fun.function);
+                compiler.finish(&mut self.rt);
+                let s: &str = &fun.ident.sym;
+                let sym = s.intern();
+                let ix = *self.fmap.get(&sym).unwrap();
+                self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
+                let var = self.access_var(sym);
+                self.access_set(var);
+                // self.emit(Opcode::OP_SET_LOCAL, &[nix], true);
+            }
+            _ => (),
         }
-        _ => (),
-    }}
+    }
     pub fn stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Switch(switch) => {
@@ -904,7 +919,7 @@ impl ByteCompiler {
                     }
                 }
             }
-            Stmt::Decl(decl) => self.decl(decl,false),
+            Stmt::Decl(decl) => self.decl(decl, false),
             Stmt::Empty(_) => {}
             Stmt::Throw(throw) => {
                 self.expr(&throw.arg, true, false);
@@ -1164,8 +1179,12 @@ impl ByteCompiler {
                     }
                 }
             }
-
-            Expr::Call(call) => {
+            x if is_builtin_call(x, self.builtins) => {
+                if let Expr::Call(call) = x {
+                    self.handle_builtin_call(call);
+                }
+            }
+            Expr::Call(call) if !is_builtin_call(expr, self.builtins) => {
                 match call.callee {
                     ExprOrSuper::Super(_) => todo!(), // todo super call
                     ExprOrSuper::Expr(ref expr) => match &**expr {
@@ -1474,11 +1493,12 @@ impl ByteCompiler {
                     lci: Vec::new(),
                     top_level: false,
                     tail_pos: false,
+                    builtins: self.builtins,
                     code: code,
                     variable_freelist: vec![],
                     val_map: Default::default(),
                     name_map: Default::default(),
-
+                    info: None,
                     fmap: Default::default(),
                     rt: RuntimeRef(&mut *self.rt),
                     scope: Rc::new(RefCell::new(Scope {
@@ -1588,7 +1608,7 @@ impl ByteCompiler {
                     code: code,
                     val_map: Default::default(),
                     name_map: Default::default(),
-
+                    info: None,
                     fmap: Default::default(),
                     rt: self.rt,
                     scope: Rc::new(RefCell::new(Scope {
@@ -1596,6 +1616,7 @@ impl ByteCompiler {
                         depth: self.scope.borrow().depth + 1,
                         variables: HashMap::new(),
                     })),
+                    builtins: self.builtins,
                 };
                 let mut rest_at = None;
                 let mut p = 0;
@@ -1853,6 +1874,71 @@ impl Visit for IdentFinder<'_> {
                 self.found = true;
             }
             _ => {}
+        }
+    }
+}
+
+fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
+    if !builtin_compilation {
+        return false;
+    }
+    if let Expr::Call(call) = e {
+        if let ExprOrSuper::Expr(expr) = &call.callee {
+            if let Expr::Ident(x) = &**expr {
+                let str: &str = &*x.sym;
+                return str.starts_with("___");
+            }
+        }
+    }
+    false
+}
+impl ByteCompiler {
+    pub fn handle_builtin_call(&mut self, call: &CallExpr) {
+        let name = if let ExprOrSuper::Expr(expr) = &call.callee {
+            if let Expr::Ident(x) = &**expr {
+                let str: &str = &*x.sym;
+                str.to_string()
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        };
+        let nstr: &str = &name;
+
+        match nstr {
+            "___toObject" => {
+                if let Some(msg) = call.args.get(1) {
+                    self.expr(&msg.expr, true, false);
+                } else {
+                    self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                }
+                self.expr(&call.args[0].expr, true, false);
+
+                self.emit(Opcode::OP_TO_OBJECT, &[], false);
+            }
+
+            "___toLength" => {
+                self.expr(&call.args[0].expr, true, false);
+
+                self.emit(Opcode::OP_TO_LENGTH, &[], false);
+            }
+            "___toIntegerOrInfinity" => {
+                self.expr(&call.args[0].expr, true, false);
+
+                self.emit(Opcode::OP_TO_INTEGER_OR_INFINITY, &[], false);
+            }
+            "___isCallable" => {
+                self.expr(&call.args[0].expr, true, false);
+
+                self.emit(Opcode::OP_IS_CALLABLE, &[], false);
+            }
+            "___isConstructor" => {
+                self.expr(&call.args[0].expr, true, false);
+
+                self.emit(Opcode::OP_IS_CTOR, &[], false);
+            }
+            _ => todo!("{}", nstr),
         }
     }
 }

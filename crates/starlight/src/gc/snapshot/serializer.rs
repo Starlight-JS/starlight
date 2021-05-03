@@ -514,6 +514,14 @@ impl Serializable for CodeBlock {
         self.param_count.serialize(serializer);
         self.args_at.serialize(serializer);
         self.is_constructor.serialize(serializer);
+
+        (self.loc.len() as u32).serialize(serializer);
+        for (range, loc) in self.loc.iter() {
+            (range.start as u32).serialize(serializer);
+            (range.end as u32).serialize(serializer);
+            loc.line.serialize(serializer);
+            loc.col.serialize(serializer);
+        }
     }
 }
 

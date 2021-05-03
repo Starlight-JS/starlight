@@ -74,7 +74,7 @@ pub fn initialize_ffi(rt: &mut Runtime) {
             false,
         )?;
 
-        rt.eval(None, false, include_str!("../builtins/FFI.js"))?;
+        rt.eval(None, false, include_str!("../builtins/FFI.js"), true)?;
         Ok(())
     };
 

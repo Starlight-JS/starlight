@@ -58,7 +58,7 @@ pub fn function_prototype(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
         format!("{{ {} }}", args.at(args.size() - 1).to_string(vm)?)
     };
 
-    Ok(ByteCompiler::compile_code(vm, &params, body)?)
+    Ok(ByteCompiler::compile_code(vm, &params, body, false)?)
 }
 
 pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {

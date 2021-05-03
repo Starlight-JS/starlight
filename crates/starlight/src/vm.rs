@@ -178,12 +178,6 @@ impl Runtime {
         None
     }
 
-    pub(crate) unsafe fn pop_until(&mut self, frame: *mut CallFrame) {
-        debug_assert!(!frame.is_null());
-        while self.stack.current != frame {
-            self.stack.pop_frame().unwrap();
-        }
-    }
     /// Collect stacktrace.
     pub fn stacktrace(&mut self) -> String {
         let mut result = String::new();
@@ -203,7 +197,13 @@ impl Runtime {
     }
     /// Compile provided script into JS function. If error when compiling happens `SyntaxError` instance
     /// is returned.
-    pub fn compile(&mut self, path: &str, name: &str, script: &str) -> Result<JsValue, JsValue> {
+    pub fn compile(
+        &mut self,
+        path: &str,
+        name: &str,
+        script: &str,
+        builtins: bool,
+    ) -> Result<JsValue, JsValue> {
         let cm: Lrc<SourceMap> = Default::default();
         let _e = BufferedError::default();
 
@@ -232,7 +232,8 @@ impl Runtime {
         };
         let mut vmref = RuntimeRef(self);
 
-        let mut code = ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned());
+        let mut code =
+            ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned(), builtins);
         code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
 
@@ -251,6 +252,7 @@ impl Runtime {
         path: Option<&str>,
         force_strict: bool,
         script: &str,
+        builtins: bool,
     ) -> Result<JsValue, JsValue> {
         let res = {
             let cm: Lrc<SourceMap> = Default::default();
@@ -284,6 +286,7 @@ impl Runtime {
                 &mut *vmref,
                 &script,
                 path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                builtins,
             );
             code.strict = code.strict || force_strict;
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());

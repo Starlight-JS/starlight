@@ -147,7 +147,7 @@ impl Test {
                             } else {
                                 self.content.to_string()
                             };
-                            let res = context.eval(None, false, &content);
+                            let res = context.eval(None, false, &content, false);
 
                             let passed = res.is_ok();
                             let text = match res {
@@ -200,7 +200,7 @@ impl Test {
                     } else {
                         match self.set_up_env(&harness, strict) {
                             Ok(mut context) => {
-                                match context.eval(None, false, &self.content.as_ref()) {
+                                match context.eval(None, false, &self.content.as_ref(), false) {
                                     Ok(res) => (
                                         false,
                                         format!(
@@ -306,16 +306,18 @@ impl Test {
         // Register the print() function.
 
         if strict {
-            context.eval(None, false, r#""use strict";"#).map_err(|e| {
-                format!(
-                    "could not set strict mode:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
-                )
-            })?;
+            context
+                .eval(None, false, r#""use strict";"#, false)
+                .map_err(|e| {
+                    format!(
+                        "could not set strict mode:\n{}",
+                        e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    )
+                })?;
         }
 
         context
-            .eval(None, false, &harness.assert.as_ref())
+            .eval(None, false, &harness.assert.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
@@ -323,7 +325,7 @@ impl Test {
                 )
             })?;
         context
-            .eval(None, false, &harness.sta.as_ref())
+            .eval(None, false, &harness.sta.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
@@ -341,6 +343,7 @@ impl Test {
                         .get(include)
                         .ok_or_else(|| format!("could not find the {} include file.", include))?
                         .as_ref(),
+                    false,
                 )
                 .map_err(|e| {
                     format!(
