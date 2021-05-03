@@ -204,5 +204,6 @@ pub fn read_line(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
 
     let mut buf = String::new();
     std::io::stdin().read_line(&mut buf).unwrap();
+
     Ok(JsValue::new(JsString::new(rt, buf)))
 }

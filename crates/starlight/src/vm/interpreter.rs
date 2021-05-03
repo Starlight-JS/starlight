@@ -793,7 +793,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             || (ip.cast::<Opcode>().read() == Opcode::OP_POP
                                 && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
-                       // rt.stack.pop_frame().unwrap();
+                        // rt.stack.pop_frame().unwrap();
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
@@ -860,7 +860,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             || (ip.cast::<Opcode>().read() == Opcode::OP_POP
                                 && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
-                       // stack.pop_frame().unwrap();
+                        // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
                     let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);

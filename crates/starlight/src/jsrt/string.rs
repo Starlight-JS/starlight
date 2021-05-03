@@ -607,6 +607,7 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, includes, string_includes, 1)?;
         def_native_method!(rt, proto, slice, string_slice, 1)?;
         def_native_method!(rt, ctor, ___replace, string_replace, 2)?;
+        def_native_method!(rt, proto, trim, string_trim, 0)?;
         Ok(())
     };
 
@@ -680,4 +681,9 @@ fn get_regex_string(rt: &mut Runtime, val: JsValue) -> Result<(String, String), 
         }
     }
     return Ok(("undefined".to_string(), "".to_string()));
+}
+
+pub fn string_trim(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let prim = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt, prim.trim())))
 }

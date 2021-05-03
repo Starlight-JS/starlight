@@ -167,7 +167,7 @@ impl Runtime {
             }
             let p = self.stack.pop_frame().unwrap();
             // if `exit_on_return` is true then this frame was created from native code.
-            if p.exit_on_return {  
+            if p.exit_on_return {
                 break;
             }
             frame = self.stack.current;
