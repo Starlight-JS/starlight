@@ -1,3 +1,5 @@
+use std::intrinsics::unlikely;
+
 use crate::{
     vm::Runtime,
     vm::{
@@ -11,6 +13,19 @@ use crate::{
         value::JsValue,
     },
 };
+
+pub fn object_get_prototype_of(vm: &mut Runtime,args: &Arguments) ->Result<JsValue,JsValue> {
+    let this= args.at(0);
+    if unlikely(this.is_undefined() || this.is_null()) {
+        return Err(JsValue::new(vm.new_type_error("Object.getPrototypeOf requires object argument")));
+    }
+
+    let object = this.to_object(vm)?;
+    Ok(match object.prototype() {
+        Some(proto) => JsValue::new(*proto),
+        None => JsValue::encode_null_value()
+    })
+}
 
 pub fn object_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let this_binding = args.this;
@@ -36,6 +51,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
     if args.size() != 0 {
         let stack = vm.shadowstack();
         let first = args.at(0);
+        let properties = args.at(1);
         if first.is_object() || first.is_null() {
             letroot!(
                 prototype = stack,
@@ -51,7 +67,20 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
             );
             let res = JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
             if !args.at(1).is_undefined() {
-                todo!("define properties");
+                let mut res_val = JsValue::new(res);
+                let mut args_ = [res_val, properties];
+                let props = vm
+                    .global_data()
+                    .object_prototype
+                    .unwrap()
+                    .get(vm, "___defineProperties___".intern())?;
+                assert!(props.is_callable());
+
+                return props.get_jsobject().as_function_mut().call(
+                    vm,
+                    &mut Arguments::new(JsValue::encode_undefined_value(), &mut args_),
+                    JsValue::encode_undefined_value()
+                );
             }
 
             return Ok(JsValue::encode_object_value(res));

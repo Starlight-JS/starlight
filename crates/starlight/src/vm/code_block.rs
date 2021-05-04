@@ -437,7 +437,7 @@ impl CodeBlock {
                         writeln!(output, "is_callable")?;
                     }
                     Opcode::OP_IS_CTOR => {
-                        writeln!(output,"is_constructor")?;
+                        writeln!(output, "is_constructor")?;
                     }
                     _ => todo!("{:?}", op),
                 }

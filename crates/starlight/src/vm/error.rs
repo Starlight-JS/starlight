@@ -26,7 +26,8 @@ impl JsError {
             structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-        let str = JsString::new(vm, "");
+        let stack = vm.stacktrace();
+        let str = JsString::new(vm, stack);
         let _ = obj.define_own_property(
             vm,
             "stack".intern(),
@@ -59,7 +60,8 @@ impl JsEvalError {
             structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-        let str = JsString::new(vm, "");
+        let stack = vm.stacktrace();
+        let str = JsString::new(vm, stack);
         let _ = obj.define_own_property(
             vm,
             "stack".intern(),
@@ -92,7 +94,8 @@ impl JsRangeError {
             structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-        let str = JsString::new(vm, "");
+        let stack = vm.stacktrace();
+        let str = JsString::new(vm, stack);
         let _ = obj.define_own_property(
             vm,
             "stack".intern(),
@@ -129,7 +132,8 @@ impl JsReferenceError {
                 .unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-        let str = JsString::new(vm, "");
+        let stack = vm.stacktrace();
+        let str = JsString::new(vm, stack);
         let _ = obj.define_own_property(
             vm,
             "stack".intern(),
@@ -162,7 +166,8 @@ impl JsSyntaxError {
             structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-        let str = JsString::new(vm, "");
+        let stack = vm.stacktrace();
+        let str = JsString::new(vm, stack);
         let _ = obj.define_own_property(
             vm,
             "stack".intern(),
@@ -195,7 +200,8 @@ impl JsTypeError {
             structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
-        let str = JsString::new(vm, "");
+        let stack = vm.stacktrace();
+        let str = JsString::new(vm, stack);
         let _ = obj.define_own_property(
             vm,
             "stack".intern(),

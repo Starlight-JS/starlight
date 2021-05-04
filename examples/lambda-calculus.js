@@ -1,4 +1,8 @@
-// λ@
+/* Copyright Freddy A Cubas "Superstar64" */
+// λ-calculus. 
+
+
+
 var isAlpha = c => c.toUpperCase() != c.toLowerCase(); // ugly hack
 
 var leftAssociative = f => (...xs) => xs.reduce(f);

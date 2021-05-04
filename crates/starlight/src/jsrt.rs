@@ -819,7 +819,13 @@ pub(crate) fn object_init(
         &*DataDescriptor::new(JsValue::new(func), NONE),
         false,
     );
-
+    let func = JsNativeFunction::new(rt, "getPrototypeOf".intern(), object_get_prototype_of, 1);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "getPrototypeOf".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
     let func = JsNativeFunction::new(
         rt,
         "preventExtensions".intern(),
@@ -954,6 +960,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         object::object_keys as usize,
         object::object_freeze as _,
         object::object_seal as _,
+        object::object_get_prototype_of as _,
         object::object_is_extensible as _,
         object::object_is_sealed as _,
         object::object_is_frozen as _,
@@ -1034,6 +1041,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         math::math_ceil as _,
         math::math_exp as _,
         math::math_abs as _,
+        math::math_sqrt as _,
         math::math_random as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,

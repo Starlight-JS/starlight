@@ -224,7 +224,7 @@ unsafe fn eval_internal(
             Ok(value) => return Ok(value),
             Err(e) => {
                 rt.stacktrace = rt.stacktrace();
-
+               
                 if let Some(unwind_frame) = rt.unwind() {
                     let (env, ip, sp) = (*unwind_frame).try_stack.pop().unwrap();
                     frame = unwind_frame;
@@ -792,9 +792,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
                     if !frame.exit_on_return
-                        && (opcode == Opcode::OP_TAILCALL
-                            || (ip.cast::<Opcode>().read() == Opcode::OP_POP
-                                && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
+                            && (opcode == Opcode::OP_TAILCALL
+                                || (ip.cast::<Opcode>().read() == Opcode::OP_POP
+                                    && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
                         // rt.stack.pop_frame().unwrap();
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
@@ -1293,15 +1293,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_TO_OBJECT => {
                 let target = frame.pop();
                 let message = frame.pop();
-                if unlikely( target.is_null() || target.is_undefined()) {
+                if unlikely(target.is_null() || target.is_undefined()) {
                     let msg = message.to_string(rt)?;
                     return Err(JsValue::new(rt.new_type_error(msg)));
                 }
                 frame.push(JsValue::new(target.to_object(rt)?));
-
             }
-            Opcode::OP_IS_CALLABLE | Opcode::OP_IS_CTOR=> {
-                let val =frame.pop();
+            Opcode::OP_IS_CALLABLE | Opcode::OP_IS_CTOR => {
+                let val = frame.pop();
                 frame.push(JsValue::new(val.is_callable()));
             }
 

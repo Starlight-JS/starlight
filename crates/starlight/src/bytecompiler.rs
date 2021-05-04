@@ -116,7 +116,7 @@ impl ByteCompiler {
         self.val_map.insert(val, ix as _);
         ix as _
     }
-    pub fn get_val2(&mut self, vm: &mut Runtime, val: JsValue) -> u32 {
+    pub fn get_val2(&mut self, _vm: &mut Runtime, val: JsValue) -> u32 {
         let ix = self.code.literals.len();
         self.code.literals.push(val);
 
@@ -552,7 +552,13 @@ impl ByteCompiler {
                     self.scope.borrow_mut().add_var(name, c as _);
                     self.code.var_count += 1;
                 }
-
+                BindingKind::Const => {
+                    let s: &str = &(var.0).0;
+                    let name = s.intern();
+                    let c = self.code.var_count;
+                    self.scope.borrow_mut().add_var(name, c as _);
+                    self.code.var_count += 1;
+                }
                 _ => (),
             }
         }
@@ -606,7 +612,7 @@ impl ByteCompiler {
             }
         }
     }
-    pub fn push_lci(&mut self, _continue_target: u32, depth: u32) {
+    pub fn push_lci(&mut self, _continue_target: u32, _depth: u32) {
         self.lci.push(LoopControlInfo {
             continues: vec![],
             breaks: vec![],

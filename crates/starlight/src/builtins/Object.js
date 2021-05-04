@@ -14,6 +14,12 @@ Object.defineProperties = function defineProperties(object, properties) {
     return object;
 }
 
+Object.defineProperty(Object, '___defineProperties___', {
+    value: Object.defineProperties,
+    writable: false,
+    enumerable: false,
+    configurable: false
+})
 
 Object.is = function (x, y) {
     // SameValue algorithm
