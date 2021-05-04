@@ -102,13 +102,14 @@ impl Test {
     /// Runs the test once, in strict or non-strict mode
     fn run_once(&self, harness: &Harness, strict: bool, verbose: u8) -> TestResult {
         if verbose > 1 {
-            println!(
-                "Starting `{}` \nDescription: {}\nesid: {:?}\n {}",
+            eprintln!(
+                "Starting `{}` {}",
                 self.name,
-                self.description,
-                self.esid,
+                
                 if strict { " (strict mode)" } else { "" }
             );
+            eprintln!("Description: {}\nesid: {:?}\n",self.description,
+            self.esid,);
         }
 
         let (result, result_text) = if !IGNORED.contains_any_flag(self.flags)
