@@ -175,18 +175,15 @@ impl ByteCompiler {
 
     pub fn decl_const(&mut self, name: Symbol) -> u16 {
         //self.emit(Opcode::OP_GET_ENV, &[0], false);
-        let ix = if let Some(ix) = self.variable_freelist.pop() {
-            self.scope.borrow_mut().add_var(name, ix as _);
-            ix as u16
+        if let Some((ix, scope)) = self.lookup_scope(name) {
+            let cur_depth = self.scope.borrow().depth;
+            let _depth = cur_depth - scope.borrow().depth;
+            self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
+            return ix;
         } else {
-            self.code.var_count += 1;
-            self.scope
-                .borrow_mut()
-                .add_var(name, self.code.var_count as u16 - 1)
-        };
-        self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
-
-        ix
+            unreachable!()
+        }
+       
     }
 
     pub fn decl_let(&mut self, name: Symbol) -> u16 {
@@ -213,7 +210,7 @@ impl ByteCompiler {
             match &decl.name {
                 Pat::Ident(name) => {
                     let name_ = Self::ident_to_sym(&name.id);
-                    let ix = if let VarDeclKind::Var = var.kind {
+                    let ix = if VarDeclKind::Var == var.kind || VarDeclKind::Const == var.kind {
                         None
                     } else {
                         Some(if let Some(ix) = self.variable_freelist.pop() {
@@ -238,8 +235,8 @@ impl ByteCompiler {
 
                     match var.kind {
                         VarDeclKind::Const => {
-                            self.emit(Opcode::OP_DECL_CONST, &[ix.unwrap() as _], false);
-                            // self.decl_const(Self::ident_to_sym(&name.id));
+                            //self.emit(Opcode::OP_DECL_CONST, &[ix.unwrap() as _], false);
+                            self.decl_const(Self::ident_to_sym(&name.id));
                         }
                         VarDeclKind::Let => {
                             self.emit(Opcode::OP_DECL_LET, &[ix.unwrap() as _], false);

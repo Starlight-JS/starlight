@@ -24,20 +24,20 @@ DEALINGS IN THE SOFTWARE.
 
 
 
-var isAlpha = c => c.toUpperCase() != c.toLowerCase(); // ugly hack
+const isAlpha = c => c.toUpperCase() != c.toLowerCase(); // ugly hack
 
-var leftAssociative = f => (...xs) => xs.reduce(f);
+const leftAssociative = f => (...xs) => xs.reduce(f);
 
-var empty = () => code => null;
+const empty = () => code => null;
 // infinite backtracing
-var or = leftAssociative((left, right) => () => code => left()(code) || right()(code));
+const or = leftAssociative((left, right) => () => code => left()(code) || right()(code));
 
-var pure = item => () => code => ({ just: [item, code] });
-var map = (f, ...x) => apply(pure(f), ...x);
-var apply = leftAssociative((f, x) => () => code => {
-    var monadF = f()(code);
+const pure = item => () => code => ({ just: [item, code] });
+const map = (f, ...x) => apply(pure(f), ...x);
+const apply = leftAssociative((f, x) => () => code => {
+    const monadF = f()(code);
     if (monadF) {
-        var monadX = x()(monadF.just[1]);
+        const monadX = x()(monadF.just[1]);
         if (monadX) {
             return { just: [monadF.just[0](monadX.just[0]), monadX.just[1]] };
         }
@@ -45,24 +45,24 @@ var apply = leftAssociative((f, x) => () => code => {
     return null;
 });
 
-var cons = x => xs => [x].concat(xs);
-var many = x => () => or(map(cons, x, many(x)), pure([]))();
-var some = x => map(cons, x, many(x));
+const cons = x => xs => [x].concat(xs);
+const many = x => () => or(map(cons, x, many(x)), pure([]))();
+const some = x => map(cons, x, many(x));
 
-var satify = check => () => code => {
+const satify = check => () => code => {
     if (code.length > 0 && check(code[0])) {
         return { just: [code[0], code.slice(1)] };
     } else {
         return null;
     }
 };
-var letter = satify(isAlpha);
-var literal = x => satify(a => a == x);
-var space = many(literal(' '));
-var identifier = map(x => x.reduce((a, b) => a + b, ''), some(letter));
+const letter = satify(isAlpha);
+const literal = x => satify(a => a == x);
+const space = many(literal(' '));
+const identifier = map(x => x.reduce((a, b) => a + b, ''), some(letter));
 
-var term = () => map(x => x.reduce((f, x) => env => f(env)(x(env))), some(termCore))();
-var lambda = map(_ => _ => name => _ => _ => _ => e => env => x => e(augment(env, name, x)),
+const term = () => map(x => x.reduce((f, x) => env => f(env)(x(env))), some(termCore))();
+const lambda = map(_ => _ => name => _ => _ => _ => e => env => x => e(augment(env, name, x)),
     literal('|'),
     space,
     identifier,
@@ -71,8 +71,8 @@ var lambda = map(_ => _ => name => _ => _ => _ => e => env => x => e(augment(env
     space,
     term
 );
-var variable = map(x => _ => env => env[x], identifier, space);
-var parens = map(_ => _ => e => _ => _ => _ => e,
+const constiable = map(x => _ => env => env[x], identifier, space);
+const parens = map(_ => _ => e => _ => _ => _ => e,
     literal('('),
     space,
     term,
@@ -80,16 +80,16 @@ var parens = map(_ => _ => e => _ => _ => _ => e,
     literal(')'),
     space
 );
-var termCore = or(lambda, variable, parens);
+const termCore = or(lambda, constiable, parens);
 
-var augment = (env, name, x) => {
-    var env2 = Object.create(env);
+const augment = (env, name, x) => {
+    const env2 = Object.create(env);
     env2[name] = x;
     return env2;
 };
 
 
-var prelude = {
+const prelude = {
     two: 2,
     four: 4,
     neg: x => -x,
@@ -100,8 +100,8 @@ var prelude = {
     sqrt: Math.sqrt
 };
 
-var run = string => term()(string).just[0](prelude);
+const run = string => term()(string).just[0](prelude);
 // quadratic formula
-var quad = run("|a| |b| |c| div (add (neg b) (sqrt ( sub (mul b b) (mul four (mul a c))))) (mul two a)");
+const quad = run("|a| |b| |c| div (add (neg b) (sqrt ( sub (mul b b) (mul four (mul a c))))) (mul two a)");
 
 print(quad(2)(4)(-20));
