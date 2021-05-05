@@ -11,8 +11,8 @@ use crate::{
         structure_chain::StructureChain, symbol_table::*, value::*, Runtime,
     },
 };
+use libloading::*;
 use std::collections::HashMap;
-
 pub mod array;
 pub mod error;
 pub mod ffi;
@@ -1062,6 +1062,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         JsSymbol::allocate as _,
         Accessor::deserialize as _,
         Accessor::allocate as _,
+        module_load as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();
@@ -1188,4 +1189,76 @@ pub fn to_property_descriptor(
     } else {
         return Ok(*GenericDescriptor::new(attr));
     }
+}
+
+pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let name = args.at(0).to_string(rt)?;
+
+    let is_js_load = (name.starts_with("./")
+        || name.starts_with("../")
+        || name.starts_with("/")
+        || name.ends_with(".js"))
+        && name.ends_with(".js");
+    let spath = if is_js_load {
+        name
+    } else {
+        format!("{}.sdll", name)
+    };
+    let path = std::path::Path::new(&spath);
+    if !path.exists() {
+        return Err(JsValue::new(
+            rt.new_type_error(format!("Module '{}' not found", spath)),
+        ));
+    }
+    let stack = rt.shadowstack();
+    letroot!(module_object = stack, JsObject::new_empty(rt));
+    let mut exports = JsObject::new_empty(rt);
+    module_object.put(rt, "@exports".intern(), JsValue::new(exports), false)?;
+    let mut args = [JsValue::new(*&*module_object)];
+    letroot!(
+        args = stack,
+        Arguments::new(JsValue::encode_undefined_value(), &mut args)
+    );
+    unsafe {
+        if !spath.ends_with(".js") {
+            'lib_load_failed: loop {
+                match Library::new(path) {
+                    Ok(library) => {
+                        match library.get::<extern "C" fn(
+                            &mut Runtime,
+                            &Arguments,
+                        )
+                            -> Result<JsValue, JsValue>>(
+                            b"starlight_module_loader\0"
+                        ) {
+                            Ok(loader) => {
+                                loader(rt, &mut args)?;
+                                return Ok(JsValue::new(*module_object));
+                            }
+                            Err(_) => break 'lib_load_failed,
+                        }
+                    }
+                    Err(_) => {
+                        break 'lib_load_failed;
+                    }
+                }
+            }
+        }
+    }
+    // this path tries to compile file as JS module. If it fails to then we throw type error.
+    let source = match std::fs::read_to_string(path) {
+        Ok(source) => source,
+        Err(e) => {
+            return Err(JsValue::new(rt.new_type_error(format!(
+                "Failed to read module '{}': {}",
+                spath,
+                e.to_string()
+            ))));
+        }
+    };
+    let name = path.file_name().unwrap().to_str().unwrap().to_string();
+    let module_fun = rt.compile_module(&spath, &name, &source)?;
+    let mut module_fun = module_fun.get_jsobject();
+    module_fun.as_function_mut().call(rt,&mut args,JsValue::encode_undefined_value())?;
+    Ok(JsValue::new(*module_object))
 }

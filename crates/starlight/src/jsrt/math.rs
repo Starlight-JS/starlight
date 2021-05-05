@@ -113,7 +113,7 @@ pub fn math_log(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> 
 pub fn math_random(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(rand::random::<f64>()))
 }
-pub fn math_sqrt(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {
+pub fn math_sqrt(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).to_number(rt)?.sqrt()))
 }
 impl Runtime {
@@ -133,7 +133,7 @@ impl Runtime {
             def_native_method!(self, math, exp, math_exp, 1)?;
             def_native_method!(self, math, abs, math_abs, 1)?;
             def_native_method!(self, math, random, math_random, 0)?;
-            def_native_method!(self, math, sqrt,math_sqrt,1)?;
+            def_native_method!(self, math, sqrt, math_sqrt, 1)?;
             self.global_object()
                 .put(self, "Math".intern(), JsValue::new(math), false)?;
             let source = include_str!("../builtins/Math.js");

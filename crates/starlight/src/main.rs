@@ -132,11 +132,11 @@ fn main() {
         Ok(source) => {
             letroot!(
                 function = gcstack,
-                match rt.compile(
+                match rt.compile_module(
                     options.file.as_os_str().to_str().unwrap(),
                     "<script>",
                     &source,
-                    false
+                    
                 ) {
                     Ok(function) => function.get_jsobject(),
                     Err(e) => {
@@ -156,11 +156,15 @@ fn main() {
             );
             letroot!(funcc = gcstack, *&*function);
             let global = rt.global_object();
-
+            letroot!(module_object = gcstack, JsObject::new_empty(&mut rt));
+            let mut exports = JsObject::new_empty(&mut rt);
+            module_object.put(&mut rt, "@exports".intern(), JsValue::new(exports), false).unwrap_or_else(|_| unreachable!());
+            let mut args = [JsValue::new(*&*module_object)];
             letroot!(
                 args = gcstack,
-                Arguments::new(JsValue::encode_object_value(global), &mut [])
+                Arguments::new(JsValue::encode_object_value(global), &mut args)
             );
+            
             let start = std::time::Instant::now();
             match function
                 .as_function_mut()

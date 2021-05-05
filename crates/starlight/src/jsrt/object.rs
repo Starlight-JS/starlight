@@ -14,16 +14,18 @@ use crate::{
     },
 };
 
-pub fn object_get_prototype_of(vm: &mut Runtime,args: &Arguments) ->Result<JsValue,JsValue> {
-    let this= args.at(0);
+pub fn object_get_prototype_of(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let this = args.at(0);
     if unlikely(this.is_undefined() || this.is_null()) {
-        return Err(JsValue::new(vm.new_type_error("Object.getPrototypeOf requires object argument")));
+        return Err(JsValue::new(
+            vm.new_type_error("Object.getPrototypeOf requires object argument"),
+        ));
     }
 
     let object = this.to_object(vm)?;
     Ok(match object.prototype() {
         Some(proto) => JsValue::new(*proto),
-        None => JsValue::encode_null_value()
+        None => JsValue::encode_null_value(),
     })
 }
 
@@ -79,7 +81,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
                 return props.get_jsobject().as_function_mut().call(
                     vm,
                     &mut Arguments::new(JsValue::encode_undefined_value(), &mut args_),
-                    JsValue::encode_undefined_value()
+                    JsValue::encode_undefined_value(),
                 );
             }
 

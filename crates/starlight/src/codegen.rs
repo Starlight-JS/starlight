@@ -26,6 +26,24 @@ impl<'a> VisitFnDecl<'a> {
     }
 }
 impl Scope {
+    pub fn analyze_module_items(items: &[ModuleItem]) -> Self {
+        let mut scope = Self {
+            vars: Default::default(),
+            symbols: Default::default(),
+        };
+        let mut path = vec![];
+
+        for stmt in items {
+            stmt.visit_with(
+                &Invalid { span: DUMMY_SP },
+                &mut Analyzer {
+                    scope: &mut scope,
+                    path: &mut path,
+                },
+            );
+        }
+        scope
+    }
     pub fn analyze_stmts(stmts: &[Stmt]) -> Self {
         let mut scope = Self {
             vars: Default::default(),

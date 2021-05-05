@@ -13,6 +13,7 @@ use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
 use function::JsVMFunction;
+use once_cell::unsync::Lazy;
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -155,7 +156,7 @@ pub struct Runtime {
     pub(crate) shadowstack: ShadowStack,
     pub(crate) stacktrace: String,
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
-
+    pub(crate) module_loader: Option<GcPointer<JsObject>>,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
 }
@@ -236,6 +237,47 @@ impl Runtime {
             ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned(), builtins);
         code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
+
+        let env = Environment::new(self, 0);
+        let fun = JsVMFunction::new(self, code, env);
+        return Ok(JsValue::encode_object_value(fun));
+    }
+    pub fn compile_module(
+        &mut self,
+        path: &str,
+        name: &str,
+        script: &str,
+    ) -> Result<JsValue, JsValue> {
+        let cm: Lrc<SourceMap> = Default::default();
+        let _e = BufferedError::default();
+
+        let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+
+        let fm = cm.new_source_file(FileName::Custom(name.into()), script.into());
+
+        let mut parser = Parser::new(
+            Syntax::Es(Default::default()),
+            StringInput::from(&*fm),
+            None,
+        );
+
+        for e in parser.take_errors() {
+            e.into_diagnostic(&handler).emit();
+        }
+
+        let module = match parser.parse_module() {
+            Ok(module) => module,
+            Err(e) => {
+                let msg = JsString::new(self, e.kind().msg());
+                return Err(JsValue::encode_object_value(JsSyntaxError::new(
+                    self, msg, None,
+                )));
+            }
+        };
+        let mut vmref = RuntimeRef(self);
+
+        let mut code = ByteCompiler::compile_module(&mut *vmref, path, name, &module);
+        code.name = name.intern();
 
         let env = Environment::new(self, 0);
         let fun = JsVMFunction::new(self, code, env);
@@ -343,6 +385,7 @@ impl Runtime {
             shadowstack: ShadowStack::new(),
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
+            module_loader: None,
             symbol_table: HashMap::new(),
         });
         let vm = &mut *this as *mut Runtime;
@@ -355,6 +398,7 @@ impl Runtime {
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
                 rt.shadowstack.trace(visitor);
+                rt.module_loader.trace(visitor);
             },
         ));
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
@@ -406,6 +450,8 @@ impl Runtime {
         );
         RegExp::init(&mut this, proto);
         this.init_self_hosted();
+        let loader = JsNativeFunction::new(&mut this,"@loader".intern(),jsrt::module_load,1);
+        this.module_loader = Some(loader);
 
         this.gc.undefer();
         this.gc.collect_if_necessary();
@@ -432,6 +478,7 @@ impl Runtime {
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
             symbol_table: HashMap::new(),
+            module_loader: None,
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -441,7 +488,7 @@ impl Runtime {
                 rt.global_object.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);
+                rt.shadowstack.trace(visitor);rt.module_loader.trace(visitor);
             },
         ));
 

@@ -1,8 +1,2 @@
-function foo() {
-    print(x);
-}
-
-const x = 42;
-
-
-foo();
+import f from "./file2.js"
+f();

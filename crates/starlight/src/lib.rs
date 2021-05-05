@@ -35,6 +35,7 @@ pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
 pub mod jsrt;
+pub mod tracingjit;
 pub mod vm;
 pub struct Platform;
 use std::sync::atomic::Ordering;

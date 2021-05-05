@@ -224,7 +224,7 @@ unsafe fn eval_internal(
             Ok(value) => return Ok(value),
             Err(e) => {
                 rt.stacktrace = rt.stacktrace();
-               
+
                 if let Some(unwind_frame) = rt.unwind() {
                     let (env, ip, sp) = (*unwind_frame).try_stack.pop().unwrap();
                     frame = unwind_frame;
@@ -792,9 +792,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
                     if !frame.exit_on_return
-                            && (opcode == Opcode::OP_TAILCALL
-                                || (ip.cast::<Opcode>().read() == Opcode::OP_POP
-                                    && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
+                        && (opcode == Opcode::OP_TAILCALL
+                            || (ip.cast::<Opcode>().read() == Opcode::OP_POP
+                                && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
                         // rt.stack.pop_frame().unwrap();
                         exit = rt.stack.pop_frame().unwrap().exit_on_return;
