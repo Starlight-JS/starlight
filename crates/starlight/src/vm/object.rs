@@ -113,7 +113,7 @@ impl JsObject {
     }
 
     #[allow(clippy::mut_from_ref)]
-    pub(crate) fn data<T>(&self) -> &mut ManuallyDrop<T> {
+    pub fn data<T>(&self) -> &mut ManuallyDrop<T> {
         unsafe {
             &mut *(self as *const Self as *mut u8)
                 .add(object_offsetof!(Self, object_data_start))

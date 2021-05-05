@@ -79,6 +79,17 @@ pub enum Access {
     ByVal,
     This,
 }
+
+impl Access {
+    pub fn expects_this(&self) -> bool {
+        match self {
+            Self::ById(_) => true,
+            Self::ByVal => true,
+            Self::ArrayPat(_) => true,
+            _ => false,
+        }
+    }
+}
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Val {
     Float(u64),
@@ -185,7 +196,7 @@ impl ByteCompiler {
         }
     }
 
-    pub fn create_const(&mut self,name: Symbol) -> u16 {
+    pub fn create_const(&mut self, name: Symbol) -> u16 {
         let ix = if let Some(ix) = self.variable_freelist.pop() {
             self.scope.borrow_mut().add_var(name, ix as _);
             ix as u16
@@ -271,6 +282,7 @@ impl ByteCompiler {
                         self.emit(Opcode::OP_PUT_BY_ID, &[sym], true);
                     }
                 }
+
                 _ => todo!(),
             }
         }
@@ -316,6 +328,7 @@ impl ByteCompiler {
             }
             Access::ByVal => self.emit(Opcode::OP_PUT_BY_VAL, &[0], false),
             Access::ArrayPat(x) => {
+                // we expect object to be on stack
                 for (_, acc) in x {
                     self.access_set(acc);
                 }
@@ -339,8 +352,13 @@ impl ByteCompiler {
             }
             Access::ByVal => self.emit(Opcode::OP_GET_BY_VAL, &[0], false),
             Access::ArrayPat(acc) => {
-                for (_, _) in acc {
-                    todo!()
+                // we expect object to be on stack there.
+                for (index, access) in acc {
+                    self.emit(Opcode::OP_DUP, &[], false); // dup object to perform array index.
+                    self.emit(Opcode::OP_PUSH_INT, &[index as i32 as u32], false);
+                    self.emit(Opcode::OP_SWAP, &[], false);
+                    self.emit(Opcode::OP_GET_BY_VAL, &[0], false);
+                    self.access_get(access);
                 }
             }
             _ => todo!(),
@@ -632,7 +650,7 @@ impl ByteCompiler {
         code.param_count = 1;
         compiler.scope.borrow_mut().add_var("@module".intern(), 0);
         let mut rt = compiler.rt;
-        let loader =JsValue::new(compiler.rt.module_loader.unwrap());
+        let loader = JsValue::new(compiler.rt.module_loader.unwrap());
         let loader_val = compiler.get_val2(&mut rt, loader);
         let scopea = Analyzer::analyze_module_items(&module.body);
 
@@ -668,44 +686,41 @@ impl ByteCompiler {
                 }
                 ModuleItem::ModuleDecl(module_decl) => match module_decl {
                     ModuleDecl::Import(import) => {
-                        let src = compiler.get_val(&mut rt,Val::Str(import.src.value.to_string()));
-                        compiler.emit(Opcode::OP_PUSH_UNDEF,&[],false);
-                        compiler.emit(Opcode::OP_PUSH_LITERAL,&[loader_val],false);
-                        compiler.emit(Opcode::OP_PUSH_LITERAL,&[src],false);
-                        compiler.emit(Opcode::OP_CALL,&[1],false);
+                        let src = compiler.get_val(&mut rt, Val::Str(import.src.value.to_string()));
+                        compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                        compiler.emit(Opcode::OP_PUSH_LITERAL, &[loader_val], false);
+                        compiler.emit(Opcode::OP_PUSH_LITERAL, &[src], false);
+                        compiler.emit(Opcode::OP_CALL, &[1], false);
                         for specifier in import.specifiers.iter() {
                             match specifier {
                                 ImportSpecifier::Default(default) => {
-                                    compiler.emit(Opcode::OP_DUP,&[],false);
+                                    compiler.emit(Opcode::OP_DUP, &[], false);
                                     let default = Self::ident_to_sym(&default.local);
                                     let sym = compiler.get_sym("@default".intern());
-                                    compiler.emit(Opcode::OP_TRY_GET_BY_ID,&[sym],true);
+                                    compiler.emit(Opcode::OP_TRY_GET_BY_ID, &[sym], true);
                                     compiler.create_const(default);
                                 }
                                 ImportSpecifier::Namespace(namespace) => {
-                                    compiler.emit(Opcode::OP_DUP,&[],false);
+                                    compiler.emit(Opcode::OP_DUP, &[], false);
                                     let default = Self::ident_to_sym(&namespace.local);
                                     compiler.create_const(default);
                                 }
                                 ImportSpecifier::Named(named) => {
-                                    compiler.emit(Opcode::OP_DUP,&[],false);
+                                    compiler.emit(Opcode::OP_DUP, &[], false);
                                     let import_as = match named.imported {
                                         Some(ref name) => Self::ident_to_sym(name),
-                                        None => Self::ident_to_sym(&named.local)
+                                        None => Self::ident_to_sym(&named.local),
                                     };
                                     let name = Self::ident_to_sym(&named.local);
                                     let sym = compiler.get_sym("@exports".intern());
-                                    compiler.emit(Opcode::OP_GET_BY_ID,&[sym],true);
+                                    compiler.emit(Opcode::OP_GET_BY_ID, &[sym], true);
                                     let sym = compiler.get_sym(name);
-                                    compiler.emit(Opcode::OP_GET_BY_ID,&[sym],true);
+                                    compiler.emit(Opcode::OP_GET_BY_ID, &[sym], true);
                                     compiler.create_const(import_as);
-
                                 }
-
                             }
                         }
-                        compiler.emit(Opcode::OP_POP,&[],false);
-                        
+                        compiler.emit(Opcode::OP_POP, &[], false);
                     }
                     ModuleDecl::ExportDecl(decl) => {
                         compiler.decl(&decl.decl, true);
@@ -1273,7 +1288,6 @@ impl ByteCompiler {
     pub fn compile_pat_decl(&mut self, pat: &Pat) {
         match pat {
             Pat::Array(pat) => {
-                todo!();
                 for pat in pat.elems.iter() {
                     match pat {
                         Some(pat) => self.compile_pat_decl(pat),
@@ -1319,7 +1333,6 @@ impl ByteCompiler {
             Pat::Ident(id) => self.access_var(Self::ident_to_sym(&id.id)),
             Pat::Expr(expr) => self.compile_access(expr, dup),
             Pat::Array(array) => {
-                todo!();
                 let mut acc = vec![];
                 for (index, pat) in array.elems.iter().enumerate() {
                     match pat {
@@ -1825,8 +1838,8 @@ impl ByteCompiler {
                             }
                             _ => unreachable!(),
                         },
-                        Pat::Array(array) => {
-                            todo!();
+                        Pat::Array(_array) => {
+                            /*
                             p += 1;
                             let tmp = format!("@arg{}", p - 1);
                             let arg = compiler.scope.borrow_mut().add_var(tmp.intern(), p - 1);
@@ -1836,7 +1849,8 @@ impl ByteCompiler {
                                     self.compile_pat_decl(pat);
                                     let access = self.compile_access_pat(&pat, false);
                                 }
-                            }
+                            }*/
+                            todo!()
                         }
                         _ => todo!(),
                     }

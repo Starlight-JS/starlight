@@ -73,9 +73,12 @@ harness = false
 [[bin]]
 name = "starlight-bundle"
 path = "src/bin/bundle.rs"
-
+[[bin]]
+name = "sl"
+path = "src/bin/sl.rs"
 [lib]
-crate-type = ["rlib", "cdylib", "staticlib"]
+name = "starlight"
+crate-type = ["dylib", "rlib"]
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
     "memoryapi",

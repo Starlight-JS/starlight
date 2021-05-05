@@ -208,6 +208,7 @@ impl<'a> Deserializer<'a> {
         rt.global_object = self.read_opt_gc();
         rt.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
         rt.module_loader = self.read_opt_gc();
+        rt.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
     }
     unsafe fn read_opt_gc<T: GcCell>(&mut self) -> Option<GcPointer<T>> {
         Option::<GcPointer<T>>::deserialize_inplace(self)

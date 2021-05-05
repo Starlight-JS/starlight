@@ -696,8 +696,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         opcode == Opcode::OP_TRY_GET_BY_ID,
                     )?;
                     continue;
-                }
-
+                }  
                 frame.push(get_by_id_slow(rt, name, object)?)
             }
             Opcode::OP_PUT_BY_ID => {
@@ -1363,7 +1362,7 @@ unsafe fn put_by_id_slow(
     fdbk: u32,
 ) -> Result<(), JsValue> {
     let mut slot = Slot::new();
-    let old_structure = obj.structure();
+    let _old_structure = obj.structure();
     obj.put_slot(
         rt,
         name,
@@ -1375,8 +1374,8 @@ unsafe fn put_by_id_slow(
     if slot.is_put_cacheable() && slot.base.is_some() {
         let mut base_cell = *obj;
         let mut new_structure = base_cell.structure();
-        let mut m_old_structure = None;
-        let mut m_offset = 0;
+        let mut m_old_structure;
+        let mut m_offset;
         let mut m_new_structure = None;
         let mut m_new_chain = None;
 
@@ -1385,7 +1384,7 @@ unsafe fn put_by_id_slow(
                 // TODO: This kind of IC does not work yet so it is not enabled to not waste time on
                 // trying to setup new IC entry.
                 return Ok(());
-                if !new_structure.is_unique()
+                /*if !new_structure.is_unique()
                     && new_structure
                         .previous
                         .map(|x| new_structure.storage_capacity() == x.storage_capacity())
@@ -1407,7 +1406,7 @@ unsafe fn put_by_id_slow(
                             m_new_chain = Some(new_structure.prototype_chain(rt, base_cell));
                         }
                     }
-                }
+                }*/
             } else {
                 m_old_structure = Some(new_structure);
                 m_offset = slot.offset();

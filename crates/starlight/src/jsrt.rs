@@ -8,16 +8,16 @@ use crate::{
         attributes::*, code_block::CodeBlock, environment::Environment, error::*, function::*,
         global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*,
         object::*, property_descriptor::*, string::*, structure::*,
-        structure_chain::StructureChain, symbol_table::*, value::*, Runtime,
+        structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind, Runtime,
     },
 };
-use libloading::*;
 use std::collections::HashMap;
 pub mod array;
 pub mod error;
 pub mod ffi;
 pub mod function;
 pub mod global;
+pub mod jsstd;
 pub mod math;
 pub mod number;
 pub mod object;
@@ -1063,6 +1063,9 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         Accessor::deserialize as _,
         Accessor::allocate as _,
         module_load as _,
+        jsstd::init_js_std as _,
+        jsstd::file::std_file_open as _,
+        jsstd::file::std_file_read as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();
@@ -1202,14 +1205,10 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let spath = if is_js_load {
         name
     } else {
-        format!("{}.sdll", name)
+        format!("{}", name)
     };
     let path = std::path::Path::new(&spath);
-    if !path.exists() {
-        return Err(JsValue::new(
-            rt.new_type_error(format!("Module '{}' not found", spath)),
-        ));
-    }
+
     let stack = rt.shadowstack();
     letroot!(module_object = stack, JsObject::new_empty(rt));
     let mut exports = JsObject::new_empty(rt);
@@ -1219,31 +1218,25 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         args = stack,
         Arguments::new(JsValue::encode_undefined_value(), &mut args)
     );
-    unsafe {
-        if !spath.ends_with(".js") {
-            'lib_load_failed: loop {
-                match Library::new(path) {
-                    Ok(library) => {
-                        match library.get::<extern "C" fn(
-                            &mut Runtime,
-                            &Arguments,
-                        )
-                            -> Result<JsValue, JsValue>>(
-                            b"starlight_module_loader\0"
-                        ) {
-                            Ok(loader) => {
-                                loader(rt, &mut args)?;
-                                return Ok(JsValue::new(*module_object));
-                            }
-                            Err(_) => break 'lib_load_failed,
-                        }
-                    }
-                    Err(_) => {
-                        break 'lib_load_failed;
-                    }
-                }
+    if let Some(module) = rt.modules.get(&spath).copied() {
+        match module {
+            ModuleKind::Initialized(x) => {
+                return Ok(JsValue::new(x));
+            }
+            ModuleKind::NativeUninit(init) => {
+                let mut module = *module_object;
+                init(rt, module)?;
+                rt.modules
+                    .insert(spath.clone(), ModuleKind::Initialized(module));
+               
+                return Ok(JsValue::new(module));
             }
         }
+    }
+    if !path.exists() {
+        return Err(JsValue::new(
+            rt.new_type_error(format!("Module '{}' not found", spath)),
+        ));
     }
     // this path tries to compile file as JS module. If it fails to then we throw type error.
     let source = match std::fs::read_to_string(path) {
@@ -1259,6 +1252,10 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let name = path.file_name().unwrap().to_str().unwrap().to_string();
     let module_fun = rt.compile_module(&spath, &name, &source)?;
     let mut module_fun = module_fun.get_jsobject();
-    module_fun.as_function_mut().call(rt,&mut args,JsValue::encode_undefined_value())?;
+    module_fun
+        .as_function_mut()
+        .call(rt, &mut args, JsValue::encode_undefined_value())?;
+    rt.modules
+        .insert(spath.clone(), ModuleKind::Initialized(*module_object));
     Ok(JsValue::new(*module_object))
 }

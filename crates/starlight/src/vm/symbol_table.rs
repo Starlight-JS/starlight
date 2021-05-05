@@ -104,15 +104,17 @@ unsafe impl Trace for Symbol {}
 
 pub const DUMMY_SYMBOL: Symbol = Symbol::Key(SymbolID(0));
 
-static mut TABLE: MaybeUninit<SymbolTable> = MaybeUninit::uninit();
+#[no_mangle]
+#[doc(hidden)]
+pub static mut SYMBOL_TABLE: MaybeUninit<SymbolTable> = MaybeUninit::uninit();
 
 pub(crate) fn initialize_symbol_table() {
     unsafe {
-        TABLE.as_mut_ptr().write(SymbolTable::new());
+        SYMBOL_TABLE.as_mut_ptr().write(SymbolTable::new());
     }
 }
 pub fn symbol_table() -> &'static SymbolTable {
-    unsafe { &*TABLE.as_ptr() }
+    unsafe { &*SYMBOL_TABLE.as_ptr() }
 }
 pub trait Internable {
     fn intern(&self) -> Symbol;

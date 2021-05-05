@@ -6,14 +6,18 @@ use crate::{
     gc::default_heap,
     gc::shadowstack::ShadowStack,
     gc::Heap,
-    gc::{cell::GcPointer, cell::Trace, cell::Tracer, SimpleMarkingConstraint},
+    gc::{
+        cell::GcPointer,
+        cell::Trace,
+        cell::{GcCell, GcPointerBase, Tracer},
+        SimpleMarkingConstraint,
+    },
     jsrt::{self, object::*, regexp::RegExp},
 };
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
 use function::JsVMFunction;
-use once_cell::unsync::Lazy;
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -61,10 +65,66 @@ pub mod symbol_table;
 pub mod thread;
 pub mod tracingjit;
 pub mod value;
+use crate::gc::snapshot::{deserializer::*, serializer::*};
 use attributes::*;
 use object::*;
 use property_descriptor::*;
 use value::*;
+
+#[derive(Copy, Clone)]
+pub enum ModuleKind {
+    Initialized(GcPointer<JsObject>),
+    NativeUninit(fn(&mut Runtime, GcPointer<JsObject>) -> Result<(), JsValue>),
+}
+impl GcCell for ModuleKind {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
+unsafe impl Trace for ModuleKind {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        match self {
+            Self::Initialized(x) => x.trace(visitor),
+            _ => (),
+        }
+    }
+}
+
+impl Serializable for ModuleKind {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        match self {
+            Self::Initialized(x) => {
+                serializer.write_u8(0x0);
+                x.serialize(serializer);
+            }
+            Self::NativeUninit(x) => {
+                serializer.write_u8(0x1);
+                serializer.write_reference((*x) as *const u8);
+            }
+        }
+    }
+}
+
+impl Deserializable for ModuleKind {
+    unsafe fn allocate(_rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+        unreachable!()
+    }
+
+    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
+        let byte = deser.get_u8();
+        match byte {
+            0x0 => ModuleKind::Initialized(GcPointer::<JsObject>::deserialize_inplace(deser)),
+            0x1 => ModuleKind::NativeUninit(std::mem::transmute(deser.get_reference())),
+            _ => unreachable!(),
+        }
+    }
+    unsafe fn deserialize(_at: *mut u8, _deser: &mut Deserializer) {
+        unreachable!()
+    }
+    unsafe fn dummy_read(_deser: &mut Deserializer) {
+        unreachable!()
+    }
+}
 
 pub struct GcParams {
     pub(crate) nmarkers: u32,
@@ -157,6 +217,7 @@ pub struct Runtime {
     pub(crate) stacktrace: String,
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
     pub(crate) module_loader: Option<GcPointer<JsObject>>,
+    pub(crate) modules: HashMap<String, ModuleKind>,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
 }
@@ -378,6 +439,7 @@ impl Runtime {
             gc,
             options,
             stack: Stack::new(),
+            modules: HashMap::new(),
             global_object: None,
             stacktrace: String::new(),
             global_data: GlobalData::default(),
@@ -399,6 +461,7 @@ impl Runtime {
                 rt.stack.trace(visitor);
                 rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
+                rt.modules.trace(visitor);
             },
         ));
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
@@ -450,9 +513,14 @@ impl Runtime {
         );
         RegExp::init(&mut this, proto);
         this.init_self_hosted();
-        let loader = JsNativeFunction::new(&mut this,"@loader".intern(),jsrt::module_load,1);
+        let loader = JsNativeFunction::new(&mut this, "@loader".intern(), jsrt::module_load, 1);
         this.module_loader = Some(loader);
-
+        this.add_module(
+            "std",
+            ModuleKind::NativeUninit(crate::jsrt::jsstd::init_js_std),
+        )
+        .unwrap();
+        assert!(this.modules.contains_key("std"));
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -469,6 +537,7 @@ impl Runtime {
         let mut this = Box::new(Self {
             gc,
             options,
+            modules: HashMap::new(),
             stack: Stack::new(),
             global_object: None,
             global_data: GlobalData::default(),
@@ -488,7 +557,9 @@ impl Runtime {
                 rt.global_object.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);rt.module_loader.trace(visitor);
+                rt.shadowstack.trace(visitor);
+                rt.module_loader.trace(visitor);
+                rt.modules.trace(visitor);
             },
         ));
 
@@ -507,7 +578,19 @@ impl Runtime {
     pub fn global_object(&self) -> GcPointer<JsObject> {
         unwrap_unchecked(self.global_object.clone())
     }
+    pub fn add_module(
+        &mut self,
+        name: &str,
+        mut module_object: ModuleKind,
+    ) -> Result<Option<ModuleKind>, &str> {
+        if let ModuleKind::Initialized(ref mut module_object) = module_object {
+            if !module_object.has_own_property(self, "@exports".intern()) {
+                return Err("module does not contain '@exports' property");
+            }
+        }
 
+        Ok(self.modules.insert(name.to_string(), module_object))
+    }
     pub fn global_data(&self) -> &GlobalData {
         &self.global_data
     }

@@ -780,5 +780,6 @@ impl Serializable for Runtime {
         self.global_object.serialize(serializer);
         self.symbol_table.serialize(serializer);
         self.module_loader.serialize(serializer);
+        self.modules.serialize(serializer);
     }
 }
