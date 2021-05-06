@@ -1,2 +1,3 @@
-var test262;
-var test262;
+import { foo } from "dir/mod.js"
+
+foo()

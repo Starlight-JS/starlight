@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 #![allow(unused_variables)]
+use std::rc::Rc;
 use vm::function::JsFunction;
 use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
@@ -1386,7 +1387,10 @@ impl Deserializable for CodeBlock {
             let col = u32::deserialize_inplace(deser);
             loc.push((start..end, FileLocation { line, col }));
         }
+        let path = String::deserialize_inplace(deser);
+        let path: Rc<str> = path.into();
         Self {
+            path,
             loc,
             args_at,
             use_arguments,

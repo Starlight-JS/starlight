@@ -294,8 +294,18 @@ impl Runtime {
         };
         let mut vmref = RuntimeRef(self);
 
-        let mut code =
-            ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned(), builtins);
+        let mut code = ByteCompiler::compile_script(
+            &mut *vmref,
+            &script,
+            &std::path::Path::new(&path)
+                .canonicalize()
+                .unwrap()
+                .parent()
+                .map(|x| x.to_str().unwrap().to_string())
+                .unwrap_or_else(|| "".to_string()),
+            path.to_owned(),
+            builtins,
+        );
         code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
 
@@ -337,7 +347,18 @@ impl Runtime {
         };
         let mut vmref = RuntimeRef(self);
 
-        let mut code = ByteCompiler::compile_module(&mut *vmref, path, name, &module);
+        let mut code = ByteCompiler::compile_module(
+            &mut *vmref,
+            path,
+            &std::path::Path::new(&path)
+                .canonicalize()
+                .unwrap()
+                .parent()
+                .map(|x| x.to_str().unwrap().to_string())
+                .unwrap_or_else(|| "".to_string()),
+            name,
+            &module,
+        );
         code.name = name.intern();
 
         let env = Environment::new(self, 0);
@@ -388,6 +409,15 @@ impl Runtime {
             let mut code = ByteCompiler::compile_script(
                 &mut *vmref,
                 &script,
+                &path
+                    .map(|path| match std::path::Path::new(&path).canonicalize() {
+                        Ok(x) => x
+                            .parent()
+                            .map(|x| x.to_str().unwrap().to_string())
+                            .unwrap_or_else(|| "".to_string()),
+                        Err(_) => String::new(),
+                    })
+                    .unwrap_or_else(|| "".to_string()),
                 path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
                 builtins,
             );
@@ -446,6 +476,16 @@ impl Runtime {
             let mut code = ByteCompiler::compile_module(
                 &mut *vmref,
                 &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                &path
+                    .map(|path| {
+                        std::path::Path::new(&path)
+                            .canonicalize()
+                            .unwrap()
+                            .parent()
+                            .map(|x| x.to_str().unwrap().to_string())
+                            .unwrap_or_else(|| "".to_string())
+                    })
+                    .unwrap_or_else(|| "".to_string()),
                 &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
                 &script,
             );

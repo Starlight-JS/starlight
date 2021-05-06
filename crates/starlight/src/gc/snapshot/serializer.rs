@@ -522,6 +522,7 @@ impl Serializable for CodeBlock {
             loc.line.serialize(serializer);
             loc.col.serialize(serializer);
         }
+        self.path.to_string().serialize(serializer);
     }
 }
 

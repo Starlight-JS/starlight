@@ -146,7 +146,7 @@ impl Test {
                             } else {
                                 self.content.to_string()
                             };
-                            let res = context.evalm(None, false, &content);
+                            let res = context.eval(None, false, &content, false);
 
                             let passed = res.is_ok();
                             let text = match res {
@@ -199,7 +199,7 @@ impl Test {
                     } else {
                         match self.set_up_env(&harness, strict) {
                             Ok(mut context) => {
-                                match context.evalm(None, false, &self.content.as_ref()) {
+                                match context.eval(None, false, &self.content.as_ref(), false) {
                                     Ok(res) => (
                                         false,
                                         format!(
@@ -305,7 +305,7 @@ impl Test {
         // Register the print() function.
 
         context
-            .evalm(None, false, &harness.assert.as_ref())
+            .eval(None, false, &harness.assert.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
@@ -313,7 +313,7 @@ impl Test {
                 )
             })?;
         context
-            .evalm(None, false, &harness.sta.as_ref())
+            .eval(None, false, &harness.sta.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
@@ -323,7 +323,7 @@ impl Test {
 
         for include in self.includes.iter() {
             context
-                .evalm(
+                .eval(
                     None,
                     false,
                     &harness
@@ -331,6 +331,7 @@ impl Test {
                         .get(include)
                         .ok_or_else(|| format!("could not find the {} include file.", include))?
                         .as_ref(),
+                    false,
                 )
                 .map_err(|e| {
                     format!(

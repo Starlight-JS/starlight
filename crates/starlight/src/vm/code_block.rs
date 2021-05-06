@@ -10,6 +10,7 @@ use crate::{
     gc::cell::{GcCell, Trace},
     gc::snapshot::deserializer::Deserializable,
 };
+use std::rc::Rc;
 use std::{fmt::Write, ops::Range};
 
 pub struct FileLocation {
@@ -56,6 +57,7 @@ pub struct CodeBlock {
     pub is_constructor: bool,
 
     pub loc: Vec<(Range<usize>, FileLocation)>,
+    pub path: Rc<str>,
 }
 
 unsafe impl Trace for CodeBlock {
@@ -446,8 +448,9 @@ impl CodeBlock {
         }
     }
     /// Create new empty code block.
-    pub fn new(rt: &mut Runtime, name: Symbol, strict: bool) -> GcPointer<Self> {
+    pub fn new(rt: &mut Runtime, name: Symbol, strict: bool, path: Rc<str>) -> GcPointer<Self> {
         let this = Self {
+            path,
             name,
             loc: vec![],
             file_name: String::new(),

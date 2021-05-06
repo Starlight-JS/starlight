@@ -1203,7 +1203,7 @@ pub fn to_property_descriptor(
 
 pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let name = args.at(0).to_string(rt)?;
-
+    let rel_path = unsafe { (*rt.stack.current).code_block.unwrap().path.clone() };
     let is_js_load = (name.starts_with("./")
         || name.starts_with("../")
         || name.starts_with("/")
@@ -1214,8 +1214,22 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     } else {
         format!("{}", name)
     };
+    let spath = if rel_path.is_empty() {
+        spath
+    } else {
+        format!("{}/{}", rel_path, spath)
+    };
     let path = std::path::Path::new(&spath);
-
+    let path = match path.canonicalize() {
+        Err(e) => {
+            return Err(JsValue::new(rt.new_reference_error(format!(
+                "Module '{}' not found: '{}'",
+                path.display(),
+                e
+            ))))
+        }
+        Ok(path) => path,
+    };
     let stack = rt.shadowstack();
     letroot!(module_object = stack, JsObject::new_empty(rt));
     let mut exports = JsObject::new_empty(rt);
@@ -1245,37 +1259,7 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
             rt.new_type_error(format!("Module '{}' not found", spath)),
         ));
     }
-    if !path.ends_with("js") {
-        'lib_load_failed: loop {
-            unsafe {
-                let mut lib;
-                match libloading::Library::new(path) {
-                    Ok(l) => lib = l,
-                    Err(_) => match libloading::Library::new(libloading::library_filename(
-                        path.display().to_string(),
-                    )) {
-                        Ok(l) => lib = l,
-                        Err(_) => break 'lib_load_failed,
-                    },
-                }
-
-                match lib
-                    .get::<extern "C" fn(&mut Runtime, GcPointer<JsObject>) -> Result<(), JsValue>>(
-                        b"starlight_load_module\0",
-                    ) {
-                    Ok(sym) => {
-                        sym(rt, *module_object)?;
-                        rt.modules
-                            .insert(spath.clone(), ModuleKind::Initialized(*module_object));
-                        return Ok(JsValue::new(*module_object));
-                    }
-                    Err(_) => break 'lib_load_failed,
-                }
-            }
-        }
-    }
-    // this path tries to compile file as JS module. If it fails to then we throw type error.
-    let source = match std::fs::read_to_string(path) {
+    let source = match std::fs::read_to_string(&path) {
         Ok(source) => source,
         Err(e) => {
             return Err(JsValue::new(rt.new_type_error(format!(

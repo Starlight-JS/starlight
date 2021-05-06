@@ -444,6 +444,7 @@ impl ByteCompiler {
     pub fn compile_code(
         mut vm: &mut Runtime,
         params_: &[String],
+        rel_path: &str,
         body: String,
         builtins: bool,
     ) -> Result<JsValue, JsValue> {
@@ -454,7 +455,7 @@ impl ByteCompiler {
             parent: None,
             depth: 0,
         }));
-        let mut code = CodeBlock::new(vm, "<anonymous>".intern(), false);
+        let mut code = CodeBlock::new(vm, "<anonymous>".intern(), false, rel_path.into());
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
             builtins,
@@ -550,7 +551,8 @@ impl ByteCompiler {
             self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
         }
         let mut params = vec![];
-        let mut code = CodeBlock::new(&mut self.rt, name, false);
+        let p = self.code.path.clone();
+        let mut code = CodeBlock::new(&mut self.rt, name, false, p);
         code.file_name = self.code.file_name.clone();
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
@@ -622,11 +624,13 @@ impl ByteCompiler {
     pub fn compile_module(
         mut vm: &mut Runtime,
         file: &str,
+        path: &str,
         name: &str,
         module: &Module,
     ) -> GcPointer<CodeBlock> {
         let name = name.intern();
-        let mut code = CodeBlock::new(&mut vm, name, false);
+
+        let mut code = CodeBlock::new(&mut vm, name, false, path.into());
         code.file_name = file.to_string();
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
@@ -669,7 +673,8 @@ impl ByteCompiler {
 
         VisitFnDecl::visit_module(&module.body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
-            let mut code = CodeBlock::new(&mut compiler.rt, name, false);
+            let p = compiler.code.path.clone();
+            let mut code = CodeBlock::new(&mut compiler.rt, name, false, p);
             code.file_name = compiler.code.file_name.clone();
             let ix = compiler.code.codes.len();
             compiler.code.codes.push(code);
@@ -800,11 +805,12 @@ impl ByteCompiler {
     pub fn compile_script(
         mut vm: &mut Runtime,
         p: &Script,
+        path: &str,
         fname: String,
         builtins: bool,
     ) -> GcPointer<CodeBlock> {
         let name = "<script>".intern();
-        let mut code = CodeBlock::new(&mut vm, name, false);
+        let mut code = CodeBlock::new(&mut vm, name, false, path.into());
         code.file_name = fname;
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
@@ -873,7 +879,8 @@ impl ByteCompiler {
 
         VisitFnDecl::visit(body, &mut |decl| {
             let name = Self::ident_to_sym(&decl.ident);
-            let mut code = CodeBlock::new(&mut self.rt, name, false);
+            let p = self.code.path.clone();
+            let mut code = CodeBlock::new(&mut self.rt, name, false, p);
             code.file_name = self.code.file_name.clone();
             let ix = self.code.codes.len();
             self.code.codes.push(code);
@@ -1360,7 +1367,6 @@ impl ByteCompiler {
                     }
                 }
                 todo!();
-                return Access::ArrayPat(acc);
             }
             _ => todo!(),
         }
@@ -1808,7 +1814,8 @@ impl ByteCompiler {
                     _ => false,
                 };
                 let name = "<anonymous>".intern();
-                let mut code = CodeBlock::new(&mut self.rt, name, false);
+                let p = self.code.path.clone();
+                let mut code = CodeBlock::new(&mut self.rt, name, false, p);
                 code.file_name = self.code.file_name.clone();
                 let mut compiler = ByteCompiler {
                     lci: Vec::new(),

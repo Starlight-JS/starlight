@@ -57,8 +57,10 @@ pub fn function_prototype(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
     } else {
         format!("{{ {} }}", args.at(args.size() - 1).to_string(vm)?)
     };
-
-    Ok(ByteCompiler::compile_code(vm, &params, body, false)?)
+    let rel_path = unsafe { (*vm.stack.current).code_block.unwrap().path.clone() };
+    Ok(ByteCompiler::compile_code(
+        vm, &params, &rel_path, body, false,
+    )?)
 }
 
 pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
