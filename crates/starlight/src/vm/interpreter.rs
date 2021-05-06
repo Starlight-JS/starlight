@@ -696,7 +696,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         opcode == Opcode::OP_TRY_GET_BY_ID,
                     )?;
                     continue;
-                }  
+                }
                 frame.push(get_by_id_slow(rt, name, object)?)
             }
             Opcode::OP_PUT_BY_ID => {

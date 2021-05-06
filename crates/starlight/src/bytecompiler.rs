@@ -678,7 +678,23 @@ impl ByteCompiler {
             let var = compiler.access_var(name);
             compiler.access_set(var);
         });
-
+        if let Some(item) = module.body.get(0) {
+            match item {
+                ModuleItem::Stmt(stmt) => match stmt {
+                    Stmt::Expr(e) => match &*e.expr {
+                        Expr::Lit(x) => match x {
+                            Lit::Str(x) => {
+                                code.strict = x.value.to_string() == "use strict";
+                            }
+                            _ => (),
+                        },
+                        _ => (),
+                    },
+                    _ => (),
+                },
+                _ => (),
+            }
+        }
         for item in &module.body {
             match item {
                 ModuleItem::Stmt(stmt) => {
@@ -1343,6 +1359,7 @@ impl ByteCompiler {
                         _ => (),
                     }
                 }
+                todo!();
                 return Access::ArrayPat(acc);
             }
             _ => todo!(),

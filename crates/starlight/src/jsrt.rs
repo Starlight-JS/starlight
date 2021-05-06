@@ -889,7 +889,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
     let refs = [
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
-        // but they should be the same for all types that is allocated in GC gc.
+        // but they should be the same for all types that is allocated in GC heap.
         Vec::<crate::gc::cell::GcPointer<crate::vm::structure::Structure>>::deserialize as _,
         Vec::<crate::gc::cell::GcPointer<crate::vm::structure::Structure>>::allocate as _,
         GcPointer::<u8>::deserialize as _,
@@ -1066,6 +1066,13 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         jsstd::init_js_std as _,
         jsstd::file::std_file_open as _,
         jsstd::file::std_file_read as _,
+        jsstd::file::std_file_write as _,
+        jsstd::file::std_file_write_all as _,
+        jsstd::file::std_file_read_bytes as _,
+        jsstd::file::std_file_read_bytes_exact as _,
+        jsstd::file::std_file_read_bytes_to_end as _,
+        jsstd::file::std_file_close as _,
+        jsstd::std_args as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();
@@ -1228,7 +1235,7 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
                 init(rt, module)?;
                 rt.modules
                     .insert(spath.clone(), ModuleKind::Initialized(module));
-               
+
                 return Ok(JsValue::new(module));
             }
         }
@@ -1237,6 +1244,35 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         return Err(JsValue::new(
             rt.new_type_error(format!("Module '{}' not found", spath)),
         ));
+    }
+    if !path.ends_with("js") {
+        'lib_load_failed: loop {
+            unsafe {
+                let mut lib;
+                match libloading::Library::new(path) {
+                    Ok(l) => lib = l,
+                    Err(_) => match libloading::Library::new(libloading::library_filename(
+                        path.display().to_string(),
+                    )) {
+                        Ok(l) => lib = l,
+                        Err(_) => break 'lib_load_failed,
+                    },
+                }
+
+                match lib
+                    .get::<extern "C" fn(&mut Runtime, GcPointer<JsObject>) -> Result<(), JsValue>>(
+                        b"starlight_load_module\0",
+                    ) {
+                    Ok(sym) => {
+                        sym(rt, *module_object)?;
+                        rt.modules
+                            .insert(spath.clone(), ModuleKind::Initialized(*module_object));
+                        return Ok(JsValue::new(*module_object));
+                    }
+                    Err(_) => break 'lib_load_failed,
+                }
+            }
+        }
     }
     // this path tries to compile file as JS module. If it fails to then we throw type error.
     let source = match std::fs::read_to_string(path) {

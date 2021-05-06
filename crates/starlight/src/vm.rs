@@ -409,6 +409,72 @@ impl Runtime {
         };
         res
     }
+    pub fn evalm(
+        &mut self,
+        path: Option<&str>,
+        force_strict: bool,
+        script: &str,
+    ) -> Result<JsValue, JsValue> {
+        let res = {
+            let cm: Lrc<SourceMap> = Default::default();
+            let _e = BufferedError::default();
+
+            let handler = Handler::with_emitter(true, false, Box::new(MyEmiter::default()));
+
+            let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
+
+            let mut parser = Parser::new(
+                Syntax::Es(Default::default()),
+                StringInput::from(&*fm),
+                None,
+            );
+
+            for e in parser.take_errors() {
+                e.into_diagnostic(&handler).emit();
+            }
+
+            let script = match parser.parse_module() {
+                Ok(script) => script,
+                Err(e) => {
+                    let msg = JsString::new(self, e.kind().msg());
+                    return Err(JsValue::encode_object_value(JsSyntaxError::new(
+                        self, msg, None,
+                    )));
+                }
+            };
+            let mut vmref = RuntimeRef(self);
+            let mut code = ByteCompiler::compile_module(
+                &mut *vmref,
+                &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                &script,
+            );
+            code.strict = code.strict || force_strict;
+
+            let stack = self.shadowstack();
+
+            letroot!(env = stack, Environment::new(self, 0));
+            letroot!(fun = stack, JsVMFunction::new(self, code, *env));
+            letroot!(func = stack, *&*fun);
+            letroot!(module_object = stack, JsObject::new_empty(self));
+            let exports = JsObject::new_empty(self);
+            module_object
+                .put(self, "@exports".intern(), JsValue::new(exports), false)
+                .unwrap_or_else(|_| unreachable!());
+            let mut args = [JsValue::new(*&*module_object)];
+            letroot!(
+                args = stack,
+                Arguments::new(
+                    JsValue::encode_object_value(self.global_object()),
+                    &mut args
+                )
+            );
+
+            fun.as_function_mut()
+                .call(self, &mut args, JsValue::new(*func))
+        };
+        res
+    }
     /// Get global variable, on error returns `None`
     pub fn get_global(&mut self, name: impl AsRef<str>) -> Option<JsValue> {
         match self.global_object().get(self, name.as_ref().intern()) {
