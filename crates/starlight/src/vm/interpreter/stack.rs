@@ -54,8 +54,8 @@ impl Stack {
                 try_stack: vec![],
                 env,
                 this: JsValue::encode_empty_value(),
-                sp: self.cursor.add(iloc_count as _),
-                limit: self.cursor.add(iloc_count as _),
+                sp: self.cursor,
+                limit: self.cursor,
                 code_block: None,
 
                 callee: JsValue::encode_undefined_value(),

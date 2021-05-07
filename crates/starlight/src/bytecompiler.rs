@@ -529,56 +529,37 @@ impl ByteCompiler {
         let fun = JsVMFunction::new(vm, code, env);
         Ok(JsValue::new(fun))
     }
-    pub fn fn_expr(&mut self, fun: &FnExpr, used: bool) {
-        // self.emit(Opcode::OP_PUSH_ENV, &[10], false);
-        self.push_scope();
-        //self.scope.borrow_mut().depth += 1;
-        let name = fun
-            .ident
-            .as_ref()
-            .map(|x| Self::ident_to_sym(x))
-            .unwrap_or_else(|| "<anonymous>".intern());
-        if name != "<anonymous>".intern() {
-            let ix = if let Some(ix) = self.variable_freelist.pop() {
-                ix
-            } else {
-                self.code.var_count += 1;
-                self.code.var_count - 1
-            };
-            let ix = self.scope.borrow_mut().add_const_var(name, ix as _);
-            self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
-            //self.emit(Opcode::OP_GET_ENV, &[0], false);
-            self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
-        }
+    pub fn function(&mut self, function: &Function, name: Symbol) {
+        let mut _rest = None;
         let mut params = vec![];
-        let p = self.code.path.clone();
-        let mut code = CodeBlock::new(&mut self.rt, name, false, p);
-        code.file_name = self.code.file_name.clone();
+        let mut rat = None;
+        let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
+        let scope = Rc::new(RefCell::new(Scope {
+            variables: HashMap::new(),
+            parent: Some(self.scope.clone()),
+            depth: self.scope.borrow().depth + 1,
+        }));
+
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
-            top_level: false,
-            tail_pos: false,
-            variable_freelist: vec![],
-            code: code,
-            val_map: Default::default(),
-            name_map: Default::default(),
-            info: None,
-            fmap: Default::default(),
-            rt: self.rt,
-            scope: Rc::new(RefCell::new(Scope {
-                parent: Some(self.scope.clone()),
-                depth: self.scope.borrow().depth + 1,
-                variables: HashMap::new(),
-            })),
             builtins: self.builtins,
+            variable_freelist: Vec::with_capacity(4),
+            code,
+            info: None,
+            tail_pos: false,
+            fmap: HashMap::new(),
+            val_map: HashMap::new(),
+            name_map: HashMap::new(),
+            top_level: false,
+            scope,
+            rt: RuntimeRef(&mut *self.rt),
         };
-        let mut rest_at = None;
         let mut p = 0;
-        for x in fun.function.params.iter() {
+        for x in function.params.iter() {
             match x.pat {
                 Pat::Ident(ref x) => {
-                    p += 1;
                     params.push(Self::ident_to_sym(&x.id));
+                    p += 1;
                     compiler
                         .scope
                         .borrow_mut()
@@ -587,7 +568,8 @@ impl ByteCompiler {
                 Pat::Rest(ref r) => match &*r.arg {
                     Pat::Ident(ref id) => {
                         p += 1;
-                        rest_at = Some(
+                        _rest = Some(Self::ident_to_sym(&id.id));
+                        rat = Some(
                             compiler
                                 .scope
                                 .borrow_mut()
@@ -600,23 +582,29 @@ impl ByteCompiler {
                 _ => todo!(),
             }
         }
+
         code.param_count = params.len() as _;
         code.var_count = p as _;
-        code.rest_at = rest_at;
-
-        compiler.compile_fn(&fun.function);
-        let code = compiler.finish(&mut self.rt);
-        let ix = self.code.codes.len();
-        self.code.codes.push(code);
-        let _nix = self.get_sym(name);
-        self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
+        code.rest_at = rat;
+        compiler.compile_fn(&function);
+        compiler.finish(&mut self.rt);
+        let ix = *self.fmap.get(&name).unwrap();
+        self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
+    }
+    pub fn fn_expr(&mut self, fun: &FnExpr, used: bool) {
+        self.push_scope();
+        let name = if let Some(ref id) = fun.ident {
+            Self::ident_to_sym(id)
+        } else {
+            "<anonymous>".intern()
+        };
+        self.function(&fun.function, name);
         if name != "<anonymous>".intern() {
             self.emit(Opcode::OP_DUP, &[], false);
             let var = self.access_var(name);
             self.access_set(var);
         }
         self.pop_scope();
-        //self.emit(Opcode::OP_POP_ENV, &[], false);
         if !used {
             self.emit(Opcode::OP_POP, &[], false);
         }
@@ -945,71 +933,12 @@ impl ByteCompiler {
             Decl::Var(var) => {
                 self.var_decl(var, export);
             }
+
             Decl::Fn(fun) => {
                 let name = Self::ident_to_sym(&fun.ident);
-                let mut _rest = None;
-                let mut params = vec![];
-                let mut rat = None;
-                let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
-                let scope = Rc::new(RefCell::new(Scope {
-                    variables: HashMap::new(),
-                    parent: Some(self.scope.clone()),
-                    depth: self.scope.borrow().depth + 1,
-                }));
 
-                let mut compiler = ByteCompiler {
-                    lci: Vec::new(),
-                    builtins: self.builtins,
-                    variable_freelist: Vec::with_capacity(4),
-                    code,
-                    info: None,
-                    tail_pos: false,
-                    fmap: HashMap::new(),
-                    val_map: HashMap::new(),
-                    name_map: HashMap::new(),
-                    top_level: false,
-                    scope,
-                    rt: RuntimeRef(&mut *self.rt),
-                };
-                let mut p = 0;
-                for x in fun.function.params.iter() {
-                    match x.pat {
-                        Pat::Ident(ref x) => {
-                            params.push(Self::ident_to_sym(&x.id));
-                            p += 1;
-                            compiler
-                                .scope
-                                .borrow_mut()
-                                .add_var(Self::ident_to_sym(&x.id), p - 1);
-                        }
-                        Pat::Rest(ref r) => match &*r.arg {
-                            Pat::Ident(ref id) => {
-                                p += 1;
-                                _rest = Some(Self::ident_to_sym(&id.id));
-                                rat = Some(
-                                    compiler
-                                        .scope
-                                        .borrow_mut()
-                                        .add_var(Self::ident_to_sym(&id.id), p - 1)
-                                        as u32,
-                                );
-                            }
-                            _ => unreachable!(),
-                        },
-                        _ => todo!(),
-                    }
-                }
-
-                code.param_count = params.len() as _;
-                code.var_count = p as _;
-                code.rest_at = rat;
-                compiler.compile_fn(&fun.function);
-                compiler.finish(&mut self.rt);
-                let s: &str = &fun.ident.sym;
-                let sym = s.intern();
-                let ix = *self.fmap.get(&sym).unwrap();
-                self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
-                let var = self.access_var(sym);
+                self.function(&fun.function, Self::ident_to_sym(&fun.ident));
+                let var = self.access_var(name);
                 self.access_set(var.clone());
                 if export {
                     self.access_get(var);
@@ -1017,7 +946,7 @@ impl ByteCompiler {
                     self.access_get(module);
                     let exports = self.get_sym("@exports".intern());
                     self.emit(Opcode::OP_GET_BY_ID, &[exports], true);
-                    let sym = self.get_sym(sym);
+                    let sym = self.get_sym(name);
                     self.emit(Opcode::OP_PUT_BY_ID, &[sym], true);
                 }
             }

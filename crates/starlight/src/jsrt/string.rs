@@ -640,6 +640,7 @@ pub(crate) fn code_point_at(string: &str, position: i32) -> Option<(u32, u8, boo
 
 /// Helper function to check if a `char` is trimmable.
 #[inline]
+#[allow(dead_code)]
 pub(crate) fn is_trimmable_whitespace(c: char) -> bool {
     // The rust implementation of `trim` does not regard the same characters whitespace as ecma standard does
     //
@@ -667,7 +668,7 @@ fn is_trailing_surrogate(value: u16) -> bool {
     (0xDC00..=0xDFFF).contains(&value)
 }
 
-fn get_regex_string(rt: &mut Runtime, val: JsValue) -> Result<(String, String), JsValue> {
+fn get_regex_string(_rt: &mut Runtime, val: JsValue) -> Result<(String, String), JsValue> {
     if val.is_jsstring() {
         return Ok((val.get_jsstring().string.clone(), String::new()));
     }

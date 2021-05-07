@@ -240,8 +240,6 @@ pub enum Opcode {
     OP_DECL_LET,
     OP_DECL_CONST,
     OP_PUSH_THIS,
-    OP_YIELD,
-    OP_NEWGENERATOR,
 
     OP_DUP,
     OP_POP,
@@ -275,4 +273,9 @@ pub enum Opcode {
     OP_TO_INTEGER_OR_INFINITY,
     OP_IS_CALLABLE,
     OP_IS_CTOR,
+
+    OP_YIELD,
+    OP_YIELD_STAR,
+    OP_AWAIT,
+    OP_NEWGENERATOR,
 }

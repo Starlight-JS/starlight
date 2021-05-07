@@ -1,7 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::slot::*;
 use super::string::*;
 use super::structure::Structure;
 use super::symbol_table::Symbol;
@@ -12,6 +11,7 @@ use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
 use super::{environment::Environment, object::*};
 use super::{error::JsTypeError, method_table::*};
+use super::{interpreter::frame::CallFrame, slot::*};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
 use std::mem::ManuallyDrop;
 
@@ -573,4 +573,85 @@ pub struct JsBoundFunction {
     pub this: JsValue,
     pub args: GcPointer<ArrayStorage>,
     pub target: GcPointer<JsObject>,
+}
+
+/// interpreter call frame copied allocated on the heap. It is used again copied to interpreter stack
+/// when function execution state is restored.
+pub struct HeapCallFrame {
+    pub stack: Vec<JsValue>,
+    pub env: GcPointer<Environment>,
+    pub code_block: GcPointer<CodeBlock>,
+    pub this: JsValue,
+    pub sp: usize,
+    pub ip: *mut u8,
+    pub try_stack: Vec<(Option<GcPointer<Environment>>, *mut u8, usize)>,
+}
+
+impl HeapCallFrame {
+    /// Saves function state
+    pub(crate) unsafe fn save(cf: &mut CallFrame) -> Self {
+        let sp = cf.sp.offset_from(cf.limit);
+        assert!(sp >= 0);
+        let sp = sp as usize;
+        let mut try_stack = vec![];
+        for (env, ip, sp) in cf.try_stack.iter() {
+            let isp = (*sp).offset_from(cf.limit) as usize;
+            try_stack.push((*env, *ip, isp));
+        }
+        let mut stack = Vec::with_capacity(sp);
+        let mut scan = cf.limit;
+        let end = cf.sp;
+        while scan < end {
+            stack.push(scan.read());
+            scan = scan.add(1);
+        }
+        Self {
+            sp,
+            try_stack,
+            stack,
+            code_block: cf.code_block.unwrap(),
+            ip: cf.ip,
+            this: cf.this,
+            env: cf.env,
+        }
+    }
+
+    /// Restores function state.
+    pub(crate) unsafe fn restore(&mut self, cf: &mut CallFrame) {
+        for val in self.stack.iter() {
+            cf.push(*val);
+        }
+        assert_eq!(cf.limit.add(self.sp), cf.sp);
+        cf.this = self.this;
+        cf.ip = self.ip;
+        cf.code_block = Some(self.code_block);
+        cf.env = self.env;
+        for (env, ip, csp) in self.try_stack.iter() {
+            let csp = cf.limit.add(*csp);
+            cf.try_stack.push((*env, *ip, csp));
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GeneratorState {
+    Start,
+    Yield,
+    YieldStart,
+    Executing,
+    Complete,
+}
+
+pub struct GeneratorData {
+    pub state: GeneratorState,
+    pub func_state: AsyncFunctionState,
+}
+pub struct AsyncFunctionData {
+    pub resolving_funcs: [JsValue; 2],
+    pub is_active: bool,
+    pub func_state: AsyncFunctionState,
+}
+pub struct AsyncFunctionState {
+    pub throw: bool,
+    pub frame: Box<HeapCallFrame>,
 }
