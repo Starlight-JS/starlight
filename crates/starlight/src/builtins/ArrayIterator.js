@@ -62,8 +62,6 @@ ___ArrayIterator.prototype.next = function next() {
         }
 }
 
-Object.defineProperty(___ArrayIterator.prototype, Symbol.iterator, {
-    get: function () {
-        return this;
-    }
-})
+___ArrayIterator.prototype[Symbol.iterator] = function () {
+    return this;
+}

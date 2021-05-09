@@ -1,6 +1,8 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+let MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
+let ctor = Array;
 Array.prototype.some = function some(callback, thisArg) {
     "use strict";
     var array = ___toObject(this, "Array.prototype.some requires that |this| not be null or undefined");
@@ -452,9 +454,61 @@ Array.prototype.at = function at(index) {
     return (k >= 0 && k < length) ? array[k] : undefined;
 }
 
+
+Array.from = function from(items, mapFn, thisArg) {
+    "use strict";
+    if (mapFn !== undefined)
+        if (!___isCallable(mapFn))
+            throw new TypeError("Array.from requires that the second argument, when provided, be a function")
+
+    var arrayLike = ___toObject(items, "Array.from requires an array-like object - not null or undefined");
+    var iteratorMethod = arrayLike[Symbol.iterator];
+    if (iteratorMethod) {
+        if (!___isCallable(iteratorMethod))
+            throw new TypeError("Array.from requires that the property of the first argument, items[Symbol.iterator], when exists, be a function");
+
+        var result = this !== ctor && ___isConstructor(this) ? new this() : [];
+        var k = 0
+        var iterator = iteratorMethod.call(items);
+
+        var wrapper = {};
+        wrapper[Symbol.iterator] = function () {
+            return iterator;
+        }
+
+        for (var value of wrapper) {
+            if (k >= MAX_SAFE_INTEGER)
+                throw new TypeError("Length exceeded the maximum array length");
+            if (mapFn)
+                result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
+            else
+                result[k] = value;
+            k += 1;
+        }
+        result.length = k;
+        return result;
+    }
+
+    var arrayLikeLength = ___toLength(arrayLike.length);
+    var result = new this(arrayLikeLength);
+    var k = 0;
+    while (k < arrayLikeLength) {
+        var value = arrayLike[k];
+        if (mapFn)
+            result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
+        else
+            result[k] = value
+
+        k += 1;
+    }
+    result.length = k;
+    return result;
+}
+
 /*
 * TODO: This implementation is wrong. We should implement GetIterator from ECMA262 spec and use it when we see iterator.
 */
+/*
 Array.from = function from(items, mapFn, thisArg) {
     var mapping;
     if (!mapFn) {
@@ -467,9 +521,12 @@ Array.from = function from(items, mapFn, thisArg) {
 
     var usingIterator = items[Symbol.iterator];
     if (usingIterator !== undefined) {
+        if (!___isCallable(usingIterator))
+            throw new TypeError("Array.from requires that the property of the first argument, items[Symbol.iterator], when exists, be a function");
         var A = ___isConstructor(this) ? new this() : [];
 
-        let iterator = usingIterator;
+        let iterator = usingIterator(items);
+        let wrapper = 
         let k = 0;
         while (true) {
             if (k >= Number.MAX_SAFE_INTEGER)
@@ -505,7 +562,7 @@ Array.from = function from(items, mapFn, thisArg) {
     A.length = k;
     return A;
 }
-
+*/
 
 
 Array.prototype.keys = function () {
@@ -520,12 +577,7 @@ let values = function values() {
     return new ___ArrayIterator(this, "value");
 }
 Array.prototype.values = values;
-Object.defineProperty(Array.prototype, Symbol.iterator, {
-    get: function () {
-        return values;
-    }
-})
-
+Array.prototype[Symbol.iterator] = values;
 Array.prototype.reduce = function (...args) {
     'use strict';
     let callback = args[0];

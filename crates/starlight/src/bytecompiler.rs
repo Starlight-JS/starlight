@@ -529,11 +529,21 @@ impl ByteCompiler {
         let fun = JsVMFunction::new(vm, code, env);
         Ok(JsValue::new(fun))
     }
-    pub fn function(&mut self, function: &Function, name: Symbol) {
+    pub fn function(&mut self, function: &Function, name: Symbol, expr: bool) {
         let mut _rest = None;
         let mut params = vec![];
         let mut rat = None;
-        let mut code = self.code.codes[self.fmap.get(&name).copied().unwrap() as usize];
+        let (mut code, ix) = if !expr {
+            (
+                self.code.codes[self.fmap.get(&name).copied().unwrap() as usize],
+                self.fmap.get(&name).copied().unwrap() as usize,
+            )
+        } else {
+            let p = self.code.path.clone();
+            let mut code = CodeBlock::new(&mut self.rt, name, false, p);
+            self.code.codes.push(code);
+            (code, self.code.codes.len() - 1)
+        };
         let scope = Rc::new(RefCell::new(Scope {
             variables: HashMap::new(),
             parent: Some(self.scope.clone()),
@@ -588,7 +598,12 @@ impl ByteCompiler {
         code.rest_at = rat;
         compiler.compile_fn(&function);
         compiler.finish(&mut self.rt);
-        let ix = *self.fmap.get(&name).unwrap();
+
+        let ix = if expr {
+            ix as u32
+        } else {
+            *self.fmap.get(&name).unwrap()
+        };
         self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
     }
     pub fn fn_expr(&mut self, fun: &FnExpr, used: bool) {
@@ -598,7 +613,7 @@ impl ByteCompiler {
         } else {
             "<anonymous>".intern()
         };
-        self.function(&fun.function, name);
+        self.function(&fun.function, name, true);
         if name != "<anonymous>".intern() {
             self.emit(Opcode::OP_DUP, &[], false);
             let var = self.access_var(name);
@@ -937,7 +952,7 @@ impl ByteCompiler {
             Decl::Fn(fun) => {
                 let name = Self::ident_to_sym(&fun.ident);
 
-                self.function(&fun.function, Self::ident_to_sym(&fun.ident));
+                self.function(&fun.function, Self::ident_to_sym(&fun.ident), false);
                 let var = self.access_var(name);
                 self.access_set(var.clone());
                 if export {
@@ -1304,6 +1319,8 @@ impl ByteCompiler {
     pub fn expr(&mut self, expr: &Expr, used: bool, tail: bool) {
         match expr {
             Expr::Ident(id) => {
+                // TODO: When builtins are compiled we should add `___` prefix support for builtin symbols.
+                // for example `___iterator` should become `"Symbol.iterator".intern().private()"` and as incle PUSH_LITERAL opcode.
                 if &id.sym == "undefined" {
                     self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                 } else {
@@ -2079,6 +2096,9 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     false
 }
 impl ByteCompiler {
+    /// TODO List:
+    /// - Implement  `___call` ,`___tailcall`.
+    /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
     pub fn handle_builtin_call(&mut self, call: &CallExpr) {
         let name = if let ExprOrSuper::Expr(expr) = &call.callee {
             if let Expr::Ident(x) = &**expr {

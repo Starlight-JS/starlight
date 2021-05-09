@@ -24,8 +24,8 @@ RegExp.prototype[Symbol.matchAll] = function matchAll(strArg) {
     var matcher = new RegExpCtor(regExp, flags);
     matcher.lastIndex = ___toLength(regExp.lastIndex);
 
-    var global = strIncludes.call(string, "g");
-    var fullUnicode = strIncludes.call(string, "u");//string.includes("u");
+    var global = strIncludes.call(flags, "g");
+    var fullUnicode = strIncludes.call(flags, "u");//string.includes("u");
 
     return new RegExpStringIterator(matcher, string, global, fullUnicode);
 }

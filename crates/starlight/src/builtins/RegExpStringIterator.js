@@ -98,9 +98,6 @@ RegExpStringIterator.prototype.next = function next() {
         value: match, done: false
     }
 }
-
-Object.defineProperty(RegExpStringIterator.prototype, Symbol.iterator, {
-    get: function () {
-        return this
-    }
-})
+RegExpStringIterator.prototype[Symbol.iterator] = function () {
+    return this;
+}
