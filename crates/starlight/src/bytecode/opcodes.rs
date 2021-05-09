@@ -274,6 +274,8 @@ pub enum Opcode {
     OP_IS_CALLABLE,
     OP_IS_CTOR,
 
+    // Almost the same as OP_YIELD except returns undefined from interpreter loop.
+    OP_INITIAL_YIELD,
     OP_YIELD,
     OP_YIELD_STAR,
     OP_AWAIT,

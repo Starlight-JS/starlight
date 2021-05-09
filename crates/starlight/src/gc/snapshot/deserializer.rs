@@ -249,6 +249,8 @@ impl<'a> Deserializer<'a> {
             set_structure: self.read_opt_gc(),
             regexp_structure: self.read_opt_gc(),
             regexp_object: self.read_opt_gc(),
+            generator_prototype: self.read_opt_gc(),
+            generator_structure: self.read_opt_gc(),
         }
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
@@ -1389,7 +1391,11 @@ impl Deserializable for CodeBlock {
         }
         let path = String::deserialize_inplace(deser);
         let path: Rc<str> = path.into();
+        let is_generator = bool::deserialize_inplace(deser);
+        let is_async = bool::deserialize_inplace(deser);
         Self {
+            is_async,
+            is_generator,
             path,
             loc,
             args_at,

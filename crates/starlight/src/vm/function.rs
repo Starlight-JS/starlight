@@ -12,7 +12,10 @@ use super::{attributes::*, symbol_table::Internable};
 use super::{environment::Environment, object::*};
 use super::{error::JsTypeError, method_table::*};
 use super::{interpreter::frame::CallFrame, slot::*};
-use crate::gc::cell::{GcPointer, Trace, Tracer};
+use crate::gc::{
+    cell::{GcPointer, Trace, Tracer},
+    snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
+};
 use std::mem::ManuallyDrop;
 
 pub struct JsFunction {
@@ -633,8 +636,73 @@ impl HeapCallFrame {
     }
 }
 
+pub struct JsGeneratorFunction {
+    pub(crate) function: GcPointer<JsObject>,
+}
+
+extern "C" fn drop_generator(obj: &mut JsObject) {
+    unsafe {
+        ManuallyDrop::drop(obj.data::<GeneratorData>());
+    }
+}
+
+extern "C" fn generator_deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+    unreachable!("cannot deserialize generator");
+}
+extern "C" fn generator_ser(_: &JsObject, _: &mut SnapshotSerializer) {
+    unreachable!("cannot serialize generator");
+}
+
+extern "C" fn generator_size() -> usize {
+    std::mem::size_of::<GeneratorData>()
+}
+
+impl JsGeneratorFunction {
+    define_jsclass_with_symbol!(
+        JsObject,
+        Generator,
+        Object,
+        Some(drop_generator),
+        None,
+        Some(generator_deser),
+        Some(generator_ser),
+        Some(generator_size)
+    );
+    /// Call generator function creating new generator object instance.
+    ///
+    /// ## Algorithm
+    /// - Invoke function and execute it up to `OP_INITIAL_YIELD`, this opcode is inserted at start of the function
+    /// when all arguments is initialized.
+    /// - Pop call frame and save it onto heap allocate [HeapCallFrame].
+    /// - Allocate JS object with class of [JsGeneratorFunction::get_class] and set its generator data.
+    /// - Return generator object.
+    fn call(
+        &mut self,
+        vm: &mut Runtime,
+        args: &mut Arguments,
+        this: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        // execute up to OP_INITIAL_YIELD. It does return `undefined` value.
+        let ret = self.function.as_function_mut().call(vm, args, this)?;
+        debug_assert!(ret.is_undefined());
+        let mut state = vm.stack.pop_frame().expect("Empty call stack");
+        let state = unsafe { HeapCallFrame::save(&mut state) };
+        let proto = vm.global_data().generator_structure.unwrap();
+        let mut generator = JsObject::new(vm, &proto, Self::get_class(), ObjectTag::Ordinary);
+        *generator.data::<GeneratorData>() = ManuallyDrop::new(GeneratorData {
+            state: GeneratorState::Start,
+            func_state: AsyncFunctionState {
+                frame: Box::new(state),
+                throw: false,
+            },
+        });
+        Ok(JsValue::new(generator))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GeneratorState {
+    Suspended,
     Start,
     Yield,
     YieldStart,
@@ -646,6 +714,7 @@ pub struct GeneratorData {
     pub state: GeneratorState,
     pub func_state: AsyncFunctionState,
 }
+
 pub struct AsyncFunctionData {
     pub resolving_funcs: [JsValue; 2],
     pub is_active: bool,

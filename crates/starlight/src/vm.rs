@@ -741,6 +741,8 @@ use self::{
 /// Global JS data that is used internally in Starlight.
 #[derive(Default, GcTrace)]
 pub struct GlobalData {
+    pub(crate) generator_prototype: Option<GcPointer<JsObject>>,
+    pub(crate) generator_structure: Option<GcPointer<Structure>>,
     pub(crate) normal_arguments_structure: Option<GcPointer<Structure>>,
     pub(crate) empty_object_struct: Option<GcPointer<Structure>>,
     pub(crate) function_struct: Option<GcPointer<Structure>>,

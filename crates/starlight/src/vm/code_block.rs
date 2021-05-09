@@ -58,6 +58,8 @@ pub struct CodeBlock {
 
     pub loc: Vec<(Range<usize>, FileLocation)>,
     pub path: Rc<str>,
+    pub is_generator: bool,
+    pub is_async: bool,
 }
 
 unsafe impl Trace for CodeBlock {
@@ -468,6 +470,8 @@ impl CodeBlock {
             feedback: vec![],
             var_count: 0,
             param_count: 0,
+            is_async: false,
+            is_generator: false,
         };
 
         rt.heap().allocate(this)

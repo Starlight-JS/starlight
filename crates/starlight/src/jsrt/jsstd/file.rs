@@ -313,7 +313,7 @@ extern "C" fn fsz() -> usize {
 impl FileObject {
     define_jsclass_with_symbol!(
         JsObject,
-        FFIFunction,
+        File,
         Object,
         Some(drop_file_fn),
         None,

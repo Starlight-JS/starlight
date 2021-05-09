@@ -523,6 +523,8 @@ impl Serializable for CodeBlock {
             loc.col.serialize(serializer);
         }
         self.path.to_string().serialize(serializer);
+        self.is_generator.serialize(serializer);
+        self.is_async.serialize(serializer);
     }
 }
 
@@ -772,6 +774,8 @@ impl Serializable for GlobalData {
         self.set_structure.serialize(serializer);
         self.regexp_structure.serialize(serializer);
         self.regexp_object.serialize(serializer);
+        self.generator_prototype.serialize(serializer);
+        self.generator_structure.serialize(serializer);
     }
 }
 
