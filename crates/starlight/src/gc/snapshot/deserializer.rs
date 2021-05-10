@@ -19,7 +19,9 @@ use crate::{
         arguments::JsArguments,
         array_storage::ArrayStorage,
         code_block::{CodeBlock, FileLocation},
-        function::{FuncType, JsBoundFunction, JsNativeFunction, JsVMFunction},
+        function::{
+            FuncType, JsBoundFunction, JsGeneratorFunction, JsNativeFunction, JsVMFunction,
+        },
         global::JsGlobal,
         indexed_elements::{IndexedElements, SparseArrayMap},
         interpreter::SpreadValue,
@@ -771,6 +773,12 @@ impl Deserializable for JsObject {
                             args: transmute(args),
                             target: transmute(target),
                             this,
+                        })
+                    }
+                    0x04 => {
+                        let func = deser.get_reference();
+                        FuncType::Generator(JsGeneratorFunction {
+                            function: transmute(func),
                         })
                     }
                     _ => unreachable!(),

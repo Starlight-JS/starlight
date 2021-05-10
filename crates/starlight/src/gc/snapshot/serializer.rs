@@ -438,6 +438,10 @@ impl Serializable for JsFunction {
                 bound_fn.target.serialize(serializer);
                 bound_fn.this.serialize(serializer);
             }
+            FuncType::Generator(gen_fn) => {
+                serializer.write_u8(0x04);
+                gen_fn.function.serialize(serializer);
+            }
         }
     }
 }

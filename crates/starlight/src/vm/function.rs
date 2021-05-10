@@ -1,7 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::string::*;
 use super::structure::Structure;
 use super::symbol_table::Symbol;
 use super::value::*;
@@ -10,13 +9,14 @@ use super::{arguments::*, code_block::CodeBlock};
 use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
 use super::{environment::Environment, object::*};
+use super::{error::JsRangeError, string::*};
 use super::{error::JsTypeError, method_table::*};
 use super::{interpreter::frame::CallFrame, slot::*};
 use crate::gc::{
     cell::{GcPointer, Trace, Tracer},
     snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
 };
-use std::mem::ManuallyDrop;
+use std::{intrinsics::unlikely, mem::ManuallyDrop};
 
 pub struct JsFunction {
     pub construct_struct: Option<GcPointer<Structure>>,
@@ -27,6 +27,7 @@ pub enum FuncType {
     Native(JsNativeFunction),
     User(JsVMFunction),
     Bound(JsBoundFunction),
+    Generator(JsGeneratorFunction),
 }
 
 #[allow(non_snake_case)]
@@ -39,6 +40,9 @@ impl JsFunction {
     }
     pub fn is_bound(&self) -> bool {
         matches!(self.ty, FuncType::Bound(_))
+    }
+    pub fn is_generator(&self) -> bool {
+        matches!(self.ty, FuncType::Generator(_))
     }
     pub fn has_instance(
         &self,
@@ -74,6 +78,7 @@ impl JsFunction {
             FuncType::Native(_) => false,
             FuncType::User(ref x) => x.code.strict,
             FuncType::Bound(ref x) => x.target.as_function().is_strict(),
+            FuncType::Generator(ref x) => x.function.as_function().is_strict(),
         }
     }
 
@@ -96,6 +101,7 @@ impl JsFunction {
             _ => unreachable!(),
         }
     }
+
     pub fn as_vm_mut(&mut self) -> &mut JsVMFunction {
         match self.ty {
             FuncType::User(ref mut x) => x,
@@ -116,6 +122,18 @@ impl JsFunction {
             _ => unreachable!(),
         }
     }
+    pub fn as_generator(&self) -> &JsGeneratorFunction {
+        match self.ty {
+            FuncType::Generator(ref x) => x,
+            _ => unreachable!(),
+        }
+    }
+    pub fn as_generator_mut(&mut self) -> &mut JsGeneratorFunction {
+        match self.ty {
+            FuncType::Generator(ref mut x) => x,
+            _ => unreachable!(),
+        }
+    }
 
     pub fn construct<'a>(
         &mut self,
@@ -125,6 +143,11 @@ impl JsFunction {
         structure: Option<GcPointer<Structure>>,
         this_fn: JsValue,
     ) -> Result<JsValue, JsValue> {
+        if unlikely(self.is_generator()) {
+            return Err(JsValue::new(
+                vm.new_type_error("function not a constructor"),
+            ));
+        }
         let stack = vm.shadowstack();
         letroot!(
             structure = stack,
@@ -160,6 +183,7 @@ impl JsFunction {
                 let mut target = x.target.clone();
                 target.as_function_mut().call(vm, &mut args, this)
             }
+            FuncType::Generator(ref mut x) => x.call(vm, args, this),
         }
     } /*
       pub fn call_with_env<'a>(
@@ -468,6 +492,9 @@ unsafe impl Trace for JsFunction {
                 x.args.trace(tracer);
                 x.target.trace(tracer);
             }
+            FuncType::Generator(ref mut x) => {
+                x.function.trace(tracer);
+            }
             _ => (),
         }
     }
@@ -569,6 +596,7 @@ impl GcPointer<JsObject> {
         Ok(structure)
     }
 }
+
 use starlight_derive::GcTrace;
 
 #[derive(GcTrace)]
@@ -594,6 +622,7 @@ impl HeapCallFrame {
     /// Saves function state
     pub(crate) unsafe fn save(cf: &mut CallFrame) -> Self {
         let sp = cf.sp.offset_from(cf.limit);
+
         assert!(sp >= 0);
         let sp = sp as usize;
         let mut try_stack = vec![];
@@ -656,14 +685,54 @@ extern "C" fn generator_ser(_: &JsObject, _: &mut SnapshotSerializer) {
 extern "C" fn generator_size() -> usize {
     std::mem::size_of::<GeneratorData>()
 }
-
+#[allow(improper_ctypes_definitions)]
+extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+    obj.data::<GeneratorData>().func_state.trace(tracer);
+}
 impl JsGeneratorFunction {
+    pub fn new(vm: &mut Runtime, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
+        // let vm = vm.space().new_local_context();
+        let stack = vm.shadowstack();
+        //root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
+        //root!(scope = stack, Environment::new(vm, 0));
+        let code = func.as_function().as_vm().code;
+        let f = JsGeneratorFunction { function: func };
+        vm.heap().defer();
+        letroot!(
+            this = stack,
+            JsFunction::new(vm, FuncType::Generator(f), false)
+        );
+        letroot!(proto = stack, JsObject::new_empty(vm));
+        vm.heap().undefer();
+        let _ = proto.define_own_property(
+            vm,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::encode_object_value(this.clone()), W | C),
+            false,
+        );
+        let desc = vm.description(code.name);
+        letroot!(s = stack, JsString::new(vm, desc));
+        let _ = this.define_own_property(
+            vm,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::encode_object_value(*proto), W),
+            false,
+        );
+        let _ = this.define_own_property(
+            vm,
+            "name".intern(),
+            &*DataDescriptor::new(JsValue::encode_object_value(*s), W | C),
+            false,
+        );
+        *this
+    }
+
     define_jsclass_with_symbol!(
         JsObject,
         Generator,
         Object,
         Some(drop_generator),
-        None,
+        Some(generator_trace),
         Some(generator_deser),
         Some(generator_ser),
         Some(generator_size)
@@ -690,7 +759,7 @@ impl JsGeneratorFunction {
         let proto = vm.global_data().generator_structure.unwrap();
         let mut generator = JsObject::new(vm, &proto, Self::get_class(), ObjectTag::Ordinary);
         *generator.data::<GeneratorData>() = ManuallyDrop::new(GeneratorData {
-            state: GeneratorState::Start,
+            state: GeneratorState::Suspended,
             func_state: AsyncFunctionState {
                 frame: Box::new(state),
                 throw: false,
@@ -701,15 +770,151 @@ impl JsGeneratorFunction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GeneratorMagic {
+    Next,
+    Return,
+    Throw,
+}
+fn async_func_resume(vm: &mut Runtime, state: &mut AsyncFunctionState) -> Result<JsValue, JsValue> {
+    let mut frame = vm
+        .stack
+        .new_frame(0, JsValue::encode_undefined_value(), state.frame.env)
+        .ok_or_else(|| {
+            let msg = JsString::new(vm, "stack overflow");
+            JsValue::new(JsRangeError::new(vm, msg, None))
+        })?;
+    unsafe {
+        state.frame.restore(&mut *frame);
+        (*frame).exit_on_return = true;
+        crate::vm::interpreter::eval(vm, frame)
+    }
+}
+pub(crate) fn js_generator_next(
+    vm: &mut Runtime,
+    this: JsValue,
+    args: &Arguments,
+    magic: GeneratorMagic,
+    pdone: &mut u32,
+) -> Result<JsValue, JsValue> {
+    let object = this.to_object(vm)?;
+    if unlikely(!object.is_class(JsGeneratorFunction::get_class())) {
+        return Err(JsValue::new(vm.new_type_error("not a generator")));
+    }
+    *pdone = 1;
+    let mut ret;
+    let s = object.data::<GeneratorData>();
+    loop {
+        match s.state {
+            GeneratorState::Suspended => {
+                if magic == GeneratorMagic::Next {
+                    s.func_state.throw = false;
+                    s.state = GeneratorState::Executing;
+                    let func_ret = async_func_resume(vm, &mut s.func_state);
+
+                    if let Err(e) = func_ret {
+                        s.state = GeneratorState::Complete;
+                        return Err(e);
+                    }
+                    let func_ret = func_ret?;
+                    s.state = GeneratorState::Yield;
+                    if func_ret.is_native_value() {
+                        let frame = vm.stack.pop_frame();
+                        let mut frame = frame.unwrap();
+                        ret = frame.top();
+
+                        unsafe {
+                            *frame.at(-1) = JsValue::encode_undefined_value();
+                        }
+                        s.func_state.frame = Box::new(unsafe { HeapCallFrame::save(&mut frame) });
+                        if func_ret.get_native_u32() == FuncRet::YieldStar as u32 {
+                            s.state = GeneratorState::YieldStar;
+                            *pdone = 2;
+                        } else {
+                            *pdone = 0;
+                        }
+                    } else {
+                        ret = func_ret;
+                        s.state = GeneratorState::Complete;
+                    }
+                    return Ok(ret);
+                } else {
+                    break;
+                }
+            }
+            GeneratorState::Yield | GeneratorState::YieldStar => {
+                ret = args.at(0);
+                if magic == GeneratorMagic::Throw && s.state == GeneratorState::Yield {
+                    s.func_state.throw = true;
+                    return Err(ret);
+                } else {
+                    *s.func_state.frame.stack.last_mut().unwrap() = ret;
+                }
+                s.state = GeneratorState::Executing;
+                let func_ret = async_func_resume(vm, &mut s.func_state).map_err(|e| {
+                    s.state = GeneratorState::Complete;
+                    e
+                })?;
+                s.state = GeneratorState::Yield;
+
+                if func_ret.is_native_value() {
+                    let frame = vm.stack.pop_frame();
+                    let mut frame = frame.unwrap();
+
+                    ret = frame.top();
+                    unsafe {
+                        *frame.at(-1) = JsValue::encode_undefined_value();
+                    }
+                    s.func_state.frame = Box::new(unsafe { HeapCallFrame::save(&mut frame) });
+                    if func_ret.get_native_u32() == FuncRet::YieldStar as u32 {
+                        s.state = GeneratorState::YieldStar;
+                        *pdone = 2;
+                    } else {
+                        *pdone = 0;
+                    }
+                } else {
+                    ret = func_ret;
+                    s.state = GeneratorState::Complete;
+                }
+                return Ok(ret);
+            }
+            GeneratorState::Executing => {
+                return Err(JsValue::new(
+                    vm.new_type_error("cannot invoke a running generator"),
+                ));
+            }
+            GeneratorState::Complete => break,
+        }
+    }
+
+    match magic {
+        GeneratorMagic::Next => {
+            ret = JsValue::encode_undefined_value();
+        }
+        GeneratorMagic::Return => {
+            ret = args.at(0);
+        }
+        GeneratorMagic::Throw => {
+            return Err(args.at(0));
+        }
+    }
+    Ok(ret)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GeneratorState {
     Suspended,
-    Start,
     Yield,
-    YieldStart,
+    YieldStar,
     Executing,
     Complete,
 }
-
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub enum FuncRet {
+    Await,
+    YieldStar,
+    Yield,
+}
 pub struct GeneratorData {
     pub state: GeneratorState,
     pub func_state: AsyncFunctionState,
@@ -723,4 +928,17 @@ pub struct AsyncFunctionData {
 pub struct AsyncFunctionState {
     pub throw: bool,
     pub frame: Box<HeapCallFrame>,
+}
+
+unsafe impl Trace for AsyncFunctionState {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.frame.stack.trace(visitor);
+        self.frame.env.trace(visitor);
+        self.frame.code_block.trace(visitor);
+        self.frame.this.trace(visitor);
+        self.frame
+            .try_stack
+            .iter_mut()
+            .for_each(|(env, _, _)| env.trace(visitor));
+    }
 }

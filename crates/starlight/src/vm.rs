@@ -596,6 +596,7 @@ impl Runtime {
         this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
+
         jsrt::symbol::symbol_init(&mut this, proto);
 
         let name = "Object".intern();
@@ -618,7 +619,9 @@ impl Runtime {
             false,
         );
         RegExp::init(&mut this, proto);
+        jsrt::generator::init_generator(&mut this, proto);
         this.init_self_hosted();
+
         let loader = JsNativeFunction::new(&mut this, "@loader".intern(), jsrt::module_load, 1);
         this.module_loader = Some(loader);
         this.add_module(

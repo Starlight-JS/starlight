@@ -443,6 +443,10 @@ impl CodeBlock {
                     Opcode::OP_IS_CTOR => {
                         writeln!(output, "is_constructor")?;
                     }
+                    Opcode::OP_INITIAL_YIELD => writeln!(output, "initial_yield")?,
+                    Opcode::OP_YIELD => writeln!(output, "yield")?,
+                    Opcode::OP_YIELD_STAR => writeln!(output, "yield_star")?,
+                    Opcode::OP_AWAIT => writeln!(output, "await")?,
                     _ => todo!("{:?}", op),
                 }
             }

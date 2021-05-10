@@ -16,6 +16,7 @@ pub mod array;
 pub mod error;
 pub mod ffi;
 pub mod function;
+pub mod generator;
 pub mod global;
 pub mod jsstd;
 pub mod math;
@@ -24,7 +25,6 @@ pub mod object;
 pub mod regexp;
 pub mod string;
 pub mod symbol;
-
 use array::*;
 use error::*;
 use function::*;
@@ -1073,6 +1073,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         jsstd::file::std_file_read_bytes_to_end as _,
         jsstd::file::std_file_close as _,
         jsstd::std_args as _,
+        generator::generator_next as _,
+        generator::generator_iterator as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

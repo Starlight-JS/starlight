@@ -544,6 +544,10 @@ impl ByteCompiler {
             self.code.codes.push(code);
             (code, self.code.codes.len() - 1)
         };
+        if function.is_async {
+            todo!("Async functions is not supported yet");
+        }
+        code.is_generator = function.is_generator;
         let scope = Rc::new(RefCell::new(Scope {
             variables: HashMap::new(),
             parent: Some(self.scope.clone()),
@@ -596,6 +600,9 @@ impl ByteCompiler {
         code.param_count = params.len() as _;
         code.var_count = p as _;
         code.rest_at = rat;
+        if code.is_generator {
+            compiler.emit(Opcode::OP_INITIAL_YIELD, &[], false);
+        }
         compiler.compile_fn(&function);
         compiler.finish(&mut self.rt);
 
@@ -1318,6 +1325,23 @@ impl ByteCompiler {
 
     pub fn expr(&mut self, expr: &Expr, used: bool, tail: bool) {
         match expr {
+            Expr::Yield(yield_expr) => {
+                if yield_expr.delegate {
+                    todo!("yiled* is not supported yet");
+                }
+                match yield_expr.arg {
+                    Some(ref expr) => {
+                        self.expr(&**expr, true, false);
+                    }
+                    None => {
+                        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
+                    }
+                }
+                self.emit(Opcode::OP_YIELD, &[], false);
+                if !used {
+                    self.emit(Opcode::OP_POP, &[], false);
+                }
+            }
             Expr::Ident(id) => {
                 // TODO: When builtins are compiled we should add `___` prefix support for builtin symbols.
                 // for example `___iterator` should become `"Symbol.iterator".intern().private()"` and as incle PUSH_LITERAL opcode.

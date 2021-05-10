@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use self::{frame::CallFrame, stack::Stack};
+use super::function::*;
 use super::{
     arguments::*, array::*, code_block::CodeBlock, environment::*, error::JsTypeError, error::*,
     function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString,
@@ -1209,11 +1210,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 //vm.space().defer_gc();
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
-                let func = JsVMFunction::new(
-                    rt,
-                    unwrap_unchecked(frame.code_block).codes[ix as usize],
-                    frame.env,
-                );
+                let code = unwrap_unchecked(frame.code_block).codes[ix as usize];
+                let func = if likely(!(code.is_async || code.is_generator)) {
+                    JsVMFunction::new(rt, code, frame.env)
+                } else {
+                    let func = JsVMFunction::new(rt, code, frame.env);
+
+                    JsGeneratorFunction::new(rt, func)
+                };
 
                 frame.push(JsValue::encode_object_value(func));
                 // vm.space().undefer_gc();
@@ -1302,7 +1306,19 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 frame.push(JsValue::new(val.is_callable()));
             }
-
+            Opcode::OP_INITIAL_YIELD => {
+                frame.ip = ip;
+                return Ok(JsValue::encode_undefined_value());
+            }
+            Opcode::OP_YIELD => {
+                frame.ip = ip;
+                return Ok(JsValue::encode_native_u32(FuncRet::Yield as u32));
+            }
+            Opcode::OP_YIELD_STAR => {
+                frame.ip = ip;
+                return Ok(JsValue::encode_native_u32(FuncRet::YieldStar as u32));
+            }
+            Opcode::OP_AWAIT => return Ok(JsValue::encode_native_u32(FuncRet::Await as u32)),
             x => {
                 panic!("NYI: {:?}", x);
             }

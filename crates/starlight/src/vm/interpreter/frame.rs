@@ -29,6 +29,9 @@ impl CallFrame {
         self.sp = self.sp.sub(1);
         self.sp.read()
     }
+    pub fn top(&self) -> JsValue {
+        unsafe { self.sp.sub(1).read() }
+    }
     #[inline]
     pub unsafe fn at(&mut self, index: isize) -> &mut JsValue {
         &mut *self.sp.offset(index)
