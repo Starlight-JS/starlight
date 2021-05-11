@@ -773,7 +773,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut this = frame.pop();
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
                 if unlikely(!func.is_callable()) {
-                    let msg = JsString::new(rt, "not a callable object");
+                    let msg = JsString::new(rt, format!("not a callable object",));
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,
                     )));
@@ -834,7 +834,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
 
                 if unlikely(!func.is_callable()) {
-                    let msg = JsString::new(rt, "not a callable object");
+                    let msg = JsString::new(rt, format!("not a callable constructor object "));
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,
                     )));
@@ -858,11 +858,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if !frame.exit_on_return
-                        && (opcode == Opcode::OP_TAILNEW
-                            || (ip.cast::<Opcode>().read() == Opcode::OP_POP
-                                && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
-                    {
+                    if false && !frame.exit_on_return && (opcode == Opcode::OP_TAILNEW) {
                         // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
