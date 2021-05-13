@@ -3,6 +3,11 @@ use crate::{
     space_bitmap_gen,
 };
 
+use intrusive_collections::LinkedListLink;
+use intrusive_collections::{intrusive_adapter, UnsafeRef};
+intrusive_adapter! {
+    pub BlockAdapter = UnsafeRef<ImmixBlock> : ImmixBlock {link: LinkedListLink}
+}
 pub const LINE_SIZE: usize = 256;
 pub const BLOCK_SIZE: usize = 32 * 1024;
 pub const NUM_LINES_PER_BLOCK: usize = BLOCK_SIZE / LINE_SIZE;
@@ -13,6 +18,7 @@ pub const IMMIX_BLOCK_MAGIC_ALLOCATED: u32 = 0xdeadbeef;
 /// Immix Block type.
 #[repr(C)]
 pub struct ImmixBlock {
+    pub(super) link: LinkedListLink,
     /// Bitmap to find *free* lines.
     pub(super) line_map: LineMap,
     /// How much free lines is there.
@@ -36,6 +42,7 @@ impl ImmixBlock {
             let ptr = at as *mut Self;
             debug_assert!(ptr as usize % 32 * 1024 == 0);
             ptr.write(Self {
+                link: LinkedListLink::new(),
                 line_map: LineMap::new(),
                 magic: 0,
                 hole_count: 0,

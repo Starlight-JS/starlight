@@ -1,6 +1,8 @@
-use super::block::*;
+use super::{block::*, block_allocator::BlockAllocator};
 use crate::gc::mem::align_usize;
 use crate::gc::*;
+use intrusive_collections::LinkedList;
+use intrusive_collections::UnsafeRef;
 
 /// A type alias for the block, the current low and high offset.
 pub type BlockTuple = (*mut ImmixBlock, u16, u16);
@@ -83,5 +85,80 @@ pub trait Allocator {
         let object = unsafe { (*block).offset(low as usize) };
 
         ((block, low + size as u16, high), object)
+    }
+}
+/// The `NormalAllocator` is the standard allocator to allocate objects within
+/// the immix space.
+///
+/// Objects smaller than `MEDIUM_OBJECT` bytes are
+pub struct NormalAllocator {
+    /// The global `BlockAllocator` to get new blocks from.
+    block_allocator: *mut BlockAllocator,
+
+    /// The exhausted blocks.
+    unavailable_blocks: LinkedList<BlockAdapter>,
+
+    /// The blocks with holes to recycle before requesting new blocks..
+    recyclable_blocks: LinkedList<BlockAdapter>,
+
+    /// The current block to allocate from.
+    current_block: Option<BlockTuple>,
+}
+impl Allocator for NormalAllocator {
+    fn get_all_blocks(&mut self) -> Vec<*mut ImmixBlock> {
+        let mut blocks = Vec::new();
+        for block in self
+            .unavailable_blocks
+            .drain(..)
+            .chain(self.recyclable_blocks.drain(..))
+            .chain(self.current_block.take().map(|b| b.0))
+        {
+            blocks.push(block);
+        }
+        blocks
+    }
+
+    fn take_current_block(&mut self) -> Option<BlockTuple> {
+        self.current_block.take()
+    }
+
+    fn put_current_block(&mut self, block_tuple: BlockTuple) {
+        self.current_block = Some(block_tuple);
+    }
+
+    fn get_new_block(&mut self) -> Option<BlockTuple> {
+        unsafe {
+            let block = (&mut *self.block_allocator).get_block()?;
+            (*block).allocated = true;
+            Some((block, (LINE_SIZE) as u16, (BLOCK_SIZE - 1) as u16))
+        }
+    }
+
+    fn handle_no_hole(&mut self, size: usize) -> Option<BlockTuple> {
+        if size >= LINE_SIZE {
+            None
+        } else {
+            match self.recyclable_blocks.pop() {
+                None => None,
+                Some(block) => {
+                    match unsafe { (*block).scan_block((size_of::<ImmixBlock>() - 1) as u16) } {
+                        None => {
+                            self.handle_full_block(block);
+                            self.handle_no_hole(size)
+                        }
+                        Some((low, high)) => {
+                            debug_assert!(low as usize >= size_of::<ImmixBlock>());
+
+                            self.scan_for_hole(size, (block, low, high))
+                                .or_else(|| self.handle_no_hole(size))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn handle_full_block(&mut self, block: *mut ImmixBlock) {
+        self.unavailable_blocks.push(block);
     }
 }
