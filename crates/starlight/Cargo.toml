@@ -19,7 +19,7 @@ regress = "0.2.0"
 dashmap = "4.0"
 swc_atoms = "0.2.5"
 swc_common = "0.10.11"
-swc_ecmascript = { version = "0.24", features = ["parser", "utils", "visit"] }
+swc_ecmascript = { version = "0.35", features = ["parser", "utils", "visit"] }
 libc = "0.2"
 libmimalloc-sys = { version = "0.1", features = ["extended"] }
 starlight-derive = { path = "../starlight-derive" }
@@ -31,7 +31,7 @@ crossbeam = "0.8"
 yastl = "0.1.2"
 ryu-js = "0.2.1"
 libffi = "1.0.0"
-num = "0.3.1"
+num = "0.4"
 mimalloc = "0.1.25"
 libloading = "0.7.0"
 tagged-box = { version = "0.1", features = ["57bits"], default-features = false }

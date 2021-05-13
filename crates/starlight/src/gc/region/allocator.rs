@@ -13,7 +13,7 @@ pub type BlockTuple = (*mut ImmixBlock, u16, u16);
 pub trait Allocator {
     /// Get all block managed by the allocator, draining any local
     /// collections.
-    fn get_all_blocks(&mut self) -> Vec<*mut ImmixBlock>;
+    fn get_all_blocks(&mut self) -> LinkedList<BlockAdapter>;
 
     /// Get the current block to allocate from.
     fn take_current_block(&mut self) -> Option<BlockTuple>;
@@ -105,16 +105,30 @@ pub struct NormalAllocator {
     current_block: Option<BlockTuple>,
 }
 impl Allocator for NormalAllocator {
-    fn get_all_blocks(&mut self) -> Vec<*mut ImmixBlock> {
-        let mut blocks = Vec::new();
-        for block in self
+    fn get_all_blocks(&mut self) -> LinkedList<BlockAdapter> {
+        let mut blocks = LinkedList::new(BlockAdapter::new());
+        /*for block in self
             .unavailable_blocks
             .drain(..)
             .chain(self.recyclable_blocks.drain(..))
             .chain(self.current_block.take().map(|b| b.0))
         {
             blocks.push(block);
+        }*/
+        unsafe {
+            if let Some((block, _, _)) = self.current_block.take() {
+                blocks.push_back(UnsafeRef::from_raw(block));
+            }
+
+            while let Some(block) = self.unavailable_blocks.pop_back() {
+                blocks.push_back(block);
+            }
+
+            while let Some(block) = self.recyclable_blocks.pop_back() {
+                blocks.push_back(block);
+            }
         }
+
         blocks
     }
 
@@ -129,7 +143,7 @@ impl Allocator for NormalAllocator {
     fn get_new_block(&mut self) -> Option<BlockTuple> {
         unsafe {
             let block = (&mut *self.block_allocator).get_block()?;
-            (*block).allocated = true;
+            (*block).magic = IMMIX_BLOCK_MAGIC_ALLOCATED;
             Some((block, (LINE_SIZE) as u16, (BLOCK_SIZE - 1) as u16))
         }
     }
@@ -138,18 +152,18 @@ impl Allocator for NormalAllocator {
         if size >= LINE_SIZE {
             None
         } else {
-            match self.recyclable_blocks.pop() {
+            match self.recyclable_blocks.pop_front() {
                 None => None,
                 Some(block) => {
                     match unsafe { (*block).scan_block((size_of::<ImmixBlock>() - 1) as u16) } {
                         None => {
-                            self.handle_full_block(block);
+                            self.handle_full_block(UnsafeRef::into_raw(block));
                             self.handle_no_hole(size)
                         }
                         Some((low, high)) => {
                             debug_assert!(low as usize >= size_of::<ImmixBlock>());
 
-                            self.scan_for_hole(size, (block, low, high))
+                            self.scan_for_hole(size, (UnsafeRef::into_raw(block), low, high))
                                 .or_else(|| self.handle_no_hole(size))
                         }
                     }
@@ -159,6 +173,9 @@ impl Allocator for NormalAllocator {
     }
 
     fn handle_full_block(&mut self, block: *mut ImmixBlock) {
-        self.unavailable_blocks.push(block);
+        unsafe {
+            self.unavailable_blocks
+                .push_back(UnsafeRef::from_raw(block));
+        }
     }
 }
