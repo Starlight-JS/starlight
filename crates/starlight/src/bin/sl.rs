@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use starlight::gc::formatted_size;
+use starlight::gc::{formatted_size, region::RegionGC};
 use starlight::prelude::*;
 use std::path::{Path, PathBuf};
 use structopt::*;
@@ -43,6 +43,11 @@ struct Options {
         help = "Enable conservative pointer marking (works only for MiGC)"
     )]
     cons_gc: bool,
+    #[structopt(
+        long = "enable-region-gc",
+        help = "Enable region based garbage collector"
+    )]
+    region_gc: bool,
 }
 
 use const_random::const_random;
@@ -60,8 +65,14 @@ fn main() {
         GcParams::default().with_parallel_marking(false)
     };
     let gc = gc.with_conservative_marking(options.cons_gc);
-    let heap = if options.use_malloc_gc {
+    let heap = if options.use_malloc_gc && !options.region_gc {
         Heap::new(starlight::gc::malloc_gc::MallocGC::new(gc))
+    } else if options.region_gc && !options.use_malloc_gc {
+        Heap::new(RegionGC::new(
+            gc.immix_region_size,
+            gc.nmarkers,
+            gc.parallel_marking,
+        ))
     } else {
         Heap::new(starlight::gc::migc::MiGC::new(gc))
     };

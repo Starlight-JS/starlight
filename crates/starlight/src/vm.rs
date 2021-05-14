@@ -127,13 +127,14 @@ impl Deserializable for ModuleKind {
 }
 
 pub struct GcParams {
-    pub(crate) nmarkers: u32,
+    pub nmarkers: u32,
     #[allow(dead_code)]
-    pub(crate) heap_size: usize,
-    pub(crate) conservative_marking: bool,
+    pub heap_size: usize,
+    pub conservative_marking: bool,
     #[allow(dead_code)]
-    pub(crate) track_allocations: bool,
-    pub(crate) parallel_marking: bool,
+    pub track_allocations: bool,
+    pub parallel_marking: bool,
+    pub immix_region_size: usize,
 }
 
 pub struct RuntimeParams {
@@ -168,6 +169,7 @@ impl Default for GcParams {
             track_allocations: false,
             parallel_marking: true,
             nmarkers: 4,
+            immix_region_size: 2 * 1024 * 1024 * 1024,
         }
     }
 }
@@ -182,6 +184,10 @@ impl GcParams {
     }
     pub fn with_conservative_marking(mut self, enabled: bool) -> Self {
         self.conservative_marking = enabled;
+        self
+    }
+    pub fn with_immix_region_size(mut self, size: usize) -> Self {
+        self.immix_region_size = size;
         self
     }
     pub fn with_marker_threads(mut self, n: u32) -> Self {

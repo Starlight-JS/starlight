@@ -177,10 +177,7 @@ impl BlockAllocator {
         if self.free_blocks.is_empty() {
             return self.build_block();
         }
-        #[cfg(feature = "threaded")]
-        {
-            self.lock.lock_nogc();
-        }
+
         let block = self
             .free_blocks
             .pop()
@@ -190,10 +187,7 @@ impl BlockAllocator {
                 x
             })
             .or_else(|| self.build_block());
-        #[cfg(feature = "threaded")]
-        {
-            self.lock.unlock();
-        }
+
         block
     }
 
