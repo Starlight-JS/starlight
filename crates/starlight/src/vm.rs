@@ -64,6 +64,7 @@ pub mod structure_chain;
 pub mod symbol_table;
 pub mod thread;
 pub mod tracingjit;
+pub mod typedarray;
 pub mod value;
 use crate::gc::snapshot::{deserializer::*, serializer::*};
 use attributes::*;
@@ -226,6 +227,9 @@ pub struct Runtime {
     pub(crate) modules: HashMap<String, ModuleKind>,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
+    #[allow(dead_code)]
+    /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
+    pub(crate) eval_history: String,
 }
 
 impl Runtime {
@@ -412,7 +416,7 @@ impl Runtime {
                 }
             };
             let mut vmref = RuntimeRef(self);
-            let mut code = ByteCompiler::compile_script(
+            let mut code = ByteCompiler::compile_eval(
                 &mut *vmref,
                 &script,
                 &path
@@ -561,6 +565,7 @@ impl Runtime {
             perf: perf::Perf::new(),
             module_loader: None,
             symbol_table: HashMap::new(),
+            eval_history: String::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -655,6 +660,7 @@ impl Runtime {
             modules: HashMap::new(),
             stack: Stack::new(),
             global_object: None,
+            eval_history: String::new(),
             global_data: GlobalData::default(),
             external_references,
             stacktrace: String::new(),

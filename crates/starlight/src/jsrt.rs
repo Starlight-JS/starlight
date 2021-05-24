@@ -8,7 +8,8 @@ use crate::{
         attributes::*, code_block::CodeBlock, environment::Environment, error::*, function::*,
         global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*,
         object::*, property_descriptor::*, string::*, structure::*,
-        structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind, Runtime,
+        structure_chain::StructureChain, symbol_table::*, typedarray::TypedArrayStorage, value::*,
+        ModuleKind, Runtime,
     },
 };
 use std::collections::HashMap;
@@ -1075,6 +1076,22 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         jsstd::std_args as _,
         generator::generator_next as _,
         generator::generator_iterator as _,
+        TypedArrayStorage::<u8>::deserialize as _,
+        TypedArrayStorage::<u8>::allocate as _,
+        TypedArrayStorage::<u16>::deserialize as _,
+        TypedArrayStorage::<u16>::allocate as _,
+        TypedArrayStorage::<u32>::deserialize as _,
+        TypedArrayStorage::<u32>::allocate as _,
+        TypedArrayStorage::<u64>::deserialize as _,
+        TypedArrayStorage::<u64>::allocate as _,
+        TypedArrayStorage::<i8>::deserialize as _,
+        TypedArrayStorage::<i8>::allocate as _,
+        TypedArrayStorage::<i16>::deserialize as _,
+        TypedArrayStorage::<i16>::allocate as _,
+        TypedArrayStorage::<i32>::deserialize as _,
+        TypedArrayStorage::<i32>::allocate as _,
+        TypedArrayStorage::<i64>::deserialize as _,
+        TypedArrayStorage::<i64>::allocate as _,
     ];
     // refs.sort_unstable();
     // refs.dedup();

@@ -49,9 +49,9 @@ use std::{
 };
 
 pub struct Deserializer<'a> {
-    rt: *mut Runtime,
+    pub rt: *mut Runtime,
     reader: &'a [u8],
-    pc: usize,
+    pub pc: usize,
     reference_map: Vec<usize>,
     symbol_map: Vec<Symbol>,
     log_deser: bool,

@@ -429,7 +429,7 @@ impl ByteCompiler {
 
         match fun.body {
             Some(ref body) => {
-                self.compile(&body.stmts);
+                self.compile(&body.stmts, false);
             }
             None => {}
         }
@@ -514,7 +514,7 @@ impl ByteCompiler {
 
         compiler.code.strict = is_strict;
 
-        compiler.compile(&script.body);
+        compiler.compile(&script.body, false);
 
         //self.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
@@ -848,7 +848,7 @@ impl ByteCompiler {
         code.top_level = true;
         code.strict = is_strict;
         compiler.push_scope();
-        compiler.compile(&p.body);
+        compiler.compile(&p.body, false);
         compiler.pop_scope();
         // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
@@ -857,7 +857,53 @@ impl ByteCompiler {
 
         result
     }
-    pub fn compile(&mut self, body: &[Stmt]) {
+
+    pub fn compile_eval(
+        mut vm: &mut Runtime,
+        p: &Script,
+        path: &str,
+        fname: String,
+        builtins: bool,
+    ) -> GcPointer<CodeBlock> {
+        let name = "<script>".intern();
+        let mut code = CodeBlock::new(&mut vm, name, false, path.into());
+        code.file_name = fname;
+        let mut compiler = ByteCompiler {
+            lci: Vec::new(),
+            top_level: true,
+            info: None,
+            tail_pos: false,
+            builtins: builtins,
+            scope: Rc::new(RefCell::new(Scope {
+                parent: None,
+                variables: Default::default(),
+                depth: 0,
+            })),
+            variable_freelist: vec![],
+            code: code,
+            val_map: Default::default(),
+            name_map: Default::default(),
+            fmap: Default::default(),
+            rt: RuntimeRef(vm),
+        };
+
+        let is_strict = match p.body.get(0) {
+            Some(ref body) => body.is_use_strict(),
+            None => false,
+        };
+        code.top_level = true;
+        code.strict = is_strict;
+        compiler.push_scope();
+        compiler.compile(&p.body, true);
+        compiler.pop_scope();
+        // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
+        compiler.emit(Opcode::OP_RET, &[], false);
+        let mut rt = compiler.rt;
+        let result = compiler.finish(&mut rt);
+
+        result
+    }
+    pub fn compile(&mut self, body: &[Stmt], last_val_ret: bool) {
         let scopea = Analyzer::analyze_stmts(body);
 
         for var in scopea.vars.iter() {
@@ -912,7 +958,15 @@ impl ByteCompiler {
             }
         }
 
-        for stmt in body {
+        for (index, stmt) in body.iter().enumerate() {
+            if index == body.len() - 1 {
+                if let Stmt::Expr(ref expr) = stmt {
+                    self.expr(&expr.expr, true, false);
+                    self.emit(Opcode::OP_RET, &[], false);
+                    break;
+                }
+            }
+
             self.stmt(stmt);
         }
     }
@@ -1854,7 +1908,7 @@ impl ByteCompiler {
                 code.var_count = p as _;
                 match &fun.body {
                     BlockStmtOrExpr::BlockStmt(block) => {
-                        compiler.compile(&block.stmts);
+                        compiler.compile(&block.stmts, false);
                         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                         compiler.emit(Opcode::OP_RET, &[], false);
                     }

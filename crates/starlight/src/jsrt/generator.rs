@@ -2,7 +2,7 @@ use std::intrinsics::unlikely;
 
 use crate::prelude::*;
 use crate::vm::function::*;
-pub(crate) fn init_generator(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
+pub(crate) fn init_generator(rt: &mut Runtime, _obj_proto: GcPointer<JsObject>) {
     let mut init = || -> Result<(), JsValue> {
         let f = Some(rt.global_data().func_prototype.unwrap());
         let generator_structure = Structure::new_indexed(rt, f, false);

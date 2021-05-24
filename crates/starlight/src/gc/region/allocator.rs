@@ -58,7 +58,7 @@ pub trait Allocator {
     /// returned.
     fn scan_for_hole(&mut self, size: usize, block_tuple: BlockTuple) -> Option<BlockTuple> {
         let (block, low, high) = block_tuple;
-        println!("{} {}", high, low);
+        
         match (high - low) as usize >= size {
             true => Some(block_tuple),
             false => match unsafe { (*block).scan_block(high) } {

@@ -1,9 +1,0 @@
-name: Rust
-
-on:
-  push:
-  pull_request:
-
-env:
-  RUST_LOG: info
-  RUST_BACKTRACE: 1
