@@ -486,8 +486,9 @@ impl ByteCompiler {
 
         let fm = cm.new_source_file(FileName::Custom("<anonymous>".into()), body);
 
+
         let mut parser = Parser::new(
-            Syntax::Es(Default::default()),
+            Syntax::Es(init_es_config()),
             StringInput::from(&*fm),
             None,
         );
