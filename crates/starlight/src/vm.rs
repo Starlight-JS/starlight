@@ -336,8 +336,9 @@ impl Runtime {
 
         let fm = cm.new_source_file(FileName::Custom(name.into()), script.into());
 
+
         let mut parser = Parser::new(
-            Syntax::Es(Default::default()),
+            Syntax::Es(init_es_config()),
             StringInput::from(&*fm),
             None,
         );
@@ -397,7 +398,7 @@ impl Runtime {
             let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
 
             let mut parser = Parser::new(
-                Syntax::Es(Default::default()),
+                Syntax::Es(init_es_config()),
                 StringInput::from(&*fm),
                 None,
             );
@@ -464,7 +465,7 @@ impl Runtime {
             let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
 
             let mut parser = Parser::new(
-                Syntax::Es(Default::default()),
+                Syntax::Es(init_es_config()),
                 StringInput::from(&*fm),
                 None,
             );
@@ -881,7 +882,7 @@ pub fn parse(script: &str, strict_mode: bool) -> Result<Program, Error> {
     let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
 
     let mut parser = Parser::new(
-        Syntax::Es(Default::default()),
+        Syntax::Es(init_es_config()),
         StringInput::from(&*fm),
         None,
     );
@@ -898,4 +899,10 @@ pub fn parse(script: &str, strict_mode: bool) -> Result<Program, Error> {
     };
 
     Ok(script)
+}
+
+pub(crate) fn init_es_config() -> EsConfig {
+    let mut es_config: EsConfig = Default::default();
+    es_config.dynamic_import = true;
+    es_config
 }
