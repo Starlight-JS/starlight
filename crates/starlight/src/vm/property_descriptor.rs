@@ -440,12 +440,10 @@ impl StoredSlot {
                 self.value = JsValue::encode_object_value(ac.clone().as_dyn());
                 ac
             };
-            if accs.is_getter_absent() {
+            if !accs.is_getter_absent() {
                 ac.set_getter(accs.get());
-            } else if accs.is_setter_absent() {
-                ac.set_setter(accs.set());
-            } else {
-                ac.set_getter(accs.get());
+            }
+            if !accs.is_setter_absent() {
                 ac.set_setter(accs.set());
             }
             self.attributes = AttrSafe::un_safe(attr);
