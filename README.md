@@ -1,7 +1,7 @@
 # Development status
 Right now I'm preparing for exams and entire June I'll be passing exams and all this stuff so development will be much slower. Issues and PRs is still accepted and I will try to do some additions too when I will have some free time to work on Starlight.
 
-# starlight
+# Starlight
 
 Starlight is a JS engine in Rust which focuses on performance rather than ensuring 100% safety of JS runtime.
 
@@ -44,6 +44,22 @@ NOTE: macOS and FreeBSD do not use `*.so` file format so `.dynlib` files from ta
 Starlight supports creating executable JavaScript bundles. To create one `starlight-bundle` could be used: just run it on one of JS files like `starlight-bundle file.js file-bundle` and it will produce statically linked executable file `file-bundle` which can be run. Internally bundle is just heap snapshot after JS file was compiled and simple call to execute code from this snapshot.
 
 ***NOTE*** `starlight-bundle` might panic when run on platform that does have `cc` available in `PATH` so `--output-c` option should be used and C file should be compiled and linked manually.
+
+# Get Started
+## Working with nightly Rust
+```bash
+# https://rust-lang.github.io/rustup/concepts/channels.html
+rustup toolchain install nightly
+rustup run nightly rustc --version
+rustup default nightly
+```
+
+## Run Js File
+```bash
+cargo run --bin sl examples/hello-world.js
+```
+
+
 # TODO
-- Precise GC
-- ES support
+-[ ] Precise GC
+-[ ] ES support
