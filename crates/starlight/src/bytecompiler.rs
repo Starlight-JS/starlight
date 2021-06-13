@@ -486,12 +486,7 @@ impl ByteCompiler {
 
         let fm = cm.new_source_file(FileName::Custom("<anonymous>".into()), body);
 
-
-        let mut parser = Parser::new(
-            Syntax::Es(init_es_config()),
-            StringInput::from(&*fm),
-            None,
-        );
+        let mut parser = Parser::new(Syntax::Es(init_es_config()), StringInput::from(&*fm), None);
 
         for e in parser.take_errors() {
             e.into_diagnostic(&handler).emit();
@@ -904,7 +899,7 @@ impl ByteCompiler {
 
         result
     }
-    pub fn compile(&mut self, body: &[Stmt], last_val_ret: bool) {
+    pub fn compile(&mut self, body: &[Stmt], _last_val_ret: bool) {
         let scopea = Analyzer::analyze_stmts(body);
 
         for var in scopea.vars.iter() {

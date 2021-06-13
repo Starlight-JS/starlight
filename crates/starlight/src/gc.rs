@@ -54,8 +54,8 @@ macro_rules! offsetof {
 pub mod cell;
 pub mod snapshot;
 pub const K: usize = 1024;
-#[macro_use]
-pub mod accounting;
+//#[macro_use]
+//pub mod accounting;
 pub mod bump;
 pub mod freelist;
 pub mod malloc_gc;
@@ -63,7 +63,7 @@ pub mod mem;
 pub mod migc;
 pub mod os;
 pub mod pmarking;
-pub mod region;
+//pub mod region;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;

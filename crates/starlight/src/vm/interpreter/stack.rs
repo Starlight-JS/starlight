@@ -3,11 +3,11 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::*;
 use crate::gc::cell::Trace;
-use memmap2::MmapMut;
+
 use std::{intrinsics::unlikely, ptr::null_mut};
 #[allow(dead_code)]
 pub struct Stack {
-    map: MmapMut,
+    mem: *mut u8,
     start: *mut JsValue,
     pub(crate) cursor: *mut JsValue,
     end: *mut JsValue,
@@ -18,10 +18,9 @@ pub const STACK_SIZE: usize = 16 * 1024;
 
 impl Stack {
     pub fn new() -> Self {
-        let mut map =
-            MmapMut::map_anon(STACK_SIZE * 8).expect("Failed to allocate interpreter stack memory");
+        let mut map = unsafe { libc::calloc(1, STACK_SIZE * 8).cast::<u8>() };
         unsafe {
-            let mut scan = map.as_mut_ptr().cast::<JsValue>();
+            let mut scan = map.cast::<JsValue>();
             let end = scan.add(STACK_SIZE);
             while scan < end {
                 scan.write(JsValue::encode_undefined_value());
@@ -29,11 +28,11 @@ impl Stack {
             }
         }
         Self {
-            start: map.as_mut_ptr().cast(),
-            end: unsafe { map.as_mut_ptr().cast::<JsValue>().add(STACK_SIZE) },
-            cursor: map.as_mut_ptr().cast(),
+            start: map.cast(),
+            end: unsafe { map.cast::<JsValue>().add(STACK_SIZE) },
+            cursor: map.cast(),
             current: null_mut(),
-            map,
+            mem: map.cast(),
         }
     }
     pub fn new_frame(
@@ -125,6 +124,14 @@ unsafe impl Trace for Stack {
                     frame = (*frame).prev;
                 }
             }
+        }
+    }
+}
+
+impl Drop for Stack {
+    fn drop(&mut self) {
+        unsafe {
+            libc::free(self.mem.cast());
         }
     }
 }

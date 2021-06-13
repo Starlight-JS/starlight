@@ -39,6 +39,7 @@ pub mod class;
 pub mod method_table;
 pub mod arguments;
 pub mod array;
+pub mod array_buffer;
 pub mod array_storage;
 pub mod attributes;
 pub mod bigint;
@@ -336,12 +337,7 @@ impl Runtime {
 
         let fm = cm.new_source_file(FileName::Custom(name.into()), script.into());
 
-
-        let mut parser = Parser::new(
-            Syntax::Es(init_es_config()),
-            StringInput::from(&*fm),
-            None,
-        );
+        let mut parser = Parser::new(Syntax::Es(init_es_config()), StringInput::from(&*fm), None);
 
         for e in parser.take_errors() {
             e.into_diagnostic(&handler).emit();
@@ -397,11 +393,8 @@ impl Runtime {
 
             let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
 
-            let mut parser = Parser::new(
-                Syntax::Es(init_es_config()),
-                StringInput::from(&*fm),
-                None,
-            );
+            let mut parser =
+                Parser::new(Syntax::Es(init_es_config()), StringInput::from(&*fm), None);
 
             for e in parser.take_errors() {
                 e.into_diagnostic(&handler).emit();
@@ -464,11 +457,8 @@ impl Runtime {
 
             let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
 
-            let mut parser = Parser::new(
-                Syntax::Es(init_es_config()),
-                StringInput::from(&*fm),
-                None,
-            );
+            let mut parser =
+                Parser::new(Syntax::Es(init_es_config()), StringInput::from(&*fm), None);
 
             for e in parser.take_errors() {
                 e.into_diagnostic(&handler).emit();
@@ -881,11 +871,7 @@ pub fn parse(script: &str, strict_mode: bool) -> Result<Program, Error> {
     };
     let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
 
-    let mut parser = Parser::new(
-        Syntax::Es(init_es_config()),
-        StringInput::from(&*fm),
-        None,
-    );
+    let mut parser = Parser::new(Syntax::Es(init_es_config()), StringInput::from(&*fm), None);
 
     for e in parser.take_errors() {
         e.into_diagnostic(&handler).emit();

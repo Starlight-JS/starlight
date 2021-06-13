@@ -8,6 +8,7 @@
     destructuring_assignment,
     const_raw_ptr_to_usize_cast,
    // try_trait,
+   stmt_expr_attributes,
     const_type_id,
     pattern
 )]

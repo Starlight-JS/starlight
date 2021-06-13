@@ -3,6 +3,8 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 use std::mem::*;
 use std::ptr::*;
+
+/*
 pub trait TypedArrayType: Default + Copy + Deserializable + Serializable + GcCell + Unpin {
     fn from_jsvalue(vm: &mut Runtime, val: JsValue) -> Result<Self, JsValue>;
     fn into_jsvalue(self, vm: &mut Runtime) -> Result<JsValue, JsValue>;
@@ -440,4 +442,11 @@ mod tests {
             .unwrap();
         assert_eq!(*object.at(0), 42);
     }
+}
+*/
+
+pub struct JsTypedArrayBase {
+    length: usize,
+    byte_width: u8,
+    offset: usize,
 }

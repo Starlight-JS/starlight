@@ -8,13 +8,13 @@ use crate::{
         attributes::*, code_block::CodeBlock, environment::Environment, error::*, function::*,
         global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*,
         object::*, property_descriptor::*, string::*, structure::*,
-        structure_chain::StructureChain, symbol_table::*, typedarray::TypedArrayStorage, value::*,
-        ModuleKind, Runtime,
+        structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind, Runtime,
     },
 };
 use std::collections::HashMap;
 pub mod array;
 pub mod error;
+#[cfg(feature = "ffi")]
 pub mod ffi;
 pub mod function;
 pub mod generator;
@@ -887,7 +887,7 @@ use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
 pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
-    let refs = [
+    let mut refs = vec![
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
         // but they should be the same for all types that is allocated in GC heap.
@@ -1022,9 +1022,6 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         NumberObject::get_class() as *const _ as usize,
         Environment::deserialize as _,
         Environment::allocate as _,
-        ffi::ffi_function_attach as _,
-        ffi::ffi_function_call as _,
-        ffi::ffi_library_open as _,
         number::number_constructor as _,
         number::number_clz as _,
         number::number_is_finite as _,
@@ -1076,26 +1073,16 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         jsstd::std_args as _,
         generator::generator_next as _,
         generator::generator_iterator as _,
-        TypedArrayStorage::<u8>::deserialize as _,
-        TypedArrayStorage::<u8>::allocate as _,
-        TypedArrayStorage::<u16>::deserialize as _,
-        TypedArrayStorage::<u16>::allocate as _,
-        TypedArrayStorage::<u32>::deserialize as _,
-        TypedArrayStorage::<u32>::allocate as _,
-        TypedArrayStorage::<u64>::deserialize as _,
-        TypedArrayStorage::<u64>::allocate as _,
-        TypedArrayStorage::<i8>::deserialize as _,
-        TypedArrayStorage::<i8>::allocate as _,
-        TypedArrayStorage::<i16>::deserialize as _,
-        TypedArrayStorage::<i16>::allocate as _,
-        TypedArrayStorage::<i32>::deserialize as _,
-        TypedArrayStorage::<i32>::allocate as _,
-        TypedArrayStorage::<i64>::deserialize as _,
-        TypedArrayStorage::<i64>::allocate as _,
     ];
+    #[cfg(feature = "ffi")]
+    {
+        refs.push(ffi::ffi_function_attach as _);
+        refs.push(ffi::ffi_function_call as _);
+        refs.push(ffi::ffi_library_open as _);
+    }
     // refs.sort_unstable();
     // refs.dedup();
-    Box::leak(Box::new(refs))
+    Box::leak(refs.into_boxed_slice())
 });
 
 pub fn get_length(rt: &mut Runtime, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
