@@ -29,11 +29,10 @@ atomic = "*"
 crossbeam = "0.8"
 yastl = "0.1.2"
 ryu-js = "0.2.1"
-libffi = { version = "1.0.0", optional = true }
+
 num = "0.4"
 mimalloc = "0.1.25"
-libloading = { version = "0.7.0", optional = true }
-tagged-box = { version = "0.1", features = ["57bits"], default-features = false }
+
 const-random = "0.1.13"
 [features]
 val-as-f64 = []
@@ -43,6 +42,7 @@ no-inline-caching = []
 # enable performance counter for interpreter/gc/codegen
 perf = []
 ffi = ["libloading", "libffi"]
+
 default = ["ffi", "val-as-u64"]
 
 [dev-dependencies]
@@ -77,9 +77,17 @@ path = "src/bin/bundle.rs"
 [[bin]]
 name = "sl"
 path = "src/bin/sl.rs"
+
 [lib]
 name = "starlight"
 crate-type = ["dylib", "rlib"]
+[target.'cfg(all(not(wasm),target_pointer_width="64"))'.dependencies]
+tagged-box = { version = "0.1", features = ["57bits"], default-features = false }
+libffi = { version = "1.0.0", optional = true }
+libloading = { version = "0.7.0", optional = true }
+
+[target.'cfg(not(wasm))'.dependencies]
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
     "memoryapi",

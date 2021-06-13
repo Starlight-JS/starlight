@@ -118,7 +118,7 @@ fn main() {
             None,
         )
     };
-
+    #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     if options.enable_ffi {
         rt.add_ffi();
     }

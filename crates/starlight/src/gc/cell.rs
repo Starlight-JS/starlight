@@ -15,6 +15,7 @@ use std::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
+#[cfg(target_pointer_width = "64")]
 use tagged_box::*;
 
 pub trait Tracer {
@@ -89,7 +90,12 @@ pub unsafe extern "C" fn get_jscell_type_id(x: *mut GcPointerBase) -> u64 {
 }
 #[repr(C)]
 pub struct GcPointerBase {
+    #[cfg(target_pointer_width = "64")]
     pub vtable: TaggedPointer,
+    #[cfg(target_pointer_width = "32")]
+    vtable: usize,
+    #[cfg(target_pointer_width = "32")]
+    state_: u8,
     pub type_id: TypeId,
 }
 
@@ -106,13 +112,25 @@ impl GcPointerBase {
     }
     pub fn new(vtable: usize, type_id: TypeId) -> Self {
         Self {
+            #[cfg(target_pointer_width = "64")]
             vtable: unsafe { TaggedPointer::new_unchecked(vtable, DEFINETELY_WHITE) },
+            #[cfg(target_pointer_width = "32")]
+            vtable,
+            #[cfg(target_pointer_width = "32")]
+            state_: DEFINETELY_WHITE,
             type_id,
         }
     }
 
     pub fn state(&self) -> u8 {
-        self.vtable.discriminant()
+        #[cfg(target_pointer_width = "64")]
+        {
+            self.vtable.discriminant()
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            self.state_
+        }
         //self.cell_state.load(Ordering::Acquire)
     }
 
@@ -124,13 +142,25 @@ impl GcPointerBase {
             if self.state() != from {
                 return false;
             }
-            self.vtable = TaggedPointer::new_unchecked(self.vtable.as_ptr::<()>() as usize, to);
+            #[cfg(target_pointer_width = "64")]
+            {
+                self.vtable = TaggedPointer::new_unchecked(self.vtable.as_ptr::<()>() as usize, to);
+            }
+            #[cfg(target_pointer_width = "32")]
+            {
+                self.state_ = to;
+            }
             true
         }
     }
     pub fn force_set_state(&mut self, to: u8) {
+        #[cfg(target_pointer_width = "64")]
         unsafe {
             self.vtable = TaggedPointer::new_unchecked(self.vtable.as_ptr::<()>() as usize, to);
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            self.state_ = to;
         }
         //self.cell_state.store(to, Ordering::AcqRel);
     }
@@ -142,7 +172,14 @@ impl GcPointerBase {
         }
     }
     pub fn raw(&self) -> usize {
-        self.vtable.as_raw_usize()
+        #[cfg(target_pointer_width = "64")]
+        {
+            self.vtable.as_raw_usize()
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            self.vtable
+        }
     }
 
     pub fn get_dyn(&self) -> &mut dyn GcCell {
@@ -155,7 +192,14 @@ impl GcPointerBase {
     }
 
     pub fn vtable(&self) -> usize {
-        self.vtable.as_ptr::<()>() as _
+        #[cfg(target_pointer_width = "64")]
+        {
+            self.vtable.as_ptr::<()>() as _
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            self.vtable
+        }
         // (self.vtable & !(1 << 0)) as usize
     }
 }

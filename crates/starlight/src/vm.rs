@@ -715,7 +715,9 @@ impl Runtime {
     ///
     ///
     /// FFI object allows to load arbitrary dynamic library and then load functions from it.
+    #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     pub fn add_ffi(&mut self) {
+        println!("FFI");
         crate::jsrt::ffi::initialize_ffi(self);
     }
 

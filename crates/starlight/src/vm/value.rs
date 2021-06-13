@@ -223,7 +223,7 @@ impl JsValue {
     #[inline]
     pub fn get_pointer(&self) -> *mut () {
         assert!(self.is_pointer());
-        unsafe { std::mem::transmute(self.0 & Self::DATA_MASK) }
+        unsafe { std::mem::transmute((self.0 & Self::DATA_MASK) as usize) }
     }
     #[inline]
     pub fn get_int32(&self) -> i32 {
@@ -263,7 +263,7 @@ impl JsValue {
     pub fn get_object(&self) -> GcPointer<dyn GcCell> {
 
         assert!(self.is_object());
-        unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>(self.0 & Self::DATA_MASK) }.clone()
+        unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>((self.0 & Self::DATA_MASK) as usize) }.clone()
     }
 
     /// Get number value from JS value.If value is int32 value then it is casted to f64.

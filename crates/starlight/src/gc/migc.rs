@@ -101,7 +101,7 @@ impl MiGC {
         }
         // Capture all the registers to scan them conservatively. Note that this also captures
         // FPU registers too because JS values is NaN boxed and exist in FPU registers.
-        let registers = crate::vm::thread::Thread::capture_registers();
+
         // Get stack pointer for scanning thread stack.
         self.sp = current_stack_pointer();
         if self.defers > 0 {
@@ -117,11 +117,15 @@ impl MiGC {
 
         unsafe {
             if self.collect_conservative {
-                if !registers.is_empty() {
-                    visitor.cons_roots.push((
-                        registers.first().unwrap() as *const usize as _,
-                        registers.last().unwrap() as *const usize as _,
-                    ));
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let registers = crate::vm::thread::Thread::capture_registers();
+                    if !registers.is_empty() {
+                        visitor.cons_roots.push((
+                            registers.first().unwrap() as *const usize as _,
+                            registers.last().unwrap() as *const usize as _,
+                        ));
+                    }
                 }
                 crate::vm::thread::THREAD.with(|thread| {
                     visitor
@@ -130,7 +134,7 @@ impl MiGC {
                 });
             }
             self.process_roots(&mut visitor);
-            drop(registers);
+
             if let Some(ref mut pool) = self.threadpool {
                 crate::gc::pmarking::start(&visitor.queue, self.n_workers as _, pool);
             } else {

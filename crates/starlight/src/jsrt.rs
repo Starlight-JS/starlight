@@ -14,7 +14,7 @@ use crate::{
 use std::collections::HashMap;
 pub mod array;
 pub mod error;
-#[cfg(feature = "ffi")]
+#[cfg(all(target_pointer_width = "64", feature = "ffi"))]
 pub mod ffi;
 pub mod function;
 pub mod generator;
@@ -1074,7 +1074,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         generator::generator_next as _,
         generator::generator_iterator as _,
     ];
-    #[cfg(feature = "ffi")]
+    #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {
         refs.push(ffi::ffi_function_attach as _);
         refs.push(ffi::ffi_function_call as _);

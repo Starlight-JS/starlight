@@ -1,4 +1,5 @@
 use super::SuiteResult;
+#[cfg(target_pointer_width = "64")]
 use git2::Repository;
 use hex::ToHex;
 use serde::{Deserialize, Serialize};
@@ -123,20 +124,28 @@ pub(crate) fn write_json(
 
 /// Gets the commit OID of the test262 submodule.
 fn get_test262_commit() -> Box<str> {
-    let repo = Repository::open(".").expect("could not open git repository in current directory");
+    #[cfg(target_pointer_width = "64")]
+    {
+        let repo =
+            Repository::open(".").expect("could not open git repository in current directory");
 
-    let submodule = repo
-        .submodules()
-        .expect("could not get the list of submodules of the repo")
-        .into_iter()
-        .find(|sub| sub.path() == Path::new("test262"))
-        .expect("test262 submodule not found");
+        let submodule = repo
+            .submodules()
+            .expect("could not get the list of submodules of the repo")
+            .into_iter()
+            .find(|sub| sub.path() == Path::new("test262"))
+            .expect("test262 submodule not found");
 
-    submodule
-        .index_id()
-        .expect("could not get the commit OID")
-        .encode_hex::<String>()
-        .into_boxed_str()
+        submodule
+            .index_id()
+            .expect("could not get the commit OID")
+            .encode_hex::<String>()
+            .into_boxed_str()
+    }
+    #[cfg(target_pointer_width = "32")]
+    {
+        "".to_string().into_boxed_str()
+    }
 }
 
 /// Updates the GitHub pages repository by pulling latest changes before writing the new things.
