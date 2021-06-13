@@ -61,5 +61,5 @@ cargo run --bin sl examples/hello-world.js
 
 
 # TODO
--[ ] Precise GC
--[ ] ES support
+- [ ] Precise GC
+- [ ] ES support
