@@ -847,6 +847,13 @@ pub(crate) fn object_init(
         &*DataDescriptor::new(JsValue::new(func), NONE),
         false,
     );
+    let func = JsNativeFunction::new(rt, "getOwnPropertyDescriptor".intern(), object_get_own_property_descriptor, 2);
+    let _ = obj_constructor.define_own_property(
+        rt,
+        "getOwnPropertyDescriptor".intern(),
+        &*DataDescriptor::new(JsValue::new(func), NONE),
+        false,
+    );
     let func = JsNativeFunction::new(rt, "create".intern(), object_create, 3);
     let _ = obj_constructor.define_own_property(
         rt,
@@ -959,6 +966,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         object::object_define_property as usize,
         object::has_own_property as usize,
         object::object_keys as usize,
+        object::object_get_own_property_descriptor as usize,
         object::object_freeze as _,
         object::object_seal as _,
         object::object_get_prototype_of as _,
