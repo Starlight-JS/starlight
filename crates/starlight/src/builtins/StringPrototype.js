@@ -73,7 +73,7 @@ String.prototype.replace = function replace(search, replace) {
 let split_sym = Symbol.split;
 let fastSplit = String.prototype.___splitFast;
 
-String.prototype.split = function (separator, limit) {
+String.prototype.split = function split(separator, limit) {
     "use strict";
     if (this === undefined | this === null)
         throw new TypeError("String.prototype.split requires that |this| not be null or undefined")
