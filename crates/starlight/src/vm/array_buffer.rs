@@ -1,13 +1,71 @@
 // TODO: Use mimalloc there?
 use crate::prelude::*;
-use std::{intrinsics::unlikely, ptr::null_mut};
+use std::{
+    intrinsics::unlikely,
+    mem::{size_of, ManuallyDrop},
+    ptr::null_mut,
+};
 pub struct JsArrayBuffer {
     data: *mut u8,
     size: usize,
     attached: bool,
 }
 
+extern "C" fn drop_array_buffer(x: &mut JsObject) {
+    unsafe {
+        ManuallyDrop::drop(x.data::<JsArrayBuffer>());
+    }
+}
+
+extern "C" fn array_buffer_serialize(x: &JsObject, serializer: &mut SnapshotSerializer) {
+    let data = x.data::<JsArrayBuffer>();
+    data.attached.serialize(serializer);
+    (data.size as u32).serialize(serializer);
+    if data.attached {
+        assert!(!data.data.is_null());
+        for i in 0..data.size {
+            unsafe {
+                data.data.add(i).read().serialize(serializer);
+            }
+        }
+    }
+}
+extern "C" fn array_buffer_deserialize(
+    x: &mut JsObject,
+    deser: &mut Deserializer,
+    _rt: &mut Runtime,
+) {
+    unsafe {
+        let attached = bool::deserialize_inplace(deser);
+        let size = u32::deserialize_inplace(deser) as usize;
+        let mut buf = null_mut();
+        if attached {
+            buf = libc::malloc(size).cast::<u8>();
+            for i in 0..size {
+                buf.add(i).write(u8::deserialize_inplace(deser));
+            }
+        }
+        *x.data::<JsArrayBuffer>() = ManuallyDrop::new(JsArrayBuffer {
+            attached,
+            data: buf,
+            size,
+        })
+    }
+}
+extern "C" fn array_buffer_size() -> usize {
+    size_of::<JsArrayBuffer>()
+}
 impl JsArrayBuffer {
+    define_jsclass_with_symbol!(
+        JsObject,
+        ArrayBuffer,
+        ArrayBuffer,
+        Some(drop_array_buffer),
+        None,
+        Some(array_buffer_deserialize),
+        Some(array_buffer_serialize),
+        Some(array_buffer_size)
+    );
     pub fn size(&self) -> usize {
         self.size
     }

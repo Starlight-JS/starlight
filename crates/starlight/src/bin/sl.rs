@@ -56,6 +56,7 @@ const SNAPSHOT_FILENAME: &'static str = ".startup-snapshot";
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
+    let x = 42;
 
     let gc = if options.parallel_marking {
         GcParams::default()
@@ -118,6 +119,7 @@ fn main() {
             None,
         )
     };
+
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     if options.enable_ffi {
         rt.add_ffi();
