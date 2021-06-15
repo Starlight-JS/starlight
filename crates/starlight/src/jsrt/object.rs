@@ -157,7 +157,7 @@ pub fn object_get_own_property_descriptor(vm: &mut Runtime, args: &Arguments) ->
 
         match obj.get_own_property(vm, name) {
             Some(property_descriptor) => {
-                let mut res = JsObject::new_empty(vm);
+                letroot!(res = stack, JsObject::new_empty(vm));
                 res.define_own_property(
                     vm,
                     "configurable".intern(),
@@ -190,23 +190,23 @@ pub fn object_get_own_property_descriptor(vm: &mut Runtime, args: &Arguments) ->
                         false,
                     )?;
                 } else {
-                    let getter = property_descriptor.getter();
-                    let setter = property_descriptor.setter();
+                    letroot!(getter = stack, property_descriptor.getter());
+                    letroot!(setter = stack, property_descriptor.setter());
 
                     res.define_own_property(
                         vm,
                         "get".intern(),
-                        &*DataDescriptor::new(JsValue::new(getter), W | C),
+                        &*DataDescriptor::new(JsValue::new(*getter), W | C),
                         false,
                     )?;
                     res.define_own_property(
                         vm,
                         "set".intern(),
-                        &*DataDescriptor::new(JsValue::new(setter), W | C),
+                        &*DataDescriptor::new(JsValue::new(*setter), W | C),
                         false,
                     )?;
                 }
-                Ok(JsValue::encode_object_value(res))
+                Ok(JsValue::encode_object_value(*res))
             }
             None => Ok(JsValue::new(Undefined)),
         }
