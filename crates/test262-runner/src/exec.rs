@@ -101,7 +101,7 @@ impl Test {
 
     /// Runs the test once, in strict or non-strict mode
     fn run_once(&self, harness: &Harness, strict: bool, verbose: u8) -> TestResult {
-        if verbose > 1 {
+        if verbose >= 1 {
             eprintln!(
                 "Starting `{}` {}",
                 self.name,
@@ -268,7 +268,7 @@ impl Test {
 
             result
         } else {
-            if verbose > 1 {
+            if verbose >= 1 {
                 println!("Result: {}", "Ignored".yellow());
             } else {
                 print!("{}", ".".yellow());
@@ -276,7 +276,7 @@ impl Test {
             (TestOutcomeResult::Ignored, String::new())
         };
 
-        if verbose > 1 {
+        if verbose >= 1 {
             println!("Result text:");
             println!("{}", result_text);
             println!();

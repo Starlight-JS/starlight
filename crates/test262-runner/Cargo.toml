@@ -20,5 +20,5 @@ fxhash = "0.2.1"
 hex = "0.4.3"
 num-format = "0.4.0"
 
-[target.'cfg(target_pointer_width="64")']
+[target.'cfg(target_pointer_width="64")'.dependencies]
 git2 = "0.13.20"
