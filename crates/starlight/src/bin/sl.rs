@@ -56,7 +56,6 @@ const SNAPSHOT_FILENAME: &'static str = ".startup-snapshot";
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
-    let x = 42;
 
     let gc = if options.parallel_marking {
         GcParams::default()

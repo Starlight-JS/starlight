@@ -13,6 +13,7 @@ use crate::{
 };
 use std::collections::HashMap;
 pub mod array;
+pub mod array_buffer;
 pub mod error;
 #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
 pub mod ffi;
@@ -847,7 +848,12 @@ pub(crate) fn object_init(
         &*DataDescriptor::new(JsValue::new(func), NONE),
         false,
     );
-    let func = JsNativeFunction::new(rt, "getOwnPropertyDescriptor".intern(), object_get_own_property_descriptor, 2);
+    let func = JsNativeFunction::new(
+        rt,
+        "getOwnPropertyDescriptor".intern(),
+        object_get_own_property_descriptor,
+        2,
+    );
     let _ = obj_constructor.define_own_property(
         rt,
         "getOwnPropertyDescriptor".intern(),

@@ -13,6 +13,7 @@ pub struct JsArrayBuffer {
 
 extern "C" fn drop_array_buffer(x: &mut JsObject) {
     unsafe {
+        x.data::<JsArrayBuffer>().detach();
         ManuallyDrop::drop(x.data::<JsArrayBuffer>());
     }
 }
@@ -66,6 +67,17 @@ impl JsArrayBuffer {
         Some(array_buffer_serialize),
         Some(array_buffer_size)
     );
+
+    pub fn new(rt: &mut Runtime) -> GcPointer<JsObject> {
+        let structure = rt.global_data().array_buffer_structure.unwrap();
+        let mut this = JsObject::new(rt, &structure, Self::get_class(), ObjectTag::ArrayBuffer);
+        *this.data::<Self>() = ManuallyDrop::new(Self {
+            data: null_mut(),
+            attached: false,
+            size: 0,
+        });
+        this
+    }
     pub fn size(&self) -> usize {
         self.size
     }

@@ -784,6 +784,7 @@ pub struct GlobalData {
     pub(crate) set_prototype: Option<GcPointer<JsObject>>,
     pub(crate) regexp_structure: Option<GcPointer<Structure>>,
     pub(crate) regexp_object: Option<GcPointer<JsObject>>,
+    pub(crate) array_buffer_structure: Option<GcPointer<Structure>>,
 }
 
 impl GlobalData {
