@@ -5,12 +5,14 @@ use crate::{
     vm::{
         arguments::Arguments,
         array::*,
+        attributes::*,
         error::JsTypeError,
         object::{JsObject, ObjectTag, *},
+        property_descriptor::DataDescriptor,
         string::JsString,
         structure::Structure,
         symbol_table::*,
-        value::JsValue,
+        value::{JsValue, Undefined},
     },
 };
 
@@ -140,6 +142,79 @@ pub fn has_own_property(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     let prop = args.at(0).to_symbol(vm)?;
     let mut obj = args.this.to_object(vm)?;
     Ok(JsValue::new(obj.get_own_property(vm, prop).is_some()))
+}
+
+pub fn object_get_own_property_descriptor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = vm.shadowstack();
+    if args.size() < 2 {
+        return Ok(JsValue::new(Undefined));
+    }
+    let first = args.at(0);
+    let prop = args.at(1);
+    if first.is_jsobject() {
+        letroot!(obj = stack, first.get_jsobject());
+        let name = prop.to_symbol(vm)?;
+
+        match obj.get_own_property(vm, name) {
+            Some(property_descriptor) => {
+                letroot!(res = stack, JsObject::new_empty(vm));
+                res.define_own_property(
+                    vm,
+                    "configurable".intern(),
+                    &*DataDescriptor::new(
+                        JsValue::new(property_descriptor.is_configurable()),
+                        W | C,
+                    ),
+                    false,
+                )?;
+                res.define_own_property(
+                    vm,
+                    "enumerable".intern(),
+                    &*DataDescriptor::new(JsValue::new(property_descriptor.is_enumerable()), W | C),
+                    false,
+                )?;
+                if property_descriptor.is_data() {
+                    res.define_own_property(
+                        vm,
+                        "value".intern(),
+                        &*DataDescriptor::new(JsValue::new(property_descriptor.value()), W | C),
+                        false,
+                    )?;
+                    res.define_own_property(
+                        vm,
+                        "writable".intern(),
+                        &*DataDescriptor::new(
+                            JsValue::new(property_descriptor.is_writable()),
+                            W | C,
+                        ),
+                        false,
+                    )?;
+                } else {
+                    letroot!(getter = stack, property_descriptor.getter());
+                    letroot!(setter = stack, property_descriptor.setter());
+
+                    res.define_own_property(
+                        vm,
+                        "get".intern(),
+                        &*DataDescriptor::new(JsValue::new(*getter), W | C),
+                        false,
+                    )?;
+                    res.define_own_property(
+                        vm,
+                        "set".intern(),
+                        &*DataDescriptor::new(JsValue::new(*setter), W | C),
+                        false,
+                    )?;
+                }
+                Ok(JsValue::encode_object_value(*res))
+            }
+            None => Ok(JsValue::new(Undefined)),
+        }
+    } else {
+        Err(JsValue::new(vm.new_type_error(
+            "Object.getOwnPropertyDescriptor requires object argument",
+        )))
+    }
 }
 
 pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
