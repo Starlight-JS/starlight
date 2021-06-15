@@ -218,6 +218,7 @@ impl<'a> Deserializer<'a> {
     }
     unsafe fn deserialize_global_data(&mut self) -> GlobalData {
         GlobalData {
+            
             normal_arguments_structure: self.read_opt_gc(),
             empty_object_struct: self.read_opt_gc(),
             function_struct: self.read_opt_gc(),
@@ -253,6 +254,7 @@ impl<'a> Deserializer<'a> {
             regexp_object: self.read_opt_gc(),
             generator_prototype: self.read_opt_gc(),
             generator_structure: self.read_opt_gc(),
+            array_buffer_structure: self.read_opt_gc(),
         }
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
