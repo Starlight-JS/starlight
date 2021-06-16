@@ -217,19 +217,46 @@ pub fn string_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
     } else {
         0
     };
-    let start = start.max(0).min(length as i32);
+    let start = (start.max(0).min(length as i32)) as usize;
 
     if search_string.is_empty() {
-        return Ok(JsValue::new(start.min(length as _)));
+        return Ok(JsValue::new(start as u32));
     }
 
-    if start < length as i32 {
-        if let Some(pos) = string.find(search_string.as_str()) {
+    if start < length {
+        if let Some(pos) = string[start..].find(search_string.as_str()) {
             return Ok(JsValue::new(string[..pos].chars().count() as u32));
         }
     }
 
     Ok(JsValue::new(-1))
+}
+
+pub fn string_last_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    args.this.check_object_coercible(rt)?;
+    let string:String = args.this.to_string(rt)?;
+    let search_string:String = args.at(0).to_string(rt)?;
+
+    let length = string.chars().count();
+    let search_string_length=  search_string.chars().count();
+    let max_search_index = (length - search_string_length) as i32;
+    let start = if args.size() > 1 {
+        args.at(1).to_int32(rt)?
+    } else {
+        max_search_index
+    };
+    
+    let start = (start.max(0).min(max_search_index)) as usize;
+    if search_string.is_empty() {
+        return Ok(JsValue::new(start as u32));
+    }
+    
+    if let Some(pos) = string[..(start+search_string_length)].rfind(search_string.as_str()) {
+        return Ok(JsValue::new(string[..pos].chars().count() as u32));
+    }
+
+    Ok(JsValue::new(-1))
+
 }
 
 pub fn string_repeat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -598,6 +625,7 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, toUpperCase, string_to_uppercase, 0)?;
         def_native_method!(rt, proto, toLowerCase, string_to_lowercase, 0)?;
         def_native_method!(rt, proto, indexOf, string_index_of, 2)?;
+        def_native_method!(rt, proto, lastIndexOf, string_last_index_of, 2)?;
         def_native_method!(rt, proto, substr, string_substr, 2)?;
         def_native_method!(rt, proto, substring, string_substring, 2)?;
         def_native_method!(rt, proto, codePointAt, string_code_point_at, 1)?;
