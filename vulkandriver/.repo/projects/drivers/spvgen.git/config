@@ -1,0 +1,10 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+[filter "lfs"]
+	smudge = git-lfs smudge --skip -- %f
+	process = git-lfs filter-process --skip
+[remote "vulkan-github"]
+	url = https://github.com/GPUOpen-Drivers/spvgen
+	projectname = spvgen
+	fetch = +refs/heads/*:refs/remotes/vulkan-github/*

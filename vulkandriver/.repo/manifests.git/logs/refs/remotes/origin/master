@@ -1,0 +1,1 @@
+0000000000000000000000000000000000000000 c29e047d95ee36b8560c75f7403ad761ebe0b456 Адель Прокуров <gtashnik11@gmail.com> 1623777719 +0300	fetch --quiet --progress origin --tags +refs/heads/*:refs/remotes/origin/* +refs/heads/master:refs/remotes/origin/master +refs/tags/*:refs/tags/*: storing head
