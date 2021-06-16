@@ -635,6 +635,8 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, trim, string_trim, 0)?;
         def_native_method!(rt, proto, trimStart, string_trim_start, 0)?;
         def_native_method!(rt, proto, trimEnd, string_trim_end, 0)?;
+        def_native_method!(rt, proto, trimLeft, string_trim_start, 0)?;
+        def_native_method!(rt, proto, trimRight, string_trim_end, 0)?;
         Ok(())
     };
 
