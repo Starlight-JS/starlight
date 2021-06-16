@@ -1019,6 +1019,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         string::string_constructor as _,
         string::string_to_string as _,
         string::string_index_of as _,
+        string::string_last_index_of as _,
         string::string_substr as _,
         string::string_substring as _,
         string::string_replace as _,
