@@ -1,3 +1,5 @@
+use std::u8;
+
 use num::traits::float::FloatCore;
 
 use crate::{prelude::*, vm::number::NumberObject};
@@ -148,7 +150,7 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
             suffix.remove(n);
         }
         // impl: having exactly `precision` digits in `suffix`
-        round_to_precision(&mut suffix, precision);
+        suffix = round_to_precision(&mut suffix, precision);
 
         // c: switching to scientific notation
         let great_exp = exponent >= precision_i32;
@@ -187,6 +189,30 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
     // 14
     Ok(JsValue::new(JsString::new(rt, prefix + &suffix)))
 }
+
+pub fn number_to_fixed(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let fixed_var = args.at(0);
+    let mut this_num = this_number_val(rt, args.this)?;
+
+    let mut fixed = 0;
+    if !fixed_var.is_undefined() {
+        fixed = fixed_var.to_int32(rt)?;
+    }
+
+    if !(0..=20).contains(&fixed) {
+        let msg = JsString::new(rt, "toFixed() digits argument must be between 0 and 20");
+        return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+    }
+
+    let fixed = fixed as usize;
+
+    let mut buffer = ryu_js::Buffer::new();
+    let mut string = buffer.format(this_num).to_string();
+    // after .
+    string = round_to_fixed(&mut string, fixed);
+    Ok(JsValue::new(JsString::new(rt, string)))
+}
+
 pub fn number_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let num;
@@ -394,25 +420,98 @@ fn flt_str_to_exp(flt: &str) -> i32 {
 ///
 /// When this procedure returns, `digits` is exactly `precision` long.
 ///
-fn round_to_precision(digits: &mut String, precision: usize) {
+pub fn round_to_precision(digits: &mut String, precision: usize) -> String {
     if digits.len() > precision {
         let to_round = digits.split_off(precision);
-        let mut digit = digits.pop().unwrap() as u8;
+        let mut digit_bytes = digits.clone().into_bytes();
+        let mut stop_index = (digit_bytes.len() - 1) as i32;
+        let mut digit = *digit_bytes.last().unwrap();
 
         for c in to_round.chars() {
             match c {
                 c if c < '4' => break,
                 c if c > '4' => {
-                    digit += 1;
+                    while digit == '9' as u8 {
+                        digit_bytes[stop_index as usize] = '0' as u8;
+                        stop_index -= 1;
+                        if stop_index == -1 {
+                            break;
+                        }
+                        digit = digit_bytes[stop_index as usize];
+                    }
                     break;
                 }
                 _ => {}
             }
         }
-
-        digits.push(digit as char);
+        if stop_index == -1 {
+            digit_bytes.insert(0, '1' as u8);
+            digit_bytes.pop();
+        } else {
+            digit_bytes[stop_index as usize] += 1;
+        }
+        return String::from_utf8(digit_bytes).unwrap();
     } else {
         digits.push_str(&"0".repeat(precision - digits.len()));
+        return digits.to_string();
+    }
+}
+
+pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
+    if let Some(n) = string.find('.') {
+        if (string.len() - 1 - n) > fixed {
+            let to_round = string.split_off(n + fixed + 1);
+            let mut digit_bytes = string.clone().into_bytes();
+            let mut stop_index = (digit_bytes.len() - 1) as i32;
+            let mut digit = *digit_bytes.last().unwrap();
+
+            for c in to_round.chars() {
+                match c {
+                    c if c < '4' => break,
+                    c if c > '4' => {
+                        loop {
+                            if digit == '9' as u8 {
+                                digit_bytes[stop_index as usize] = '0' as u8;
+                                stop_index -= 1;
+                                if stop_index == -1 {
+                                    break;
+                                }
+                                digit = digit_bytes[stop_index as usize];
+                            } else if digit == '.' as u8 {
+                                stop_index -= 1;
+                                digit = digit_bytes[stop_index as usize];
+                            } else {
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            if stop_index == -1 {
+                digit_bytes.insert(0, '1' as u8);
+            } else {
+                digit_bytes[stop_index as usize] += 1;
+            }
+            if fixed == 0 {
+                digit_bytes.pop();
+            }
+            return String::from_utf8(digit_bytes).unwrap();
+        } else {
+            let mut digits = string.split_off(n + 1);
+            digits = round_to_precision(&mut digits, fixed);
+            string.push_str(&digits);
+            return string.to_string();
+        }
+    } else {
+        let mut digits = String::from("");
+        digits = round_to_precision(&mut digits, fixed);
+        if digits.len() > 0 {
+            string.push_str(".");
+            string.push_str(&digits);
+        }
+        return string.to_string();
     }
 }
 
@@ -481,6 +580,8 @@ pub(crate) fn init_number(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
 
         let f = JsNativeFunction::new(rt, "toPrecision".intern(), number_to_precisiion, 1);
         let _ = proto.put(rt, "toPrecision".intern(), JsValue::new(f), false);
+        let f = JsNativeFunction::new(rt, "toFixed".intern(), number_to_fixed, 1);
+        let _ = proto.put(rt, "toFixed".intern(), JsValue::new(f), false);
 
         let f = JsNativeFunction::new(rt, "clz".intern(), number_clz, 1);
         let _ = proto.put(rt, "clz".intern(), JsValue::new(f), false);

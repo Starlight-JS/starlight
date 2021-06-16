@@ -27,6 +27,7 @@ macro_rules! def_native_method {
         $obj.put($vm, name, JsValue::new(m), true)
     }};
 }
+
 #[macro_export]
 macro_rules! as_atomic {
     ($value: expr;$t: ident) => {

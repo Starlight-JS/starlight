@@ -1,6 +1,11 @@
+use libc::accept4;
+use libffi::high::arg;
 use regress::Regex;
 
-use crate::{bytecode::profile::ResultsTag, gc::cell::GcPointer, vm::{
+use crate::{
+    bytecode::profile::ResultsTag,
+    gc::cell::GcPointer,
+    vm::{
         arguments::Arguments,
         array::JsArray,
         attributes::*,
@@ -13,7 +18,8 @@ use crate::{bytecode::profile::ResultsTag, gc::cell::GcPointer, vm::{
         symbol_table::{Internable, Symbol},
         value::*,
         Runtime,
-    }};
+    },
+};
 use std::{
     char::{decode_utf16, from_u32},
     cmp::{max, min},
@@ -637,6 +643,9 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, trimEnd, string_trim_end, 0)?;
         def_native_method!(rt, proto, trimLeft, string_trim_start, 0)?;
         def_native_method!(rt, proto, trimRight, string_trim_end, 0)?;
+        def_native_method!(rt, proto, padStart, string_pad_start, 2)?;
+        def_native_method!(rt, proto, padEnd, string_pad_end, 2)?;
+        def_native_method!(rt, proto, repeat, string_repeat, 1)?;
         Ok(())
     };
 
@@ -726,4 +735,61 @@ pub fn string_trim_start(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
 pub fn string_trim_end(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let prim = args.this.to_string(rt)?;
     Ok(JsValue::new(JsString::new(rt, prim.trim_end())))
+}
+
+pub enum Alignment {
+    Start,
+    End,
+}
+
+pub fn string_pad(
+    rt: &mut Runtime,
+    args: &Arguments,
+    alignment: Alignment,
+) -> Result<JsValue, JsValue> {
+    let mut string = args.this.to_string(rt)?;
+    let target_length = args.at(0).to_int32(rt)?;
+    let pad_str_arg = args.at(1);
+    let mut pad_str = String::from(" ");
+    if !pad_str_arg.is_undefined() {
+        pad_str = pad_str_arg.to_string(rt)?;
+    }
+    let length = string.chars().count();
+    if target_length <= length as i32 {
+        Ok(JsValue::new(JsString::new(rt, string)))
+    } else {
+        let pad_num = target_length as usize - length;
+        let mut pad_str_iter = pad_str.chars();
+        let mut to_pad_str = String::from("");
+        let mut index = 0;
+        while index < pad_num {
+            match pad_str_iter.next() {
+                Some(ch) => {
+                    to_pad_str.push(ch);
+                    index += 1;
+                }
+                None => {
+                    pad_str_iter = pad_str.chars();
+                }
+            }
+        }
+        match alignment {
+            Alignment::Start => {
+                to_pad_str.push_str(&string);
+                Ok(JsValue::new(JsString::new(rt, to_pad_str)))
+            }
+            Alignment::End => {
+                string.push_str(&to_pad_str);
+                Ok(JsValue::new(JsString::new(rt, string)))
+            }
+        }
+    }
+}
+
+pub fn string_pad_end(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    string_pad(rt, args, Alignment::End)
+}
+
+pub fn string_pad_start(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    string_pad(rt, args, Alignment::Start)
 }
