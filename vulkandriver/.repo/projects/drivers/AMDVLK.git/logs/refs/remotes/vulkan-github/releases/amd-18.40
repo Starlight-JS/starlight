@@ -1,1 +1,0 @@
-0000000000000000000000000000000000000000 64c789435dae85cd69464e54c812b4a3ed92052b Адель Прокуров <gtashnik11@gmail.com> 1623777729 +0300	fetch --quiet --progress vulkan-github --tags +refs/heads/*:refs/remotes/vulkan-github/* +refs/tags/*:refs/tags/*: storing head
