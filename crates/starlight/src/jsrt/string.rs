@@ -1,8 +1,6 @@
 use regress::Regex;
 
-use crate::{
-    gc::cell::GcPointer,
-    vm::{
+use crate::{bytecode::profile::ResultsTag, gc::cell::GcPointer, vm::{
         arguments::Arguments,
         array::JsArray,
         attributes::*,
@@ -15,8 +13,7 @@ use crate::{
         symbol_table::{Internable, Symbol},
         value::*,
         Runtime,
-    },
-};
+    }};
 use std::{
     char::{decode_utf16, from_u32},
     cmp::{max, min},
@@ -234,29 +231,28 @@ pub fn string_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
 
 pub fn string_last_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     args.this.check_object_coercible(rt)?;
-    let string:String = args.this.to_string(rt)?;
-    let search_string:String = args.at(0).to_string(rt)?;
+    let string: String = args.this.to_string(rt)?;
+    let search_string: String = args.at(0).to_string(rt)?;
 
     let length = string.chars().count();
-    let search_string_length=  search_string.chars().count();
+    let search_string_length = search_string.chars().count();
     let max_search_index = (length - search_string_length) as i32;
     let start = if args.size() > 1 {
         args.at(1).to_int32(rt)?
     } else {
         max_search_index
     };
-    
+
     let start = (start.max(0).min(max_search_index)) as usize;
     if search_string.is_empty() {
         return Ok(JsValue::new(start as u32));
     }
-    
-    if let Some(pos) = string[..(start+search_string_length)].rfind(search_string.as_str()) {
+
+    if let Some(pos) = string[..(start + search_string_length)].rfind(search_string.as_str()) {
         return Ok(JsValue::new(string[..pos].chars().count() as u32));
     }
 
     Ok(JsValue::new(-1))
-
 }
 
 pub fn string_repeat(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -621,6 +617,7 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         .unwrap_or_else(|_| panic!());
 
     let mut init = || -> Result<(), JsValue> {
+        def_native_method!(rt, proto, charAt, string_char_at, 1)?;
         def_native_method!(rt, proto, charCodeAt, string_char_code_at, 1)?;
         def_native_method!(rt, proto, toUpperCase, string_to_uppercase, 0)?;
         def_native_method!(rt, proto, toLowerCase, string_to_lowercase, 0)?;
@@ -636,6 +633,10 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, slice, string_slice, 1)?;
         def_native_method!(rt, ctor, ___replace, string_replace, 2)?;
         def_native_method!(rt, proto, trim, string_trim, 0)?;
+        def_native_method!(rt, proto, trimStart, string_trim_start, 0)?;
+        def_native_method!(rt, proto, trimEnd, string_trim_end, 0)?;
+        def_native_method!(rt, proto, trimLeft, string_trim_start, 0)?;
+        def_native_method!(rt, proto, trimRight, string_trim_end, 0)?;
         Ok(())
     };
 
@@ -715,4 +716,14 @@ fn get_regex_string(_rt: &mut Runtime, val: JsValue) -> Result<(String, String),
 pub fn string_trim(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let prim = args.this.to_string(rt)?;
     Ok(JsValue::new(JsString::new(rt, prim.trim())))
+}
+
+pub fn string_trim_start(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let prim = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt, prim.trim_start())))
+}
+
+pub fn string_trim_end(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let prim = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt, prim.trim_end())))
 }
