@@ -25,4 +25,4 @@ jobs:
     - name: Submodule update
       run: git submodule update --init
     - name: Run test262 tests
-      run: cargo run --release --bin test262-runner run -vvv
+      run: cargo run --release --bin test262-runner run 
