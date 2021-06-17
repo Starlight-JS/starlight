@@ -372,13 +372,16 @@ impl Runtime {
         let fun = JsVMFunction::new(self, code, env);
         return Ok(JsValue::encode_object_value(fun));
     }
-
+    /// Evaluates provided script.
+    pub fn eval(&mut self, script: &str) -> Result<JsValue, JsValue> {
+        self.eval_internal(None, false, script, false)
+    }
     /// Tries to evaluate provided `script`. If error when parsing or execution occurs then `Err` with exception value is returned.
     ///
     ///
     ///
     /// TODO: Return script execution result. Right now just `undefined` value is returned.
-    pub fn eval(
+    pub fn eval_internal(
         &mut self,
         path: Option<&str>,
         force_strict: bool,
@@ -717,7 +720,6 @@ impl Runtime {
     /// FFI object allows to load arbitrary dynamic library and then load functions from it.
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     pub fn add_ffi(&mut self) {
-        println!("FFI");
         crate::jsrt::ffi::initialize_ffi(self);
     }
 

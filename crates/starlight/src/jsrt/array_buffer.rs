@@ -69,7 +69,7 @@ pub fn array_buffer_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let new_buf = JsArrayBuffer::new(rt);
     new_buf
         .data::<JsArrayBuffer>()
-        .create_data_block(rt, new_len, true);
+        .create_data_block(rt, new_len, true)?;
 
     todo!()
 }

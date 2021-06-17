@@ -15,6 +15,8 @@ pub(crate) fn init_generator(rt: &mut Runtime, _obj_proto: GcPointer<JsObject>) 
         );
 
         def_native_method!(rt, generator, next, generator_next, 0)?;
+        def_native_method!(rt, generator, throw, generator_throw, 0)?;
+        def_native_method!(rt, generator, r#return, generator_return, 0)?;
         let iter = JsNativeFunction::new(
             rt,
             "Symbol.iterator".intern().private(),
@@ -54,6 +56,50 @@ pub fn generator_next(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
         JsValue::new(this),
         args,
         GeneratorMagic::Next,
+        &mut done,
+    )?;
+    if done != 2 {
+        let mut ret_obj = JsObject::new_empty(rt);
+        ret_obj.put(rt, "value".intern(), ret, false)?;
+        ret_obj.put(rt, "done".intern(), JsValue::new(done != 0), false)?;
+        ret = JsValue::new(ret_obj);
+    }
+    Ok(ret)
+}
+
+pub fn generator_return(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let this = args.this.to_object(rt)?;
+    if unlikely(!this.is_class(JsGeneratorFunction::get_class())) {
+        return Err(JsValue::new(rt.new_type_error("not generator function")));
+    }
+    let mut done = 0;
+    let mut ret = js_generator_next(
+        rt,
+        JsValue::new(this),
+        args,
+        GeneratorMagic::Return,
+        &mut done,
+    )?;
+    if done != 2 {
+        let mut ret_obj = JsObject::new_empty(rt);
+        ret_obj.put(rt, "value".intern(), ret, false)?;
+        ret_obj.put(rt, "done".intern(), JsValue::new(done != 0), false)?;
+        ret = JsValue::new(ret_obj);
+    }
+    Ok(ret)
+}
+
+pub fn generator_throw(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let this = args.this.to_object(rt)?;
+    if unlikely(!this.is_class(JsGeneratorFunction::get_class())) {
+        return Err(JsValue::new(rt.new_type_error("not generator function")));
+    }
+    let mut done = 0;
+    let mut ret = js_generator_next(
+        rt,
+        JsValue::new(this),
+        args,
+        GeneratorMagic::Throw,
         &mut done,
     )?;
     if done != 2 {

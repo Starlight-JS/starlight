@@ -146,7 +146,7 @@ impl Test {
                             } else {
                                 self.content.to_string()
                             };
-                            let res = context.eval(None, false, &content, false);
+                            let res = context.eval_internal(None, false, &content, false);
 
                             let passed = res.is_ok();
                             let text = match res {
@@ -199,7 +199,12 @@ impl Test {
                     } else {
                         match self.set_up_env(&harness, strict) {
                             Ok(mut context) => {
-                                match context.eval(None, false, &self.content.as_ref(), false) {
+                                match context.eval_internal(
+                                    None,
+                                    false,
+                                    &self.content.as_ref(),
+                                    false,
+                                ) {
                                     Ok(res) => (
                                         false,
                                         format!(
@@ -305,7 +310,7 @@ impl Test {
         // Register the print() function.
 
         context
-            .eval(None, false, &harness.assert.as_ref(), false)
+            .eval_internal(None, false, &harness.assert.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
@@ -313,7 +318,7 @@ impl Test {
                 )
             })?;
         context
-            .eval(None, false, &harness.sta.as_ref(), false)
+            .eval_internal(None, false, &harness.sta.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
@@ -323,7 +328,7 @@ impl Test {
 
         for include in self.includes.iter() {
             context
-                .eval(
+                .eval_internal(
                     None,
                     false,
                     &harness

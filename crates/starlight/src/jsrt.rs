@@ -152,7 +152,7 @@ impl Runtime {
     }
     pub(crate) fn init_self_hosted(&mut self) {
         let mut eval = |path, source| {
-            self.eval(Some(path), false, source, true)
+            self.eval_internal(Some(path), false, source, true)
                 .unwrap_or_else(|error| match error.to_string(self) {
                     Ok(str) => panic!("Failed to initialize builtins: {}", str),
                     Err(_) => panic!("Failed to initialize builtins"),
@@ -1094,6 +1094,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         jsstd::std_args as _,
         generator::generator_next as _,
         generator::generator_iterator as _,
+        generator::generator_return as _,
+        generator::generator_throw as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

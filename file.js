@@ -1,1 +1,1 @@
-'abc'.padEnd(5, '');
+print('abc'.padEnd(5, ''));
