@@ -755,10 +755,11 @@ pub fn string_pad(
         pad_str = pad_str_arg.to_string(rt)?;
     }
     let length = string.chars().count();
-    if target_length <= length as i32 {
+    if target_length <= length as i32 || pad_str.is_empty() {
         Ok(JsValue::new(JsString::new(rt, string)))
     } else {
         let pad_num = target_length as usize - length;
+
         let mut pad_str_iter = pad_str.chars();
         let mut to_pad_str = String::from("");
         let mut index = 0;
