@@ -432,6 +432,9 @@ impl Serializable for JsFunction {
                 serializer.write_u8(0x02);
                 serializer.write_reference(native_fn.func as *const u8);
             }
+            FuncType::Closure(_) => {
+                panic!("Cannot serialize a Function based on a rust closure");
+            }
             FuncType::Bound(bound_fn) => {
                 serializer.write_u8(0x03);
                 bound_fn.args.serialize(serializer);

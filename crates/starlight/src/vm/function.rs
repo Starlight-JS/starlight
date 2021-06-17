@@ -25,6 +25,7 @@ pub struct JsFunction {
 
 pub enum FuncType {
     Native(JsNativeFunction),
+    Closure(JsClosureFunction),
     User(JsVMFunction),
     Bound(JsBoundFunction),
     Generator(JsGeneratorFunction),
@@ -76,6 +77,7 @@ impl JsFunction {
     pub fn is_strict(&self) -> bool {
         match self.ty {
             FuncType::Native(_) => false,
+            FuncType::Closure(_) => false,
             FuncType::User(ref x) => x.code.strict,
             FuncType::Bound(ref x) => x.target.as_function().is_strict(),
             FuncType::Generator(ref x) => x.function.as_function().is_strict(),
@@ -167,6 +169,7 @@ impl JsFunction {
     ) -> Result<JsValue, JsValue> {
         match self.ty {
             FuncType::Native(ref x) => (x.func)(vm, args),
+            FuncType::Closure(ref x) => (x.func)(vm, args),
             FuncType::User(ref x) => {
                 vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args, this)
             }
@@ -476,6 +479,80 @@ impl JsNativeFunction {
         let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
 
         *func
+    }
+}
+
+/// Represents a javascript Function based on a rust closure
+/// this is useful as an alternative for functions for example when adding a callback to an EventTarget or a Promise
+/// Please note that using this will result in the code block not being serializable due to the nature of using closures
+/// # Example
+/// ```
+/// // get the global object
+/// use starlight::vm::symbol_table::Internable;
+/// use starlight::vm::value::JsValue;
+/// use starlight::Platform;
+/// use starlight::vm::{RuntimeParams, GcParams};
+///
+/// // start a runtime
+/// Platform::initialize();
+/// let options = RuntimeParams::default();
+/// let gc_params = GcParams::default();
+/// let mut starlight_runtime = Platform::new_runtime(options, gc_params, None);
+///
+/// let mut global = starlight_runtime.global_object();
+///
+/// // create a symbol for the functions name
+/// let name_symbol = "myFunction".intern();
+/// let x = 1234;
+///
+/// // create a Function based on a closure
+/// let arg_count = 0;
+/// let func = starlight::vm::function::JsClosureFunction::new(
+///     &mut starlight_runtime,
+///     name_symbol,
+///     move |vm, args| {
+///         return Ok(JsValue::encode_int32(x));
+///     },
+///     arg_count,
+/// );
+///
+/// // add the function to the global object
+/// global.put(&mut starlight_runtime, name_symbol, JsValue::new(func), true);
+///
+/// // run the function
+/// let outcome = starlight_runtime.eval("return (myFunction());").ok().expect("function failed");
+/// assert_eq!(outcome.get_int32(), 1234);
+/// ```
+pub struct JsClosureFunction {
+    pub(crate) func: Box<dyn Fn(&mut Runtime, &Arguments) -> Result<JsValue, JsValue>>,
+}
+
+impl JsClosureFunction {
+    /// create a new JsClosureFunction
+    pub fn new<F>(vm: &mut Runtime, name: Symbol, f: F, arg_count: u32) -> GcPointer<JsObject>
+    where
+        F: Fn(&mut Runtime, &Arguments) -> Result<JsValue, JsValue> + 'static,
+    {
+        let vm = vm;
+        let mut func = JsFunction::new(
+            vm,
+            FuncType::Closure(JsClosureFunction { func: Box::new(f) }),
+            false,
+        );
+        let l = "length".intern();
+
+        let _ = func.define_own_property(
+            vm,
+            l,
+            &*DataDescriptor::new(JsValue::new(arg_count as i32), NONE),
+            false,
+        );
+        let n = "name".intern();
+        let k = vm.description(name);
+        let name = JsValue::encode_object_value(JsString::new(vm, &k));
+        let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
+
+        func
     }
 }
 
