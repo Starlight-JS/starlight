@@ -1,9 +1,6 @@
-use libc::accept4;
-use libffi::high::arg;
 use regress::Regex;
 
 use crate::{
-    bytecode::profile::ResultsTag,
     gc::cell::GcPointer,
     vm::{
         arguments::Arguments,

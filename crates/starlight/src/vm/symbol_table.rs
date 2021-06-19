@@ -64,7 +64,7 @@ impl SymbolID {
 ///
 ///
 /// This type is used as property names and inside JsSymbol.
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum Symbol {
     /// Represents index value, this variant is used when you can definetely put array
     /// index inside u32 so it does not take space in interner gc.

@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 rand = "0.8"
 mopa = "0.2"
-wtf-rs = { path = "../wtf-rs" }
+wtf-rs = { path="../wtf-rs" }
 ctor = "*"
 paste = "1.0.5"
 cfg-if = "1.0"
@@ -18,10 +18,10 @@ regress = "0.3.0"
 dashmap = "4.0"
 swc_atoms = "0.2.5"
 swc_common = "0.10.11"
-swc_ecmascript = { version = "0.38", features = ["parser", "utils", "visit"] }
+swc_ecmascript = { version="0.39", features=["parser", "utils", "visit"] }
 libc = "0.2"
-libmimalloc-sys = { version = "0.1", features = ["extended"] }
-starlight-derive = { path = "../starlight-derive" }
+libmimalloc-sys = { version="0.1", features=["extended"] }
+starlight-derive = { path="../starlight-derive" }
 structopt = "0.3"
 backtrace = "0.3"
 intrusive-collections = "*"
@@ -82,14 +82,14 @@ path = "src/bin/sl.rs"
 name = "starlight"
 crate-type = ["dylib", "rlib"]
 [target.'cfg(all(not(wasm),target_pointer_width="64"))'.dependencies]
-tagged-box = { version = "0.1", features = ["57bits"], default-features = false }
-libffi = { version = "1.0.0", optional = true }
-libloading = { version = "0.7.0", optional = true }
+tagged-box = { version="0.1", features=["57bits"], default-features=false }
+libffi = { version="1.0.0", optional=true }
+libloading = { version="0.7.0", optional=true }
 
 [target.'cfg(not(wasm))'.dependencies]
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = [
+winapi = { version="0.3", features=[
     "memoryapi",
     "winnt",
     "sysinfoapi",

@@ -316,7 +316,7 @@ impl Runtime {
                 .unwrap_or_else(|| "".to_string()),
             path.to_owned(),
             builtins,
-        );
+        )?;
         code.name = name.intern();
         //code.display_to(&mut OutBuf).unwrap();
 
@@ -365,7 +365,7 @@ impl Runtime {
                 .unwrap_or_else(|| "".to_string()),
             name,
             &module,
-        );
+        )?;
         code.name = name.intern();
 
         let env = Environment::new(self, 0);
@@ -427,7 +427,7 @@ impl Runtime {
                     .unwrap_or_else(|| "".to_string()),
                 path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
                 builtins,
-            );
+            )?;
             code.strict = code.strict || force_strict;
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
@@ -492,7 +492,7 @@ impl Runtime {
                     .unwrap_or_else(|| "".to_string()),
                 &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
                 &script,
-            );
+            )?;
             code.strict = code.strict || force_strict;
 
             let stack = self.shadowstack();
@@ -732,6 +732,11 @@ impl Runtime {
     pub fn new_reference_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsReferenceError::new(self, msg, None)
+    }
+    /// Construct new syntax error from provided string.
+    pub fn new_syntax_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsSyntaxError::new(self, msg, None)
     }
 }
 

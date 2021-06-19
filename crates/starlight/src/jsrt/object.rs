@@ -77,7 +77,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
                     .global_data()
                     .object_prototype
                     .unwrap()
-                    .get(vm, "___defineProperties___".intern())?;
+                    .get(vm, "defineProperties".intern())?;
                 assert!(props.is_callable());
 
                 return props.get_jsobject().as_function_mut().call(
@@ -144,7 +144,10 @@ pub fn has_own_property(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::new(obj.get_own_property(vm, prop).is_some()))
 }
 
-pub fn object_get_own_property_descriptor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_get_own_property_descriptor(
+    vm: &mut Runtime,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let stack = vm.shadowstack();
     if args.size() < 2 {
         return Ok(JsValue::new(Undefined));

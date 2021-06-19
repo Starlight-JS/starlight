@@ -54,7 +54,7 @@ unsafe fn eval_record(
     (*frame).ip = ip;
 
     loop {
-        let result = eval(rt, frame);
+        let result = eval(rt, frame, &mut RecordResult::Ok, &mut vec![]);
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {

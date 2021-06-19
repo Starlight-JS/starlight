@@ -881,9 +881,10 @@ impl JsValue {
                 let desc = rt.description(object.downcast::<JsSymbol>().unwrap().symbol());
                 return Ok(desc);
             }
+            println!("{:?}", (object.get_dyn()).type_name());
             todo!()
         } else {
-            unreachable!()
+            unreachable!("{:?}", self.type_of())
         }
     }
     pub fn to_symbol(self, rt: &mut Runtime) -> Result<Symbol, JsValue> {

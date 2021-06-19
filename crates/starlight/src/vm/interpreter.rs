@@ -942,7 +942,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     };
                     let mut object = object.get_jsobject();
                     if likely(object.indexed.dense()) {
-                        if likely(index < object.indexed.length()) {
+                        if likely(index < object.indexed.vector.size()) {
                             *object.indexed.vector.at_mut(index) = value;
                             continue;
                         }
@@ -990,7 +990,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     };
                     let object = object.get_jsobject();
                     if likely(object.indexed.dense()) {
-                        if likely(index < object.indexed.length() as usize) {
+                        if likely(index < object.indexed.vector.size() as usize) {
                             if likely(!object.indexed.vector.at(index as _).is_empty()) {
                                 if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
                                     frame.push(JsValue::new(object));

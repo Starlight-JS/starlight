@@ -6,7 +6,7 @@ use colored::Colorize;
 use starlight::{
     gc::default_heap,
     prelude::Deserializer,
-    vm::{parse, GcParams, Runtime},
+    vm::{parse, GcParams, Runtime, RuntimeParams},
 };
 use std::panic::{self, AssertUnwindSafe};
 
@@ -307,8 +307,14 @@ impl Test {
             None,
             |_, _| {},
         );
-        // Register the print() function.
 
+        /*let mut context = Runtime::new(
+            RuntimeParams::default().with_dump_bytecode(false),
+            GcParams::default()
+                .with_parallel_marking(false)
+                .with_conservative_marking(false),
+            None,
+        );*/
         context
             .eval_internal(None, false, &harness.assert.as_ref(), false)
             .map_err(|e| {
