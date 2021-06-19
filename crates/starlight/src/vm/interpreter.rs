@@ -1365,7 +1365,7 @@ pub fn get_by_id_slow(rt: &mut Runtime, name: Symbol, val: JsValue) -> Result<Js
     val.get_slot(rt, name, &mut slot)
 }
 
-unsafe fn put_by_id_slow(
+pub(crate) unsafe fn put_by_id_slow(
     rt: &mut Runtime,
     frame: &mut CallFrame,
     obj: &mut GcPointer<JsObject>,

@@ -4,7 +4,14 @@ use crate::{
 };
 
 pub enum Trace {
+    GE0GL(u32),
+    GE0SL(u32),
+    GetLocal(u32),
+    SetLocal(u32),
+    GetEnv(u32),
     Swap,
+    Pop,
+    This,
     PushI(i32),
     PushL(u32),
     PushT,
