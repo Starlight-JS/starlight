@@ -12,7 +12,14 @@
     const_type_id,
     pattern
 )]
-#![allow(unused_unsafe, unused_mut)]
+#![allow(
+    unused_unsafe,
+    unused_mut,
+    clippy::missing_safety_doc,
+    clippy::field_reassign_with_default,
+    clippy::needless_return,
+    clippy::float_cmp
+)]
 
 use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
@@ -72,6 +79,7 @@ pub extern "C" fn platform_initialize() {
 }
 use gc::snapshot::deserializer::Deserializable;
 #[no_mangle]
+#[doc(hidden)]
 pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     let mut function = None;
     let mut rt = Deserializer::deserialize(

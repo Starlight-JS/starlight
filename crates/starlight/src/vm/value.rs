@@ -263,7 +263,7 @@ impl JsValue {
     pub fn get_object(&self) -> GcPointer<dyn GcCell> {
 
         assert!(self.is_object());
-        unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>((self.0 & Self::DATA_MASK) as usize) }.clone()
+        unsafe { std::mem::transmute::<_,GcPointer<dyn GcCell>>((self.0 & Self::DATA_MASK) as usize) }
     }
 
     /// Get number value from JS value.If value is int32 value then it is casted to f64.
@@ -864,7 +864,7 @@ impl JsValue {
             Ok(self.get_bool().to_string())
         } else if self.is_object() {
             let object = self.get_object();
-            if let Some(jsstr) = object.clone().downcast::<JsString>() {
+            if let Some(jsstr) = object.downcast::<JsString>() {
                 return Ok(jsstr.as_str().to_owned());
             } else if let Some(object) = object.downcast::<JsObject>() {
                 let stack = rt.shadowstack();
@@ -928,13 +928,13 @@ impl JsValue {
         assert!(!self.is_empty());
         assert!(self.is_primitive());
         if self.is_jsstring() {
-            return vm.global_data().string_prototype.clone().unwrap();
+            return vm.global_data().string_prototype.unwrap();
         } else if self.is_number() {
-            return vm.global_data().number_prototype.clone().unwrap();
+            return vm.global_data().number_prototype.unwrap();
         } else if self.is_bool() {
-            return vm.global_data().boolean_prototype.clone().unwrap();
+            return vm.global_data().boolean_prototype.unwrap();
         } else {
-            return vm.global_data().symbol_prototype.clone().unwrap();
+            return vm.global_data().symbol_prototype.unwrap();
         }
     }
 
@@ -1010,7 +1010,7 @@ impl JsValue {
                             .chars()
                             .nth(index as usize)
                             .map(|x| JsValue::encode_object_value(JsString::new(rt, x.to_string())))
-                            .unwrap_or(JsValue::encode_undefined_value());
+                            .unwrap_or_else(JsValue::encode_undefined_value);
                         slot.set_1(char, string_indexed(), Some(str.as_dyn()));
                         return Ok(slot.value());
                     }
@@ -1037,7 +1037,7 @@ impl JsValue {
         } else if self.is_bool() {
             return self.get_bool();
         } else {
-            return true;
+            true
         }
     }
     pub fn check_object_coercible(self, rt: &mut Runtime) -> Result<(), Self> {

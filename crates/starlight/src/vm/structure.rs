@@ -658,18 +658,18 @@ impl GcPointer<Structure> {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Structure::new_unique(vm, self.clone())
             } else {
-                self.clone()
+                *self
             };
             map.prototype = prototype;
             map
         } else {
-            let mut map = Structure::new_unique(vm, self.clone());
+            let mut map = Structure::new_unique(vm, *self);
             map.change_prototype_transition(vm, prototype)
         }
     }
 
     pub fn change_extensible_transition(&mut self, vm: &mut Runtime) -> GcPointer<Structure> {
-        Structure::new_unique(vm, self.clone())
+        Structure::new_unique(vm, *self)
     }
     pub fn change_attributes_transition(
         &mut self,
@@ -677,7 +677,7 @@ impl GcPointer<Structure> {
         name: Symbol,
         attributes: AttrSafe,
     ) -> GcPointer<Structure> {
-        let mut map = Structure::new_unique(vm, self.clone());
+        let mut map = Structure::new_unique(vm, *self);
         if !map.has_table() {
             map.allocate_table(vm);
         }
@@ -724,9 +724,9 @@ impl GcPointer<Structure> {
             }
 
             let mut map = if self.transitions.is_enabled_unique_transition() {
-                Structure::new_unique(vm, self.clone())
+                Structure::new_unique(vm, *self)
             } else {
-                self.clone()
+                *self
             };
             if !map.deleted.empty() {
                 entry.offset = map.deleted.pop();
@@ -746,11 +746,11 @@ impl GcPointer<Structure> {
         }
         if self.transit_count > 64 {
             // stop transition
-            let mut map = Structure::new_unique(vm, self.clone());
+            let mut map = Structure::new_unique(vm, *self);
             // go to above unique path
             return map.add_property_transition(vm, name, attributes, offset);
         }
-        let mut map = Structure::new(vm, self.clone());
+        let mut map = Structure::new(vm, *self);
 
         if !map.deleted.empty() {
             let slot = map.deleted.pop();
@@ -773,7 +773,7 @@ impl GcPointer<Structure> {
             map.calculated_size = self.get_slots_size() as u32 + 1;
         }
         map.transit_count += 1;
-        self.transitions.insert(vm, name, attributes, map.clone());
+        self.transitions.insert(vm, name, attributes, map);
         *offset = map.added.1.offset;
         assert!(map.get_slots_size() as u32 > map.added.1.offset);
 
@@ -820,6 +820,6 @@ impl GcPointer<Structure> {
     }
     pub fn change_prototype_with_no_transition(&mut self, prototype: GcPointer<JsObject>) -> Self {
         self.prototype = Some(prototype);
-        self.clone()
+        *self
     }
 }

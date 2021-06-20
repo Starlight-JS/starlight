@@ -24,6 +24,12 @@ impl Drop for SymbolTable {
         self.ids.clear();
     }
 }
+
+impl Default for SymbolTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl SymbolTable {
     pub fn new() -> Self {
         Self {
@@ -80,10 +86,11 @@ impl Symbol {
         }
     }
     pub fn is_index(self) -> bool {
-        match self {
+        /*match self {
             Self::Index(_) => true,
             _ => false,
-        }
+        }*/
+        matches!(self, Self::Index(_))
     }
     pub fn get_index(self) -> u32 {
         match self {

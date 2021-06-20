@@ -85,9 +85,8 @@ impl GcCell for ModuleKind {
 }
 unsafe impl Trace for ModuleKind {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
-        match self {
-            Self::Initialized(x) => x.trace(visitor),
-            _ => (),
+        if let Self::Initialized(x) = self {
+            x.trace(visitor)
         }
     }
 }
@@ -166,7 +165,7 @@ impl RuntimeParams {
 impl Default for GcParams {
     fn default() -> Self {
         Self {
-            heap_size: 1 * 1024 * 1024 * 1024,
+            heap_size: 1024 * 1024 * 1024,
             conservative_marking: false,
             track_allocations: false,
             parallel_marking: true,
@@ -261,7 +260,7 @@ impl Runtime {
                     let name = self.description(cb.name);
                     result.push_str(&format!("  at '{}':'{}'\n", cb.file_name, name));
                 } else {
-                    result.push_str(&format!(" at '<native code>\n"));
+                    result.push_str(" at '<native code>\n");
                 }
                 frame = (*frame).prev;
             }
@@ -322,7 +321,7 @@ impl Runtime {
 
         let env = Environment::new(self, 0);
         let fun = JsVMFunction::new(self, code, env);
-        return Ok(JsValue::encode_object_value(fun));
+        Ok(JsValue::encode_object_value(fun))
     }
     pub fn compile_module(
         &mut self,
@@ -370,7 +369,7 @@ impl Runtime {
 
         let env = Environment::new(self, 0);
         let fun = JsVMFunction::new(self, code, env);
-        return Ok(JsValue::encode_object_value(fun));
+        Ok(JsValue::encode_object_value(fun))
     }
     /// Evaluates provided script.
     pub fn eval(&mut self, script: &str) -> Result<JsValue, JsValue> {
@@ -425,7 +424,7 @@ impl Runtime {
                         Err(_) => String::new(),
                     })
                     .unwrap_or_else(|| "".to_string()),
-                path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 builtins,
             )?;
             code.strict = code.strict || force_strict;
@@ -479,7 +478,7 @@ impl Runtime {
             let mut vmref = RuntimeRef(self);
             let mut code = ByteCompiler::compile_module(
                 &mut *vmref,
-                &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                &path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 &path
                     .map(|path| {
                         std::path::Path::new(&path)
@@ -490,7 +489,7 @@ impl Runtime {
                             .unwrap_or_else(|| "".to_string())
                     })
                     .unwrap_or_else(|| "".to_string()),
-                &path.map(|x| x.to_owned()).unwrap_or_else(|| String::new()),
+                &path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 &script,
             )?;
             code.strict = code.strict || force_strict;
@@ -578,7 +577,7 @@ impl Runtime {
         this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
         let s = Structure::new_unique_indexed(&mut this, None, false);
         let mut proto = JsObject::new(&mut this, &s, JsObject::get_class(), ObjectTag::Ordinary);
-        this.global_data.object_prototype = Some(proto.clone());
+        this.global_data.object_prototype = Some(proto);
         this.global_data.function_struct = Some(Structure::new_indexed(&mut this, None, false));
         this.global_data.normal_arguments_structure =
             Some(Structure::new_indexed(&mut this, None, false));
@@ -587,17 +586,17 @@ impl Runtime {
             .empty_object_struct
             .as_mut()
             .unwrap()
-            .change_prototype_with_no_transition(proto.clone());
+            .change_prototype_with_no_transition(proto);
 
         this.global_data
             .empty_object_struct
             .as_mut()
             .unwrap()
-            .change_prototype_with_no_transition(proto.clone());
+            .change_prototype_with_no_transition(proto);
         this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
         this.init_func(proto);
-        this.init_error(proto.clone());
-        this.init_array(proto.clone());
+        this.init_error(proto);
+        this.init_array(proto);
         this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
@@ -641,7 +640,7 @@ impl Runtime {
     }
     /// Get stacktrace. If there was no error then returned string is empty.
     pub fn take_stacktrace(&mut self) -> String {
-        std::mem::replace(&mut self.stacktrace, String::new())
+        std::mem::take(&mut self.stacktrace)
     }
     pub(crate) fn new_empty(
         gc: Heap,
@@ -691,7 +690,7 @@ impl Runtime {
 
     /// Obtain global object reference.
     pub fn global_object(&self) -> GcPointer<JsObject> {
-        unwrap_unchecked(self.global_object.clone())
+        unwrap_unchecked(self.global_object)
     }
     pub fn add_module(
         &mut self,
@@ -796,11 +795,11 @@ pub struct GlobalData {
 
 impl GlobalData {
     pub fn get_function_struct(&self) -> GcPointer<Structure> {
-        unwrap_unchecked(self.function_struct.clone())
+        unwrap_unchecked(self.function_struct)
     }
 
     pub fn get_object_prototype(&self) -> GcPointer<JsObject> {
-        unwrap_unchecked(self.object_prototype.clone())
+        unwrap_unchecked(self.object_prototype)
     }
 }
 
@@ -879,7 +878,7 @@ pub fn parse(script: &str, strict_mode: bool) -> Result<Program, Error> {
     } else {
         script.to_string()
     };
-    let fm = cm.new_source_file(FileName::Custom("<script>".into()), script.into());
+    let fm = cm.new_source_file(FileName::Custom("<script>".into()), script);
 
     let mut parser = Parser::new(Syntax::Es(init_es_config()), StringInput::from(&*fm), None);
 
