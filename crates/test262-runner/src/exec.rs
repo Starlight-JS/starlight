@@ -6,7 +6,7 @@ use colored::Colorize;
 use starlight::{
     gc::default_heap,
     prelude::Deserializer,
-    vm::{parse, GcParams, Runtime, RuntimeParams},
+    vm::{parse, GcParams, Runtime},
 };
 use std::panic::{self, AssertUnwindSafe};
 
@@ -150,11 +150,8 @@ impl Test {
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => format!(
-                                    "{}",
-                                    val.to_string(&mut context)
-                                        .unwrap_or_else(|_| String::new())
-                                ),
+                                Ok(val) => val.to_string(&mut context)
+                                        .unwrap_or_else(|_| String::new()),
                                 Err(e) => format!(
                                     "Uncaught {}",
                                     e.to_string(&mut context).unwrap_or_else(|_| String::new())
@@ -207,11 +204,8 @@ impl Test {
                                 ) {
                                     Ok(res) => (
                                         false,
-                                        format!(
-                                            "{}",
-                                            res.to_string(&mut context)
-                                                .unwrap_or_else(|_| String::new())
-                                        ),
+                                        res.to_string(&mut context)
+                                                .unwrap_or_else(|_| String::new()),
                                     ),
                                     Err(e) => {
                                         let passed = e

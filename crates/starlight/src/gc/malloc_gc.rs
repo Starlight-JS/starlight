@@ -80,7 +80,7 @@ impl<'a> Collector<'a> {
         self.reset_weak_references();
     }
     fn process_roots(&mut self) {
-        let mut constraints = std::mem::replace(&mut self.gc.constraints, vec![]);
+        let mut constraints = std::mem::take(&mut self.gc.constraints);
         for constraint in constraints.iter_mut() {
             constraint.execute(self);
         }

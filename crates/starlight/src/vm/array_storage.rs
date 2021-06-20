@@ -190,13 +190,13 @@ impl ArrayStorage {
         *this
     }
     pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {
-        let cell = rt.allocate(Self {
+        
+
+        rt.allocate(Self {
             capacity,
             size: 0,
             data: [],
-        });
-
-        cell
+        })
     }
     pub fn data(&self) -> *const JsValue {
         self.data.as_ptr()

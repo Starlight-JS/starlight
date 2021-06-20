@@ -72,7 +72,9 @@ pub struct MiGC {
 
 impl MiGC {
     pub fn new(gc_params: GcParams) -> Self {
-        let this = Self {
+        
+
+        Self {
             n_workers: gc_params.nmarkers as _,
             collect_conservative: gc_params.conservative_marking,
             threadpool: if gc_params.parallel_marking {
@@ -88,9 +90,7 @@ impl MiGC {
             allocated: 0,
             max_heap_size: 256 * 1024,
             mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
-        };
-
-        this
+        }
     }
     #[inline(never)]
     fn collect_internal(&mut self, _sp: *const usize) {
@@ -234,7 +234,7 @@ impl MiGC {
     /// for potential root objects.
     fn process_roots(&mut self, visitor: &mut SlotVisitor) {
         unsafe {
-            let mut constraints = std::mem::replace(&mut self.constraints, vec![]);
+            let mut constraints = std::mem::take(&mut self.constraints);
             for constraint in constraints.iter_mut() {
                 constraint.execute(visitor);
             }
@@ -309,10 +309,8 @@ impl MiGC {
         ptr: *mut u8,
         mut f: impl FnMut(&mut Self, *mut GcPointerBase),
     ) {
-        if libmimalloc_sys::mi_heap_check_owned(self.mi_heap, ptr.cast()) {
-            if libmimalloc_sys::mi_heap_contains_block(self.mi_heap, ptr.cast()) {
-                f(self, ptr.cast());
-            }
+        if libmimalloc_sys::mi_heap_check_owned(self.mi_heap, ptr.cast()) && libmimalloc_sys::mi_heap_contains_block(self.mi_heap, ptr.cast()) {
+            f(self, ptr.cast());
         }
     }
 }

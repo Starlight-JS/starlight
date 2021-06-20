@@ -73,7 +73,7 @@ impl SnapshotSerializer {
                 indexx += 1;
             });
 
-        if let Some(ref references) = rt.external_references {
+        if let Some(references) = rt.external_references {
             for (_index, reference) in references.iter().enumerate() {
                 /* let result = self.reference_map.insert(*reference, indexx);
                 indexx += 1;

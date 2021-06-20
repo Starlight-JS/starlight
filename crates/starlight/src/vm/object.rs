@@ -98,7 +98,7 @@ pub struct JsObject {
 }
 impl JsObject {
     pub fn direct(&self, n: usize) -> &JsValue {
-        &self.slots.at(n as _)
+        self.slots.at(n as _)
     }
 
     pub fn direct_mut(&mut self, n: usize) -> &mut JsValue {
@@ -109,7 +109,7 @@ impl JsObject {
     }
 
     pub fn is_class(&self, cls: &Class) -> bool {
-        self.class as *const Class == cls as *const Class
+        std::ptr::eq(self.class, cls)
     }
 
     #[allow(clippy::mut_from_ref)]
@@ -256,7 +256,7 @@ impl JsObject {
                 break true;
             }
             match obj.prototype() {
-                Some(proto) => *obj = proto.clone(),
+                Some(proto) => *obj = *proto,
                 _ => break false,
             }
         }
@@ -304,7 +304,7 @@ impl JsObject {
         }
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(&base, &obj) && slot.attributes().is_data() {
+                if GcPointer::ptr_eq(base, obj) && slot.attributes().is_data() {
                     obj.define_own_non_indexed_property_slot(
                         vm,
                         name,
@@ -368,7 +368,7 @@ impl JsObject {
             if index < obj.indexed.length() {
                 let it = map.get(&index);
                 if let Some(it) = it {
-                    slot.set_from_slot(it, Some(obj.clone().as_dyn()));
+                    slot.set_from_slot(it, Some((*obj).as_dyn()));
                     return true;
                 }
             }
@@ -409,7 +409,7 @@ impl JsObject {
         }
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(&base, &obj) && slot.attributes().is_data() {
+                if GcPointer::ptr_eq(base, obj) && slot.attributes().is_data() {
                     obj.define_own_indexed_property_slot(
                         vm,
                         index,
@@ -468,7 +468,7 @@ impl JsObject {
             }
 
             match obj.prototype() {
-                Some(proto) => *obj = proto.clone(),
+                Some(proto) => *obj = *proto,
                 None => break false,
             }
         }
@@ -506,7 +506,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(&base, &obj) {
+                if GcPointer::ptr_eq(base, obj) {
                     let mut returned = false;
                     if slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
                         if slot.has_offset() {
@@ -600,10 +600,10 @@ impl JsObject {
             let mut returned = false;
             if !slot.is_not_found() {
                 if let Some(base) = slot.base() {
-                    if GcPointer::ptr_eq(&base, &obj) {
-                        if !slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
-                            return Ok(returned);
-                        }
+                    if GcPointer::ptr_eq(base, obj)
+                        && !slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)?
+                    {
+                        return Ok(returned);
                     }
                 }
             }
@@ -808,7 +808,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         letroot!(
             args = stack,
-            Arguments::new(JsValue::encode_object_value(obj.clone()), &mut [])
+            Arguments::new(JsValue::encode_object_value(*obj), &mut [])
         );
 
         macro_rules! try_ {
@@ -854,7 +854,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         letroot!(
             structure = stack,
-            vm.global_data().empty_object_struct.clone().unwrap()
+            vm.global_data().empty_object_struct.unwrap()
         );
         Self::new(vm, &structure, Self::get_class(), ObjectTag::Ordinary)
     }
@@ -929,7 +929,7 @@ impl GcPointer<JsObject> {
         let stack = vm.shadowstack();
         let exotic_to_prim = self.get_method(vm, "toPrimitive".intern());
 
-        letroot!(obj = stack, self.clone());
+        letroot!(obj = stack, *self);
         match exotic_to_prim {
             Ok(val) => {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
@@ -984,13 +984,13 @@ impl GcPointer<JsObject> {
     }
 
     pub fn has_indexed_property(&self) -> bool {
-        let mut obj = self.clone();
+        let mut obj = *self;
         loop {
             if obj.structure.is_indexed() {
                 return true;
             }
             match obj.prototype() {
-                Some(proto) => obj = proto.clone(),
+                Some(proto) => obj = *proto,
                 None => break false,
             }
         }
@@ -1064,7 +1064,7 @@ impl GcPointer<JsObject> {
         }
     }
     pub fn structure(&self) -> GcPointer<Structure> {
-        self.structure.clone()
+        self.structure
     }
     pub fn get_property_slot(&mut self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
         if let Symbol::Index(index) = name {
@@ -1111,14 +1111,12 @@ impl GcPointer<JsObject> {
     }
 
     pub fn can_put_non_indexed(&mut self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
-        if self.get_non_indexed_property_slot(vm, name, slot) {
+        if self.get_non_indexed_property_slot(vm, name, slot) && slot.attributes().is_accessor() {
             if slot.attributes().is_accessor() {
-                if slot.attributes().is_accessor() {
-                    return slot.accessor().setter().is_pointer()
-                        && !slot.accessor().setter().is_empty();
-                } else {
-                    return slot.attributes().is_writable();
-                }
+                return slot.accessor().setter().is_pointer()
+                    && !slot.accessor().setter().is_empty();
+            } else {
+                return slot.attributes().is_writable();
             }
         }
         self.is_extensible()
@@ -1207,12 +1205,12 @@ impl GcPointer<JsObject> {
         absent: bool,
     ) {
         if index < self.indexed.vector.size() {
-            if !absent {
+            /*if !absent {
                 self.indexed.non_gc &= !val.is_object();
                 *self.indexed.vector.at_mut(index) = val;
             } else {
                 *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
-            }
+            }*/
         } else {
             if !self.structure.is_indexed() {
                 let s = self.structure.change_indexed_transition(vm);
@@ -1223,12 +1221,12 @@ impl GcPointer<JsObject> {
             letroot!(vector = stack, self.indexed.vector);
             vector.mut_handle().resize(vm.heap(), index + 1);
             self.indexed.vector = *vector;
-            if !absent {
-                self.indexed.non_gc &= !val.is_object();
-                *self.indexed.vector.at_mut(index) = val;
-            } else {
-                *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
-            }
+        }
+        if !absent {
+            self.indexed.non_gc &= !val.is_object();
+            *self.indexed.vector.at_mut(index) = val;
+        } else {
+            *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
         }
         if index >= self.indexed.length() {
             self.indexed.set_length(index + 1);
@@ -1266,16 +1264,15 @@ impl GcPointer<JsObject> {
                     return Ok(true);
                 }
             } else {
-                if is_absent_descriptor(desc) {
-                    if index < self.indexed.vector.size()
-                        && !self.indexed.vector.at(index).is_empty()
-                    {
-                        if !desc.is_value_absent() {
-                            self.indexed.non_gc &= !desc.value().is_object();
-                            *self.indexed.vector.at_mut(index) = desc.value();
-                        }
-                        return Ok(true);
+                if is_absent_descriptor(desc)
+                    && index < self.indexed.vector.size()
+                    && !self.indexed.vector.at(index).is_empty()
+                {
+                    if !desc.is_value_absent() {
+                        self.indexed.non_gc &= !desc.value().is_object();
+                        *self.indexed.vector.at_mut(index) = desc.value();
                     }
+                    return Ok(true);
                 }
 
                 if index < MAX_VECTOR_SIZE as u32 {
@@ -1447,7 +1444,7 @@ impl Env {
             }
             let mut slot = Slot::new();
             self.record.put_slot(vm, name, val, &mut slot, strict)?;
-            return Ok((self.record.clone(), slot));
+            return Ok((self.record, slot));
         } else {
             let mut current = self.record.prototype().cloned();
             while let Some(mut cur) = current {
@@ -1461,7 +1458,7 @@ impl Env {
                     }
                     let mut slot = Slot::new();
                     cur.put_slot(vm, name, val, &mut slot, strict)?;
-                    return Ok((cur.clone(), slot));
+                    return Ok((cur, slot));
                 }
                 current = cur.prototype().cloned();
             }
@@ -1567,7 +1564,7 @@ mod tests {
                 assert_eq!(val.get_number(), 42.4242);
             }
             Err(_) => {
-                assert!(false);
+                unreachable!();
             }
         }
     }
@@ -1593,7 +1590,7 @@ mod tests {
                     assert_eq!(val.get_number() as u32, i);
                 }
                 Err(_) => {
-                    assert!(false);
+                    unreachable!();
                 }
             }
         }
@@ -1614,7 +1611,7 @@ mod tests {
                     assert_eq!(val.get_number() as u32, i);
                 }
                 Err(_) => {
-                    assert!(false);
+                    unreachable!();
                 }
             }
         }
@@ -1625,7 +1622,7 @@ mod tests {
                 assert_eq!(val.get_number(), 42.42);
             }
             Err(_) => {
-                assert!(false);
+                unreachable!();
             }
         }
     }

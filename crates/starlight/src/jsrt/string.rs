@@ -533,15 +533,13 @@ pub fn string_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         Ok(JsValue::encode_object_value(JsTypeError::new(
             rt, msg, None,
         )))
+    } else if args.size() != 0 {
+        let str = args.at(0).to_string(rt)?;
+        let jsttr = JsString::new(rt, str);
+        return Ok(JsValue::encode_object_value(jsttr));
     } else {
-        if args.size() != 0 {
-            let str = args.at(0).to_string(rt)?;
-            let jsttr = JsString::new(rt, str);
-            return Ok(JsValue::encode_object_value(jsttr));
-        } else {
-            let jsttr = JsString::new(rt, "");
-            return Ok(JsValue::encode_object_value(jsttr));
-        }
+        let jsttr = JsString::new(rt, "");
+        return Ok(JsValue::encode_object_value(jsttr));
     }
 }
 

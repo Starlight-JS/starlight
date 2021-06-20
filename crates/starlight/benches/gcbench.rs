@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::float_cmp)]
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::letroot;
 use starlight::{
@@ -139,7 +139,7 @@ fn make_tree(gc: &mut Runtime, idepth: i32) -> GcPointer<Node> {
     letroot!(n1 = stack, make_tree(gc, idepth - 1));
     letroot!(n2 = stack, make_tree(gc, idepth - 1));
     gc.heap().collect_if_necessary();
-    gc.heap().allocate(Node::new(Some(*&*n1), Some(*&*n2)))
+    gc.heap().allocate(Node::new(Some(*n1), Some(*n2)))
 }
 
 impl Node {

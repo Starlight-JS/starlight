@@ -96,7 +96,7 @@ pub fn is_aligned(value: usize, align: usize) -> bool {
 
 /// returns true if value fits into u8 (unsigned 8bits).
 pub fn fits_u8(value: i64) -> bool {
-    0 <= value && value <= 255
+    (0..=255).contains(&value)
 }
 
 /// returns true if value fits into i32 (signed 32bits).

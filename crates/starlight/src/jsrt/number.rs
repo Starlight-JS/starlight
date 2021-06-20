@@ -42,12 +42,10 @@ pub fn number_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
             res = args.at(0).to_number(rt)?;
         }
         Ok(JsValue::new(NumberObject::new(rt, res)))
+    } else if args.size() == 0 {
+        return Ok(JsValue::new(0i32));
     } else {
-        if args.size() == 0 {
-            return Ok(JsValue::new(0i32));
-        } else {
-            return args.at(0).to_number(rt).map(|x| JsValue::new(x));
-        }
+        return args.at(0).to_number(rt).map(JsValue::new);
     }
 }
 pub fn number_is_nan(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -95,13 +93,13 @@ pub fn number_is_integer(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
 
 pub fn number_to_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
-    num.to_int32(rt).map(|x| JsValue::new(x))
+    num.to_int32(rt).map(JsValue::new)
 }
 pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let precision_var = args.at(0);
     let mut this_num = this_number_val(rt, args.this)?;
     if precision_var.is_undefined() || !this_num.is_finite() {
-        return Ok(number_to_string(rt, &Arguments::new(args.this, &mut []))?);
+        return number_to_string(rt, &Arguments::new(args.this, &mut []));
     }
 
     let precision = match precision_var.to_int32(rt)? {
@@ -239,7 +237,7 @@ pub fn number_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, J
         if radix == 10 {
             return Ok(JsValue::new(JsString::new(rt, num.to_string())));
         }
-        if 2 <= radix && radix <= 36 {
+        if (2..=36).contains(&radix) {
             if radix != 10 {
                 if num.is_nan() {
                     return Ok(JsValue::new(JsString::new(rt, "NaN")));
@@ -431,8 +429,8 @@ pub fn round_to_precision(digits: &mut String, precision: usize) -> String {
             match c {
                 c if c < '4' => break,
                 c if c > '4' => {
-                    while digit == '9' as u8 {
-                        digit_bytes[stop_index as usize] = '0' as u8;
+                    while digit == b'9' {
+                        digit_bytes[stop_index as usize] = b'0';
                         stop_index -= 1;
                         if stop_index == -1 {
                             break;
@@ -445,7 +443,7 @@ pub fn round_to_precision(digits: &mut String, precision: usize) -> String {
             }
         }
         if stop_index == -1 {
-            digit_bytes.insert(0, '1' as u8);
+            digit_bytes.insert(0, b'1');
             digit_bytes.pop();
         } else {
             digit_bytes[stop_index as usize] += 1;
@@ -470,14 +468,14 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
                     c if c < '4' => break,
                     c if c > '4' => {
                         loop {
-                            if digit == '9' as u8 {
-                                digit_bytes[stop_index as usize] = '0' as u8;
+                            if digit == b'9' {
+                                digit_bytes[stop_index as usize] = b'0';
                                 stop_index -= 1;
                                 if stop_index == -1 {
                                     break;
                                 }
                                 digit = digit_bytes[stop_index as usize];
-                            } else if digit == '.' as u8 {
+                            } else if digit == b'.' {
                                 stop_index -= 1;
                                 digit = digit_bytes[stop_index as usize];
                             } else {
@@ -490,7 +488,7 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
                 }
             }
             if stop_index == -1 {
-                digit_bytes.insert(0, '1' as u8);
+                digit_bytes.insert(0, b'1');
             } else {
                 digit_bytes[stop_index as usize] += 1;
             }
@@ -507,8 +505,8 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     } else {
         let mut digits = String::from("");
         digits = round_to_precision(&mut digits, fixed);
-        if digits.len() > 0 {
-            string.push_str(".");
+        if !digits.is_empty() {
+            string.push('.');
             string.push_str(&digits);
         }
         return string.to_string();

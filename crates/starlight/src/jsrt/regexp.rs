@@ -493,7 +493,7 @@ impl<'r, 't> Pattern<'t> for RegexPattern<'r> {
 
     fn into_searcher(self, haystack: &'t str) -> RegexSearcher<'r, 't> {
         RegexSearcher {
-            haystack: haystack,
+            haystack,
             it: self.0.find_iter(haystack),
             last_step_end: 0,
             next_match: None,

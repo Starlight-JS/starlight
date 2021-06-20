@@ -42,7 +42,7 @@ pub fn object_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     } else if this_binding.is_null() {
         return Ok(JsValue::encode_object_value(JsString::new(
             vm,
-            "[object Undefined]",
+            "[object Null]",
         )));
     }
     let obj = this_binding.to_object(vm)?;
@@ -98,18 +98,17 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
 }
 
 pub fn object_constructor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let val = args.at(0);
     if args.ctor_call {
-        let val = args.at(0);
         if val.is_jsstring() || val.is_number() || val.is_bool() {
-            return val.to_object(vm).map(|x| JsValue::encode_object_value(x));
+            return val.to_object(vm).map(JsValue::encode_object_value);
         }
         return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
     } else {
-        let val = args.at(0);
         if val.is_undefined() || val.is_null() {
             return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
         } else {
-            return val.to_object(vm).map(|x| JsValue::encode_object_value(x));
+            return val.to_object(vm).map(JsValue::encode_object_value);
         }
     }
 }
@@ -126,7 +125,7 @@ pub fn object_define_property(vm: &mut Runtime, args: &Arguments) -> Result<JsVa
             let desc = super::to_property_descriptor(vm, attr)?;
 
             obj.define_own_property(vm, name, &desc, true)?;
-            return Ok(JsValue::new(*&*obj));
+            return Ok(JsValue::new(*obj));
         }
     }
 
@@ -239,7 +238,7 @@ pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
                 let name = JsString::new(vm, desc);
                 arr.put(vm, Symbol::Index(i as _), JsValue::new(name), false)?;
             }
-            return Ok(JsValue::new(*&*arr));
+            return Ok(JsValue::new(*arr));
         }
     }
 

@@ -78,7 +78,7 @@ impl Runtime {
                 p
             };
             let mut args =
-                JsArguments::new(self, nscope.clone(), &p, args_.size() as _, args_.values);
+                JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
@@ -88,12 +88,10 @@ impl Runtime {
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
+        } else if args_.this.is_undefined() {
+            JsValue::encode_object_value(self.global_object())
         } else {
-            if args_.this.is_undefined() {
-                JsValue::encode_object_value(self.global_object())
-            } else {
-                args_.this
-            }
+            args_.this
         };
 
         unsafe {
@@ -172,7 +170,7 @@ impl Runtime {
                 p
             };
             let mut args =
-                JsArguments::new(self, nscope.clone(), &p, args_.size() as _, args_.values);
+                JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
@@ -182,12 +180,10 @@ impl Runtime {
         }
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
+        } else if args_.this.is_undefined() {
+            JsValue::encode_object_value(self.global_object())
         } else {
-            if args_.this.is_undefined() {
-                JsValue::encode_object_value(self.global_object())
-            } else {
-                args_.this
-            }
+            args_.this
         };
 
         Ok((_this, *nscope))
@@ -298,7 +294,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 if unlikely(!env.as_slice_mut()[index as usize].mutable) {
                     return Err(JsValue::new(
-                        rt.new_type_error(format!("Cannot assign to immutable variable")),
+                        rt.new_type_error("Cannot assign to immutable variable".to_string()),
                     ));
                 }
 
@@ -325,7 +321,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 if unlikely(!env.as_slice_mut()[index as usize].mutable) {
                     return Err(JsValue::new(
-                        rt.new_type_error(format!("Cannot assign to immutable variable")),
+                        rt.new_type_error("Cannot assign to immutable variable".to_string()),
                     ));
                 }
 
@@ -641,7 +637,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             .feedback
                             .get_unchecked(fdbk as usize)
                     {
-                        if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                        if GcPointer::ptr_eq(structure, &obj.structure()) {
                             frame.push(*obj.direct(*offset as _));
 
                             continue;
@@ -726,7 +722,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                     if Some(obj.structure()) != *old_structure {
                                         break 'slowpath;
                                     }
-                                    if let None = new_structure {
+                                    if new_structure.is_none() {
                                         *obj.direct_mut(*offset as usize) = value;
                                         break 'exit;
                                     }
@@ -773,13 +769,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut this = frame.pop();
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
                 if unlikely(!func.is_callable()) {
-                    let msg = JsString::new(rt, format!("not a callable object",));
+                    let msg = JsString::new(rt, "not a callable object".to_string());
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,
                     )));
                 }
                 letroot!(func_object = gcstack, func.get_jsobject());
-                letroot!(funcc = gcstack, *&*func_object);
+                letroot!(funcc = gcstack, *func_object);
                 let func = func_object.as_function_mut();
                 letroot!(args_ = gcstack, Arguments::new(this, &mut args));
 
@@ -834,7 +830,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
 
                 if unlikely(!func.is_callable()) {
-                    let msg = JsString::new(rt, format!("not a callable constructor object "));
+                    let msg = JsString::new(rt, "not a callable constructor object ".to_string());
                     return Err(JsValue::encode_object_value(JsTypeError::new(
                         rt, msg, None,
                     )));
@@ -941,11 +937,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         key.get_double().floor() as u32
                     };
                     let mut object = object.get_jsobject();
-                    if likely(object.indexed.dense()) {
-                        if likely(index < object.indexed.vector.size()) {
-                            *object.indexed.vector.at_mut(index) = value;
-                            continue;
-                        }
+                    if likely(object.indexed.dense()) && likely(index < object.indexed.vector.size()) {
+                        *object.indexed.vector.at_mut(index) = value;
+                        continue;
                     }
                 }
                 let key = key.to_symbol(rt)?;
@@ -989,17 +983,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         key.get_double().floor() as usize
                     };
                     let object = object.get_jsobject();
-                    if likely(object.indexed.dense()) {
-                        if likely(index < object.indexed.vector.size() as usize) {
-                            if likely(!object.indexed.vector.at(index as _).is_empty()) {
-                                if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
-                                    frame.push(JsValue::new(object));
-                                }
-                                frame.push(*object.indexed.vector.at(index as _));
-
-                                continue;
-                            }
+                    if likely(object.indexed.dense()) && likely(index < object.indexed.vector.size() as usize) && likely(!object.indexed.vector.at(index as _).is_empty()) {
+                        if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
+                            frame.push(JsValue::new(object));
                         }
+                        frame.push(*object.indexed.vector.at(index as _));
+
+                        continue;
                     }
                 }
                 let key = key.to_symbol(rt)?;
@@ -1330,15 +1320,13 @@ pub struct SpreadValue {
 impl SpreadValue {
     pub fn new(rt: &mut Runtime, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
         unsafe {
-            if value.is_jsobject() {
-                if value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array {
-                    let mut object = value.get_jsobject();
-                    let mut arr = vec![];
-                    for i in 0..crate::jsrt::get_length(rt, &mut object)? {
-                        arr.push(object.get(rt, Symbol::Index(i))?);
-                    }
-                    return Ok(rt.heap().allocate(Self { array: arr }));
+            if value.is_jsobject() && value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array {
+                let mut object = value.get_jsobject();
+                let mut arr = vec![];
+                for i in 0..crate::jsrt::get_length(rt, &mut object)? {
+                    arr.push(object.get(rt, Symbol::Index(i))?);
                 }
+                return Ok(rt.heap().allocate(Self { array: arr }));
             }
 
             let msg = JsString::new(rt, "cannot create spread from non-array value");

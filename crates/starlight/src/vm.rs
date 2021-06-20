@@ -434,7 +434,7 @@ impl Runtime {
 
             letroot!(env = stack, Environment::new(self, 0));
             letroot!(fun = stack, JsVMFunction::new(self, code, *env));
-            letroot!(func = stack, *&*fun);
+            letroot!(func = stack, *fun);
             letroot!(
                 args = stack,
                 Arguments::new(JsValue::encode_undefined_value(), &mut [])
@@ -498,13 +498,13 @@ impl Runtime {
 
             letroot!(env = stack, Environment::new(self, 0));
             letroot!(fun = stack, JsVMFunction::new(self, code, *env));
-            letroot!(func = stack, *&*fun);
+            letroot!(func = stack, *fun);
             letroot!(module_object = stack, JsObject::new_empty(self));
             let exports = JsObject::new_empty(self);
             module_object
                 .put(self, "@exports".intern(), JsValue::new(exports), false)
                 .unwrap_or_else(|_| unreachable!());
-            let mut args = [JsValue::new(*&*module_object)];
+            let mut args = [JsValue::new(*module_object)];
             letroot!(
                 args = stack,
                 Arguments::new(

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::redundant_allocation,
+    clippy::needless_borrow,
+    clippy::field_reassign_with_default
+)]
 pub mod exec;
 pub mod read;
 pub mod results;

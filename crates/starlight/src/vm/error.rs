@@ -23,7 +23,7 @@ impl JsError {
         let stack = vm.shadowstack();
         letroot!(
             shape = stack,
-            structure.unwrap_or_else(|| vm.global_data().error_structure.clone().unwrap())
+            structure.unwrap_or_else(|| vm.global_data().error_structure.unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
         let stack = vm.stacktrace();
@@ -57,7 +57,7 @@ impl JsEvalError {
         let stack = vm.shadowstack();
         letroot!(
             shape = stack,
-            structure.unwrap_or_else(|| vm.global_data().eval_error_structure.clone().unwrap())
+            structure.unwrap_or_else(|| vm.global_data().eval_error_structure.unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
         let stack = vm.stacktrace();
@@ -91,7 +91,7 @@ impl JsRangeError {
         let stack = vm.shadowstack();
         letroot!(
             shape = stack,
-            structure.unwrap_or_else(|| vm.global_data().range_error_structure.clone().unwrap())
+            structure.unwrap_or_else(|| vm.global_data().range_error_structure.unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
         let stack = vm.stacktrace();
@@ -128,7 +128,6 @@ impl JsReferenceError {
             structure.unwrap_or_else(|| vm
                 .global_data()
                 .reference_error_structure
-                .clone()
                 .unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
@@ -163,7 +162,7 @@ impl JsSyntaxError {
         let stack = vm.shadowstack();
         letroot!(
             shape = stack,
-            structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.clone().unwrap())
+            structure.unwrap_or_else(|| vm.global_data().syntax_error_structure.unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
         let stack = vm.stacktrace();
@@ -197,7 +196,7 @@ impl JsTypeError {
         let stack = vm.shadowstack();
         letroot!(
             shape = stack,
-            structure.unwrap_or_else(|| vm.global_data().type_error_structure.clone().unwrap())
+            structure.unwrap_or_else(|| vm.global_data().type_error_structure.unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
         let stack = vm.stacktrace();

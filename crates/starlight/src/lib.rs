@@ -18,7 +18,16 @@
     clippy::missing_safety_doc,
     clippy::field_reassign_with_default,
     clippy::needless_return,
-    clippy::float_cmp
+    clippy::float_cmp,
+    clippy::redundant_allocation,
+    clippy::single_match,
+    clippy::new_ret_no_self,
+    clippy::or_fun_call,
+    clippy::new_without_default,
+    clippy::never_loop,
+    clippy::explicit_counter_loop,
+    clippy::comparison_chain,
+    clippy::needless_range_loop
 )]
 
 use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
@@ -95,7 +104,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     let stack = rt.shadowstack();
 
     letroot!(function = stack, function.expect("No function"));
-    letroot!(funcc = stack, *&*function);
+    letroot!(funcc = stack, *function);
     assert!(function.is_callable(), "Not a callable function");
 
     let global = rt.global_object();

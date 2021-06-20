@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::float_cmp, clippy::mut_from_ref)]
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::vm::value::JsValue;
 use std::{

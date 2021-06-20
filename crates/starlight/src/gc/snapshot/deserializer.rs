@@ -118,7 +118,7 @@ impl<'a> Deserializer<'a> {
                 ix += 1;
             });
 
-        if let Some(ref references) = rt.external_references {
+        if let Some(references) = rt.external_references {
             for reference in references.iter() {
                 *self.reference_map.get_mut(ix as usize).unwrap() = *reference;
                 ix += 1;
@@ -173,7 +173,7 @@ impl<'a> Deserializer<'a> {
         for _ in 0..weak_count {
             let is_null = self.get_u8() == 0x0;
             let ptr = if is_null {
-                0 as *const u8
+                std::ptr::null::<u8>()
             } else {
                 self.get_reference()
             };
@@ -327,14 +327,14 @@ impl Deserializable for JsValue {
     }
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         let ty = deser.get_u8();
-        let val = if ty == 0xff {
+        
+        if ty == 0xff {
             JsValue::encode_object_value(std::mem::transmute::<_, GcPointer<u8>>(
                 deser.get_reference(),
             ))
         } else {
             std::mem::transmute::<_, JsValue>(deser.get_u64())
-        };
-        val
+        }
     }
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
         let val = Self::deserialize_inplace(deser);

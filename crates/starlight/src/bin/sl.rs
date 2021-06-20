@@ -52,7 +52,7 @@ struct Options {
 
 use const_random::const_random;
 const BIN_ID: u64 = const_random!(u64);
-const SNAPSHOT_FILENAME: &'static str = ".startup-snapshot";
+const SNAPSHOT_FILENAME: &str = ".startup-snapshot";
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
@@ -159,14 +159,14 @@ fn main() {
                     }
                 }
             );
-            letroot!(funcc = gcstack, *&*function);
+            letroot!(funcc = gcstack, *function);
             let global = rt.global_object();
             letroot!(module_object = gcstack, JsObject::new_empty(&mut rt));
             let exports = JsObject::new_empty(&mut rt);
             module_object
                 .put(&mut rt, "@exports".intern(), JsValue::new(exports), false)
                 .unwrap_or_else(|_| unreachable!());
-            let mut args = [JsValue::new(*&*module_object)];
+            let mut args = [JsValue::new(*module_object)];
             letroot!(
                 args = gcstack,
                 Arguments::new(JsValue::encode_object_value(global), &mut args)

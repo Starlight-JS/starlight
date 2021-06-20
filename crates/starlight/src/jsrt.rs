@@ -336,9 +336,7 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(slice), W | C | E),
             false,
         );
-        let _ = (|| -> Result<(), JsValue> {
-            def_native_method!(self, proto, shift, array::array_shift, 0)
-        })();
+        let _ = { def_native_method!(self, proto, shift, array::array_shift, 0) };
         /*let name = "forEach".intern();
         let for_each = JsNativeFunction::new(self, name, array_for_each, 1);
         let _ = proto.define_own_property(
@@ -871,13 +869,13 @@ pub(crate) fn object_init(
     let _ = obj_constructor.define_own_property(
         rt,
         "prototype".intern(),
-        &*DataDescriptor::new(JsValue::from(proto.clone()), NONE),
+        &*DataDescriptor::new(JsValue::from(proto), NONE),
         false,
     );
     let _ = proto.define_own_property(
         rt,
         "constructor".intern(),
-        &*DataDescriptor::new(JsValue::from(obj_constructor.clone()), W | C),
+        &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
         false,
     );
     let obj_to_string = JsNativeFunction::new(rt, "toString".intern(), object_to_string, 0);
@@ -1109,7 +1107,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
 });
 
 pub fn get_length(rt: &mut Runtime, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
-    if val.class() as *const _ == JsArray::get_class() as *const _ {
+    if std::ptr::eq(val.class(), JsArray::get_class()) {
         return Ok(val.indexed.length());
     }
     let len = val.get(rt, "length".intern())?;
@@ -1141,7 +1139,7 @@ pub fn to_property_descriptor(
             if enumerable {
                 attr = (attr & !UNDEF_ENUMERABLE) | ENUMERABLE;
             } else {
-                attr = attr & !UNDEF_ENUMERABLE;
+                attr &= !UNDEF_ENUMERABLE;
             }
         }
     }
@@ -1152,7 +1150,7 @@ pub fn to_property_descriptor(
             if configurable {
                 attr = (attr & !UNDEF_CONFIGURABLE) | CONFIGURABLE;
             } else {
-                attr = attr & !UNDEF_CONFIGURABLE;
+                attr &= !UNDEF_CONFIGURABLE;
             }
         }
     }
@@ -1235,14 +1233,10 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let rel_path = unsafe { (*rt.stack.current).code_block.unwrap().path.clone() };
     let is_js_load = (name.starts_with("./")
         || name.starts_with("../")
-        || name.starts_with("/")
+        || name.starts_with('/')
         || name.ends_with(".js"))
         && name.ends_with(".js");
-    let spath = if is_js_load {
-        name
-    } else {
-        format!("{}", name)
-    };
+    let spath = name;
     let spath = if rel_path.is_empty() {
         spath
     } else {
@@ -1263,7 +1257,7 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     letroot!(module_object = stack, JsObject::new_empty(rt));
     let mut exports = JsObject::new_empty(rt);
     module_object.put(rt, "@exports".intern(), JsValue::new(exports), false)?;
-    let mut args = [JsValue::new(*&*module_object)];
+    let mut args = [JsValue::new(*module_object)];
     letroot!(
         args = stack,
         Arguments::new(JsValue::encode_undefined_value(), &mut args)

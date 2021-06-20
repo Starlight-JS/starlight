@@ -392,12 +392,10 @@ impl ByteCompiler {
                 }
                 let name = if member.computed {
                     None
+                } else if let Expr::Ident(name) = &*member.prop {
+                    Some(Self::ident_to_sym(name))
                 } else {
-                    if let Expr::Ident(name) = &*member.prop {
-                        Some(Self::ident_to_sym(name))
-                    } else {
-                        None
-                    }
+                    None
                 };
                 if name.is_none() {
                     self.expr(&member.prop, true, false)?;
@@ -564,7 +562,7 @@ impl ByteCompiler {
         };
         if function.is_async {
             return Err(JsValue::new(
-                self.rt.new_syntax_error(format!("NYI: async")),
+                self.rt.new_syntax_error("NYI: async".to_string()),
             ));
         }
         code.is_generator = function.is_generator;
@@ -627,7 +625,7 @@ impl ByteCompiler {
         if code.is_generator {
             compiler.emit(Opcode::OP_INITIAL_YIELD, &[], false);
         }
-        compiler.compile_fn(&function)?;
+        compiler.compile_fn(function)?;
         compiler.finish(&mut self.rt);
 
         let ix = if expr {
@@ -680,7 +678,7 @@ impl ByteCompiler {
                 depth: 0,
             })),
             variable_freelist: vec![],
-            code: code,
+            code,
             val_map: Default::default(),
             name_map: Default::default(),
             fmap: Default::default(),
@@ -809,7 +807,7 @@ impl ByteCompiler {
                     ModuleDecl::ExportNamed(named_export) => {
                         if named_export.src.is_some() {
                             return Err(JsValue::new(
-                                rt.new_syntax_error(format!("NYI: export * from mod",)),
+                                rt.new_syntax_error("NYI: export * from mod".to_string()),
                             ));
                         }
 
@@ -863,14 +861,14 @@ impl ByteCompiler {
             top_level: true,
             info: None,
             tail_pos: false,
-            builtins: builtins,
+            builtins,
             scope: Rc::new(RefCell::new(Scope {
                 parent: None,
                 variables: Default::default(),
                 depth: 0,
             })),
             variable_freelist: vec![],
-            code: code,
+            code,
             val_map: Default::default(),
             name_map: Default::default(),
             fmap: Default::default(),
@@ -878,7 +876,7 @@ impl ByteCompiler {
         };
 
         let is_strict = match p.body.get(0) {
-            Some(ref body) => body.is_use_strict(),
+            Some(body) => body.is_use_strict(),
             None => false,
         };
         code.top_level = true;
@@ -909,14 +907,14 @@ impl ByteCompiler {
             top_level: true,
             info: None,
             tail_pos: false,
-            builtins: builtins,
+            builtins,
             scope: Rc::new(RefCell::new(Scope {
                 parent: None,
                 variables: Default::default(),
                 depth: 0,
             })),
             variable_freelist: vec![],
-            code: code,
+            code,
             val_map: Default::default(),
             name_map: Default::default(),
             fmap: Default::default(),
@@ -924,7 +922,7 @@ impl ByteCompiler {
         };
 
         let is_strict = match p.body.get(0) {
-            Some(ref body) => body.is_use_strict(),
+            Some(body) => body.is_use_strict(),
             None => false,
         };
         code.top_level = true;
@@ -1083,7 +1081,7 @@ impl ByteCompiler {
                     match case.test {
                         Some(ref expr) => {
                             self.emit(Opcode::OP_DUP, &[], false);
-                            self.expr(&expr, true, false)?;
+                            self.expr(expr, true, false)?;
                             self.emit(Opcode::OP_EQ, &[], false);
                             let fail = self.cjmp(false);
 
@@ -1379,7 +1377,7 @@ impl ByteCompiler {
                     match case {
                         ObjectPatProp::KeyValue(ref keyvalue) => match keyvalue.key {
                             PropName::Ident(ref id) => {
-                                self.decl_let(Self::ident_to_sym(&id));
+                                self.decl_let(Self::ident_to_sym(id));
                             }
                             PropName::Str(ref x) => {
                                 self.decl_let(x.value.intern());
@@ -1610,7 +1608,7 @@ impl ByteCompiler {
                 match call.callee {
                     ExprOrSuper::Super(_) => {
                         return Err(JsValue::new(
-                            self.rt.new_syntax_error(format!("NYI: super call")),
+                            self.rt.new_syntax_error("NYI: super call".to_string()),
                         ))
                     } // todo super call
                     ExprOrSuper::Expr(ref expr) => match &**expr {
@@ -1632,7 +1630,7 @@ impl ByteCompiler {
                                 }
                                 ExprOrSuper::Super(_super) => {
                                     return Err(JsValue::new(
-                                        self.rt.new_syntax_error(format!("NYI: super call",)),
+                                        self.rt.new_syntax_error("NYI: super call".to_string()),
                                     ))
                                 }
                             }
@@ -1935,7 +1933,7 @@ impl ByteCompiler {
                     top_level: false,
                     tail_pos: false,
                     builtins: self.builtins,
-                    code: code,
+                    code,
                     variable_freelist: vec![],
                     val_map: Default::default(),
                     name_map: Default::default(),

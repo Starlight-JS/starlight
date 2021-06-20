@@ -56,10 +56,10 @@ impl IndexedElements {
 
     pub fn ensure_map(&mut self, vm: &mut Runtime) -> GcPointer<SparseArrayMap> {
         match self.map.as_ref() {
-            Some(map) => map.clone(),
+            Some(map) => *map,
             None => {
                 let map = vm.heap().allocate(HashMap::with_capacity(8));
-                self.map = Some(map.clone());
+                self.map = Some(map);
                 map
             }
         }

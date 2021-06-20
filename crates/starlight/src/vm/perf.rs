@@ -32,7 +32,11 @@ impl Perf {
     pub const EXTERN: u8 = 254;
     pub const INVALID: u8 = 255;
 }
-
+impl Default for Perf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Perf {
     pub fn new() -> Self {
         Perf {
@@ -106,8 +110,8 @@ impl Perf {
                 } else {
                     format!("{:?}", unsafe { std::mem::transmute::<_, Opcode>(i as u8) })
                 },
-                if *c > 10000_000 {
-                    format!("{:>12}M", c / 1000_000)
+                if *c > 10_000_000 {
+                    format!("{:>12}M", c / 1_000_000)
                 } else if *c > 10000 {
                     format!("{:>10}K", c / 1000)
                 } else {

@@ -137,7 +137,7 @@ impl JsFunction {
         }
     }
 
-    pub fn construct<'a>(
+    pub fn construct(
         &mut self,
         vm: &mut Runtime,
 
@@ -161,7 +161,7 @@ impl JsFunction {
         self.call(vm, args, this_fn)
     }
 
-    pub fn call<'a>(
+    pub fn call(
         &mut self,
         vm: &mut Runtime,
         args: &mut Arguments,
@@ -171,7 +171,7 @@ impl JsFunction {
             FuncType::Native(ref x) => (x.func)(vm, args),
             FuncType::Closure(ref x) => (x.func)(vm, args),
             FuncType::User(ref x) => {
-                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args, this)
+                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope), args, this)
             }
             FuncType::Bound(ref mut x) => {
                 let stack = vm.shadowstack();
@@ -183,7 +183,7 @@ impl JsFunction {
                         values: x.args.as_slice_mut(),
                     }
                 );
-                let mut target = x.target.clone();
+                let mut target = x.target;
                 target.as_function_mut().call(vm, &mut args, this)
             }
             FuncType::Generator(ref mut x) => x.call(vm, args, this),
@@ -599,10 +599,7 @@ impl JsVMFunction {
         let stack = vm.shadowstack();
         //root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
         //root!(scope = stack, Environment::new(vm, 0));
-        let f = JsVMFunction {
-            code: code.clone(),
-            scope: env,
-        };
+        let f = JsVMFunction { code, scope: env };
         vm.heap().defer();
         letroot!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
         letroot!(proto = stack, JsObject::new_empty(vm));
@@ -610,7 +607,7 @@ impl JsVMFunction {
         let _ = proto.define_own_property(
             vm,
             "constructor".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(this.clone()), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
             false,
         );
         let desc = vm.description(code.name);
@@ -641,7 +638,7 @@ impl GcPointer<JsObject> {
         let func = self.as_function_mut();
 
         let vm = vm;
-        if let Some(s) = func.construct_struct.clone() {
+        if let Some(s) = func.construct_struct {
             return Ok(s);
         }
 
@@ -663,11 +660,11 @@ impl GcPointer<JsObject> {
             && slot
                 .base()
                 .as_ref()
-                .map(|base| GcPointer::ptr_eq(&base, &obj))
+                .map(|base| GcPointer::ptr_eq(base, &obj))
                 .unwrap_or(false)
             && slot.attributes().is_data()
         {
-            func.construct_struct = Some(structure.clone());
+            func.construct_struct = Some(structure);
         }
 
         Ok(structure)
@@ -784,7 +781,7 @@ impl JsGeneratorFunction {
         let _ = proto.define_own_property(
             vm,
             "constructor".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(this.clone()), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
             false,
         );
         let desc = vm.description(code.name);

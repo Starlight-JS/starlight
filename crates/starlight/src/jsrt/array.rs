@@ -102,7 +102,7 @@ pub fn array_join(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
     let len = if len as u32 as f64 == len {
         len as u32
     } else {
-        0 as u32
+        0_u32
     };
     let separator = if !args.at(0).is_undefined() {
         args.at(0).to_string(vm)?
@@ -139,13 +139,13 @@ pub fn array_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
         letroot!(func = stack, unsafe {
             m.value().get_object().downcast_unchecked::<JsObject>()
         });
-        letroot!(f2 = stack, *&*func);
+        letroot!(f2 = stack, *func);
         let f = func.as_function_mut();
         letroot!(args = stack, Arguments::new(args.this, &mut []));
         return f.call(vm, &mut args, JsValue::new(*f2));
     }
     letroot!(args = stack, Arguments::new(args.this, &mut []));
-    object_to_string(vm, &mut args)
+    object_to_string(vm, &args)
 }
 
 // TODO(playX): Allow to push up to 2^53-1 values
@@ -220,7 +220,7 @@ pub fn array_reduce(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
     }
 
     letroot!(callbackf = stack, args.at(0).get_jsobject());
-    letroot!(cb = stack, *&*callbackf);
+    letroot!(cb = stack, *callbackf);
     let callback = callbackf.as_function_mut();
     if len == 0 && arg_count <= 1 {
         let msg = JsString::new(
@@ -337,7 +337,7 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
     }
 
     letroot!(callback = stack, callback.to_object(rt)?);
-    letroot!(cb2 = stack, *&*callback);
+    letroot!(cb2 = stack, *callback);
     let this_arg = args.at(1);
     let mut buf: [JsValue; 3] = [JsValue::encode_undefined_value(); 3];
     for i in 0..length {
@@ -345,7 +345,7 @@ pub fn array_for_each(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
             let element = array.get(rt, Symbol::Index(i))?;
             buf[0] = element;
             buf[1] = JsValue::new(i);
-            buf[2] = JsValue::new(*&*array);
+            buf[2] = JsValue::new(*array);
             letroot!(args = stack, Arguments::new(this_arg, &mut buf));
 
             callback
@@ -369,7 +369,7 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
     }
 
     letroot!(callback = stack, callback.to_object(rt)?);
-    letroot!(cb2 = stack, *&*callback);
+    letroot!(cb2 = stack, *callback);
     letroot!(result = stack, JsArray::new(rt, 0));
     letroot!(this_arg = stack, args.at(1));
 
@@ -382,8 +382,8 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         let current = array.get(rt, Symbol::Index(i))?;
         buf[0] = current;
         buf[1] = JsValue::new(i);
-        buf[2] = JsValue::new(*&*array);
-        let mut args = Arguments::new(*&*this_arg, &mut buf);
+        buf[2] = JsValue::new(*array);
+        let mut args = Arguments::new(*this_arg, &mut buf);
         let val = callback
             .as_function_mut()
             .call(rt, &mut args, JsValue::new(*cb2))?;
@@ -392,7 +392,7 @@ pub fn array_filter(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
             next_index += 1;
         }
     }
-    Ok(JsValue::new(*&*result))
+    Ok(JsValue::new(*result))
 }
 
 pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -408,7 +408,7 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     }
 
     letroot!(callback = stack, callback.to_object(rt)?);
-    letroot!(cb2 = stack, *&*callback);
+    letroot!(cb2 = stack, *callback);
     letroot!(result = stack, JsArray::new(rt, 0));
     letroot!(this_arg = stack, args.at(1));
     let mut buf = [JsValue::encode_undefined_value(); 3];
@@ -419,14 +419,14 @@ pub fn array_map(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
 
         buf[0] = array.get(rt, Symbol::Index(i))?;
         buf[1] = JsValue::new(i);
-        buf[2] = JsValue::new(*&*array);
-        let mut args = Arguments::new(*&*this_arg, &mut buf);
+        buf[2] = JsValue::new(*array);
+        let mut args = Arguments::new(*this_arg, &mut buf);
         let mapped_value = callback
             .as_function_mut()
             .call(rt, &mut args, JsValue::new(*cb2))?;
         result.put(rt, Symbol::Index(i), mapped_value, true)?;
     }
-    Ok(JsValue::new(*&*result))
+    Ok(JsValue::new(*result))
 }
 
 pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -452,7 +452,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
             fin = len;
         } else {
             let relative_end = args.at(1).to_int32(rt)?;
-            if unlikely(relative_end as u32 >= 4294967295) {
+            if unlikely(relative_end as u32 == 4294967295) {
                 let msg = JsString::new(rt, "Out of memory for array values");
                 return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
             }
@@ -467,7 +467,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
     }
 
     let result_len = if fin > k { fin - k } else { 0 };
-    if unlikely(result_len as u32 >= 4294967295 || len >= 4294967295) {
+    if unlikely(result_len as u32 == 4294967295 || len >= 4294967295) {
         let msg = JsString::new(rt, "Out of memory for array values");
         return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
     }
@@ -486,7 +486,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
             k += 1;
             n += 1;
         }
-        return Ok(JsValue::new(*&*ary));
+        return Ok(JsValue::new(*ary));
     }
     letroot!(ary = stack, JsArray::new(rt, result_len));
     let mut n = 0;
@@ -498,7 +498,7 @@ pub fn array_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
         k += 1;
         n += 1;
     }
-    return Ok(JsValue::new(*&*ary));
+    return Ok(JsValue::new(*ary));
 }
 
 pub fn array_shift(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {

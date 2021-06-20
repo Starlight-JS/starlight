@@ -168,7 +168,7 @@ impl Heap {
     ) -> *mut GcPointerBase {
         let real_size = size + size_of::<GcPointerBase>();
         let memory = self.gc.allocate(real_size, vtable as _, type_id);
-        memory.map(|x| x.as_ptr()).unwrap_or_else(|| null_mut())
+        memory.map(|x| x.as_ptr()).unwrap_or_else(null_mut)
     }
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
@@ -199,22 +199,22 @@ impl Heap {
     pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
         let slot = self.gc.make_weak_slot(null_mut());
         unsafe {
-            let weak = WeakRef {
+            
+            WeakRef {
                 inner: NonNull::new_unchecked(slot),
                 marker: Default::default(),
-            };
-            weak
+            }
         }
     }
 
     pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
         let slot = self.gc.make_weak_slot(p.base.as_ptr());
         unsafe {
-            let weak = WeakRef {
+            
+            WeakRef {
                 inner: NonNull::new_unchecked(slot),
                 marker: Default::default(),
-            };
-            weak
+            }
         }
     }
 

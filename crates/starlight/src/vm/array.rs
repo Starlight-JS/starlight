@@ -34,7 +34,7 @@ impl JsArray {
     pub fn new(vm: &mut Runtime, n: u32) -> GcPointer<JsObject> {
         let mut arr = JsObject::new(
             vm,
-            &vm.global_data().array_structure.clone().unwrap(),
+            &vm.global_data().array_structure.unwrap(),
             Self::get_class(),
             ObjectTag::Array,
         );
@@ -223,19 +223,17 @@ impl GcPointer<JsObject> {
     ) -> Result<bool, JsValue> {
         if !writable {
             self.indexed.make_readonly();
-        } else {
-            if !self.indexed.writable() {
-                if throwable {
-                    let msg = JsString::new(
-                        vm,
-                        "changing [[Writable]] of unconfigurable property not allowed",
-                    );
-                    return Err(JsValue::encode_object_value(JsTypeError::new(
-                        vm, msg, None,
-                    )));
-                }
-                return Ok(false);
+        } else if !self.indexed.writable() {
+            if throwable {
+                let msg = JsString::new(
+                    vm,
+                    "changing [[Writable]] of unconfigurable property not allowed",
+                );
+                return Err(JsValue::encode_object_value(JsTypeError::new(
+                    vm, msg, None,
+                )));
             }
+            return Ok(false);
         }
         Ok(true)
     }
@@ -332,7 +330,7 @@ impl GcPointer<JsObject> {
         len: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        if unlikely(len >= 4294967295) {
+        if unlikely(len == 4294967295) {
             let msg = JsString::new(ctx, "Out of memory for array values");
             return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
         }
