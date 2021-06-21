@@ -1237,11 +1237,14 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         || name.ends_with(".js"))
         && name.ends_with(".js");
     let spath = name;
-    let spath = if rel_path.is_empty() {
+    let mut spath = if rel_path.is_empty() {
         spath
     } else {
         format!("{}/{}", rel_path, spath)
     };
+    if cfg!(windows) {
+        spath = spath.replace("/","\\");
+    }
     let path = std::path::Path::new(&spath);
     let path = match path.canonicalize() {
         Err(e) => {
