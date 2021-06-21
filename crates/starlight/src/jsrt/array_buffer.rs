@@ -72,6 +72,7 @@ pub fn array_buffer_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
 }
 
 pub(crate) fn array_buffer_init(rt: &mut Runtime) {
+    // Do not care about GC since no GC is possible when initializing runtime.
     let mut init = || -> Result<(), JsValue> {
         let mut structure =
             Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);

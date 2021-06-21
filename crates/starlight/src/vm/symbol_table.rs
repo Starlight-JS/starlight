@@ -64,6 +64,8 @@ impl SymbolTable {
 pub struct SymbolID(pub(crate) u32);
 
 impl SymbolID {
+    // TODO: Actually make use of symbol IDs < 128 for property names like `prototype` or `constructor` so we do not invoke hash map look up for such
+    // simple cases.
     pub const PUBLIC_START: SymbolID = Self(128);
 }
 /// Runtime symbol type.
