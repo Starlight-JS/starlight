@@ -64,7 +64,6 @@ pub mod structure;
 pub mod structure_chain;
 pub mod symbol_table;
 pub mod thread;
-pub mod tracingjit;
 pub mod typedarray;
 pub mod value;
 use crate::gc::snapshot::{deserializer::*, serializer::*};
@@ -634,6 +633,7 @@ impl Runtime {
         )
         .unwrap();
         assert!(this.modules.contains_key("std"));
+        jsrt::array_buffer::array_buffer_init(&mut this);
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -790,6 +790,7 @@ pub struct GlobalData {
     pub(crate) set_prototype: Option<GcPointer<JsObject>>,
     pub(crate) regexp_structure: Option<GcPointer<Structure>>,
     pub(crate) regexp_object: Option<GcPointer<JsObject>>,
+    pub(crate) array_buffer_prototype: Option<GcPointer<JsObject>>,
     pub(crate) array_buffer_structure: Option<GcPointer<Structure>>,
 }
 

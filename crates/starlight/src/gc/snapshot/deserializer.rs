@@ -218,7 +218,6 @@ impl<'a> Deserializer<'a> {
     }
     unsafe fn deserialize_global_data(&mut self) -> GlobalData {
         GlobalData {
-            
             normal_arguments_structure: self.read_opt_gc(),
             empty_object_struct: self.read_opt_gc(),
             function_struct: self.read_opt_gc(),
@@ -254,6 +253,7 @@ impl<'a> Deserializer<'a> {
             regexp_object: self.read_opt_gc(),
             generator_prototype: self.read_opt_gc(),
             generator_structure: self.read_opt_gc(),
+            array_buffer_prototype: self.read_opt_gc(),
             array_buffer_structure: self.read_opt_gc(),
         }
     }
@@ -327,7 +327,7 @@ impl Deserializable for JsValue {
     }
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         let ty = deser.get_u8();
-        
+
         if ty == 0xff {
             JsValue::encode_object_value(std::mem::transmute::<_, GcPointer<u8>>(
                 deser.get_reference(),

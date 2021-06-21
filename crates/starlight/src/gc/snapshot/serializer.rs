@@ -783,6 +783,7 @@ impl Serializable for GlobalData {
         self.regexp_object.serialize(serializer);
         self.generator_prototype.serialize(serializer);
         self.generator_structure.serialize(serializer);
+        self.array_buffer_prototype.serialize(serializer);
         self.array_buffer_structure.serialize(serializer);
     }
 }

@@ -4,11 +4,12 @@
 use crate::{
     gc::cell::{GcPointer, WeakRef},
     vm::{
-        arguments::Arguments, arguments::JsArguments, array::JsArray, array_storage::ArrayStorage,
-        attributes::*, code_block::CodeBlock, environment::Environment, error::*, function::*,
-        global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*,
-        object::*, property_descriptor::*, string::*, structure::*,
-        structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind, Runtime,
+        arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
+        array_storage::ArrayStorage, attributes::*, code_block::CodeBlock,
+        environment::Environment, error::*, function::*, global::JsGlobal,
+        indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*,
+        property_descriptor::*, string::*, structure::*, structure_chain::StructureChain,
+        symbol_table::*, value::*, ModuleKind, Runtime,
     },
 };
 use std::collections::HashMap;
@@ -1094,6 +1095,10 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         generator::generator_iterator as _,
         generator::generator_return as _,
         generator::generator_throw as _,
+        array_buffer::array_buffer_constructor as _,
+        array_buffer::array_buffer_byte_length as _,
+        array_buffer::array_buffer_slice as _,
+        JsArrayBuffer::get_class() as *const _ as usize,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {
@@ -1243,7 +1248,7 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         format!("{}/{}", rel_path, spath)
     };
     if cfg!(windows) {
-        spath = spath.replace("/","\\");
+        spath = spath.replace("/", "\\");
     }
     let path = std::path::Path::new(&spath);
     let path = match path.canonicalize() {

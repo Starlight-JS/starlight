@@ -45,6 +45,15 @@ macro_rules! def_native_method {
 }
 
 #[macro_export]
+macro_rules! def_native_accessor {
+    ($vm: expr,$obj: expr,$name: ident,$get: expr,$name_set: ident,$set: expr) => {{
+        let name = stringify!($name).intern();
+        let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
+        $obj.put($vm, name, JsValue::new(m), true)
+    }};
+}
+
+#[macro_export]
 macro_rules! as_atomic {
     ($value: expr;$t: ident) => {
         unsafe { core::mem::transmute::<_, &'_ core::sync::atomic::$t>($value as *const _) }
