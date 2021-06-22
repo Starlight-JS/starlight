@@ -6,9 +6,9 @@ use std::{
     ptr::null_mut,
 };
 pub struct JsArrayBuffer {
-    data: *mut u8,
-    size: usize,
-    attached: bool,
+    pub(crate) data: *mut u8,
+    pub(crate) size: usize,
+    pub(crate) attached: bool,
 }
 
 extern "C" fn drop_array_buffer(x: &mut JsObject) {

@@ -82,6 +82,11 @@ pub(crate) fn array_buffer_init(rt: &mut Runtime) {
             JsArrayBuffer::get_class(),
             ObjectTag::ArrayBuffer,
         );
+        *proto.data::<JsArrayBuffer>() = std::mem::ManuallyDrop::new(JsArrayBuffer {
+            data: std::ptr::null_mut(),
+            size: 0,
+            attached: false,
+        });
         let map = structure.change_prototype_transition(rt, Some(proto));
         rt.global_data.array_buffer_prototype = Some(proto);
         rt.global_data.array_buffer_structure = Some(map);
