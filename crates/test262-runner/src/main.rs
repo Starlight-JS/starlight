@@ -14,7 +14,8 @@ use once_cell::sync::Lazy;
 use results::{compare_results, write_json};
 use serde::{Deserialize, Serialize};
 use starlight::{prelude::Snapshot, vm::Runtime, Platform};
-use std::rc::Rc;
+
+use std::sync::Arc;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -174,9 +175,9 @@ struct Harness {
 #[derive(Debug, Clone)]
 struct TestSuite {
     name: Box<str>,
-    suites: Box<[TestSuite]>,
-    tests: Box<[Test]>,
-    snapshot: Rc<Box<[u8]>>,
+    suites: Vec<TestSuite>,
+    tests: Vec<Test>,
+    snapshot: Arc<Box<[u8]>>,
 }
 
 /// Outcome of a test suite.
@@ -238,13 +239,13 @@ struct Test {
     includes: Box<[Box<str>]>,
     locale: Locale,
     content: Box<str>,
-    snapshot: Rc<Box<[u8]>>,
+    snapshot: Arc<Box<[u8]>>,
 }
 
 impl Test {
     /// Creates a new test.
     #[inline]
-    fn new<N, C>(name: N, content: C, metadata: MetaData, snapshot: Rc<Box<[u8]>>) -> Self
+    fn new<N, C>(name: N, content: C, metadata: MetaData, snapshot: Arc<Box<[u8]>>) -> Self
     where
         N: Into<Box<str>>,
         C: Into<Box<str>>,
@@ -420,7 +421,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     if suite.to_string_lossy().ends_with(".js") {
         let mut rt = Runtime::new(Default::default(), Default::default(), None);
         let buf = Snapshot::take(false, &mut rt, |_, _| {});
-        let test = read_test(&test262_path.join(suite), Rc::new(buf.buffer))
+        let test = read_test(&test262_path.join(suite), Arc::new(buf.buffer))
             .expect("could not get the test to run");
 
         if verbose != 0 {
@@ -436,7 +437,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
         if verbose != 0 {
             println!("Test suite loaded, starting tests...");
         }
-        let results = suite.run(&harness, verbose);
+        let results = suite.run_main(&harness, verbose);
 
         println!();
         println!("Results:");

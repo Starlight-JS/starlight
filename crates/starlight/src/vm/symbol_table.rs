@@ -60,12 +60,36 @@ impl SymbolTable {
     }
 }
 
+macro_rules! builtin_symbols {
+    ($m: ident) => {
+        $m! {
+            /*PROTOTYPE prototype 0,
+            TO_STRING toString 1,
+            CONSTRUCTOR constructor 2,
+            LENGTH length 3,
+            BYTE_LENGTH byteLength 4,
+            GET get 5,
+            SET set 6,
+            CALL call 7,
+            APPLY apply 8*/
+
+        }
+    };
+}
+
+macro_rules! def_sid {
+    ($($id: ident $val: ident $ix: expr),*) => {
+        $(pub const $id: SymbolID = SymbolID($ix);)*
+    };
+}
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct SymbolID(pub(crate) u32);
 
 impl SymbolID {
-    // TODO: Actually make use of symbol IDs < 128 for property names like `prototype` or `constructor` so we do not invoke hash map look up for such
-    // simple cases.
+    builtin_symbols! {
+        def_sid
+    }
+
     pub const PUBLIC_START: SymbolID = Self(128);
 }
 /// Runtime symbol type.
@@ -74,13 +98,27 @@ impl SymbolID {
 /// This type is used as property names and inside JsSymbol.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum Symbol {
+    /// Interned string.
+    Key(SymbolID),
+    /// Private symbol. You can't create it in JS world.
+    Private(SymbolID),
     /// Represents index value, this variant is used when you can definetely put array
     /// index inside u32 so it does not take space in interner gc.
-    Key(SymbolID),
-    Private(SymbolID),
     Index(u32),
 }
+
+macro_rules! def_sym {
+    ($($id: ident $val: ident $ix: expr),*) => {
+        $(
+            pub const $id: Symbol = Symbol::Key(SymbolID::$id);
+        )*
+    };
+}
+
 impl Symbol {
+    builtin_symbols! {
+        def_sym
+    }
     pub fn private(self) -> Self {
         match self {
             Self::Key(x) => Self::Private(x),
@@ -117,10 +155,26 @@ pub const DUMMY_SYMBOL: Symbol = Symbol::Key(SymbolID(0));
 #[doc(hidden)]
 pub static mut SYMBOL_TABLE: MaybeUninit<SymbolTable> = MaybeUninit::uninit();
 
+macro_rules! globals {
+    ($($id: ident $val: ident $ix: expr),*) => {
+       $( pub static $id: &'static str = stringify!($val);)*
+    };
+}
+builtin_symbols!(globals);
+macro_rules! intern_builtins {
+    ($($id: ident $val: ident $ix: expr),*) => {
+        let mut symtab = symbol_table();
+        $(
+            symtab.ids.insert($ix,$id);
+            symtab.symbols.insert($id,$ix);
+        )*
+    };
+}
 pub(crate) fn initialize_symbol_table() {
     unsafe {
         SYMBOL_TABLE.as_mut_ptr().write(SymbolTable::new());
     }
+    builtin_symbols!(intern_builtins);
 }
 pub fn symbol_table() -> &'static SymbolTable {
     unsafe { &*SYMBOL_TABLE.as_ptr() }

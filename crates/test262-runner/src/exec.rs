@@ -3,6 +3,7 @@ use super::{
     TestSuite, IGNORED,
 };
 use colored::Colorize;
+use rayon::iter::*;
 use starlight::{
     gc::default_heap,
     prelude::Deserializer,
@@ -11,6 +12,76 @@ use starlight::{
 use std::panic::{self, AssertUnwindSafe};
 
 impl TestSuite {
+    pub(crate) fn run_main(&self, harness: &Harness, verbose: u8) -> SuiteResult {
+        if verbose != 0 {
+            println!("Suite {}:", self.name);
+        }
+
+        // TODO: in parallel
+        let suites: Vec<_> = self
+            .suites
+            .par_iter()
+            .map(|suite| suite.run(harness, verbose))
+            .collect();
+
+        // TODO: in parallel
+        let tests: Vec<_> = self
+            .tests
+            .par_iter()
+            .map(|test| test.run(harness, verbose))
+            .flatten()
+            .collect();
+
+        if verbose != 0 {
+            println!();
+        }
+
+        // Count passed tests
+        let mut passed = 0;
+        let mut ignored = 0;
+        let mut panic = 0;
+        for test in &tests {
+            match test.result {
+                TestOutcomeResult::Passed => passed += 1,
+                TestOutcomeResult::Ignored => ignored += 1,
+                TestOutcomeResult::Panic => panic += 1,
+                TestOutcomeResult::Failed => {}
+            }
+        }
+
+        // Count total tests
+        let mut total = tests.len();
+        for suite in &suites {
+            total += suite.total;
+            passed += suite.passed;
+            ignored += suite.ignored;
+            panic += suite.panic;
+        }
+
+        if verbose != 0 {
+            println!(
+            "Suite {} results: total: {}, passed: {}, ignored: {}, failed: {} (panics: {}{}), conformance: {:.2}%",
+            self.name,
+            total,
+            passed.to_string().green(),
+            ignored.to_string().yellow(),
+            (total - passed - ignored).to_string().red(),
+            if panic == 0 {"0".normal()} else {panic.to_string().red()},
+            if panic != 0 {" ⚠"} else {""}.red(),
+            (passed as f64 / total as f64) * 100.0
+        );
+        }
+
+        SuiteResult {
+            name: self.name.clone(),
+            total,
+            passed,
+            ignored,
+            panic,
+            suites,
+            tests,
+        }
+    }
     /// Runs the test suite.
     pub(crate) fn run(&self, harness: &Harness, verbose: u8) -> SuiteResult {
         if verbose != 0 {
@@ -150,8 +221,9 @@ impl Test {
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => val.to_string(&mut context)
-                                        .unwrap_or_else(|_| String::new()),
+                                Ok(val) => val
+                                    .to_string(&mut context)
+                                    .unwrap_or_else(|_| String::new()),
                                 Err(e) => format!(
                                     "Uncaught {}",
                                     e.to_string(&mut context).unwrap_or_else(|_| String::new())
@@ -205,7 +277,7 @@ impl Test {
                                     Ok(res) => (
                                         false,
                                         res.to_string(&mut context)
-                                                .unwrap_or_else(|_| String::new()),
+                                            .unwrap_or_else(|_| String::new()),
                                     ),
                                     Err(e) => {
                                         let passed = e
