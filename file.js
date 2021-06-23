@@ -1,2 +1,14 @@
-let first = { x: 0, y: 1 }
-let second = { x: 2, y: 3 }
+function Node(left, right) {
+    this.left = left;
+    this.right = right;
+}
+
+function makeTree(depth) {
+    if (depth <= 0) {
+        return new Node(undefined, undefined);
+    }
+
+    return new Node(makeTree(depth - 1), makeTree(depth - 1));
+}
+
+makeTree(14);

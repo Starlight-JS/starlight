@@ -72,8 +72,6 @@ pub struct MiGC {
 
 impl MiGC {
     pub fn new(gc_params: GcParams) -> Self {
-        
-
         Self {
             n_workers: gc_params.nmarkers as _,
             collect_conservative: gc_params.conservative_marking,
@@ -117,7 +115,7 @@ impl MiGC {
 
         unsafe {
             if self.collect_conservative {
-                #[cfg(not(target_arch = "wasm32"))]
+                /*#[cfg(not(target_arch = "wasm32"))]
                 {
                     let registers = crate::vm::thread::Thread::capture_registers();
                     if !registers.is_empty() {
@@ -126,7 +124,7 @@ impl MiGC {
                             registers.last().unwrap() as *const usize as _,
                         ));
                     }
-                }
+                } */
                 crate::vm::thread::THREAD.with(|thread| {
                     visitor
                         .cons_roots
@@ -309,7 +307,9 @@ impl MiGC {
         ptr: *mut u8,
         mut f: impl FnMut(&mut Self, *mut GcPointerBase),
     ) {
-        if libmimalloc_sys::mi_heap_check_owned(self.mi_heap, ptr.cast()) && libmimalloc_sys::mi_heap_contains_block(self.mi_heap, ptr.cast()) {
+        if libmimalloc_sys::mi_heap_check_owned(self.mi_heap, ptr.cast())
+            && libmimalloc_sys::mi_heap_contains_block(self.mi_heap, ptr.cast())
+        {
             f(self, ptr.cast());
         }
     }

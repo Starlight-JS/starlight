@@ -43,11 +43,8 @@ struct Options {
         help = "Enable conservative pointer marking (works only for MiGC)"
     )]
     cons_gc: bool,
-    #[structopt(
-        long = "enable-region-gc",
-        help = "Enable region based garbage collector"
-    )]
-    region_gc: bool,
+    #[structopt(long = "enable-jet-gc", help = "Enable Jet GC")]
+    jet_gc: bool,
 }
 
 use const_random::const_random;
@@ -67,6 +64,8 @@ fn main() {
     let gc = gc.with_conservative_marking(options.cons_gc);
     let heap = if options.use_malloc_gc {
         Heap::new(starlight::gc::malloc_gc::MallocGC::new(gc))
+    } else if options.jet_gc {
+        Heap::new(starlight::gc::jet::JetGC::new(gc))
     } else {
         Heap::new(starlight::gc::migc::MiGC::new(gc))
     };

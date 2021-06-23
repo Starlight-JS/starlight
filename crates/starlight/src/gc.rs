@@ -58,6 +58,7 @@ pub const K: usize = 1024;
 //pub mod accounting;
 pub mod bump;
 pub mod freelist;
+pub mod jet;
 pub mod malloc_gc;
 pub mod mem;
 pub mod migc;
@@ -199,7 +200,6 @@ impl Heap {
     pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
         let slot = self.gc.make_weak_slot(null_mut());
         unsafe {
-            
             WeakRef {
                 inner: NonNull::new_unchecked(slot),
                 marker: Default::default(),
@@ -210,7 +210,6 @@ impl Heap {
     pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
         let slot = self.gc.make_weak_slot(p.base.as_ptr());
         unsafe {
-            
             WeakRef {
                 inner: NonNull::new_unchecked(slot),
                 marker: Default::default(),
