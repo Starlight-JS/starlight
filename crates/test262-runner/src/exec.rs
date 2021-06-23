@@ -20,14 +20,14 @@ impl TestSuite {
         // TODO: in parallel
         let suites: Vec<_> = self
             .suites
-            .par_iter()
+            .iter()
             .map(|suite| suite.run(harness, verbose))
             .collect();
 
         // TODO: in parallel
         let tests: Vec<_> = self
             .tests
-            .par_iter()
+            .iter()
             .map(|test| test.run(harness, verbose))
             .flatten()
             .collect();

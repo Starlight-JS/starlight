@@ -854,7 +854,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if false && !frame.exit_on_return && (opcode == Opcode::OP_TAILNEW) {
+                    if  !frame.exit_on_return && (opcode == Opcode::OP_TAILNEW) {
                         // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
