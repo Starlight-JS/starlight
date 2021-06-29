@@ -1,19 +1,12 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    bytecompiler::ByteCompiler,
-    gc::default_heap,
-    gc::shadowstack::ShadowStack,
-    gc::Heap,
-    gc::{
+use crate::{bytecompiler::ByteCompiler, codegen, gc::Heap, gc::default_heap, gc::shadowstack::ShadowStack, gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
-    },
-    jsrt::{self, object::*, regexp::RegExp},
-};
+    }, jsrt::{self, object::*, regexp::RegExp}};
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
@@ -24,15 +17,9 @@ use std::{
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
-use swc_common::{
-    errors::{DiagnosticBuilder, Emitter, Handler},
-    sync::Lrc,
-};
+use swc_common::{errors::{DiagnosticBuilder, Emitter, Handler}, pass::CompilerPass, sync::Lrc};
 use swc_common::{FileName, SourceMap};
-use swc_ecmascript::{
-    ast::Program,
-    parser::{error::Error, *},
-};
+use swc_ecmascript::{ast::{ExprOrSpread, Program}, parser::{error::Error, *}};
 #[macro_use]
 pub mod class;
 #[macro_use]
@@ -224,6 +211,7 @@ pub struct Runtime {
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
     pub(crate) module_loader: Option<GcPointer<JsObject>>,
     pub(crate) modules: HashMap<String, ModuleKind>,
+    pub(crate) codegen_plugins: HashMap<String, Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>>,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
     #[allow(dead_code)]
@@ -427,6 +415,9 @@ impl Runtime {
                 builtins,
             )?;
             code.strict = code.strict || force_strict;
+            let mut buf = String::new();
+            code.display_to(&mut buf);
+            println!("{}", buf);
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
             let stack = self.shadowstack();
@@ -558,6 +549,7 @@ impl Runtime {
             module_loader: None,
             symbol_table: HashMap::new(),
             eval_history: String::new(),
+            codegen_plugins: HashMap::new()
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -662,6 +654,7 @@ impl Runtime {
             perf: perf::Perf::new(),
             symbol_table: HashMap::new(),
             module_loader: None,
+            codegen_plugins: HashMap::new()
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -737,6 +730,11 @@ impl Runtime {
         let msg = JsString::new(self, msg);
         JsSyntaxError::new(self, msg, None)
     }
+
+    pub fn register_codegen_plugin(&mut self,plugin_name: &str, codegen_func: Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>){
+        self.codegen_plugins.insert(String::from(plugin_name), codegen_func);
+    }
+
 }
 
 use starlight_derive::GcTrace;
@@ -901,4 +899,42 @@ pub(crate) fn init_es_config() -> EsConfig {
     let mut es_config: EsConfig = Default::default();
     es_config.dynamic_import = true;
     es_config
+}
+
+
+#[cfg(test)]
+mod tests {
+    use swc_ecmascript::ast::ExprOrSpread;
+
+    use crate::{Platform, bytecode::opcodes::Opcode, bytecompiler::ByteCompiler, gc::{Heap, migc::MiGC}};
+
+    use super::{GcParams, Runtime, RuntimeParams};
+
+    #[test]
+    fn test_register_codegen_plugin() {
+        Platform::initialize();
+        let gc = GcParams::default().with_parallel_marking(false);
+        let heap = Heap::new(MiGC::new(gc));
+        
+        let mut rt = Runtime::with_heap(
+            heap,
+            RuntimeParams::default(),
+            None);
+        rt.heap().gc.stats();
+        rt.shadowstack();
+
+        rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
+        {
+            compiler.expr(&call_args[0].expr, true, false)?;
+            compiler.expr(&call_args[1].expr,true,false)?;
+            compiler.emit(Opcode::OP_ADD,&[0],false);
+            Ok(())
+        }));
+        let result =rt.eval("MyOwnAddFn(2,3)");
+        assert!(result.is_ok(),"Should get result");
+        if let Ok(value) = result {
+            assert_eq!(5,value.get_int32());
+        }
+        //
+    }
 }

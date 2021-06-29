@@ -1606,6 +1606,11 @@ impl ByteCompiler {
                     self.handle_builtin_call(call)?;
                 }
             }
+            x if is_codegen_plugin_call(self.rt, x) => {
+                if let Expr::Call(call) = x {
+                    self.handle_codegen_plugin_call(call)?;
+                }
+            }
             Expr::Call(call) if !is_builtin_call(expr, self.builtins) => {
                 match call.callee {
                     ExprOrSuper::Super(_) => {
@@ -2243,6 +2248,24 @@ impl Visit for IdentFinder<'_> {
     }
 }
 
+fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr) -> bool{
+    if let Expr::Call(call) = e {
+        if let ExprOrSuper::Expr(expr) = &call.callee {
+            match (&**expr) {
+                // ___foo(x,y)
+                Expr::Ident(x) => {
+                    let str = &*x.sym;
+                    return rt.codegen_plugins.contains_key(str);
+                }
+                _ => {
+                    return false;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     if !builtin_compilation {
         return false;
@@ -2272,6 +2295,23 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     false
 }
 impl ByteCompiler {
+    pub fn handle_codegen_plugin_call(&mut self, call: &CallExpr) -> Result<(), JsValue> {
+        let plugin_name = if let ExprOrSuper::Expr(expr) = &call.callee {
+            if let Expr::Ident(x) = &**expr {
+                let str = &*x.sym;
+                str
+            } else {
+                unreachable!();
+            }
+        } else {
+            unreachable!();
+        };
+        let runtime = self.rt;
+        let plugin = runtime.codegen_plugins.get(plugin_name).unwrap();
+        plugin(self,&call.args)
+    }
+
+
     /// TODO List:
     /// - Implement  `___call` ,`___tailcall`.
     /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
@@ -2339,7 +2379,7 @@ impl ByteCompiler {
                 if let Some(func) = &member {
                     if let ExprOrSuper::Expr(x) = &func {
                         if let Expr::Ident(_) = &**x {
-                            self.expr(&call.args[0].expr,true,false)?;
+                            self.expr(&call.args[0].expr, true, false)?;
                             self.expr(&**x, true, false)?;
                             for i in 1..call.args.len() {
                                 self.expr(&call.args[i].expr, true, false)?;
