@@ -1,13 +1,9 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use starlight::gc::{default_heap, formatted_size, GarbageCollector};
-use starlight::heap::block::Block;
-use starlight::heap::block_allocator::BlockAllocator;
-use starlight::heap::constants::BLOCK_SIZE;
-use starlight::{offsetof, prelude::*};
-use std::mem::size_of;
-use std::path::{Path, PathBuf};
+use starlight::gc::default_heap;
+use starlight::prelude::*;
+use std::path::Path;
 use structopt::*;
 
 #[cfg(not(debug_assertions))]

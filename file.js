@@ -13,6 +13,5 @@ function makeTree(depth) {
     return new Node(makeTree(depth - 1), makeTree(depth - 1))
 }
 
-let n = makeTree(17);
+let n = makeTree(21);
 
-print(n.counter);

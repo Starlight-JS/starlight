@@ -8,12 +8,12 @@ use std::{
 use wtf_rs::round_up;
 
 use crate::{
+    gc::{block::Block, constants::BLOCK_SIZE},
     gc::{
         cell::{GcPointerBase, DEFINETELY_WHITE, POSSIBLY_BLACK},
         mem::is_aligned,
         Address,
     },
-    heap::{block::Block, constants::BLOCK_SIZE},
     vm::object::JsObject,
 };
 

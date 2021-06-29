@@ -365,7 +365,7 @@ impl Test {
     fn set_up_env(&self, harness: &Harness, _strict: bool) -> Result<Box<Runtime>, String> {
         // Create new Realm
         // TODO: in parallel.
-        let mut options = Options::default();
+        let options = Options::default();
         let gc = default_heap(&options);
         let mut context = Deserializer::deserialize(
             false,

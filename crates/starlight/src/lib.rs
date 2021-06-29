@@ -65,7 +65,6 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
-pub mod heap;
 pub mod jsrt;
 pub mod options;
 pub mod tracingjit;

@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::cell::{GcPointerBase, POSSIBLY_BLACK, POSSIBLY_GREY};
-use crate::heap::allocation::Space;
-use crate::heap::SlotVisitor;
+use crate::gc::allocation::Space;
+use crate::gc::SlotVisitor;
 use crossbeam::deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
