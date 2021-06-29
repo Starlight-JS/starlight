@@ -2,7 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use starlight::gc::formatted_size;
-use starlight::prelude::*;
+use starlight::heap::block::Block;
+use starlight::heap::block_allocator::BlockAllocator;
+use starlight::heap::constants::BLOCK_SIZE;
+use starlight::{offsetof, prelude::*};
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use structopt::*;
 
@@ -43,8 +47,8 @@ struct Options {
         help = "Enable conservative pointer marking (works only for MiGC)"
     )]
     cons_gc: bool,
-    #[structopt(long = "enable-jet-gc", help = "Enable Jet GC")]
-    jet_gc: bool,
+    #[structopt(long = "experimental-gc", help = "Enable Experimental GC")]
+    immix_gc: bool,
 }
 
 use const_random::const_random;
@@ -64,8 +68,8 @@ fn main() {
     let gc = gc.with_conservative_marking(options.cons_gc);
     let heap = if options.use_malloc_gc {
         Heap::new(starlight::gc::malloc_gc::MallocGC::new(gc))
-    } else if options.jet_gc {
-        Heap::new(starlight::gc::jet::JetGC::new(gc))
+    } else if options.immix_gc {
+        Heap::new(starlight::heap::Heap::new(1.4, true, 1024 * 1024 * 1024))
     } else {
         Heap::new(starlight::gc::migc::MiGC::new(gc))
     };

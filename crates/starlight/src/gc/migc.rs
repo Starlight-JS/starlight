@@ -257,7 +257,7 @@ impl MiGC {
                             visitor.visit_raw(&mut ptr);
                             found = true;
                         });
-                        #[cfg(target_pointer_width = "64")]
+                        /*#[cfg(target_pointer_width = "64")]
                         if !found {
                             let value = transmute::<_, crate::vm::value::JsValue>(ptr);
                             if value.is_object() {
@@ -268,7 +268,7 @@ impl MiGC {
                                     },
                                 );
                             }
-                        }
+                        }*/
                         scan = scan.add(1);
                     }
                 }

@@ -58,7 +58,6 @@ pub const K: usize = 1024;
 //pub mod accounting;
 pub mod bump;
 pub mod freelist;
-pub mod jet;
 pub mod malloc_gc;
 pub mod mem;
 pub mod migc;

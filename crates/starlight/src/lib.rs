@@ -7,8 +7,8 @@
     linked_list_cursors,
     destructuring_assignment,
     const_raw_ptr_to_usize_cast,
-   // try_trait,
-   stmt_expr_attributes,
+    const_raw_ptr_deref,
+    stmt_expr_attributes,
     const_type_id,
     pattern
 )]
@@ -67,6 +67,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
+pub mod heap;
 pub mod jsrt;
 pub mod tracingjit;
 pub mod vm;
