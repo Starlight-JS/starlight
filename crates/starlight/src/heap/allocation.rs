@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     intrinsics::{likely, unlikely},
     mem::size_of,
     ptr::{drop_in_place, null_mut},
@@ -9,6 +10,7 @@ use wtf_rs::round_up;
 use crate::{
     gc::{
         cell::{GcPointerBase, DEFINETELY_WHITE, POSSIBLY_BLACK},
+        mem::is_aligned,
         Address,
     },
     heap::{block::Block, constants::BLOCK_SIZE},
@@ -158,6 +160,15 @@ pub struct Space {
     allocators: *mut LocalAllocator,
     bitmap: SpaceBitmap<16>,
 }
+
+impl Drop for Space {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = Box::from_raw(self.block_allocator);
+        }
+    }
+}
+
 impl Space {
     unsafe fn allocator_for_slow<'a>(&'a mut self, size: usize) -> Option<*mut LocalAllocator> {
         let index = size_class_to_index(size);
@@ -367,7 +378,9 @@ impl Space {
     }
     pub fn is_heap_pointer(&self, ptr: *const u8) -> bool {
         unsafe {
-            if (*self.block_allocator).is_in_space(Address::from_ptr(ptr)) {
+            if (*self.block_allocator).is_in_space(Address::from_ptr(ptr))
+                && is_aligned(ptr as _, 16)
+            {
                 return self.bitmap.test(ptr as _);
             }
             self.precise_allocations.contains(Address::from_ptr(ptr))
@@ -396,10 +409,9 @@ impl LocalAllocator {
         unsafe {
             let mut block = self.current;
             if block.is_null() {
-                self.current = (*self.allocator).get_block().unwrap_or_else(|| {
-                    eprintln!("OOM");
-                    loop {}
-                });
+                self.current = (*self.allocator)
+                    .get_block()
+                    .unwrap_or_else(|| panic!("{:?}", GCOOM(self.cell_size)));
                 block = self.current;
                 (*block).init(self.cell_size as _);
             }
@@ -412,10 +424,9 @@ impl LocalAllocator {
                 if !next.is_null() {
                     self.current = next;
                 } else {
-                    self.current = (*self.allocator).get_block().unwrap_or_else(|| {
-                        eprintln!("OOM");
-                        loop {}
-                    });
+                    self.current = (*self.allocator)
+                        .get_block()
+                        .unwrap_or_else(|| panic!("{:?}", GCOOM(self.cell_size)));
                     block = self.current;
                     (*block).init(self.cell_size as _);
                 }
@@ -424,5 +435,17 @@ impl LocalAllocator {
 
             ptr
         }
+    }
+}
+
+pub struct GCOOM(usize);
+
+impl Debug for GCOOM {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "GC Heap Out of memory satisfying allocation of size: {}.\n Help: Try to increase GC heap size",
+            self.0
+        )
     }
 }

@@ -187,7 +187,9 @@ impl BlockAllocator {
                 x
             })
             .or_else(|| self.build_block());
-
+        if block.is_none() {
+            panic!("OOM");
+        }
         block
     }
 

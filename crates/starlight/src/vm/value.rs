@@ -588,7 +588,11 @@ impl JsValue {
         if !lhs.is_object() || !rhs.is_object() {
             return lhs.get_raw() == rhs.get_raw();
         }
-        if lhs.is_object() && rhs.is_object() && lhs.get_object().is::<JsString>() && rhs.get_object().is::<JsString>() {
+        if lhs.is_object()
+            && rhs.is_object()
+            && lhs.get_object().is::<JsString>()
+            && rhs.get_object().is::<JsString>()
+        {
             return unsafe {
                 lhs.get_object().downcast_unchecked::<JsString>().as_str()
                     == rhs.get_object().downcast_unchecked::<JsString>().as_str()

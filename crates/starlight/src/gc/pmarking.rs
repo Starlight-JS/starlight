@@ -1,10 +1,9 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{
-    cell::{GcPointerBase, POSSIBLY_BLACK, POSSIBLY_GREY},
-    migc::SlotVisitor,
-};
+use super::cell::{GcPointerBase, POSSIBLY_BLACK, POSSIBLY_GREY};
+use crate::heap::allocation::Space;
+use crate::heap::SlotVisitor;
 use crossbeam::deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
@@ -13,7 +12,12 @@ use std::thread;
 use std::time::Duration;
 use yastl::Pool;
 
-pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut Pool) {
+pub fn start(
+    rootset: &[*mut GcPointerBase],
+    space: &'static Space,
+    n_workers: usize,
+    threadpool: &mut Pool,
+) {
     let number_workers = n_workers;
     let mut workers = Vec::with_capacity(number_workers);
     let mut stealers = Vec::with_capacity(number_workers);
@@ -41,9 +45,8 @@ pub fn start(rootset: &[*mut GcPointerBase], n_workers: usize, threadpool: &mut 
                 let mut task = MarkingTask {
                     task_id,
                     visitor: SlotVisitor {
-                        cons_roots: vec![],
                         queue: Vec::with_capacity(256),
-
+                        heap: space,
                         bytes_visited: 0,
                     },
                     worker,

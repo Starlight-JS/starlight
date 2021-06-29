@@ -39,7 +39,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
     }
 
     pub fn new(
-        name: &str,
+        _name: &str,
         mem_map: MmapMut,
         bitmap_begin: *mut usize,
         bitmap_size: usize,
@@ -57,7 +57,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
     }
 
     pub fn create_from_memmap(
-        name: &str,
+        _name: &str,
         mem_map: MmapMut,
         heap_begin: *mut u8,
         heap_capacity: usize,
@@ -81,7 +81,8 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
     }
 
     #[inline]
-    pub fn test(&self, object: usize) -> bool {
+    pub fn test(&self, object: *const u8) -> bool {
+        let object = object as usize;
         let offset = object as isize - self.heap_begin as isize;
         let index = Self::offset_to_index(offset as _);
         let mask = Self::offset_to_mask(offset as _);
@@ -102,7 +103,6 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                     *atomic_entry = old_word | mask;
                 }
             } else {
-                let before = *atomic_entry;
                 *atomic_entry = old_word & !mask;
 
                 //atomic_entry.store(old_word & !mask, Ordering::Relaxed);

@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 #![allow(dead_code, unused_variables)]
+use crate::options::Options;
 use crate::vm::Runtime;
 use crate::{
     gc::cell::*,
@@ -10,7 +11,6 @@ use crate::{
         deserializer::Deserializer,
         serializer::{Serializable, SnapshotSerializer},
     },
-    vm::GcParams,
 };
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
@@ -54,16 +54,9 @@ macro_rules! offsetof {
 pub mod cell;
 pub mod snapshot;
 pub const K: usize = 1024;
-//#[macro_use]
-//pub mod accounting;
-pub mod bump;
-pub mod freelist;
-pub mod malloc_gc;
 pub mod mem;
-pub mod migc;
 pub mod os;
 pub mod pmarking;
-//pub mod region;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;
@@ -139,19 +132,21 @@ pub trait GarbageCollector {
 }
 
 pub struct Heap {
-    pub gc: Box<dyn GarbageCollector>,
+    pub gc: crate::heap::Heap,
 }
 
-pub fn default_heap(params: GcParams) -> Heap {
+pub fn default_heap(params: &Options) -> Heap {
     Heap {
-        gc: Box::new(migc::MiGC::new(params)),
+        gc: crate::heap::Heap::new(
+            params.size_class_progression,
+            params.dump_size_classes,
+            params.heap_size,
+            params,
+        ),
     }
 }
 
 impl Heap {
-    pub fn new(gc: impl GarbageCollector + 'static) -> Self {
-        Self { gc: Box::new(gc) }
-    }
     pub fn undefer(&mut self) {
         self.gc.undefer();
     }

@@ -8,11 +8,10 @@ pub mod space_bitmap;
 use yastl::Pool;
 
 use crate::gc::{cell::*, GarbageCollector, GcStats, MarkingConstraint};
-use crate::vm::value::JsValue;
+use crate::prelude::Options;
 use std::collections::LinkedList;
-use std::ptr::null_mut;
+use std::ptr::{drop_in_place, null_mut};
 use std::{
-    intrinsics::transmute,
     mem::{size_of, swap},
     ptr::NonNull,
 };
@@ -21,11 +20,12 @@ use self::allocation::Space;
 /// Visits garbage collected objects
 pub struct SlotVisitor {
     pub(super) queue: Vec<*mut GcPointerBase>,
-    pub(super) cons_roots: Vec<(usize, usize)>,
     pub(super) bytes_visited: usize,
-    pub(super) heap: *const Space,
+    pub(super) heap: &'static Space,
 }
-
+unsafe impl Send for SlotVisitor {}
+unsafe impl Send for Space {}
+unsafe impl Sync for Space {}
 impl Tracer for SlotVisitor {
     fn visit_weak(&mut self, slot: *const WeakSlot) {
         unsafe {
@@ -113,7 +113,7 @@ pub struct Heap {
 }
 
 impl Heap {
-    pub fn new(progression: f64, dump: bool, size: usize) -> Self {
+    pub fn new(progression: f64, dump: bool, size: usize, opts: &Options) -> Self {
         Self {
             weak_slots: LinkedList::new(),
             constraints: vec![],
@@ -121,8 +121,12 @@ impl Heap {
             defers: 0,
             allocated: 0,
             max_heap_size: 128 * 1024,
-            threadpool: None,
-            n_workers: 0,
+            threadpool: if opts.parallel_marking {
+                Some(Pool::new(opts.gc_threads as _))
+            } else {
+                None
+            },
+            n_workers: opts.gc_threads as _,
             space: Space::new(size, dump, progression),
         }
     }
@@ -229,10 +233,9 @@ impl Heap {
         }
         let sp = self.sp;
         let mut visitor = SlotVisitor {
-            cons_roots: vec![],
             bytes_visited: 0,
             queue: Vec::with_capacity(256),
-            heap: &self.space,
+            heap: unsafe { std::mem::transmute(&self.space) },
         };
         crate::vm::thread::THREAD.with(|thread| {
             visitor.add_conservative(thread.bounds.origin as _, sp as usize);
@@ -240,7 +243,12 @@ impl Heap {
         self.process_roots(&mut visitor);
 
         if let Some(ref mut pool) = self.threadpool {
-            crate::gc::pmarking::start(&visitor.queue, self.n_workers as _, pool);
+            crate::gc::pmarking::start(
+                &visitor.queue,
+                unsafe { std::mem::transmute(&self.space) },
+                self.n_workers as _,
+                pool,
+            );
         } else {
             self.process_worklist(&mut visitor);
         }
@@ -323,5 +331,11 @@ impl GarbageCollector for Heap {
 
     fn walk(&mut self, callback: &mut dyn FnMut(*mut GcPointerBase, usize) -> bool) {
         self.space.for_each_cell(callback);
+    }
+}
+
+impl Drop for Heap {
+    fn drop(&mut self) {
+        self.space.sweep();
     }
 }

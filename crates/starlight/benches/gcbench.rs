@@ -1,22 +1,19 @@
 #![allow(dead_code, clippy::float_cmp)]
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::letroot;
+use starlight::prelude::Options;
 use starlight::{
     gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
     },
-    vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime, RuntimeParams},
+    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
     Platform,
 };
 use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let rrt = Runtime::new(
-        RuntimeParams::default(),
-        GcParams::default().with_parallel_marking(false),
-        None,
-    );
+    let rrt = Runtime::new(Options::default(), None);
     let stack = rrt.shadowstack();
     let mut rt = rrt;
 
