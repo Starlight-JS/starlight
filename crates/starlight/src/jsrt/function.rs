@@ -58,9 +58,7 @@ pub fn function_prototype(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
         format!("{{ {} }}", args.at(args.size() - 1).to_string(vm)?)
     };
     let rel_path = unsafe { (*vm.stack.current).code_block.unwrap().path.clone() };
-    ByteCompiler::compile_code(
-        vm, &params, &rel_path, body, false,
-    )
+    ByteCompiler::compile_code(vm, &params, &rel_path, body, false)
 }
 
 pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {

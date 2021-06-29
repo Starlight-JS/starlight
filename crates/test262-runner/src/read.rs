@@ -119,7 +119,7 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
 
     let mut suites = Vec::new();
     let mut tests = Vec::new();
-    let mut rt = Runtime::new(Default::default(), Default::default(), None);
+    let mut rt = Runtime::new(Default::default(), None);
     let buf = Arc::new(Snapshot::take(false, &mut rt, |_, _| {}).buffer);
     // TODO: iterate in parallel
     for entry in path.read_dir()? {

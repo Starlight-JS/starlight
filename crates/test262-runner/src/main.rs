@@ -419,7 +419,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     let harness = read_harness(test262_path).expect("could not read initialization bindings");
 
     if suite.to_string_lossy().ends_with(".js") {
-        let mut rt = Runtime::new(Default::default(), Default::default(), None);
+        let mut rt = Runtime::new(Default::default(), None);
         let buf = Snapshot::take(false, &mut rt, |_, _| {});
         let test = read_test(&test262_path.join(suite), Arc::new(buf.buffer))
             .expect("could not get the test to run");

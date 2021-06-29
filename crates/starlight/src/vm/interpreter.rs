@@ -77,8 +77,7 @@ impl Runtime {
                 }
                 p
             };
-            let mut args =
-                JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
+            let mut args = JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
@@ -169,8 +168,7 @@ impl Runtime {
                 }
                 p
             };
-            let mut args =
-                JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
+            let mut args = JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
@@ -854,7 +852,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let scope = JsValue::new(vm_fn.scope);
                     let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
-                    if  !frame.exit_on_return && (opcode == Opcode::OP_TAILNEW) {
+                    if !frame.exit_on_return && (opcode == Opcode::OP_TAILNEW) {
                         // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
@@ -937,7 +935,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         key.get_double().floor() as u32
                     };
                     let mut object = object.get_jsobject();
-                    if likely(object.indexed.dense()) && likely(index < object.indexed.vector.size()) {
+                    if likely(object.indexed.dense())
+                        && likely(index < object.indexed.vector.size())
+                    {
                         *object.indexed.vector.at_mut(index) = value;
                         continue;
                     }
@@ -983,7 +983,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         key.get_double().floor() as usize
                     };
                     let object = object.get_jsobject();
-                    if likely(object.indexed.dense()) && likely(index < object.indexed.vector.size() as usize) && likely(!object.indexed.vector.at(index as _).is_empty()) {
+                    if likely(object.indexed.dense())
+                        && likely(index < object.indexed.vector.size() as usize)
+                        && likely(!object.indexed.vector.at(index as _).is_empty())
+                    {
                         if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
                             frame.push(JsValue::new(object));
                         }
@@ -1320,7 +1323,9 @@ pub struct SpreadValue {
 impl SpreadValue {
     pub fn new(rt: &mut Runtime, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
         unsafe {
-            if value.is_jsobject() && value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array {
+            if value.is_jsobject()
+                && value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array
+            {
                 let mut object = value.get_jsobject();
                 let mut arr = vec![];
                 for i in 0..crate::jsrt::get_length(rt, &mut object)? {

@@ -13,7 +13,7 @@ use crate::{
     gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
     gc::Heap,
     jsrt::VM_NATIVE_REFERENCES,
-    prelude::Class,
+    prelude::{Class, Options},
     vm::{
         self,
         arguments::JsArguments,
@@ -278,7 +278,7 @@ impl<'a> Deserializer<'a> {
     pub fn deserialize(
         log_deser: bool,
         snapshot: &'a [u8],
-        options: RuntimeParams,
+        options: Options,
         gc: Heap,
         external_refs: Option<&'static [usize]>,
         callback: impl FnOnce(&mut Self, &mut Runtime),

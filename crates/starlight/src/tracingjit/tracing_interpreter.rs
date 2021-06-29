@@ -827,7 +827,10 @@ pub unsafe fn eval(
                         key.get_double().floor() as usize
                     };
                     let object = object.get_jsobject();
-                    if likely(object.indexed.dense()) && likely(index < object.indexed.length() as usize) && likely(!object.indexed.vector.at(index as _).is_empty()) {
+                    if likely(object.indexed.dense())
+                        && likely(index < object.indexed.length() as usize)
+                        && likely(!object.indexed.vector.at(index as _).is_empty())
+                    {
                         if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
                             frame.push(JsValue::new(object));
                         }

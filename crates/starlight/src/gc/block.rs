@@ -65,7 +65,7 @@ impl Block {
     pub fn new(at: *mut u8) -> &'static mut Self {
         unsafe {
             let ptr = at as *mut Self;
-            debug_assert!(ptr as usize % (32 * 1024) == 0);
+            debug_assert!(ptr as usize % BLOCK_SIZE == 0);
             ptr.write(Self {
                 next: null_mut(),
                 allocated: false,

@@ -1550,7 +1550,7 @@ mod tests {
     #[test]
     fn test_put() {
         Platform::initialize();
-        let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+        let mut rt = Runtime::new(Options::default(), None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1572,7 +1572,7 @@ mod tests {
     #[test]
     fn test_indexed() {
         Platform::initialize();
-        let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+        let mut rt = Runtime::new(Options::default(), None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
