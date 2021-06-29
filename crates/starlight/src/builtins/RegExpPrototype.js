@@ -24,8 +24,8 @@ RegExp.prototype[Symbol.matchAll] = function matchAll(strArg) {
     var matcher = new RegExpCtor(regExp, flags);
     matcher.lastIndex = ___toLength(regExp.lastIndex);
 
-    var global = strIncludes.call(flags, "g");
-    var fullUnicode = strIncludes.call(flags, "u");//string.includes("u");
+    var global = strIncludes.___call(flags, "g");
+    var fullUnicode = strIncludes.___call(flags, "u");//string.includes("u");
 
     return new RegExpStringIterator(matcher, string, global, fullUnicode);
 }
@@ -40,12 +40,12 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
     var replacementLength = replacement.length;
     var result = "";
     var lastStart = 0;
-    if (strIncludes.call(replacement, '$'))
+    if (strIncludes.___call(replacement, '$'))
         throw "TODO"
-    for (var start = 0; start = strIndexOf.call(replacement, "$", lastStart) /*replacement.indexOf("$", lastStart)*/, start !== -1; lastStart = start) {
+    for (var start = 0; start = strIndexOf.___call(replacement, "$", lastStart) /*replacement.indexOf("$", lastStart)*/, start !== -1; lastStart = start) {
 
         if (start - lastStart > 0)
-            result = result + strSubstring.call(replacement, lastStart, start) //replacement.substring(lastStart, start)
+            result = result + strSubstring.___call(replacement, lastStart, start) //replacement.substring(lastStart, start)
         start++;
         if (start >= replacementLength)
             result = result + "$";
@@ -62,20 +62,20 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
                     break;
                 case "`":
                     if (position > 0)
-                        result = result + strSubstring.call(str, 0, position) //str.substring(0, position)//@stringSubstringInternal.@call(str, 0, position);
+                        result = result + strSubstring.___call(str, 0, position) //str.substring(0, position)//@stringSubstringInternal.@call(str, 0, position);
                     start++;
                     break;
                 case "'":
                     if (tailPos < stringLength)
-                        result = result + strSubstring.call(str, tailPos) //str.substring(tailPos)//@stringSubstringInternal.@call(str, tailPos);
+                        result = result + strSubstring.___call(str, tailPos) //str.substring(tailPos)//@stringSubstringInternal.@call(str, tailPos);
                     start++;
                     break;
                 case "<":
                     if (namedCaptures !== undefined) {
                         var groupNameStartIndex = start + 1;
-                        var groupNameEndIndex = strIndexOf.call(replacement, ">", groupNameStartIndex) //@stringIndexOfInternal.@call(replacement, ">", groupNameStartIndex);
+                        var groupNameEndIndex = strIndexOf.___call(replacement, ">", groupNameStartIndex) //@stringIndexOfInternal.@call(replacement, ">", groupNameStartIndex);
                         if (groupNameEndIndex !== -1) {
-                            var groupName = strSubstring.call(replacement, groupNameStartIndex, groupNameEndIndex) //@stringSubstringInternal.@call(replacement, groupNameStartIndex, groupNameEndIndex);
+                            var groupName = strSubstring.___call(replacement, groupNameStartIndex, groupNameEndIndex) //@stringSubstringInternal.@call(replacement, groupNameStartIndex, groupNameEndIndex);
                             var capture = namedCaptures[groupName];
                             if (capture !== undefined)
                                 result = result + capture;
@@ -89,19 +89,19 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
                     start++;
                     break;
                 default:
-                    var chCode = strCharCodeAt.call(ch, 0) //ch.charCodeAt(0);
+                    var chCode = strCharCodeAt.___call(ch, 0) //ch.charCodeAt(0);
                     if (chCode >= 0x30 && chCode <= 0x39) {
                         var originalStart = start - 1;
                         start++;
 
                         var n = chCode - 0x30;
                         if (n > m) {
-                            result = result + strSubstring.call(replacement, originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
+                            result = result + strSubstring.___call(replacement, originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
                             break;
                         }
 
                         if (start < replacementLength) {
-                            var nextChCode = strCharCodeAt.call(replacement, start) //replacement.charCodeAt(start);
+                            var nextChCode = strCharCodeAt.___call(replacement, start) //replacement.charCodeAt(start);
                             if (nextChCode >= 0x30 && nextChCode <= 0x39) {
                                 var nn = 10 * n + nextChCode - 0x30;
                                 if (nn <= m) {
@@ -112,7 +112,7 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
                         }
 
                         if (n == 0) {
-                            result = result + strSubstring.call(replacement, originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
+                            result = result + strSubstring.___call(replacement, originalStart, start);//@stringSubstringInternal.@call(replacement, originalStart, start);
                             break;
                         }
 
@@ -126,7 +126,7 @@ let getSubstitution = function getSubstitution(matched, str, position, captures,
         }
     }
 
-    return result + strSubstring.call(replacement, lastStart) //replacement.substring(lastStart);
+    return result + strSubstring.___call(replacement, lastStart) //replacement.substring(lastStart);
 }
 RegExp.prototype[Symbol.replace] = function (strArg, replace) {
     "use strict";
@@ -151,7 +151,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
 
     while (!done) {
 
-        result = regexExec.call(regexp, str) // regexp.exec(str);
+        result = regexExec.___call(regexp, str) // regexp.exec(str);
         if (result === null)
             done = true;
         else {
@@ -187,7 +187,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
             var capN = result[n];
             if (capN !== undefined)
                 capN = capN + "";
-            arrayPush.call(captures, capN) //captures.push(capN);// @arrayPush(captures, capN);
+            arrayPush.___call(captures, capN) //captures.push(capN);// @arrayPush(captures, capN);
         }
 
         var replacement;
@@ -196,17 +196,17 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
         if (functionalReplace) {
             var replacerArgs = [matched];
             for (var j = 0; j < captures.length; j++)
-                arrayPush.call(replacerArgs, captures[j]);
+                arrayPush.___call(replacerArgs, captures[j]);
 
             // @arrayPush(replacerArgs, captures[j]);
-            arrayPush.call(replacerArgs, position);
-            arrayPush.call(replacerArgs, str);
+            arrayPush.___call(replacerArgs, position);
+            arrayPush.___call(replacerArgs, str);
             //replacerArgs.push(position);
             //replacerArgs.push(str);
 
 
             if (namedCaptures !== undefined)
-                arrayPush.call(replacerArgs, namedCaptures);
+                arrayPush.___call(replacerArgs, namedCaptures);
             //replacerArgs.push(namedCaptures)//@arrayPush(replacerArgs, namedCaptures);
 
             var replValue = replace.apply(undefined, replacerArgs);
@@ -219,7 +219,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
         }
 
         if (position >= nextSourcePosition) {
-            accumulatedResult = accumulatedResult + strSubstring.call(str, nextSourcePosition, position) + replacement//@stringSubstringInternal.@call(str, nextSourcePosition, position) + replacement;
+            accumulatedResult = accumulatedResult + strSubstring.___call(str, nextSourcePosition, position) + replacement//@stringSubstringInternal.@call(str, nextSourcePosition, position) + replacement;
             nextSourcePosition = position + matchLength;
         }
     }
@@ -227,7 +227,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
     if (nextSourcePosition >= stringLength)
         return accumulatedResult;
 
-    return accumulatedResult + strSubstring.call(str, nextSourcePosition)// @stringSubstringInternal.@call(str, nextSourcePosition);
+    return accumulatedResult + strSubstring.___call(str, nextSourcePosition)// @stringSubstringInternal.@call(str, nextSourcePosition);
 }
 
 
@@ -250,8 +250,8 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
     }
     let flags = regexp.flags;
 
-    let unicodeMatching = strIncludes.call(flags, "u");
-    let newFlags = strIncludes.call(flags, "y") ? flags : flags + "y";
+    let unicodeMatching = strIncludes.___call(flags, "u");
+    let newFlags = strIncludes.___call(flags, "y") ? flags : flags + "y";
     let splitter = new ctor(regexp, newFlags);
     if (!hasObservableSideEffectsForSplit(splitter))
         return splitFast(splitter, str, limit);
@@ -263,7 +263,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
 
     let size = str.length;
     if (!size) {
-        var z = regexExec.call(splitter, str);
+        var z = regexExec.___call(splitter, str);
         if (z !== null)
             return result;
         result[0] = str;
@@ -279,7 +279,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
         // a. Perform ? Set(splitter, "lastIndex", q, true).
         splitter.lastIndex = matchPosition;
         // b. Let z be ? RegExpExec(splitter, S).
-        var matches = regexExec.call(splitter, str);
+        var matches = regexExec.___call(splitter, str);
         // c. If z is null, let q be AdvanceStringIndex(S, q, unicodeMatching).
         if (matches === null)
             matchPosition = __advanceStringIndex__(str, matchPosition, unicodeMatching);
@@ -295,10 +295,10 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
             // iv. Else e != p,
             else {
                 // 1. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through q (exclusive).
-                var subStr = strSubstring.call(str, position, matchPosition)
+                var subStr = strSubstring.___call(str, position, matchPosition)
                 // 2. Perform ! CreateDataProperty(A, ! ToString(lengthA), T).
                 // 3. Let lengthA be lengthA + 1.
-                arrayPush.call(result, subStr);
+                arrayPush.___call(result, subStr);
                 // 4. If lengthA = lim, return A.
                 if (result.length == limit)
                     return result;
@@ -317,7 +317,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
                     var nextCapture = matches[i];
                     // b. Perform ! CreateDataProperty(A, ! ToString(lengthA), nextCapture).
                     // d. Let lengthA be lengthA + 1.
-                    arrayPush.call(result, nextCapture);
+                    arrayPush.___call(result, nextCapture);
                     // e. If lengthA = lim, return A.
                     if (result.length == limit)
                         return result;
@@ -330,9 +330,9 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
         }
     }
     // 20. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
-    var remainingStr = strSubstring.call(str, position, size)
+    var remainingStr = strSubstring.___call(str, position, size)
     // 21. Perform ! CreateDataProperty(A, ! ToString(lengthA), T).
-    arrayPush.call(result, remainingStr);
+    arrayPush.___call(result, remainingStr);
     // 22. Return A.
     return result;
 

@@ -1,3 +1,4 @@
+use crate::jsrt::print;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
@@ -7,6 +8,7 @@ use crate::{
     prelude::*,
     vm::{code_block::CodeBlock, RuntimeRef},
 };
+use std::convert::TryInto;
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 use swc_common::{errors::Handler, sync::Lrc};
 use swc_common::{FileName, SourceMap};
@@ -2247,9 +2249,23 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     }
     if let Expr::Call(call) = e {
         if let ExprOrSuper::Expr(expr) = &call.callee {
-            if let Expr::Ident(x) = &**expr {
-                let str: &str = &*x.sym;
-                return str.starts_with("___");
+            match (&**expr) {
+                // ___foo(x,y)
+                Expr::Ident(x) => {
+                    let str = &*x.sym;
+                    return str.starts_with("___");
+                }
+                // foo.___call(x,y)
+                // now first support foo.___call
+                Expr::Member(m) => {
+                    if let Expr::Ident(x) = (&*m.prop) {
+                        let str = &*x.sym;
+                        return str == "___call";
+                    }
+                }
+                _ => {
+                    return false;
+                }
             }
         }
     }
@@ -2260,17 +2276,32 @@ impl ByteCompiler {
     /// - Implement  `___call` ,`___tailcall`.
     /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
     pub fn handle_builtin_call(&mut self, call: &CallExpr) -> Result<(), JsValue> {
-        let name = if let ExprOrSuper::Expr(expr) = &call.callee {
-            if let Expr::Ident(x) = &**expr {
-                let str: &str = &*x.sym;
-                str.to_string()
-            } else {
-                unreachable!()
+        let (member, builtin_call_name) = if let ExprOrSuper::Expr(expr) = &call.callee {
+            match (&**expr) {
+                // ___foo(x,y)
+                Expr::Ident(x) => {
+                    let str = &*x.sym;
+                    (None, str.to_string())
+                }
+                // foo.___call(x,y)
+                // now first support foo.___call
+                Expr::Member(m) => {
+                    if let Expr::Ident(x) = (&*m.prop) {
+                        let str = &*x.sym;
+                        assert!(str == "___call");
+                        (Some(&m.obj), str.to_string())
+                    } else {
+                        unreachable!()
+                    }
+                }
+                _ => {
+                    unreachable!()
+                }
             }
         } else {
             unreachable!()
         };
-        let nstr: &str = &name;
+        let nstr: &str = &builtin_call_name;
 
         match nstr {
             "___toObject" => {
@@ -2303,6 +2334,27 @@ impl ByteCompiler {
                 self.expr(&call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_IS_CTOR, &[], false);
+            }
+            "___call" => {
+                if let Some(func) = &member {
+                    if let ExprOrSuper::Expr(x) = &func {
+                        if let Expr::Ident(_) = &**x {
+                            self.expr(&call.args[0].expr,true,false)?;
+                            self.expr(&**x, true, false)?;
+                            for i in 1..call.args.len() {
+                                self.expr(&call.args[i].expr, true, false)?;
+                            }
+                            let operands: u32 = (call.args.len() - 1).try_into().unwrap();
+                            self.emit(Opcode::OP_CALL, &[operands], false);
+                        } else {
+                            todo!()
+                        }
+                    } else {
+                        todo!()
+                    }
+                } else {
+                    unreachable!()
+                }
             }
             _ => todo!("{}", nstr),
         }

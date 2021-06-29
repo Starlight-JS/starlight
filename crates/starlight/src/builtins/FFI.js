@@ -48,7 +48,7 @@ CFunction.create = function cnew(library, name, args, ret, variadic) {
 
                 let cfunc = CFunction.attach(library, name, types, ret);
 
-                return cfunc.call(vargs);
+                return cfunc.___call(vargs);
             }
         }
     }
