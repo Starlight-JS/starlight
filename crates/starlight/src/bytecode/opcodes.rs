@@ -280,4 +280,7 @@ pub enum Opcode {
     OP_YIELD_STAR,
     OP_AWAIT,
     OP_NEWGENERATOR,
+
+    OP_FAST_CALL,
+    OP_FAST_RET
 }

@@ -111,9 +111,31 @@ pub struct ByteCompiler {
     pub variable_freelist: Vec<u32>,
 
     pub info: Option<Vec<(Range<usize>, FileLocation)>>,
+
+    pub in_try_stmt: bool,
+    pub fast_calls: Vec<Box<dyn FnOnce(&mut ByteCompiler)>>
 }
 
 impl ByteCompiler {
+    pub fn new( rt: RuntimeRef, builtins: bool,code:GcPointer<CodeBlock>,scope: Rc<RefCell<Scope>>)-> Self {
+        Self {
+            lci: Vec::new(),
+            builtins,
+            variable_freelist: Vec::with_capacity(4),
+            code,
+            tail_pos: false,
+            info: None,
+            fmap: HashMap::new(),
+            val_map: HashMap::new(),
+            name_map: HashMap::new(),
+            top_level: false,
+            scope,
+            rt: rt,
+            in_try_stmt: false,
+            fast_calls: Vec::new()
+        }
+    }
+
     pub fn get_val(&mut self, vm: &mut Runtime, val: Val) -> u32 {
         if let Some(ix) = self.val_map.get(&val) {
             return *ix;
@@ -472,20 +494,7 @@ impl ByteCompiler {
             depth: 0,
         }));
         let mut code = CodeBlock::new(vm, "<anonymous>".intern(), false, rel_path.into());
-        let mut compiler = ByteCompiler {
-            lci: Vec::new(),
-            builtins,
-            variable_freelist: Vec::with_capacity(4),
-            code,
-            tail_pos: false,
-            info: None,
-            fmap: HashMap::new(),
-            val_map: HashMap::new(),
-            name_map: HashMap::new(),
-            top_level: false,
-            scope,
-            rt: RuntimeRef(&mut *vm),
-        };
+        let mut compiler = ByteCompiler::new(RuntimeRef(vm),builtins,code,scope);
         let mut p = 0;
         for x in params_.iter() {
             params.push(x.intern());
@@ -573,20 +582,7 @@ impl ByteCompiler {
             depth: self.scope.borrow().depth + 1,
         }));
 
-        let mut compiler = ByteCompiler {
-            lci: Vec::new(),
-            builtins: self.builtins,
-            variable_freelist: Vec::with_capacity(4),
-            code,
-            info: None,
-            tail_pos: false,
-            fmap: HashMap::new(),
-            val_map: HashMap::new(),
-            name_map: HashMap::new(),
-            top_level: false,
-            scope,
-            rt: RuntimeRef(&mut *self.rt),
-        };
+        let mut compiler = ByteCompiler::new(self.rt,self.builtins,code,scope);
         let mut p = 0;
         for x in function.params.iter() {
             match x.pat {
@@ -667,24 +663,11 @@ impl ByteCompiler {
 
         let mut code = CodeBlock::new(&mut vm, name, false, path.into());
         code.file_name = file.to_string();
-        let mut compiler = ByteCompiler {
-            lci: Vec::new(),
-            top_level: true,
-            info: None,
-            tail_pos: false,
-            builtins: false,
-            scope: Rc::new(RefCell::new(Scope {
-                parent: None,
-                variables: Default::default(),
-                depth: 0,
-            })),
-            variable_freelist: vec![],
-            code,
-            val_map: Default::default(),
-            name_map: Default::default(),
-            fmap: Default::default(),
-            rt: RuntimeRef(vm),
-        };
+        let mut compiler = ByteCompiler::new(RuntimeRef(vm),false,code,Rc::new(RefCell::new(Scope {
+            parent: None,
+            variables: Default::default(),
+            depth: 0
+        })));
         code.var_count = 1;
         code.param_count = 1;
         compiler.scope.borrow_mut().add_var("@module".intern(), 0);
@@ -857,24 +840,13 @@ impl ByteCompiler {
         let name = "<script>".intern();
         let mut code = CodeBlock::new(&mut vm, name, false, path.into());
         code.file_name = fname;
-        let mut compiler = ByteCompiler {
-            lci: Vec::new(),
-            top_level: true,
-            info: None,
-            tail_pos: false,
-            builtins,
-            scope: Rc::new(RefCell::new(Scope {
+        let mut compiler = ByteCompiler::new(
+            RuntimeRef(vm),builtins,code,Rc::new(RefCell::new(Scope {
                 parent: None,
                 variables: Default::default(),
                 depth: 0,
-            })),
-            variable_freelist: vec![],
-            code,
-            val_map: Default::default(),
-            name_map: Default::default(),
-            fmap: Default::default(),
-            rt: RuntimeRef(vm),
-        };
+            }))
+        );
 
         let is_strict = match p.body.get(0) {
             Some(body) => body.is_use_strict(),
@@ -903,24 +875,11 @@ impl ByteCompiler {
         let name = "<script>".intern();
         let mut code = CodeBlock::new(&mut vm, name, false, path.into());
         code.file_name = fname;
-        let mut compiler = ByteCompiler {
-            lci: Vec::new(),
-            top_level: true,
-            info: None,
-            tail_pos: false,
-            builtins,
-            scope: Rc::new(RefCell::new(Scope {
-                parent: None,
-                variables: Default::default(),
-                depth: 0,
-            })),
-            variable_freelist: vec![],
-            code,
-            val_map: Default::default(),
-            name_map: Default::default(),
-            fmap: Default::default(),
-            rt: RuntimeRef(vm),
-        };
+        let mut compiler = ByteCompiler::new(RuntimeRef(vm),builtins,code,Rc::new(RefCell::new(Scope {
+            parent: None,
+            variables: Default::default(),
+            depth: 0,
+        })));
 
         let is_strict = match p.body.get(0) {
             Some(body) => body.is_use_strict(),
@@ -1122,6 +1081,10 @@ impl ByteCompiler {
                     None => self.emit(Opcode::OP_PUSH_UNDEF, &[], false),
                 };
                 self.tail_pos = false;
+                if self.in_try_stmt {
+                    let fast_call = self.fast_call();
+                    self.fast_calls.push(Box::new(fast_call));
+                }
                 self.emit(Opcode::OP_RET, &[], false);
             }
             Stmt::Break(_) => {
@@ -1303,7 +1266,8 @@ impl ByteCompiler {
             }
             Stmt::Try(try_stmt) => {
                 let try_push = self.try_();
-
+                
+                self.in_try_stmt = true;
                 for stmt in try_stmt.block.stmts.iter() {
                     self.stmt(stmt)?;
                 }
@@ -1337,6 +1301,13 @@ impl ByteCompiler {
 
                 jfinally(self);
                 jcatch_finally(self);
+                while self.fast_calls.len() >0 {
+                    let call = self.fast_calls.pop();
+                    if let Some(c) = call {
+                        c(self);
+                    }
+                }
+                self.in_try_stmt = false;
                 match try_stmt.finalizer {
                     Some(ref block) => {
                         self.push_scope();
@@ -1349,8 +1320,12 @@ impl ByteCompiler {
                     }
                     None => {}
                 }
+                self.emit(Opcode::OP_FAST_RET,&[], false);
             }
-
+            Stmt::Debugger(_) => todo!(),
+            Stmt::With(_) => todo!(),
+            Stmt::Labeled(_) => todo!(),
+            Stmt::DoWhile(_) => todo!(),
             x => {
                 return Err(JsValue::new(
                     self.rt.new_syntax_error(format!("NYI: {:?}", x)),
@@ -1929,24 +1904,11 @@ impl ByteCompiler {
                 let p = self.code.path.clone();
                 let mut code = CodeBlock::new(&mut self.rt, name, false, p);
                 code.file_name = self.code.file_name.clone();
-                let mut compiler = ByteCompiler {
-                    lci: Vec::new(),
-                    top_level: false,
-                    tail_pos: false,
-                    builtins: self.builtins,
-                    code,
-                    variable_freelist: vec![],
-                    val_map: Default::default(),
-                    name_map: Default::default(),
-                    info: None,
-                    fmap: Default::default(),
-                    rt: RuntimeRef(&mut *self.rt),
-                    scope: Rc::new(RefCell::new(Scope {
-                        parent: Some(self.scope.clone()),
-                        depth: self.scope.borrow().depth + 1,
-                        variables: HashMap::new(),
-                    })),
-                };
+                let mut compiler = ByteCompiler::new(self.rt,self.builtins,code, Rc::new(RefCell::new(Scope {
+                    parent: Some(self.scope.clone()),
+                    depth: self.scope.borrow().depth + 1,
+                    variables: HashMap::new(),
+                })));
                 code.strict = is_strict;
                 let mut params = vec![];
                 let mut rest_at = None;
@@ -2099,6 +2061,23 @@ impl ByteCompiler {
             let to = this.code.code.len() - (p + 5);
             let bytes = (to as u32).to_le_bytes();
             this.code.code[p] = Opcode::OP_JMP as u8;
+            this.code.code[p + 1] = bytes[0];
+            this.code.code[p + 2] = bytes[1];
+            this.code.code[p + 3] = bytes[2];
+            this.code.code[p + 4] = bytes[3];
+            //this.code.code[p] = ins as u8;
+        }
+    }
+
+    pub fn fast_call(&mut self) -> impl FnOnce(&mut Self) {
+        let p = self.code.code.len();
+        self.emit(Opcode::OP_FAST_CALL, &[0], false);
+
+        move |this: &mut Self| {
+            // this.emit(Opcode::OP_NOP, &[], false);
+            let to = this.code.code.len() - (p + 5);
+            let bytes = (to as u32).to_le_bytes();
+            this.code.code[p] = Opcode::OP_FAST_CALL as u8;
             this.code.code[p + 1] = bytes[0];
             this.code.code[p + 2] = bytes[1];
             this.code.code[p + 3] = bytes[2];

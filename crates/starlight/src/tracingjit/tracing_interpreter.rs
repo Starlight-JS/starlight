@@ -20,6 +20,7 @@ use crate::{
 use crate::{bytecode::*, gc::cell::Tracer};
 use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
+use std::ptr::null_mut;
 use wtf_rs::unwrap_unchecked;
 
 pub enum RecordResult {
@@ -88,6 +89,7 @@ pub unsafe fn eval(
     let stack = &mut rt.stack as *mut Stack;
     let stack = &mut *stack;
     let gcstack = rt.shadowstack();
+    let mut last_fast_call_ip = null_mut();
     loop {
         // if trace is too large we do not want to compile it. Just return to interpreting.
         if trace.len() > MAX_TRACE_SIZE {
@@ -172,7 +174,13 @@ pub unsafe fn eval(
 
                 frame.push(JsValue::new(env));
             }
-
+            Opcode::OP_FAST_CALL => {
+                rt.heap().collect_if_necessary();
+                let offset = ip.cast::<i32>().read();
+                ip = ip.add(4);
+                last_fast_call_ip = ip;
+                ip = ip.offset(offset as isize);
+            }
             Opcode::OP_JMP => {
                 // XXX: we do not need to record jumps?
                 rt.heap().collect_if_necessary();
@@ -236,6 +244,14 @@ pub unsafe fn eval(
             Opcode::OP_PUSH_NULL => {
                 trace.push((sip, Ir::PushN));
                 frame.push(JsValue::encode_null_value());
+            }
+            Opcode::OP_FAST_RET => {
+                if last_fast_call_ip.is_null(){
+                    continue;
+                } else {
+                    ip = last_fast_call_ip;
+                    last_fast_call_ip = null_mut();
+                }
             }
             Opcode::OP_RET => {
                 trace.push((sip, Ir::LeaveFrame));

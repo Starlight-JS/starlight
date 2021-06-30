@@ -19,6 +19,7 @@ use crate::{
 use crate::{bytecode::*, gc::cell::Tracer};
 use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
+use std::ptr::null_mut;
 use wtf_rs::unwrap_unchecked;
 pub mod frame;
 pub mod stack;
@@ -243,6 +244,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
     let stack = &mut rt.stack as *mut Stack;
     let stack = &mut *stack;
     let gcstack = rt.shadowstack();
+    let mut last_fast_call_ip:*mut u8 = null_mut();
+
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
@@ -337,7 +340,13 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                 frame.push(JsValue::new(env));
             }
-
+            Opcode::OP_FAST_CALL => {
+                rt.heap().collect_if_necessary();
+                let offset = ip.cast::<i32>().read();
+                ip = ip.add(4);
+                last_fast_call_ip = ip;
+                ip = ip.offset(offset as isize);
+            }
             Opcode::OP_JMP => {
                 rt.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
@@ -391,6 +400,14 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
             Opcode::OP_PUSH_NULL => {
                 frame.push(JsValue::encode_null_value());
+            }
+            Opcode::OP_FAST_RET => {
+                if last_fast_call_ip.is_null(){
+                    continue;
+                } else {
+                    ip = last_fast_call_ip;
+                    last_fast_call_ip = null_mut();
+                }
             }
             Opcode::OP_RET => {
                 let mut value = if frame.sp <= frame.limit {
