@@ -128,12 +128,14 @@ pub struct RuntimeParams {
     pub(crate) dump_bytecode: bool,
     #[allow(dead_code)]
     pub(crate) inline_caches: bool,
+    pub(crate) codegen_plugins: bool,
 }
 impl Default for RuntimeParams {
     fn default() -> Self {
         Self {
             dump_bytecode: false,
             inline_caches: true,
+            codegen_plugins: false,
         }
     }
 }
@@ -144,6 +146,10 @@ impl RuntimeParams {
     }
     pub fn with_dump_bytecode(mut self, enabled: bool) -> Self {
         self.dump_bytecode = enabled;
+        self
+    }
+    pub fn with_codegen_plugins(mut self, enabled: bool) -> Self {
+        self.codegen_plugins = enabled;
         self
     }
 }
@@ -415,9 +421,6 @@ impl Runtime {
                 builtins,
             )?;
             code.strict = code.strict || force_strict;
-            let mut buf = String::new();
-            code.display_to(&mut buf);
-            println!("{}", buf);
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
             let stack = self.shadowstack();
@@ -731,8 +734,12 @@ impl Runtime {
         JsSyntaxError::new(self, msg, None)
     }
 
-    pub fn register_codegen_plugin(&mut self,plugin_name: &str, codegen_func: Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>){
+    pub fn register_codegen_plugin(&mut self,plugin_name: &str, codegen_func: Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>) -> Result<(),&str> {
+        if !self.options.codegen_plugins {
+            return Err("Need enable codegen_plugins option to register codegen plugin!");
+        }
         self.codegen_plugins.insert(String::from(plugin_name), codegen_func);
+        Ok(())
     }
 
 }
@@ -918,23 +925,45 @@ mod tests {
         
         let mut rt = Runtime::with_heap(
             heap,
-            RuntimeParams::default(),
+            RuntimeParams::default().with_codegen_plugins(true),
             None);
         rt.heap().gc.stats();
         rt.shadowstack();
 
-        rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
+        let result = rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
         {
             compiler.expr(&call_args[0].expr, true, false)?;
             compiler.expr(&call_args[1].expr,true,false)?;
             compiler.emit(Opcode::OP_ADD,&[0],false);
             Ok(())
         }));
+        assert!(result.is_ok(),"Should register success!");
         let result =rt.eval("MyOwnAddFn(2,3)");
         assert!(result.is_ok(),"Should get result");
         if let Ok(value) = result {
             assert_eq!(5,value.get_int32());
         }
+
+        Platform::initialize();
+        let gc = GcParams::default().with_parallel_marking(false);
+        let heap = Heap::new(MiGC::new(gc));
+        let mut rt = Runtime::with_heap(
+            heap,
+            RuntimeParams::default().with_codegen_plugins(false),
+            None);
+        rt.heap().gc.stats();
+        rt.shadowstack();
+        
+        let result = rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
+        {
+            compiler.expr(&call_args[0].expr, true, false)?;
+            compiler.expr(&call_args[1].expr,true,false)?;
+            compiler.emit(Opcode::OP_ADD,&[0],false);
+            Ok(())
+        }));
+        assert!(result.is_err(),"Should can't register codegen plugin!");
+        let result =rt.eval("MyOwnAddFn(2,3)");
+        assert!(result.is_err(),"Should return JsValue error");
         //
     }
 }

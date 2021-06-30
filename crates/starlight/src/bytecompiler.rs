@@ -1606,7 +1606,7 @@ impl ByteCompiler {
                     self.handle_builtin_call(call)?;
                 }
             }
-            x if is_codegen_plugin_call(self.rt, x) => {
+            x if is_codegen_plugin_call(self.rt, x,self.builtins) => {
                 if let Expr::Call(call) = x {
                     self.handle_codegen_plugin_call(call)?;
                 }
@@ -2248,7 +2248,10 @@ impl Visit for IdentFinder<'_> {
     }
 }
 
-fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr) -> bool{
+fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr, builtins: bool) -> bool{
+    if !builtins && !rt.options.codegen_plugins {
+        return false;
+    }
     if let Expr::Call(call) = e {
         if let ExprOrSuper::Expr(expr) = &call.callee {
             match (&**expr) {
@@ -2301,10 +2304,10 @@ impl ByteCompiler {
                 let str = &*x.sym;
                 str
             } else {
-                unreachable!();
+                return Err(JsValue::new(self.rt.new_syntax_error("Incorrect codegen plugin syntax")));
             }
         } else {
-            unreachable!();
+            return Err(JsValue::new(self.rt.new_syntax_error("Incorrect codegen plugin syntax")));
         };
         let runtime = self.rt;
         let plugin = runtime.codegen_plugins.get(plugin_name).unwrap();

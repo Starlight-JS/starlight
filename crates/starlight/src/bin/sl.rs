@@ -45,6 +45,8 @@ struct Options {
     cons_gc: bool,
     #[structopt(long = "enable-jet-gc", help = "Enable Jet GC")]
     jet_gc: bool,
+    #[structopt(long = "enable-codegen-plugins", help = "Enable codegen plugin")]
+    codegen_plugins: bool,
 }
 
 use const_random::const_random;
@@ -81,7 +83,8 @@ fn main() {
                         heap,
                         RuntimeParams::default()
                             .with_dump_bytecode(options.dump_bytecode)
-                            .with_inline_caching(!options.disable_ic),
+                            .with_inline_caching(!options.disable_ic)
+                            .with_codegen_plugins(options.codegen_plugins),
                         None,
                     )
                 } else {
@@ -93,7 +96,8 @@ fn main() {
                         snapshot,
                         RuntimeParams::default()
                             .with_dump_bytecode(options.dump_bytecode)
-                            .with_inline_caching(!options.disable_ic),
+                            .with_inline_caching(!options.disable_ic)
+                            .with_codegen_plugins(options.codegen_plugins),
                         heap,
                         None,
                         |_, _| {},
