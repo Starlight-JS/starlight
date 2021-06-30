@@ -1,9 +1,10 @@
-use core::alloc::Layout;
-use core::ptr::NonNull;
-use core::sync::atomic::AtomicBool;
-
 use crate::gc::cell::{GcPointerBase, DEFINETELY_WHITE};
 use crate::gc::Address;
+use core::sync::atomic::AtomicBool;
+use libmimalloc_sys::{
+    mi_free, mi_heap_contains_block, mi_heap_destroy, mi_heap_malloc, mi_heap_new, mi_heap_t,
+    mi_is_in_heap_region,
+};
 /// Precise allocation used for large objects (>= LARGE_CUTOFF).
 /// Starlight uses mimalloc that already knows what to do for large allocations. The GC shouldn't
 /// have to think about such things. That's where PreciseAllocation comes in. We will allocate large
@@ -132,11 +133,10 @@ impl PreciseAllocation {
         true
     }
     /// Try to create precise allocation (no way that it will return null for now).
-    pub fn try_create(size: usize, index_in_space: u32) -> *mut Self {
+    pub fn try_create(heap: *mut mi_heap_t, size: usize, index_in_space: u32) -> *mut Self {
         let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
         unsafe {
-            let mut space =
-                libmimalloc_sys::mi_malloc(adjusted_alignment_allocation_size).cast::<u8>();
+            let mut space = mi_heap_malloc(heap, adjusted_alignment_allocation_size).cast::<u8>();
 
             //let mut space = libc::malloc(adjusted_alignment_allocation_size);
             let mut adjusted_alignment = false;
@@ -169,7 +169,7 @@ impl PreciseAllocation {
             Self::header_size() + self.cell_size + Self::HALF_ALIGNMENT;
         let base = self.base_pointer();
         unsafe {
-            libmimalloc_sys::mi_free(base.cast());
+            mi_free(base.cast());
         }
     }
 }
@@ -184,6 +184,7 @@ pub fn is_aligned_for_precise_allocation(mem: *mut u8) -> bool {
 pub struct LargeObjectSpace {
     pub(crate) allocations: Vec<*mut PreciseAllocation>,
     pub(crate) current_live_mark: bool,
+    pub(crate) heap: *mut mi_heap_t,
 }
 
 impl Default for LargeObjectSpace {
@@ -197,6 +198,7 @@ impl LargeObjectSpace {
         Self {
             current_live_mark: false,
             allocations: Vec::with_capacity(8),
+            heap: unsafe { mi_heap_new() },
         }
     }
     pub fn sweep(&mut self) -> usize {
@@ -220,6 +222,7 @@ impl LargeObjectSpace {
             return false;
         }
         unsafe {
+            /*
             if (&*self.allocations[0]).above_lower_bound(p.to_mut_ptr())
                 && (&**self.allocations.last().unwrap()).below_upper_bound(p.to_mut_ptr())
             {
@@ -230,6 +233,12 @@ impl LargeObjectSpace {
                 {
                     return true;
                 }
+            }*/
+            let alloc = PreciseAllocation::from_cell(p.to_mut_ptr());
+            if mi_is_in_heap_region(alloc.cast()) {
+                if mi_heap_contains_block(self.heap, alloc.cast()) {
+                    return true;
+                }
             }
         }
         false
@@ -237,17 +246,17 @@ impl LargeObjectSpace {
 
     pub fn alloc(&mut self, size: usize, th: &mut usize) -> Address {
         let ix = self.allocations.len() as u32;
-        let cell = PreciseAllocation::try_create(size, ix);
+        let cell = PreciseAllocation::try_create(self.heap, size, ix);
         unsafe {
             if cell.is_null() {
                 return Address::null();
             }
             self.allocations.push(cell);
-            if (cell as usize) < self.allocations[self.allocations.len() - 1] as usize
+            /*if (cell as usize) < self.allocations[self.allocations.len() - 1] as usize
                 || (cell as usize) < self.allocations[0] as usize
             {
                 self.allocations.sort_unstable();
-            }
+            }*/
             *th += (*cell).cell_size();
             let raw = (&*cell).cell();
 
@@ -262,6 +271,9 @@ impl Drop for LargeObjectSpace {
             unsafe {
                 (&mut *alloc).destroy();
             }
+        }
+        unsafe {
+            mi_heap_destroy(self.heap);
         }
     }
 }

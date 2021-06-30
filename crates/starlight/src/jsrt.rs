@@ -1236,7 +1236,7 @@ pub fn to_property_descriptor(
 pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let name = args.at(0).to_string(rt)?;
     let rel_path = unsafe { (*rt.stack.current).code_block.unwrap().path.clone() };
-    let is_js_load = (name.starts_with("./")
+    let _is_js_load = (name.starts_with("./")
         || name.starts_with("../")
         || name.starts_with('/')
         || name.ends_with(".js"))

@@ -163,10 +163,10 @@ macro_rules! globals {
 builtin_symbols!(globals);
 macro_rules! intern_builtins {
     ($($id: ident $val: ident $ix: expr),*) => {
-        let mut symtab = symbol_table();
+        let mut _symtab = symbol_table();
         $(
-            symtab.ids.insert($ix,$id);
-            symtab.symbols.insert($id,$ix);
+            _symtab.ids.insert($ix,$id);
+            _symtab.symbols.insert($id,$ix);
         )*
     };
 }
