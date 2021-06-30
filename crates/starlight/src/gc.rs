@@ -488,11 +488,9 @@ impl Tracer for SlotVisitor {
         if scan > end {
             swap(&mut scan, &mut end);
         }
-        // end = scan;
         unsafe {
             while scan < end {
                 let ptr = (scan as *mut *mut u8).read();
-                // println!("{}", ptr as usize);
 
                 if (*self.heap).is_heap_pointer(ptr) {
                     let mut ptr = ptr.cast::<GcPointerBase>();
