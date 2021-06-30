@@ -8,11 +8,8 @@ Starlight is a JS engine in Rust which focuses on performance rather than ensuri
 
 # Features
 - Bytecode interpreter
-- Mostly-precise GC without overhead for tracking GC objects
-- Polymorphic inline caches for objects and variable lookups
-- Small memory footprint, only around ~40KB of memory is used for a single runtime instance. 
-    **NOTE**: memory consumption will be larger in the future when more of JS builtins will be implemented but it should not exceed 100KB I believe.
-
+- Mostly-precise GC
+- Polymorphic inline caches
 - Startup snapshots
 - Executable JS bundles
 
@@ -58,8 +55,3 @@ rustup default nightly
 ```bash
 cargo run --bin sl examples/hello-world.js
 ```
-
-
-# TODO
-- [ ] Precise GC
-- [ ] ES support
