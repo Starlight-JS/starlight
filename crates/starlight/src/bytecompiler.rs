@@ -1322,10 +1322,6 @@ impl ByteCompiler {
                 }
                 self.emit(Opcode::OP_FAST_RET,&[], false);
             }
-            Stmt::Debugger(_) => todo!(),
-            Stmt::With(_) => todo!(),
-            Stmt::Labeled(_) => todo!(),
-            Stmt::DoWhile(_) => todo!(),
             x => {
                 return Err(JsValue::new(
                     self.rt.new_syntax_error(format!("NYI: {:?}", x)),

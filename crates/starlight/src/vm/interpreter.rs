@@ -407,6 +407,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 } else {
                     ip = last_fast_call_ip;
                     last_fast_call_ip = null_mut();
+                    continue;
                 }
             }
             Opcode::OP_RET => {

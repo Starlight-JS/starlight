@@ -16,7 +16,6 @@ const SNAPSHOT_FILENAME: &str = ".startup-snapshot";
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
-
     let mut deserialized = false;
     let mut rt = if Path::new(SNAPSHOT_FILENAME).exists() {
         let mut src = std::fs::read(SNAPSHOT_FILENAME);
