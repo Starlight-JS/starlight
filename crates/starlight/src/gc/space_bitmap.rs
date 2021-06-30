@@ -86,6 +86,9 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
         let offset = object as isize - self.heap_begin as isize;
         let index = Self::offset_to_index(offset as _);
         let mask = Self::offset_to_mask(offset as _);
+        if index >= self.bitmap_size / size_of::<usize>() {
+            return false;
+        }
         let atomic_entry = unsafe { *self.bitmap_begin.add(index) };
         (atomic_entry & mask) != 0
     }
