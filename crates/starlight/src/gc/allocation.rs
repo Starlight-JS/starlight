@@ -1,6 +1,5 @@
 use std::{
     fmt::Debug,
-    intrinsics::{likely, unlikely},
     mem::size_of,
     ptr::{drop_in_place, null_mut},
 };
@@ -14,7 +13,6 @@ use crate::{
         mem::is_aligned,
         Address,
     },
-    vm::object::JsObject,
 };
 
 use super::{

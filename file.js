@@ -1,17 +1,5 @@
-let i = 0;
-function Node(l, r) {
-    this.left = l;
-    this.right = r;
-    //this.counter = i++;
+let arr = new Array();
+
+for (let i = 0; i < 1000000; i++) {
+    arr.push(i);
 }
-
-function makeTree(depth) {
-    if (depth <= 0) {
-        return new Node();
-    }
-
-    return new Node(makeTree(depth - 1), makeTree(depth - 1))
-}
-
-let n = makeTree(21);
-

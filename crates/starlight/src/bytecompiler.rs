@@ -1,4 +1,3 @@
-use crate::jsrt::print;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
@@ -2249,7 +2248,7 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     }
     if let Expr::Call(call) = e {
         if let ExprOrSuper::Expr(expr) = &call.callee {
-            match (&**expr) {
+            match &**expr {
                 // ___foo(x,y)
                 Expr::Ident(x) => {
                     let str = &*x.sym;
@@ -2258,7 +2257,7 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
                 // foo.___call(x,y)
                 // now first support foo.___call
                 Expr::Member(m) => {
-                    if let Expr::Ident(x) = (&*m.prop) {
+                    if let Expr::Ident(x) = &*m.prop {
                         let str = &*x.sym;
                         return str == "___call";
                     }
@@ -2277,7 +2276,7 @@ impl ByteCompiler {
     /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
     pub fn handle_builtin_call(&mut self, call: &CallExpr) -> Result<(), JsValue> {
         let (member, builtin_call_name) = if let ExprOrSuper::Expr(expr) = &call.callee {
-            match (&**expr) {
+            match &**expr {
                 // ___foo(x,y)
                 Expr::Ident(x) => {
                     let str = &*x.sym;
@@ -2286,7 +2285,7 @@ impl ByteCompiler {
                 // foo.___call(x,y)
                 // now first support foo.___call
                 Expr::Member(m) => {
-                    if let Expr::Ident(x) = (&*m.prop) {
+                    if let Expr::Ident(x) = &*m.prop {
                         let str = &*x.sym;
                         assert!(str == "___call");
                         (Some(&m.obj), str.to_string())
@@ -2339,7 +2338,7 @@ impl ByteCompiler {
                 if let Some(func) = &member {
                     if let ExprOrSuper::Expr(x) = &func {
                         if let Expr::Ident(_) = &**x {
-                            self.expr(&call.args[0].expr,true,false)?;
+                            self.expr(&call.args[0].expr, true, false)?;
                             self.expr(&**x, true, false)?;
                             for i in 1..call.args.len() {
                                 self.expr(&call.args[i].expr, true, false)?;
