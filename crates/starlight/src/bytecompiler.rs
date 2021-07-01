@@ -1078,6 +1078,8 @@ impl ByteCompiler {
                 self.push_lci(0, d);
                 self.expr(&switch.discriminant, true, false)?;
 
+                let mut last_jump: Option<Box<dyn FnOnce(&mut ByteCompiler)>> = None;
+
                 for case in switch.cases.iter() {
                     match case.test {
                         Some(ref expr) => {
@@ -1085,12 +1087,21 @@ impl ByteCompiler {
                             self.expr(expr, true, false)?;
                             self.emit(Opcode::OP_EQ, &[], false);
                             let fail = self.cjmp(false);
+                            match last_jump {
+                                None => {
 
+                                }
+                                Some(jmp)=>{
+                                    jmp(self);
+                                }
+                            }
                             for stmt in case.cons.iter() {
                                 self.stmt(stmt)?;
                             }
+                            last_jump = Some(Box::new(self.jmp()));
 
                             fail(self);
+                            
                         }
                         None => {
                             for stmt in case.cons.iter() {

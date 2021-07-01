@@ -1,5 +1,10 @@
-let arr = new Array();
-
-for (let i = 0; i < 1000000; i++) {
-    arr.push(i);
-}
+switch (0) {
+    case 0:
+        print("case 0");
+    case 1:
+        print("case 1");
+    case 2:
+        print("case 2");
+    default:
+        print("default");
+  }
