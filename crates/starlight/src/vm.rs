@@ -159,7 +159,8 @@ impl Runtime {
     /// use starlight::Platform;
     /// use starlight::options::Options;
     /// Platform::initialize();
-    /// let options = Options::default().with_async_scheduler(Box::new(move |job| {
+    /// let options = Options::default();
+    /// let mut starlight_runtime = Platform::new_runtime(options, None).with_async_scheduler(Box::new(move |job| {
     ///     // here you would add the job to your EventLoop
     ///     // e.g.:
     ///     // EventLoop.add_local_void(move || {
@@ -170,7 +171,6 @@ impl Runtime {
     ///     // });
     ///     println!("sched async job...");
     /// }));
-    /// let mut starlight_runtime = Platform::new_runtime(options, None);
     /// ```
     pub fn with_async_scheduler(
         mut self,
