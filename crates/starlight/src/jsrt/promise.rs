@@ -117,7 +117,7 @@ pub fn promise_finally(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
 pub fn promise_resolve(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     with_prom(vm, args, |vm, args, prom| {
         if args.size() == 1 {
-            prom.resolve(vm, args.at(0))?;
+            prom.resolve(vm, args.this, args.at(0))?;
             Ok(JsValue::encode_undefined_value())
         } else {
             Err(JsValue::encode_object_value(JsString::new(
@@ -131,7 +131,7 @@ pub fn promise_resolve(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
 pub fn promise_reject(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     with_prom(vm, args, |vm, args, prom| {
         if args.size() == 1 {
-            prom.reject(vm, args.at(0))?;
+            prom.reject(vm, args.this, args.at(0))?;
             Ok(JsValue::encode_undefined_value())
         } else {
             Err(JsValue::encode_object_value(JsString::new(

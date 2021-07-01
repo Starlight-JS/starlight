@@ -146,7 +146,7 @@ pub struct Runtime {
     #[allow(dead_code)]
     /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
     pub(crate) eval_history: String,
-    persistent_roots: HashMap<usize, JsValue>,
+    persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
     sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
 }
 
@@ -179,20 +179,22 @@ impl Runtime {
         self.sched_async_func = Some(scheduler);
         self
     }
-    pub fn add_persistent_root(&mut self, obj: JsValue) -> usize {
+    pub fn add_persistent_root(&mut self, obj: JsValue) -> PersistentRooted {
         // for PoC only, todo use something like AutoIdMap for persistent_roots
 
+        let pr = &mut *self.persistent_roots.borrow_mut();
+
         let mut id = 0;
-        while self.persistent_roots.contains_key(&id) {
+        while pr.contains_key(&id) {
             id += 1;
         }
-        self.persistent_roots.insert(id, obj);
-        id
+        pr.insert(id, obj);
+        PersistentRooted {
+            id,
+            map: self.persistent_roots.clone()
+        }
     }
 
-    pub fn remove_persistent_root(&mut self, id: &usize) {
-        self.persistent_roots.remove(id);
-    }
     pub(crate) fn schedule_async<F>(&mut self, job: F) -> Result<(), JsValue>
         where
             F: FnOnce(&mut Runtime) + 'static,
@@ -654,7 +656,8 @@ impl Runtime {
                 rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
-                rt.persistent_roots.iter_mut().for_each(|entry| {
+                let pr = &mut *rt.persistent_roots.borrow_mut();
+                pr.iter_mut().for_each(|entry| {
                     entry.1.trace(visitor);
                 });
             },
@@ -718,6 +721,24 @@ impl Runtime {
     }
 }
 
+pub struct PersistentRooted {
+    id: usize,
+    map: Rc<RefCell<HashMap<usize, JsValue>>>
+}
+
+impl PersistentRooted {
+    pub fn get_value(&self) -> JsValue {
+        *self.map.borrow().get(&self.id).unwrap()
+    }
+}
+
+impl Drop for PersistentRooted {
+    fn drop(&mut self) {
+        let map = &mut *self.map.borrow_mut();
+        map.remove(&self.id);
+    }
+}
+
 use starlight_derive::GcTrace;
 use wtf_rs::unwrap_unchecked;
 
@@ -730,6 +751,8 @@ use self::{
     structure::Structure,
     symbol_table::{Internable, JsSymbol, Symbol},
 };
+use std::rc::Rc;
+use std::cell::RefCell;
 
 /// Global JS data that is used internally in Starlight.
 #[derive(Default, GcTrace)]

@@ -23,75 +23,56 @@ impl JsPromise {
         let promise = Self::new_unresolving(vm)?;
 
         // add persistentrooted for promise and function_value here..
-        let prom_rooted_id = vm.add_persistent_root(promise);
-        let func_rooted_id = vm.add_persistent_root(function_value);
 
-        let sched_res = vm.schedule_async(move |vm| {
-            // here we are running async
-            // call the function passed to the promise constructor with a resolve and a reject arg
+        // here we are running async
+        // call the function passed to the promise constructor with a resolve and a reject arg
 
+        let resolve_func = JsValue::encode_object_value(JsClosureFunction::new(
+            vm,
+            "resolve".intern(),
+            move |vm, arguments| {
+                // todo check one arg
+                let resolution = arguments.at(0);
+                let mut promise = promise;
 
-            let resolve_func = JsValue::encode_object_value(JsClosureFunction::new(
-                vm,
-                "resolve".intern(),
-                move |vm, arguments| {
-                    let mut promise = promise;
-                    // resolve promise here
+                promise
+                    .get_jsobject()
+                    .as_promise_mut()
+                    .resolve(vm, promise, resolution)?;
 
-                    // todo check one arg
-                    let resolution = arguments.at(0);
-                    promise
-                        .get_jsobject()
-                        .as_promise_mut()
-                        .resolve(vm, resolution)?;
-                    Ok(JsValue::encode_undefined_value())
-                },
-                1,
-            ));
-            let reject_func = JsValue::encode_object_value(JsClosureFunction::new(
-                vm,
-                "reject".intern(),
-                move |vm, arguments| {
-                    let mut promise = promise;
-                    // reject promise here
+                Ok(JsValue::encode_undefined_value())
+            },
+            1,
+        ));
+        let reject_func = JsValue::encode_object_value(JsClosureFunction::new(
+            vm,
+            "reject".intern(),
+            move |vm, arguments| {
+                let mut promise = promise;
+                // reject promise here
 
-                    // todo check one arg
-                    let rejection = arguments.at(0);
-                    promise
-                        .get_jsobject()
-                        .as_promise_mut()
-                        .reject(vm, rejection)?;
-                    Ok(JsValue::encode_undefined_value())
-                },
-                1,
-            ));
+                // todo check one arg
+                let rejection = arguments.at(0);
+                promise
+                    .get_jsobject()
+                    .as_promise_mut()
+                    .reject(vm, promise, rejection)?;
+                Ok(JsValue::encode_undefined_value())
+            },
+            1,
+        ));
 
-            let mut args_vec = vec![resolve_func, reject_func];
-            let mut arguments =
-                Arguments::new(JsValue::encode_undefined_value(), args_vec.as_mut_slice());
+        let mut args_vec = vec![resolve_func, reject_func];
+        let mut arguments =
+            Arguments::new(JsValue::encode_undefined_value(), args_vec.as_mut_slice());
 
-            let res = function_value.get_jsobject().as_function_mut().call(
-                vm,
-                &mut arguments,
-                JsValue::encode_undefined_value(),
-            );
+        let res = function_value.get_jsobject().as_function_mut().call(
+            vm,
+            &mut arguments,
+            JsValue::encode_undefined_value(),
+        );
 
-            match res {
-                Ok(_) => {}
-                Err(err) => {
-                    // should this reject the prom?
-                    println!(
-                        "prom func invoc failed: {}",
-                        err.to_string(vm).ok().expect("conversion failed")
-                    )
-                }
-            }
-
-            vm.remove_persistent_root(&prom_rooted_id);
-            vm.remove_persistent_root(&func_rooted_id);
-        });
-
-        sched_res.map(|_| promise)
+        res.map(|_| promise)
     }
     pub fn new_unresolving(vm: &mut Runtime) -> Result<JsValue, JsValue> {
         let proto = vm
@@ -110,15 +91,27 @@ impl JsPromise {
         });
         Ok(JsValue::new(obj))
     }
-    pub fn resolve(&mut self, vm: &mut Runtime, resolution: JsValue) -> Result<(), JsValue> {
-        self.do_resolve(vm, Ok(resolution))
+    pub fn resolve(
+        &mut self,
+        vm: &mut Runtime,
+        prom_this: JsValue,
+        resolution: JsValue,
+    ) -> Result<(), JsValue> {
+        self.do_resolve(vm, prom_this, Ok(resolution))
     }
-    pub fn reject(&mut self, vm: &mut Runtime, rejection: JsValue) -> Result<(), JsValue> {
-        self.do_resolve(vm, Err(rejection))
+    pub fn reject(
+        &mut self,
+        vm: &mut Runtime,
+        prom_this: JsValue,
+        rejection: JsValue,
+    ) -> Result<(), JsValue> {
+        self.do_resolve(vm, prom_this, Err(rejection))
     }
+
     fn do_resolve(
         &mut self,
         vm: &mut Runtime,
+        prom_this: JsValue,
         resolution: Result<JsValue, JsValue>,
     ) -> Result<(), JsValue> {
         //println!("do_resolve, subs={}", self.subs.len());
@@ -132,59 +125,79 @@ impl JsPromise {
             self.resolution = Some(resolution);
 
             // todo everything below needs to be in async job.. need to root persistent again... later
+            // root prom_this
+            let prom_root = vm.add_persistent_root(prom_this);
 
-            if let Some(ok_resolution) = self.resolution.unwrap().ok() {
-                for sub in &self.subs {
-                    // invoke 0, resolve 3
-                    if let Some(jsFunc) = sub.0 {
+            vm.schedule_async(move |vm| {
+                let prom_val = prom_root.get_value();
+                let mut prom_js_object = prom_val.get_jsobject();
+                let prom_self: &mut JsPromise = prom_js_object.as_promise_mut();
+
+                if let Some(ok_resolution) = prom_self.resolution.unwrap().ok() {
+                    for sub in &prom_self.subs {
+                        // invoke 0, resolve 3
+                        if let Some(jsFunc) = sub.0 {
+                            let this = JsValue::encode_undefined_value();
+                            let mut args_vec = vec![ok_resolution];
+                            let mut args = Arguments::new(this, args_vec.as_mut_slice());
+                            let sub_res = jsFunc
+                                .get_jsobject()
+                                .as_function_mut()
+                                .call(vm, &mut args, this);
+                            let sub_res = sub
+                                .3
+                                .get_jsobject()
+                                .as_promise_mut()
+                                .do_resolve(vm, sub.3, sub_res);
+                            if sub_res.is_err() {
+                                println!("could not resolve sub");
+                            }
+                        }
+                    }
+                } else {
+                    let err_resolution = prom_self.resolution.unwrap().err().unwrap();
+                    for sub in &prom_self.subs {
+                        // invoke 1, resolve 3
+                        if let Some(jsFunc) = sub.1 {
+                            let this = JsValue::encode_undefined_value();
+                            let mut args_vec = vec![err_resolution];
+                            let mut args = Arguments::new(this, args_vec.as_mut_slice());
+                            let sub_res = jsFunc
+                                .get_jsobject()
+                                .as_function_mut()
+                                .call(vm, &mut args, this);
+                            let sub_res = sub
+                                .3
+                                .get_jsobject()
+                                .as_promise_mut()
+                                .do_resolve(vm, sub.3, sub_res);
+                            if sub_res.is_err() {
+                                println!("could not resolve sub");
+                            }
+                        }
+                    }
+                }
+                for sub in &prom_self.subs {
+                    // invoke 2, resolve 3
+                    if let Some(jsFunc) = sub.2 {
                         let this = JsValue::encode_undefined_value();
-                        let mut args_vec = vec![ok_resolution];
+                        let mut args_vec = vec![];
                         let mut args = Arguments::new(this, args_vec.as_mut_slice());
                         let sub_res = jsFunc
                             .get_jsobject()
                             .as_function_mut()
                             .call(vm, &mut args, this);
-                        sub.3
+                        let sub_res = sub
+                            .3
                             .get_jsobject()
                             .as_promise_mut()
-                            .do_resolve(vm, sub_res)?
+                            .do_resolve(vm, sub.3, sub_res);
+                        if sub_res.is_err() {
+                            println!("could not resolve sub");
+                        }
                     }
                 }
-            } else {
-                let err_resolution = self.resolution.unwrap().err().unwrap();
-                for sub in &self.subs {
-                    // invoke 1, resolve 3
-                    if let Some(jsFunc) = sub.1 {
-                        let this = JsValue::encode_undefined_value();
-                        let mut args_vec = vec![err_resolution];
-                        let mut args = Arguments::new(this, args_vec.as_mut_slice());
-                        let sub_res = jsFunc
-                            .get_jsobject()
-                            .as_function_mut()
-                            .call(vm, &mut args, this);
-                        sub.3
-                            .get_jsobject()
-                            .as_promise_mut()
-                            .do_resolve(vm, sub_res)?
-                    }
-                }
-            }
-            for sub in &self.subs {
-                // invoke 2, resolve 3
-                if let Some(jsFunc) = sub.2 {
-                    let this = JsValue::encode_undefined_value();
-                    let mut args_vec = vec![];
-                    let mut args = Arguments::new(this, args_vec.as_mut_slice());
-                    let sub_res = jsFunc
-                        .get_jsobject()
-                        .as_function_mut()
-                        .call(vm, &mut args, this);
-                    sub.3
-                        .get_jsobject()
-                        .as_promise_mut()
-                        .do_resolve(vm, sub_res)?
-                }
-            }
+            })?;
             Ok(())
         }
     }
@@ -254,14 +267,11 @@ pub mod tests {
 
     use crate::options::Options;
     use crate::Platform;
-    use backtrace::Backtrace;
     use std::cell::RefCell;
-    use std::panic;
     use std::rc::Rc;
 
     #[test]
     fn test_promise() {
-
         //Platform::initialize();
         let todos = Rc::new(RefCell::new(vec![]));
         let todos2 = todos.clone();
@@ -290,10 +300,18 @@ pub mod tests {
             }
         }
 
-        let todos_vec = &mut *todos.borrow_mut();
-        println!("running todos");
-        while !todos_vec.is_empty() {
-            let job = todos_vec.remove(0);
+        loop {
+            let job;
+            {
+                let todos_vec = &mut *todos.borrow_mut();
+                if todos_vec.is_empty() {
+                    break;
+                }
+                job = todos_vec.remove(0);
+            }
+
+            println!("running todo");
+
             job(&mut starlight_runtime);
         }
         println!("done running todos");
