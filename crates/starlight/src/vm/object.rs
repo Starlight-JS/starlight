@@ -29,6 +29,7 @@ use std::{
     mem::{size_of, ManuallyDrop},
 };
 use wtf_rs::object_offsetof;
+use crate::vm::promise::JsPromise;
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EnumerationMode {
     Default,
@@ -129,7 +130,16 @@ impl JsObject {
 
         &mut *self.data::<JsFunction>()
     }
-
+    pub fn as_promise(&self) -> &JsPromise {
+        assert_eq!(self.tag, ObjectTag::Ordinary);
+        assert_eq!(self.class.name, JsPromise::get_class().name);
+        &*self.data::<JsPromise>()
+    }
+    pub fn as_promise_mut(&mut self) -> &mut JsPromise {
+        assert_eq!(self.tag, ObjectTag::Ordinary);
+        assert_eq!(self.class.name, JsPromise::get_class().name);
+        &mut *self.data::<JsPromise>()
+    }
     pub fn as_string_object(&self) -> &JsStringObject {
         assert_eq!(self.tag, ObjectTag::String);
         &*self.data::<JsStringObject>()

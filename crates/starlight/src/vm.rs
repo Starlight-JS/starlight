@@ -72,6 +72,7 @@ use attributes::*;
 use object::*;
 use property_descriptor::*;
 use value::*;
+pub mod promise;
 
 #[derive(Copy, Clone)]
 pub enum ModuleKind {
@@ -145,9 +146,64 @@ pub struct Runtime {
     #[allow(dead_code)]
     /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
     pub(crate) eval_history: String,
+    persistent_roots: HashMap<usize, JsValue>,
+    sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
 }
 
 impl Runtime {
+    /// initialize a Runtime with an async scheduler
+    /// the async scheduler is used to asynchronously run jobs with the Runtime
+    /// this can be used for things like Promises, setImmediate, async functions
+    /// # Example
+    /// ```rust
+    /// use starlight::Platform;
+    /// use starlight::options::Options;
+    /// Platform::initialize();
+    /// let options = Options::default().with_async_scheduler(Box::new(move |job| {
+    ///     // here you would add the job to your EventLoop
+    ///     // e.g.:
+    ///     // EventLoop.add_local_void(move || {
+    ///     //     RtThreadLocal.with(|rc| {
+    ///     //         let sl_rt = &mut *rc.borrow_mut();
+    ///     //         job(rt);
+    ///     //     });
+    ///     // });
+    ///     println!("sched async job...");
+    /// }));
+    /// let mut starlight_runtime = Platform::new_runtime(options, None);
+    /// ```
+    pub fn with_async_scheduler(
+        mut self,
+        scheduler: Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>,
+    ) -> Self {
+        self.sched_async_func = Some(scheduler);
+        self
+    }
+    pub fn add_persistent_root(&mut self, obj: JsValue) -> usize {
+        // for PoC only, todo use something like AutoIdMap for persistent_roots
+
+        let mut id = 0;
+        while self.persistent_roots.contains_key(&id) {
+            id += 1;
+        }
+        self.persistent_roots.insert(id, obj);
+        id
+    }
+
+    pub fn remove_persistent_root(&mut self, id: &usize) {
+        self.persistent_roots.remove(id);
+    }
+    pub(crate) fn schedule_async<F>(&mut self, job: F) -> Result<(), JsValue>
+        where
+            F: FnOnce(&mut Runtime) + 'static,
+    {
+        if let Some(scheduler) = &self.sched_async_func {
+            scheduler(Box::new(job));
+            Ok(())
+        } else {
+            Err(JsValue::encode_object_value(JsString::new(self, "In order to use async you have to init the RuntimeOptions with with_async_scheduler()")))
+        }
+    }
     pub fn options(&self) -> &Options {
         &self.options
     }
@@ -477,6 +533,8 @@ impl Runtime {
             module_loader: None,
             symbol_table: HashMap::new(),
             eval_history: String::new(),
+            persistent_roots: Default::default(),
+            sched_async_func: None
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -515,6 +573,7 @@ impl Runtime {
         this.init_func(proto);
         this.init_error(proto);
         this.init_array(proto);
+        this.init_promise().ok().expect("init prom failed");
         this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
@@ -581,6 +640,8 @@ impl Runtime {
             perf: perf::Perf::new(),
             symbol_table: HashMap::new(),
             module_loader: None,
+            persistent_roots: Default::default(),
+            sched_async_func: None
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -593,6 +654,9 @@ impl Runtime {
                 rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
+                rt.persistent_roots.iter_mut().for_each(|entry| {
+                    entry.1.trace(visitor);
+                });
             },
         ));
 
@@ -816,4 +880,123 @@ pub(crate) fn init_es_config() -> EsConfig {
     let mut es_config: EsConfig = Default::default();
     es_config.dynamic_import = true;
     es_config
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::options::Options;
+    use crate::vm::symbol_table::Internable;
+    use crate::vm::value::JsValue;
+    use crate::vm::{arguments, Runtime};
+    use crate::Platform;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    #[test]
+    fn test_simple_async() {
+        // start a runtime
+        Platform::initialize();
+
+        type JobType = dyn FnOnce(&mut Runtime);
+        // the todo Rc is where we will store our async job, in real life this would be an EventLoop to which we could add multiple jobs
+        let todo: Rc<RefCell<Option<Box<JobType>>>> = Rc::new(RefCell::new(None));
+        let todo_clone = todo.clone();
+
+        // in real life you would add this job to an EventLoop
+        let options = Options::default();
+
+        let mut starlight_runtime =
+            Platform::new_runtime(options, None).with_async_scheduler(Box::new(move |job| {
+                println!("sched async job...");
+                let opt = &mut *todo_clone.borrow_mut();
+                opt.replace(Box::new(job));
+            }));
+
+        let mut global = starlight_runtime.global_object();
+
+        // create a symbol for the functions name
+        let name_symbol = "setImmediate".intern();
+
+        // create a setImmediate Function
+        // the setImmediate function is not part of the official ECMAspec but is implemented in older IE versions
+        // it should work about the same as setTimeout(func, 0)
+        // see also https://developer.mozilla.org/en-US/docs/Web/API/Window/setImmediate
+        // it should serve pretty good as a simple as it gets first example of doing things async
+        let arg_count = 0;
+        let func = crate::vm::function::JsNativeFunction::new(
+            &mut starlight_runtime,
+            name_symbol,
+            move |vm, args| {
+                if args.size() == 1 {
+                    let func_val = args.at(0);
+                    if func_val.is_callable() {
+                        match vm.schedule_async(move |vm2| {
+                            println!("invoking func_val");
+                            // invoke func val here with vm2
+                            let mut obj = func_val.get_jsobject();
+                            let func = obj.as_function_mut();
+                            let this = JsValue::encode_null_value();
+                            let mut arguments = arguments::Arguments::new(this, &mut []);
+                            let res = func.call(vm2, &mut arguments, this);
+                            match res {
+                                Ok(_) => {
+                                    println!("job exe ok");
+                                }
+                                Err(e) => {
+                                    panic!(
+                                        "job exe fail: {}",
+                                        e.to_string(vm2).ok().expect("conversion failed")
+                                    );
+                                }
+                            }
+                        }) {
+                            Ok(_) => Ok(JsValue::encode_null_value()),
+                            Err(_err) => {
+                                // todo encode str
+                                Err(JsValue::encode_null_value())
+                            }
+                        }
+                    } else {
+                        // "args was not callable"
+                        // todo encode str
+                        Err(JsValue::encode_null_value())
+                    }
+                } else {
+                    // todo return string value
+                    // "need one arg"
+                    Err(JsValue::encode_null_value())
+                }
+            },
+            arg_count,
+        );
+
+        // add the function to the global object
+        global
+            .put(
+                &mut starlight_runtime,
+                name_symbol,
+                JsValue::new(func),
+                true,
+            )
+            .ok()
+            .expect("could not add func to global");
+
+        // run the function
+        let _outcome =
+            match starlight_runtime.eval("setImmediate(() => {print('later')}); print('first');") {
+                Ok(e) => e,
+                Err(err) => panic!(
+                    "func failed: {}",
+                    err.to_string(&mut starlight_runtime)
+                        .ok()
+                        .expect("conversion failed")
+                ),
+            };
+
+        if let Some(job) = todo.take() {
+            job(&mut starlight_runtime);
+        } else {
+            panic!("did not get job")
+        }
+    }
 }
