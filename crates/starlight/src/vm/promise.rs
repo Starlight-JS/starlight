@@ -8,12 +8,25 @@ use super::Runtime;
 use crate::gc::cell::{Trace, Tracer};
 use crate::gc::snapshot::deserializer::Deserializer;
 use crate::gc::snapshot::serializer::SnapshotSerializer;
+use crate::prelude::JsArray;
 use crate::vm::function::JsClosureFunction;
 use crate::vm::structure::Structure;
 use std::mem::ManuallyDrop;
 
+pub enum TrackingMode {
+    All,
+    Race,
+    AllSettled,
+    Any,
+}
+
 pub struct JsPromise {
+    // sub promises, added by calling then/catch/finally
     subs: Vec<(Option<JsValue>, Option<JsValue>, Option<JsValue>, JsValue)>, // then_func / catch_func / finally_func / sub_promise
+    // when tracking we generate a Vec with results which we'll map to a result array later based on the TrackingMode
+    tracking_mode: Option<TrackingMode>,
+    tracking_results: Option<Vec<Option<Result<JsValue, JsValue>>>>,
+    // resolution for this Promise
     resolution: Option<Result<JsValue, JsValue>>,
 }
 
@@ -22,9 +35,6 @@ impl JsPromise {
     pub fn new(vm: &mut Runtime, function_value: JsValue) -> Result<JsValue, JsValue> {
         let promise = Self::new_unresolving(vm)?;
 
-        // add persistentrooted for promise and function_value here..
-
-        // here we are running async
         // call the function passed to the promise constructor with a resolve and a reject arg
 
         let resolve_func = JsValue::encode_object_value(JsClosureFunction::new(
@@ -87,6 +97,36 @@ impl JsPromise {
 
         *obj.data::<JsPromise>() = ManuallyDrop::new(JsPromise {
             subs: vec![],
+            tracking_mode: None,
+            tracking_results: None,
+            resolution: None,
+        });
+        Ok(JsValue::new(obj))
+    }
+    pub fn new_tracking(
+        vm: &mut Runtime,
+        mode: TrackingMode,
+        promises_array: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let proto = vm
+            .global_object()
+            .get(vm, "Promise".intern())?
+            .to_object(vm)?
+            .get(vm, "prototype".intern())?
+            .to_object(vm)?;
+
+        let mut results = vec![];
+        // let prom_array: JsArray = promises_array.get_jsobject().as_array();
+        // todo for array.length add None to results vec
+        // todo add handler to every promise with index, resolve that index in vec, check followup action based on mode
+
+        let structure = Structure::new_indexed(vm, Some(proto), false);
+        let mut obj = JsObject::new(vm, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
+
+        *obj.data::<JsPromise>() = ManuallyDrop::new(JsPromise {
+            subs: vec![],
+            tracking_mode: Some(mode),
+            tracking_results: Some(results),
             resolution: None,
         });
         Ok(JsValue::new(obj))
@@ -289,6 +329,9 @@ unsafe impl Trace for JsPromise {
             sub.2.trace(tracer);
             sub.3.trace(tracer);
         });
+        if let Some(tracking_results) = &mut self.tracking_results {
+            tracking_results.trace(tracer);
+        }
     }
 }
 
