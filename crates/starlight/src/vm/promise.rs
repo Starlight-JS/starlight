@@ -122,6 +122,36 @@ impl JsPromise {
                 "Promise was already resolved",
             )))
         } else {
+            if resolution.is_ok() {
+                // if promise is resolved with a promise we let that promise resolve this promise
+                // as per spec this is not done for reject operations
+                let resolution_value = resolution.ok().unwrap();
+                if resolution_value.is_jsobject()
+                    && resolution_value
+                        .get_jsobject()
+                        .is_class(JsPromise::get_class())
+                {
+                    // resolved with a promise
+                    let mut resolution_object = resolution_value.get_jsobject();
+                    let resolution_prom: &mut JsPromise = resolution_object.as_promise_mut();
+                    // add self as sub to resolution prom
+                    let pass_val_func = JsValue::encode_object_value(JsClosureFunction::new(
+                        vm,
+                        "pass_val".intern(),
+                        |_vm, args| Ok(args.at(0)),
+                        1,
+                    ));
+                    resolution_prom.subs.push((
+                        Some(pass_val_func),
+                        Some(pass_val_func),
+                        None,
+                        prom_this,
+                    ));
+                    // exit this do_resolve()
+                    return Ok(());
+                }
+            }
+
             self.resolution = Some(resolution);
 
             // todo everything below needs to be in async job.. need to root persistent again... later
@@ -285,6 +315,23 @@ pub mod tests {
 
         match starlight_runtime
             .eval("let p = new Promise((res, rej) => {print('running promise'); res(123);}); p.then((res) => {print('p resolved to ' + res);});")
+        {
+            Ok(_) => {
+
+                println!("prom code running");
+            }
+            Err(e) => {
+                println!(
+                    "prom init failed: {}",
+                    e.to_string(&mut starlight_runtime)
+                        .ok()
+                        .expect("conversion failed")
+                );
+            }
+        }
+
+        match starlight_runtime
+            .eval("let p = new Promise((resa, rejb) => {print('running promise'); resa(new Promise((resb, rejb) => {resb(321);}));}); p.then((res) => {print('p resolved to ' + res);});")
         {
             Ok(_) => {
 
