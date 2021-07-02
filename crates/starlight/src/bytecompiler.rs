@@ -2253,7 +2253,7 @@ fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr, builtins: bool) -> bool{
     }
     if let Expr::Call(call) = e {
         if let ExprOrSuper::Expr(expr) = &call.callee {
-            match (&**expr) {
+            match &**expr {
                 // ___foo(x,y)
                 Expr::Ident(x) => {
                     let str = &*x.sym;
