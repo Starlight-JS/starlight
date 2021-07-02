@@ -5,10 +5,13 @@ use super::string::*;
 use super::symbol_table::Internable;
 use super::value::*;
 use super::Runtime;
+use crate::gc::cell::GcPointer;
 use crate::gc::cell::{Trace, Tracer};
 use crate::gc::snapshot::deserializer::Deserializer;
 use crate::gc::snapshot::serializer::SnapshotSerializer;
-use crate::prelude::JsArray;
+use crate::jsrt::get_length;
+use crate::prelude::Symbol;
+use crate::vm::array::JsArray;
 use crate::vm::function::JsClosureFunction;
 use crate::vm::structure::Structure;
 use std::mem::ManuallyDrop;
@@ -115,7 +118,25 @@ impl JsPromise {
             .get(vm, "prototype".intern())?
             .to_object(vm)?;
 
-        let mut results = vec![];
+        if !promises_array.is_jsobject() {
+            return Err(JsValue::encode_object_value(JsString::new(
+                vm,
+                "argument was not an Array",
+            )));
+        }
+        let mut promises_array_object = promises_array.get_jsobject();
+        if promises_array_object.tag() != ObjectTag::Array {
+            return Err(JsValue::encode_object_value(JsString::new(
+                vm,
+                "argument was not an Array",
+            )));
+        }
+
+        //promises_array_object.
+
+        let length = array_util_get_length(vm, &mut promises_array_object)?;
+
+        let mut results = vec![None; length as usize];
         // let prom_array: JsArray = promises_array.get_jsobject().as_array();
         // todo for array.length add None to results vec
         // todo add handler to every promise with index, resolve that index in vec, check followup action based on mode
@@ -129,7 +150,102 @@ impl JsPromise {
             tracking_results: Some(results),
             resolution: None,
         });
-        Ok(JsValue::new(obj))
+        let promise_value = JsValue::new(obj);
+
+        // for every prom add finally to set value in promise_value
+        // todo do we have something like a for_each util somewhere?
+        for x in 0..length {
+            let sub_prom = array_util_get_value_at(vm, &mut promises_array_object, x)?;
+            let mut sub_prom_obj = sub_prom.get_jsobject();
+            let sub_prom_jsprom: &mut JsPromise = sub_prom_obj.as_promise_mut();
+
+            let outer_root = vm.add_persistent_root(promise_value);
+            let sub_prom_root = vm.add_persistent_root(sub_prom);
+
+            let sub_finally = JsValue::encode_object_value(JsClosureFunction::new(
+                vm,
+                "finally_track".intern(),
+                move |vm, _args| {
+                    // todo add single val to outer promise_value
+                    let outer_prom = outer_root.get_value();
+                    let sub_prom = sub_prom_root.get_value();
+                    let sub_resolution = sub_prom.get_jsobject().as_promise().resolution;
+                    outer_prom
+                        .get_jsobject()
+                        .as_promise_mut()
+                        .resolve_single_tracked_resolution(
+                            vm,
+                            outer_prom,
+                            x,
+                            sub_resolution.unwrap(),
+                        )?;
+                    Ok(JsValue::encode_null_value())
+                },
+                1,
+            ));
+
+            sub_prom_jsprom.then(vm, None, None, Some(sub_finally))?;
+        }
+
+        Ok(promise_value)
+    }
+    fn resolve_single_tracked_resolution(
+        &mut self,
+        vm: &mut Runtime,
+        prom_this: JsValue,
+        index: u32,
+        resolution: Result<JsValue, JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        // only do things if not yet settled
+        if self.resolution.is_none() {
+            // update single result
+            let tracking_results = self.tracking_results.as_mut().unwrap();
+
+            // replace val in vec
+            std::mem::replace(&mut tracking_results[index as usize], Some(resolution));
+            match self.tracking_mode.as_ref().unwrap() {
+                TrackingMode::All => {
+                    match resolution {
+                        Ok(_) => {
+                            // see if all proms have settled
+                            if !tracking_results.contains(&None) {
+                                // all have settled
+                                // create array of results
+                                let arr_value = JsValue::encode_object_value(JsArray::new(
+                                    vm,
+                                    tracking_results.len() as u32,
+                                ));
+                                let mut arr_obj = arr_value.get_jsobject();
+
+                                for x in 0..tracking_results.len() {
+                                    // results should all be Some and Ok
+                                    let res =
+                                        tracking_results.get(x).unwrap().unwrap().ok().unwrap();
+                                    array_util_set_value_at(vm, &mut arr_obj, x as u32, res)?;
+                                }
+                                self.resolve(vm, prom_this, arr_value)?;
+                            }
+                            Ok(JsValue::encode_null_value())
+                        }
+                        Err(err_res) => {
+                            self.reject(vm, prom_this, err_res)?;
+                            Ok(JsValue::encode_null_value())
+                        }
+                    }
+                }
+                TrackingMode::Race => {
+                    match resolution {
+                        Ok(ok_res) => self.resolve(vm, prom_this, ok_res)?,
+                        Err(err_res) => self.reject(vm, prom_this, err_res)?,
+                    }
+                    Ok(JsValue::encode_null_value())
+                }
+                TrackingMode::AllSettled => Ok(JsValue::encode_null_value()),
+                TrackingMode::Any => Ok(JsValue::encode_null_value()),
+            }
+        } else {
+            Ok(JsValue::encode_null_value())
+        }
     }
     pub fn resolve(
         &mut self,
@@ -300,6 +416,30 @@ impl JsPromise {
     );
 }
 
+fn array_util_get_length(
+    vm: &mut Runtime,
+    arr_object: &mut GcPointer<JsObject>,
+) -> Result<u32, JsValue> {
+    get_length(vm, arr_object)
+}
+
+fn array_util_get_value_at(
+    vm: &mut Runtime,
+    arr_object: &mut GcPointer<JsObject>,
+    index: u32,
+) -> Result<JsValue, JsValue> {
+    arr_object.get(vm, Symbol::Index(index))
+}
+
+fn array_util_set_value_at(
+    vm: &mut Runtime,
+    arr_object: &mut GcPointer<JsObject>,
+    index: u32,
+    value: JsValue,
+) -> Result<(), JsValue> {
+    arr_object.put(vm, Symbol::Index(index), value, false)
+}
+
 extern "C" fn drop_promise_fn(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<JsPromise>()) }
 }
@@ -375,6 +515,23 @@ pub mod tests {
 
         match starlight_runtime
             .eval("let p = new Promise((resa, rejb) => {print('running promise'); resa(new Promise((resb, rejb) => {resb(321);}));}); p.then((res) => {print('p resolved to ' + res);});")
+        {
+            Ok(_) => {
+
+                println!("prom code running");
+            }
+            Err(e) => {
+                println!(
+                    "prom init failed: {}",
+                    e.to_string(&mut starlight_runtime)
+                        .ok()
+                        .expect("conversion failed")
+                );
+            }
+        }
+
+        match starlight_runtime
+            .eval("let p = Promise.all([new Promise((resA, rejA) => {resA(123);}), new Promise((resB, rejB) => {resB(456);})]); p.then((res) => {print('pAll resolved to ' + res.join(','));}); p.catch((res) => {print('pAll rejected to ' + res);});")
         {
             Ok(_) => {
 

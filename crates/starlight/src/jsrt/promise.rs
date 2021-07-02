@@ -156,7 +156,7 @@ pub fn promise_static_resolve(vm: &mut Runtime, args: &Arguments) -> Result<JsVa
     if let Some(prom_val) = res.ok() {
         let mut prom_js_obj = prom_val.get_jsobject();
         let prom: &mut JsPromise = prom_js_obj.as_promise_mut();
-        prom.resolve(vm, prom_val, value);
+        prom.resolve(vm, prom_val, value)?;
     }
     res
 }
@@ -174,7 +174,7 @@ pub fn promise_static_reject(vm: &mut Runtime, args: &Arguments) -> Result<JsVal
     if let Some(prom_val) = res.ok() {
         let mut prom_js_obj = prom_val.get_jsobject();
         let prom: &mut JsPromise = prom_js_obj.as_promise_mut();
-        prom.reject(vm, prom_val, value);
+        prom.reject(vm, prom_val, value)?;
     }
     res
 }
