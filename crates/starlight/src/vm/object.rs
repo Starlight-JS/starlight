@@ -24,12 +24,12 @@ use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
 };
+use crate::vm::promise::JsPromise;
 use std::{
     collections::hash_map::Entry,
     mem::{size_of, ManuallyDrop},
 };
 use wtf_rs::object_offsetof;
-use crate::vm::promise::JsPromise;
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EnumerationMode {
     Default,
@@ -132,12 +132,12 @@ impl JsObject {
     }
     pub fn as_promise(&self) -> &JsPromise {
         assert_eq!(self.tag, ObjectTag::Ordinary);
-        assert_eq!(self.class.name, JsPromise::get_class().name);
+        assert!(self.is_class(JsPromise::get_class()));
         &*self.data::<JsPromise>()
     }
     pub fn as_promise_mut(&mut self) -> &mut JsPromise {
         assert_eq!(self.tag, ObjectTag::Ordinary);
-        assert_eq!(self.class.name, JsPromise::get_class().name);
+        assert!(self.is_class(JsPromise::get_class()));
         &mut *self.data::<JsPromise>()
     }
     pub fn as_string_object(&self) -> &JsStringObject {
