@@ -1,10 +1,9 @@
-switch (0) {
-    case 0:
-        print("case 0");
-    case 1:
-        print("case 1");
-    case 2:
-        print("case 2");
-    default:
-        print("default");
-  }
+function Foo(x, y, outer) {
+    this.outer = outer;
+}
+
+const BAR = new Foo(0, 0, undefined);
+
+let far = new Foo(1, 2, BAR);
+
+print(far, far == BAR);

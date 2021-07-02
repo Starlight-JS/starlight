@@ -448,7 +448,7 @@ impl ByteCompiler {
             }
             None => {}
         }
-        //self.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
+        self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         self.emit(Opcode::OP_RET, &[], false);
         //self.finish(&mut self.vm);
         /*#[cfg(feature = "perf")]
@@ -528,7 +528,7 @@ impl ByteCompiler {
 
         compiler.compile(&script.body, false)?;
 
-        //self.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
+        compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         //compiler.compile(&script.body);
         let mut code = compiler.finish(&mut vm);
@@ -840,7 +840,7 @@ impl ByteCompiler {
                 },
             }
         }
-
+        compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         let mut rt = compiler.rt;
         let result = compiler.finish(&mut rt);
@@ -885,7 +885,7 @@ impl ByteCompiler {
         compiler.push_scope();
         compiler.compile(&p.body, false)?;
         compiler.pop_scope();
-        // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
+        compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         let mut rt = compiler.rt;
         let result = compiler.finish(&mut rt);
@@ -931,7 +931,7 @@ impl ByteCompiler {
         compiler.push_scope();
         compiler.compile(&p.body, true)?;
         compiler.pop_scope();
-        // compiler.builder.emit(Opcode::OP_PUSH_UNDEFINED, &[], false);
+        compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         let mut rt = compiler.rt;
         let result = compiler.finish(&mut rt);
@@ -994,7 +994,7 @@ impl ByteCompiler {
         }
 
         for (index, stmt) in body.iter().enumerate() {
-            if index == body.len() - 1 {
+            if index == body.len() - 1 && _last_val_ret {
                 if let Stmt::Expr(ref expr) = stmt {
                     self.expr(&expr.expr, true, false)?;
                     self.emit(Opcode::OP_RET, &[], false);
@@ -1088,10 +1088,8 @@ impl ByteCompiler {
                             self.emit(Opcode::OP_EQ, &[], false);
                             let fail = self.cjmp(false);
                             match last_jump {
-                                None => {
-
-                                }
-                                Some(jmp)=>{
+                                None => {}
+                                Some(jmp) => {
                                     jmp(self);
                                 }
                             }
@@ -1101,7 +1099,6 @@ impl ByteCompiler {
                             last_jump = Some(Box::new(self.jmp()));
 
                             fail(self);
-                            
                         }
                         None => {
                             for stmt in case.cons.iter() {
@@ -1616,7 +1613,7 @@ impl ByteCompiler {
                     self.handle_builtin_call(call)?;
                 }
             }
-            x if is_codegen_plugin_call(self.rt, x,self.builtins) => {
+            x if is_codegen_plugin_call(self.rt, x, self.builtins) => {
                 if let Expr::Call(call) = x {
                     self.handle_codegen_plugin_call(call)?;
                 }
@@ -2258,7 +2255,7 @@ impl Visit for IdentFinder<'_> {
     }
 }
 
-fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr, builtins: bool) -> bool{
+fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr, builtins: bool) -> bool {
     if !builtins && !rt.options.codegen_plugins {
         return false;
     }
@@ -2314,16 +2311,19 @@ impl ByteCompiler {
                 let str = &*x.sym;
                 str
             } else {
-                return Err(JsValue::new(self.rt.new_syntax_error("Incorrect codegen plugin syntax")));
+                return Err(JsValue::new(
+                    self.rt.new_syntax_error("Incorrect codegen plugin syntax"),
+                ));
             }
         } else {
-            return Err(JsValue::new(self.rt.new_syntax_error("Incorrect codegen plugin syntax")));
+            return Err(JsValue::new(
+                self.rt.new_syntax_error("Incorrect codegen plugin syntax"),
+            ));
         };
         let runtime = self.rt;
         let plugin = runtime.codegen_plugins.get(plugin_name).unwrap();
-        plugin(self,&call.args)
+        plugin(self, &call.args)
     }
-
 
     /// TODO List:
     /// - Implement  `___call` ,`___tailcall`.

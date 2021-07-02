@@ -12,6 +12,7 @@ use crate::{
         serializer::{Serializable, SnapshotSerializer},
     },
 };
+use std::intrinsics::unlikely;
 use std::usize;
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
@@ -461,7 +462,7 @@ impl Tracer for SlotVisitor {
                     marker: Default::default(),
                 };
             }
-
+            self.heap.mark(*cell);
             self.queue.push(base as *mut _);
             GcPointer {
                 base: NonNull::new_unchecked(base as *mut _),
@@ -476,7 +477,7 @@ impl Tracer for SlotVisitor {
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
                 return *cell;
             }
-
+            self.heap.mark(cell.base.as_ptr());
             self.queue.push(base);
             *cell
         }
@@ -528,6 +529,7 @@ pub struct Heap {
     n_workers: u32,
     max_heap_size: usize,
     space: Space,
+    verbose: bool,
 }
 
 impl Heap {
@@ -537,8 +539,9 @@ impl Heap {
             constraints: vec![],
             sp: 0,
             defers: 0,
+            verbose: opts.verbose_gc,
             allocated: 0,
-            max_heap_size: 128 * 1024,
+            max_heap_size: 256 * 1024,
             threadpool: if opts.parallel_marking {
                 Some(Pool::new(opts.gc_threads as _))
             } else {
@@ -644,12 +647,18 @@ impl Heap {
         // FPU registers too because JS values is NaN boxed and exist in FPU registers.
 
         // Get stack pointer for scanning thread stack.
-        let sp : usize = 0;
+        let sp: usize = 0;
         let sp = &sp as *const usize;
         self.sp = sp as usize;
         if self.defers > 0 {
             return;
         }
+        logln_if!(
+            unlikely(self.verbose),
+            "[GC] Starting GC with {:.4} KB allocated and {:.4} KB threshold ",
+            self.allocated as f64 / 1024.,
+            self.max_heap_size as f64 / 1024.
+        );
         let sp = self.sp;
         let mut visitor = SlotVisitor {
             bytes_visited: 0,
@@ -660,7 +669,7 @@ impl Heap {
             visitor.add_conservative(thread.bounds.origin as _, sp as usize);
         });
         self.process_roots(&mut visitor);
-        
+
         if let Some(ref mut pool) = self.threadpool {
             crate::gc::pmarking::start(
                 &visitor.queue,
@@ -676,10 +685,22 @@ impl Heap {
         self.reset_weak_references();
         let alloc = self.allocated;
         self.allocated = self.space.sweep();
+        logln_if!(
+            unlikely(self.verbose),
+            "[GC] Sweep {:.4}->{:.4} KB",
+            alloc as f64 / 1024.,
+            self.allocated as f64 / 1024.
+        );
 
         if self.allocated > self.max_heap_size {
             self.max_heap_size = (self.allocated as f64 * 1.5f64) as usize;
+            logln_if!(
+                unlikely(self.verbose),
+                "[GC] New threshold: {:.4}KB",
+                self.max_heap_size as f64 / 1024.
+            );
         }
+        logln_if!(unlikely(self.verbose), "[GC] End");
     }
     pub fn allocate_(
         &mut self,

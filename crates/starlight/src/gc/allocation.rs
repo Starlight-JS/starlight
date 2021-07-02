@@ -10,13 +10,14 @@ use crate::{
     gc::{block::Block, constants::BLOCK_SIZE},
     gc::{
         cell::{GcPointerBase, DEFINETELY_WHITE, POSSIBLY_BLACK},
-        mem::is_aligned,
         Address,
     },
 };
 
 use super::{
-    block::FreeList, block_allocator::BlockAllocator, large_object_space::LargeObjectSpace,
+    block::FreeList,
+    block_allocator::BlockAllocator,
+    large_object_space::{LargeObjectSpace, PreciseAllocation},
     space_bitmap::SpaceBitmap,
 };
 
@@ -156,7 +157,8 @@ pub struct Space {
     size_class_for_size_step: [usize; NUM_SIZE_CLASSES],
     block_allocator: *mut BlockAllocator,
     allocators: *mut LocalAllocator,
-    bitmap: SpaceBitmap<16>,
+    live_bitmap: SpaceBitmap<16>,
+    mark_bitmap: SpaceBitmap<16>,
 }
 
 impl Drop for Space {
@@ -195,7 +197,7 @@ impl Space {
                 let mut block = (*alloc).current;
                 while !block.is_null() {
                     (*block).walk(|ptr| {
-                        if self.bitmap.test(ptr as _) {
+                        if self.live_bitmap.test(ptr as _) {
                             cb(ptr.cast(), (*block).cell_size.get() as _);
                         }
                     });
@@ -205,7 +207,7 @@ impl Space {
                 block = (*alloc).unavail;
                 while !block.is_null() {
                     (*block).walk(|ptr| {
-                        if self.bitmap.test(ptr as _) {
+                        if self.live_bitmap.test(ptr as _) {
                             cb(ptr.cast(), (*block).cell_size.get() as _);
                         }
                     });
@@ -241,24 +243,26 @@ impl Space {
                     let mut has_free = false;
                     let mut fully_free = true;
                     (*cursor).walk(|cell| {
-                        if self.bitmap.test(cell as _) {
+                        if self.live_bitmap.test(cell as _) {
                             let cell = cell.cast::<GcPointerBase>();
                             let state = (*cell).state();
                             debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
-                            if (*cell).state() == POSSIBLY_BLACK {
+                            if self.mark_bitmap.clear(cell as _) {
                                 fully_free = false;
 
                                 (*cell).force_set_state(DEFINETELY_WHITE);
                                 allocated += (*cursor).cell_size.get() as usize;
                             } else {
-                                self.bitmap.clear(cell as _);
+                                debug_assert!(!self.mark_bitmap.test(cell as _));
+                                self.live_bitmap.clear(cell as _);
                                 has_free = true;
                                 drop_in_place((*cell).get_dyn());
                                 freelist.add(cell.cast());
                             }
                         } else {
+                            debug_assert!(!self.mark_bitmap.test(cell as _));
                             has_free = true;
-                            debug_assert!(!self.bitmap.test(cell as _));
+                            debug_assert!(!self.live_bitmap.test(cell as _));
                             freelist.add(cell.cast());
                         }
                     });
@@ -283,24 +287,26 @@ impl Space {
                     let mut has_free = false;
                     let mut fully_free = true;
                     (*cursor).walk(|cell| {
-                        if self.bitmap.test(cell as _) {
+                        if self.live_bitmap.test(cell as _) {
                             let cell = cell.cast::<GcPointerBase>();
                             let state = (*cell).state();
                             debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
-                            if (*cell).state() == POSSIBLY_BLACK {
+                            if self.mark_bitmap.clear(cell as _) {
                                 fully_free = false;
 
                                 (*cell).force_set_state(DEFINETELY_WHITE);
                                 allocated += (*cursor).cell_size.get() as usize;
                             } else {
-                                self.bitmap.clear(cell as _);
+                                debug_assert!(!self.mark_bitmap.test(cell as _));
+                                self.live_bitmap.clear(cell as _);
                                 has_free = true;
                                 drop_in_place((*cell).get_dyn());
                                 freelist.add(cell.cast());
                             }
                         } else {
+                            debug_assert!(!self.mark_bitmap.test(cell as _));
                             has_free = true;
-                            debug_assert!(!self.bitmap.test(cell as _));
+                            debug_assert!(!self.live_bitmap.test(cell as _));
                             freelist.add(cell.cast());
                         }
                     });
@@ -329,9 +335,9 @@ impl Space {
     pub fn allocate(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
         let ptr = if size <= LARGE_CUTOFF {
             let p = self.allocate_small(size, threshold);
-            debug_assert!(!self.bitmap.test(p as _));
-            self.bitmap.set(p as _);
-            debug_assert!(self.bitmap.test(p as _));
+            debug_assert!(!self.live_bitmap.test(p as _));
+            self.live_bitmap.set(p as _);
+            debug_assert!(self.live_bitmap.test(p as _));
 
             p
         } else {
@@ -357,12 +363,14 @@ impl Space {
     pub fn new(size: usize, dump: bool, progression: f64) -> Self {
         let mut alloc = Box::into_raw(Box::new(BlockAllocator::new(size)));
         unsafe {
-            let mut bitmap = SpaceBitmap::<16>::create("SpaceBitmap", (*alloc).mmap.start(), size);
+            let mut bitmap = SpaceBitmap::<16>::create("live-bitmap", (*alloc).mmap.start(), size);
+            let mark_bitmap = SpaceBitmap::<16>::create("mark-bitmap", (*alloc).mmap.start(), size);
             let mut this = Self {
                 allocator_for_size_class: vec![None; NUM_SIZE_CLASSES].into_boxed_slice(),
-                bitmap,
+                live_bitmap: bitmap,
                 block_allocator: alloc,
                 allocators: null_mut(),
+                mark_bitmap,
                 size_class_for_size_step: [0; NUM_SIZE_CLASSES],
                 precise_allocations: LargeObjectSpace::new(),
             };
@@ -376,10 +384,21 @@ impl Space {
     }
     pub fn is_heap_pointer(&self, ptr: *const u8) -> bool {
         unsafe {
-            if self.bitmap.has_address(ptr) {
-                return self.bitmap.test(ptr as _);
+            if self.live_bitmap.has_address(ptr) {
+                return self.live_bitmap.test(ptr as _);
             }
             self.precise_allocations.contains(Address::from_ptr(ptr))
+        }
+    }
+
+    pub fn mark(&self, ptr: *const GcPointerBase) -> bool {
+        if self.live_bitmap.has_address(ptr.cast()) {
+            return self.mark_bitmap.set(ptr.cast());
+        } else {
+            unsafe {
+                let prec = PreciseAllocation::from_cell(ptr as _);
+                (*prec).test_and_set_marked()
+            }
         }
     }
 }

@@ -65,8 +65,7 @@ impl PreciseAllocation {
     pub fn is_marked(&self) -> bool {
         self.is_marked
     }
-    /// Test and set marked. Will return true
-    /// if it is already marked.
+
     pub fn test_and_set_marked(&mut self) -> bool {
         if self.is_marked() {
             return true;
@@ -118,17 +117,13 @@ impl PreciseAllocation {
     /// Derop cell if this allocation is not marked.
     pub fn sweep(&mut self) -> bool {
         let cell = self.cell();
-        if unsafe { (*cell).state() == DEFINETELY_WHITE } {
+        if !self.is_marked() {
             self.has_valid_cell = false;
 
             unsafe {
                 core::ptr::drop_in_place((*cell).get_dyn());
             }
             return false;
-        } else {
-            unsafe {
-                (*cell).force_set_state(DEFINETELY_WHITE);
-            }
         }
         true
     }
@@ -209,6 +204,7 @@ impl LargeObjectSpace {
             if !retain {
                 p.destroy();
             } else {
+                (*p.cell()).force_set_state(DEFINETELY_WHITE);
                 sweeped += p.cell_size;
             }
             retain

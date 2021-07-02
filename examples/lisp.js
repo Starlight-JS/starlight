@@ -44,16 +44,17 @@ Env.prototype.get = function envGet(name) {
     if (name in this) {
         return this;
     }
+
     if (this.outer !== undefined) {
         return this.outer.get(name);
     }
-    throw "Variable '" + name + "' not found";
-}
-let global_env = new Env([], []);
+    let str = "Variable '" + name + "' not found";
 
+    throw str;
+}
+
+const global_env = new Env([], []);
 function eval(x, env) {
-    if (!env)
-        env = global_env;
 
     if (typeof x === "string") {
         return env.get(x)[x];
@@ -77,8 +78,12 @@ function eval(x, env) {
     } else if (x[0] === 'lambda') {
         let vars = x[1];
         let exp = x[2];
+
         return (...args) => {
-            return eval(exp, new Env(vars, args, env));
+
+            let e = new Env(vars, args, env);
+
+            return eval(exp, e);
         }
     } else if (x[0] === 'begin') {
         let val;
@@ -107,7 +112,7 @@ function repl() {
         try {
             let tokens = tokenize(readLine('> ').trim());
             let ast = readFrom(tokens);
-            let val = eval(ast);
+            let val = eval(ast, global_env);
             if (val !== undefined)
                 print(val)
         } catch (e) {

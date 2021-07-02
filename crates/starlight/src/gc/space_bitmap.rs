@@ -150,13 +150,13 @@ impl<const ALIGN: usize> SpaceBitmap<ALIGN> {
     }
 
     #[inline(always)]
-    pub fn set(&self, obj: *const u8) {
-        self.modify::<true>(obj);
+    pub fn set(&self, obj: *const u8) -> bool {
+        self.modify::<true>(obj)
     }
 
     #[inline(always)]
-    pub fn clear(&self, obj: *const u8) {
-        self.modify::<false>(obj);
+    pub fn clear(&self, obj: *const u8) -> bool {
+        self.modify::<false>(obj)
     }
 
     pub fn compute_bitmap_size(capacity: u64) -> usize {
