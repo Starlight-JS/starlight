@@ -46,7 +46,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             parallel_marking: false,
-            dump_bytecode: true,
+            dump_bytecode: false,
             disable_ic: false,
             dump_size_classes: false,
             dump_stats: false,
