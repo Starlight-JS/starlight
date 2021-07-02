@@ -40,6 +40,8 @@ pub struct Options {
         help = "Dump various statistics at the end of execution"
     )]
     pub dump_stats: bool,
+    #[structopt(long = "codegen-plugins", help = "Enable codegen plugins")]
+    pub codegen_plugins: bool,
 }
 
 impl Default for Options {
@@ -55,7 +57,61 @@ impl Default for Options {
             heap_size: 2 * 1024 * 1024 * 1024,
             file: PathBuf::new(),
             gc_threads: 4,
+            codegen_plugins: false
         }
+    }
+}
+
+// for configure
+impl Options {
+    pub fn with_codegen_plugins(mut self,enable:bool)-> Self {
+        self.codegen_plugins = enable;
+        self
+    }
+
+    pub fn with_dump_size_classes(mut self,enable: bool) -> Self {
+        self.dump_size_classes = enable;
+        self
+    }
+
+    pub fn with_parallel_marking(mut self, enable: bool)-> Self {
+        self.parallel_marking = enable;
+        self
+    }
+
+    pub fn with_size_class_progression(mut self, size: f64) -> Self {
+        self.size_class_progression  = size;
+        self
+    }
+
+    pub fn with_heap_size(mut self, size: usize) -> Self {
+        self.heap_size = size;
+        self
+    }
+
+    pub fn with_gc_threads(mut self, threads: u32) -> Self {
+        self.gc_threads = threads;
+        self
+    }
+
+    pub fn with_dump_bytecode(mut self, enable: bool) -> Self {
+        self.dump_bytecode = enable;
+        self
+    }
+
+    pub fn with_disable_ic(mut self, disable :bool) -> Self {
+        self.disable_ic = disable;
+        self
+    }
+
+    pub fn with_enable_ffi(mut self, enable:bool)-> Self {
+        self.enable_ffi = enable;
+        self
+    }
+
+    pub fn with_dump_stats(mut self, enable: bool)->Self {
+        self.dump_stats = enable;
+        self
     }
 }
 

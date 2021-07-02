@@ -12,6 +12,7 @@ use crate::{
         serializer::{Serializable, SnapshotSerializer},
     },
 };
+use std::usize;
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
     mem::size_of,
@@ -639,16 +640,13 @@ impl Heap {
     }
 
     fn collect_internal(&mut self) {
-        fn current_stack_pointer() -> usize {
-            let mut sp: usize = 0;
-            sp = &sp as *const usize as usize;
-            sp
-        }
         // Capture all the registers to scan them conservatively. Note that this also captures
         // FPU registers too because JS values is NaN boxed and exist in FPU registers.
 
         // Get stack pointer for scanning thread stack.
-        self.sp = current_stack_pointer();
+        let sp : usize = 0;
+        let sp = &sp as *const usize;
+        self.sp = sp as usize;
         if self.defers > 0 {
             return;
         }
@@ -662,7 +660,7 @@ impl Heap {
             visitor.add_conservative(thread.bounds.origin as _, sp as usize);
         });
         self.process_roots(&mut visitor);
-
+        
         if let Some(ref mut pool) = self.threadpool {
             crate::gc::pmarking::start(
                 &visitor.queue,
@@ -673,6 +671,7 @@ impl Heap {
         } else {
             self.process_worklist(&mut visitor);
         }
+
         self.update_weak_references();
         self.reset_weak_references();
         let alloc = self.allocated;

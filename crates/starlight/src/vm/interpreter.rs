@@ -761,7 +761,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
 
                 let args_start = frame.sp.sub(argc as _);
-
+                
                 frame.sp = args_start;
                 let mut func = frame.pop();
                 let mut this = frame.pop();
