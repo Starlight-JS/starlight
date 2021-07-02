@@ -1,7 +1,12 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{bytecompiler::ByteCompiler, gc::Heap, gc::default_heap, gc::shadowstack::ShadowStack, gc::{
+use crate::{
+    bytecompiler::ByteCompiler,
+    gc::default_heap,
+    gc::shadowstack::ShadowStack,
+    gc::Heap,
+    gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
@@ -20,9 +25,15 @@ use std::{
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
-use swc_common::{errors::{DiagnosticBuilder, Emitter, Handler}, sync::Lrc};
+use swc_common::{
+    errors::{DiagnosticBuilder, Emitter, Handler},
+    sync::Lrc,
+};
 use swc_common::{FileName, SourceMap};
-use swc_ecmascript::{ast::{ExprOrSpread, Program}, parser::{error::Error, *}};
+use swc_ecmascript::{
+    ast::{ExprOrSpread, Program},
+    parser::{error::Error, *},
+};
 #[macro_use]
 pub mod class;
 #[macro_use]
@@ -61,6 +72,7 @@ use attributes::*;
 use object::*;
 use property_descriptor::*;
 use value::*;
+pub mod promise;
 
 #[derive(Copy, Clone)]
 pub enum ModuleKind {
@@ -129,15 +141,73 @@ pub struct Runtime {
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
     pub(crate) module_loader: Option<GcPointer<JsObject>>,
     pub(crate) modules: HashMap<String, ModuleKind>,
-    pub(crate) codegen_plugins: HashMap<String, Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>>,
+    pub(crate) codegen_plugins:
+        HashMap<String, Box<dyn Fn(&mut ByteCompiler, &Vec<ExprOrSpread>) -> Result<(), JsValue>>>,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
     #[allow(dead_code)]
     /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
     pub(crate) eval_history: String,
+    persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
+    sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
 }
 
 impl Runtime {
+    /// initialize a Runtime with an async scheduler
+    /// the async scheduler is used to asynchronously run jobs with the Runtime
+    /// this can be used for things like Promises, setImmediate, async functions
+    /// # Example
+    /// ```rust
+    /// use starlight::Platform;
+    /// use starlight::options::Options;
+    /// Platform::initialize();
+    /// let options = Options::default();
+    /// let mut starlight_runtime = Platform::new_runtime(options, None).with_async_scheduler(Box::new(move |job| {
+    ///     // here you would add the job to your EventLoop
+    ///     // e.g.:
+    ///     // EventLoop.add_local_void(move || {
+    ///     //     RtThreadLocal.with(|rc| {
+    ///     //         let sl_rt = &mut *rc.borrow_mut();
+    ///     //         job(rt);
+    ///     //     });
+    ///     // });
+    ///     println!("sched async job...");
+    /// }));
+    /// ```
+    pub fn with_async_scheduler(
+        mut self,
+        scheduler: Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>,
+    ) -> Self {
+        self.sched_async_func = Some(scheduler);
+        self
+    }
+    pub fn add_persistent_root(&mut self, obj: JsValue) -> PersistentRooted {
+        // for PoC only, todo use something like AutoIdMap for persistent_roots
+
+        let pr = &mut *self.persistent_roots.borrow_mut();
+
+        let mut id = 0;
+        while pr.contains_key(&id) {
+            id += 1;
+        }
+        pr.insert(id, obj);
+        PersistentRooted {
+            id,
+            map: self.persistent_roots.clone(),
+        }
+    }
+
+    pub(crate) fn schedule_async<F>(&mut self, job: F) -> Result<(), JsValue>
+    where
+        F: FnOnce(&mut Runtime) + 'static,
+    {
+        if let Some(scheduler) = &self.sched_async_func {
+            scheduler(Box::new(job));
+            Ok(())
+        } else {
+            Err(JsValue::encode_object_value(JsString::new(self, "In order to use async you have to init the RuntimeOptions with with_async_scheduler()")))
+        }
+    }
     pub fn options(&self) -> &Options {
         &self.options
     }
@@ -467,7 +537,9 @@ impl Runtime {
             module_loader: None,
             symbol_table: HashMap::new(),
             eval_history: String::new(),
-            codegen_plugins: HashMap::new()
+            persistent_roots: Default::default(),
+            sched_async_func: None,
+            codegen_plugins: HashMap::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -506,6 +578,7 @@ impl Runtime {
         this.init_func(proto);
         this.init_error(proto);
         this.init_array(proto);
+        this.init_promise().ok().expect("init prom failed");
         this.init_math();
         crate::jsrt::number::init_number(&mut this, proto);
         this.init_builtin();
@@ -572,7 +645,9 @@ impl Runtime {
             perf: perf::Perf::new(),
             symbol_table: HashMap::new(),
             module_loader: None,
-            codegen_plugins: HashMap::new()
+            persistent_roots: Default::default(),
+            sched_async_func: None,
+            codegen_plugins: HashMap::new(),
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -585,6 +660,10 @@ impl Runtime {
                 rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
+                let pr = &mut *rt.persistent_roots.borrow_mut();
+                pr.iter_mut().for_each(|entry| {
+                    entry.1.trace(visitor);
+                });
             },
         ));
 
@@ -645,14 +724,36 @@ impl Runtime {
         JsSyntaxError::new(self, msg, None)
     }
 
-    pub fn register_codegen_plugin(&mut self,plugin_name: &str, codegen_func: Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>) -> Result<(),&str> {
+    pub fn register_codegen_plugin(
+        &mut self,
+        plugin_name: &str,
+        codegen_func: Box<dyn Fn(&mut ByteCompiler, &Vec<ExprOrSpread>) -> Result<(), JsValue>>,
+    ) -> Result<(), &str> {
         if !self.options.codegen_plugins {
             return Err("Need enable codegen_plugins option to register codegen plugin!");
         }
-        self.codegen_plugins.insert(String::from(plugin_name), codegen_func);
+        self.codegen_plugins
+            .insert(String::from(plugin_name), codegen_func);
         Ok(())
     }
+}
 
+pub struct PersistentRooted {
+    id: usize,
+    map: Rc<RefCell<HashMap<usize, JsValue>>>,
+}
+
+impl PersistentRooted {
+    pub fn get_value(&self) -> JsValue {
+        *self.map.borrow().get(&self.id).unwrap()
+    }
+}
+
+impl Drop for PersistentRooted {
+    fn drop(&mut self) {
+        let map = &mut *self.map.borrow_mut();
+        map.remove(&self.id);
+    }
 }
 
 use starlight_derive::GcTrace;
@@ -667,6 +768,8 @@ use self::{
     structure::Structure,
     symbol_table::{Internable, JsSymbol, Symbol},
 };
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Global JS data that is used internally in Starlight.
 #[derive(Default, GcTrace)]
@@ -819,53 +922,172 @@ pub(crate) fn init_es_config() -> EsConfig {
     es_config
 }
 
-
 #[cfg(test)]
-mod tests {
+pub mod tests {
+    use crate::options::Options;
+    use crate::vm::symbol_table::Internable;
+    use crate::vm::value::JsValue;
+    use crate::vm::{arguments, Runtime};
+    use crate::Platform;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    #[test]
+    fn test_simple_async() {
+        // start a runtime
+        Platform::initialize();
+
+        type JobType = dyn FnOnce(&mut Runtime);
+        // the todo Rc is where we will store our async job, in real life this would be an EventLoop to which we could add multiple jobs
+        let todo: Rc<RefCell<Option<Box<JobType>>>> = Rc::new(RefCell::new(None));
+        let todo_clone = todo.clone();
+
+        // in real life you would add this job to an EventLoop
+        let options = Options::default();
+
+        let mut starlight_runtime =
+            Platform::new_runtime(options, None).with_async_scheduler(Box::new(move |job| {
+                println!("sched async job...");
+                let opt = &mut *todo_clone.borrow_mut();
+                opt.replace(Box::new(job));
+            }));
+
+        let mut global = starlight_runtime.global_object();
+
+        // create a symbol for the functions name
+        let name_symbol = "setImmediate".intern();
+
+        // create a setImmediate Function
+        // the setImmediate function is not part of the official ECMAspec but is implemented in older IE versions
+        // it should work about the same as setTimeout(func, 0)
+        // see also https://developer.mozilla.org/en-US/docs/Web/API/Window/setImmediate
+        // it should serve pretty good as a simple as it gets first example of doing things async
+        let arg_count = 0;
+        let func = crate::vm::function::JsNativeFunction::new(
+            &mut starlight_runtime,
+            name_symbol,
+            move |vm, args| {
+                if args.size() == 1 {
+                    let func_val = args.at(0);
+                    if func_val.is_callable() {
+                        match vm.schedule_async(move |vm2| {
+                            println!("invoking func_val");
+                            // invoke func val here with vm2
+                            let mut obj = func_val.get_jsobject();
+                            let func = obj.as_function_mut();
+                            let this = JsValue::encode_null_value();
+                            let mut arguments = arguments::Arguments::new(this, &mut []);
+                            let res = func.call(vm2, &mut arguments, this);
+                            match res {
+                                Ok(_) => {
+                                    println!("job exe ok");
+                                }
+                                Err(e) => {
+                                    panic!(
+                                        "job exe fail: {}",
+                                        e.to_string(vm2).ok().expect("conversion failed")
+                                    );
+                                }
+                            }
+                        }) {
+                            Ok(_) => Ok(JsValue::encode_null_value()),
+                            Err(_err) => {
+                                // todo encode str
+                                Err(JsValue::encode_null_value())
+                            }
+                        }
+                    } else {
+                        // "args was not callable"
+                        // todo encode str
+                        Err(JsValue::encode_null_value())
+                    }
+                } else {
+                    // todo return string value
+                    // "need one arg"
+                    Err(JsValue::encode_null_value())
+                }
+            },
+            arg_count,
+        );
+
+        // add the function to the global object
+        global
+            .put(
+                &mut starlight_runtime,
+                name_symbol,
+                JsValue::new(func),
+                true,
+            )
+            .ok()
+            .expect("could not add func to global");
+
+        // run the function
+        let _outcome =
+            match starlight_runtime.eval("setImmediate(() => {print('later')}); print('first');") {
+                Ok(e) => e,
+                Err(err) => panic!(
+                    "func failed: {}",
+                    err.to_string(&mut starlight_runtime)
+                        .ok()
+                        .expect("conversion failed")
+                ),
+            };
+
+        if let Some(job) = todo.take() {
+            job(&mut starlight_runtime);
+        } else {
+            panic!("did not get job")
+        }
+    }
+
     use swc_ecmascript::ast::ExprOrSpread;
 
-    use crate::{Platform, bytecode::opcodes::Opcode, bytecompiler::ByteCompiler, gc::{default_heap}, prelude::Options};
-
-    use super::{Runtime};
+    use crate::{bytecode::opcodes::Opcode, bytecompiler::ByteCompiler, gc::default_heap};
 
     #[test]
     fn test_register_codegen_plugin() {
         Platform::initialize();
-        let options:Options = Options::default().with_codegen_plugins(true);
+        let options: Options = Options::default().with_codegen_plugins(true);
         let heap = default_heap(&options);
-        let mut rt = Runtime::with_heap(heap, options , None);
+        let mut rt = Runtime::with_heap(heap, options, None);
 
-        
-        let result = rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
-        {
-            compiler.expr(&call_args[0].expr, true, false)?;
-            compiler.expr(&call_args[1].expr,true,false)?;
-            compiler.emit(Opcode::OP_ADD,&[0],false);
-            Ok(())
-        }));
-        assert!(result.is_ok(),"Should register success!");
-        let result =rt.eval("MyOwnAddFn(2,3)");
-        assert!(result.is_ok(),"Should get result");
+        let result = rt.register_codegen_plugin(
+            "MyOwnAddFn",
+            Box::new(
+                |compiler: &mut ByteCompiler, call_args: &Vec<ExprOrSpread>| {
+                    compiler.expr(&call_args[0].expr, true, false)?;
+                    compiler.expr(&call_args[1].expr, true, false)?;
+                    compiler.emit(Opcode::OP_ADD, &[0], false);
+                    Ok(())
+                },
+            ),
+        );
+        assert!(result.is_ok(), "Should register success!");
+        let result = rt.eval("MyOwnAddFn(2,3)");
+        assert!(result.is_ok(), "Should get result");
         if let Ok(value) = result {
-            assert_eq!(5,value.get_int32());
+            assert_eq!(5, value.get_int32());
         }
 
         Platform::initialize();
-        let options:Options = Options::default();
+        let options: Options = Options::default();
         let heap = default_heap(&options);
-        let mut rt = Runtime::with_heap(heap, options , None); 
+        let mut rt = Runtime::with_heap(heap, options, None);
 
-        
-        let result = rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
-        {
-            compiler.expr(&call_args[0].expr, true, false)?;
-            compiler.expr(&call_args[1].expr,true,false)?;
-            compiler.emit(Opcode::OP_ADD,&[0],false);
-            Ok(())
-        }));
-        assert!(result.is_err(),"Should can't register codegen plugin!");
-        let result =rt.eval("MyOwnAddFn(2,3)");
-        assert!(result.is_err(),"Should return JsValue error");
+        let result = rt.register_codegen_plugin(
+            "MyOwnAddFn",
+            Box::new(
+                |compiler: &mut ByteCompiler, call_args: &Vec<ExprOrSpread>| {
+                    compiler.expr(&call_args[0].expr, true, false)?;
+                    compiler.expr(&call_args[1].expr, true, false)?;
+                    compiler.emit(Opcode::OP_ADD, &[0], false);
+                    Ok(())
+                },
+            ),
+        );
+        assert!(result.is_err(), "Should can't register codegen plugin!");
+        let result = rt.eval("MyOwnAddFn(2,3)");
+        assert!(result.is_err(), "Should return JsValue error");
         //
     }
 }

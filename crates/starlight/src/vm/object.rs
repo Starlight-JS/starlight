@@ -24,6 +24,7 @@ use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
     snapshot::deserializer::Deserializable,
 };
+use crate::vm::promise::JsPromise;
 use std::{
     collections::hash_map::Entry,
     mem::{size_of, ManuallyDrop},
@@ -129,7 +130,16 @@ impl JsObject {
 
         &mut *self.data::<JsFunction>()
     }
-
+    pub fn as_promise(&self) -> &JsPromise {
+        assert_eq!(self.tag, ObjectTag::Ordinary);
+        assert!(self.is_class(JsPromise::get_class()));
+        &*self.data::<JsPromise>()
+    }
+    pub fn as_promise_mut(&mut self) -> &mut JsPromise {
+        assert_eq!(self.tag, ObjectTag::Ordinary);
+        assert!(self.is_class(JsPromise::get_class()));
+        &mut *self.data::<JsPromise>()
+    }
     pub fn as_string_object(&self) -> &JsStringObject {
         assert_eq!(self.tag, ObjectTag::String);
         &*self.data::<JsStringObject>()

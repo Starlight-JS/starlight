@@ -28,9 +28,11 @@ pub mod object;
 pub mod regexp;
 pub mod string;
 pub mod symbol;
+pub mod promise;
 use array::*;
 use error::*;
 use function::*;
+use promise::*;
 use wtf_rs::keep_on_stack;
 
 pub fn print(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -247,6 +249,36 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(f), W | C),
             false,
         );
+    }
+    pub(crate) fn init_promise(&mut self) -> Result<(), JsValue> {
+
+        let rt = self;
+        // copied from file
+
+        let mut ctor = JsNativeFunction::new(rt, "Promise".intern(), promise_constructor, 1);
+
+        let mut proto = JsObject::new_empty(rt);
+        // members / proto
+        def_native_method!(rt, proto, then, promise_then, 2)?;
+        def_native_method!(rt, proto, catch, promise_catch, 1)?;
+        def_native_method!(rt, proto, finally, promise_finally, 1)?;
+        def_native_method!(rt, proto, resolve, promise_resolve, 1)?;
+        def_native_method!(rt, proto, reject, promise_reject, 1)?;
+        // statics
+        def_native_method!(rt, ctor, all, promise_static_all, 1)?;
+        def_native_method!(rt, ctor, allSettled, promise_static_all_settled, 1)?;
+        def_native_method!(rt, ctor, any, promise_static_any, 1)?;
+        def_native_method!(rt, ctor, race, promise_static_race, 1)?;
+        def_native_method!(rt, ctor, reject, promise_static_reject, 1)?;
+        def_native_method!(rt, ctor, resolve, promise_static_resolve, 1)?;
+
+        // add to global
+        rt.global_object()
+            .put(rt, "Promise".intern(), JsValue::new(ctor), false)?;
+
+        ctor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
+
+        Ok(())
     }
     pub(crate) fn init_array(&mut self, obj_proto: GcPointer<JsObject>) {
         let structure = Structure::new_indexed(self, None, true);
@@ -1091,6 +1123,18 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         jsstd::file::std_file_read_bytes_to_end as _,
         jsstd::file::std_file_close as _,
         jsstd::std_args as _,
+        promise::promise_constructor as _,
+        promise::promise_then as _,
+        promise::promise_catch as _,
+        promise::promise_finally as _,
+        promise::promise_resolve as _,
+        promise::promise_reject as _,
+        promise::promise_static_resolve as _,
+        promise::promise_static_reject as _,
+        promise::promise_static_race as _,
+        promise::promise_static_all as _,
+        promise::promise_static_all_settled as _,
+        promise::promise_static_any as _,
         generator::generator_next as _,
         generator::generator_iterator as _,
         generator::generator_return as _,
