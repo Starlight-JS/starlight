@@ -202,7 +202,7 @@ impl JsPromise {
             let tracking_results = self.tracking_results.as_mut().unwrap();
 
             // replace val in vec
-            std::mem::replace(&mut tracking_results[index as usize], Some(resolution));
+            let _ = std::mem::replace(&mut tracking_results[index as usize], Some(resolution));
             match self.tracking_mode.as_ref().unwrap() {
                 TrackingMode::All => {
                     match resolution {
