@@ -125,10 +125,7 @@ impl JsReferenceError {
         let stack = vm.shadowstack();
         letroot!(
             shape = stack,
-            structure.unwrap_or_else(|| vm
-                .global_data()
-                .reference_error_structure
-                .unwrap())
+            structure.unwrap_or_else(|| vm.global_data().reference_error_structure.unwrap())
         );
         let mut obj = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Ordinary);
         let stack = vm.stacktrace();

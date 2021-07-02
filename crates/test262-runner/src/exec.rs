@@ -6,8 +6,8 @@ use colored::Colorize;
 use rayon::iter::*;
 use starlight::{
     gc::default_heap,
-    prelude::Deserializer,
-    vm::{parse, GcParams, Runtime},
+    prelude::{Deserializer, Options},
+    vm::{parse, Runtime},
 };
 use std::panic::{self, AssertUnwindSafe};
 
@@ -365,11 +365,13 @@ impl Test {
     fn set_up_env(&self, harness: &Harness, _strict: bool) -> Result<Box<Runtime>, String> {
         // Create new Realm
         // TODO: in parallel.
+        let options = Options::default();
+        let gc = default_heap(&options);
         let mut context = Deserializer::deserialize(
             false,
             &self.snapshot,
             Default::default(),
-            default_heap(GcParams::default().with_parallel_marking(false)),
+            gc,
             None,
             |_, _| {},
         );

@@ -6,7 +6,10 @@ use crate::{bytecompiler::ByteCompiler, codegen, gc::Heap, gc::default_heap, gc:
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
-    }, jsrt::{self, object::*, regexp::RegExp}};
+    },
+    jsrt::{self, object::*, regexp::RegExp},
+    options::Options,
+};
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
@@ -113,97 +116,6 @@ impl Deserializable for ModuleKind {
     }
 }
 
-pub struct GcParams {
-    pub nmarkers: u32,
-    #[allow(dead_code)]
-    pub heap_size: usize,
-    pub conservative_marking: bool,
-    #[allow(dead_code)]
-    pub track_allocations: bool,
-    pub parallel_marking: bool,
-    pub immix_region_size: usize,
-}
-
-pub struct RuntimeParams {
-    pub(crate) dump_bytecode: bool,
-    #[allow(dead_code)]
-    pub(crate) inline_caches: bool,
-    pub(crate) codegen_plugins: bool,
-}
-impl Default for RuntimeParams {
-    fn default() -> Self {
-        Self {
-            dump_bytecode: false,
-            inline_caches: true,
-            codegen_plugins: false,
-        }
-    }
-}
-impl RuntimeParams {
-    pub fn with_inline_caching(mut self, enabled: bool) -> Self {
-        self.inline_caches = enabled;
-        self
-    }
-    pub fn with_dump_bytecode(mut self, enabled: bool) -> Self {
-        self.dump_bytecode = enabled;
-        self
-    }
-    pub fn with_codegen_plugins(mut self, enabled: bool) -> Self {
-        self.codegen_plugins = enabled;
-        self
-    }
-}
-
-impl Default for GcParams {
-    fn default() -> Self {
-        Self {
-            heap_size: 1024 * 1024 * 1024,
-            conservative_marking: false,
-            track_allocations: false,
-            parallel_marking: true,
-            nmarkers: 4,
-            immix_region_size: 2 * 1024 * 1024 * 1024,
-        }
-    }
-}
-
-impl GcParams {
-    pub fn with_heap_size(mut self, mut size: usize) -> Self {
-        if size < 256 * 1024 {
-            size = 256 * 1024
-        };
-        self.heap_size = size;
-        self
-    }
-    pub fn with_conservative_marking(mut self, enabled: bool) -> Self {
-        self.conservative_marking = enabled;
-        self
-    }
-    pub fn with_immix_region_size(mut self, size: usize) -> Self {
-        self.immix_region_size = size;
-        self
-    }
-    pub fn with_marker_threads(mut self, n: u32) -> Self {
-        assert!(self.parallel_marking, "Enable parallel marking first");
-        self.nmarkers = n;
-        if n == 0 {
-            panic!("Can't set zero marker threads");
-        }
-        self
-    }
-
-    pub fn with_parallel_marking(mut self, cond: bool) -> Self {
-        self.parallel_marking = cond;
-        self.nmarkers = 4;
-        self
-    }
-
-    pub fn with_track_allocations(mut self, cond: bool) -> Self {
-        self.track_allocations = cond;
-        self
-    }
-}
-
 /// JavaScript runtime instance.
 pub struct Runtime {
     pub(crate) gc: Heap,
@@ -211,7 +123,7 @@ pub struct Runtime {
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
     pub(crate) external_references: Option<&'static [usize]>,
-    pub(crate) options: RuntimeParams,
+    pub(crate) options: Options,
     pub(crate) shadowstack: ShadowStack,
     pub(crate) stacktrace: String,
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
@@ -226,6 +138,9 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    pub fn options(&self) -> &Options {
+        &self.options
+    }
     /// Find call frame that has try catch block in it. (Does not clean the stack!)
     pub(crate) unsafe fn unwind(&mut self) -> Option<*mut CallFrame> {
         let mut frame = self.stack.current;
@@ -534,7 +449,7 @@ impl Runtime {
     /// Construct runtime instance with specific GC heap.
     pub fn with_heap(
         gc: Heap,
-        options: RuntimeParams,
+        options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
         let mut this = Box::new(Self {
@@ -639,7 +554,7 @@ impl Runtime {
     }
     pub(crate) fn new_empty(
         gc: Heap,
-        options: RuntimeParams,
+        options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
         let mut this = Box::new(Self {
@@ -676,12 +591,8 @@ impl Runtime {
         this
     }
     /// Create new JS runtime with `MiGC` set as GC.
-    pub fn new(
-        options: RuntimeParams,
-        gc_params: GcParams,
-        external_references: Option<&'static [usize]>,
-    ) -> Box<Runtime> {
-        Self::with_heap(default_heap(gc_params), options, external_references)
+    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Runtime> {
+        Self::with_heap(default_heap(&options), options, external_references)
     }
 
     /// Obtain global object reference.

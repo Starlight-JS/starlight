@@ -1,14 +1,5 @@
-function Node(left, right) {
-    this.left = left;
-    this.right = right;
+let arr = new Array();
+
+for (let i = 0; i < 1000000; i++) {
+    arr.push(i);
 }
-
-function makeTree(depth) {
-    if (depth <= 0) {
-        return new Node(undefined, undefined);
-    }
-
-    return new Node(makeTree(depth - 1), makeTree(depth - 1));
-}
-
-makeTree(14);

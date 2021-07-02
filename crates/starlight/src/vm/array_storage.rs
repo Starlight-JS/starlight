@@ -190,8 +190,6 @@ impl ArrayStorage {
         *this
     }
     pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {
-        
-
         rt.allocate(Self {
             capacity,
             size: 0,

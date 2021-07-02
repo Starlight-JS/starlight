@@ -21,6 +21,8 @@ use tagged_box::*;
 pub trait Tracer {
     fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell>;
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell>;
+    /// Add memory range to search for conservative roots. Note that some collectors might scan this range multiple
+    /// times if you supplied same range multiple times.
     fn add_conservative(&mut self, from: usize, to: usize);
     fn visit_weak(&mut self, at: *const WeakSlot);
 }

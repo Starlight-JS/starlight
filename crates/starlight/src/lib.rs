@@ -7,8 +7,8 @@
     linked_list_cursors,
     destructuring_assignment,
     const_raw_ptr_to_usize_cast,
-   // try_trait,
-   stmt_expr_attributes,
+    const_raw_ptr_deref,
+    stmt_expr_attributes,
     const_type_id,
     pattern
 )]
@@ -32,9 +32,7 @@
 
 use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
-use vm::{
-    arguments::Arguments, object::JsObject, value::JsValue, GcParams, Runtime, RuntimeParams,
-};
+use vm::{arguments::Arguments, object::JsObject, value::JsValue, Runtime};
 #[macro_export]
 macro_rules! def_native_method {
     ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr) => {{
@@ -68,6 +66,7 @@ pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
 pub mod jsrt;
+pub mod options;
 pub mod tracingjit;
 pub mod vm;
 pub struct Platform;
@@ -82,12 +81,11 @@ impl Platform {
     }
 
     pub fn new_runtime(
-        options: RuntimeParams,
-        gc_params: GcParams,
+        options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Runtime> {
         Self::initialize();
-        vm::Runtime::new(options, gc_params, external_references)
+        vm::Runtime::new(options, external_references)
     }
 }
 
@@ -96,15 +94,20 @@ pub extern "C" fn platform_initialize() {
     Platform::initialize();
 }
 use gc::snapshot::deserializer::Deserializable;
+
+use crate::options::Options;
 #[no_mangle]
 #[doc(hidden)]
 pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     let mut function = None;
+
+    let options = Options::default();
+    let gc = gc::default_heap(&options);
     let mut rt = Deserializer::deserialize(
         false,
         std::slice::from_raw_parts(array, size),
-        RuntimeParams::default(),
-        gc::default_heap(GcParams::default().with_parallel_marking(true)),
+        options,
+        gc,
         None,
         |deser, _rt| {
             function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));
@@ -149,6 +152,8 @@ pub mod prelude {
         MarkingConstraint, SimpleMarkingConstraint,
     };
     pub use super::letroot;
+    pub use super::options::Options;
+    pub use super::vm::Runtime;
     pub use super::vm::{
         arguments::Arguments,
         array::JsArray,
@@ -165,6 +170,5 @@ pub mod prelude {
         symbol_table::*,
         value::JsValue,
     };
-    pub use super::vm::{GcParams, Runtime, RuntimeParams};
     pub use super::Platform;
 }

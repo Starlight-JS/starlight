@@ -8,7 +8,7 @@ use starlight::{
         SimpleMarkingConstraint,
     },
     letroot,
-    vm::GcParams,
+    prelude::Options,
 };
 use wtf_rs::keep_on_stack;
 struct Large([u8; 8192]);
@@ -24,7 +24,7 @@ impl Serializable for Large {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let mut gc = default_heap(GcParams::default().with_parallel_marking(false));
+    let mut gc = default_heap(&Options::default());
     //gc.defer();
     let mut stack = Box::new(ShadowStack::new());
     let stack_ptr: *mut ShadowStack = &mut *stack;

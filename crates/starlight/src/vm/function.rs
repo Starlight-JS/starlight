@@ -491,13 +491,11 @@ impl JsNativeFunction {
 /// use starlight::vm::symbol_table::Internable;
 /// use starlight::vm::value::JsValue;
 /// use starlight::Platform;
-/// use starlight::vm::{RuntimeParams, GcParams};
+/// use starlight::options::Options;
 ///
 /// // start a runtime
 /// Platform::initialize();
-/// let options = RuntimeParams::default();
-/// let gc_params = GcParams::default();
-/// let mut starlight_runtime = Platform::new_runtime(options, gc_params, None);
+/// let mut starlight_runtime = Platform::new_runtime(Options::default(), None);
 ///
 /// let mut global = starlight_runtime.global_object();
 ///
