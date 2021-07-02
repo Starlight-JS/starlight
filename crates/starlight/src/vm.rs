@@ -1,12 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    bytecompiler::ByteCompiler,
-    gc::default_heap,
-    gc::shadowstack::ShadowStack,
-    gc::Heap,
-    gc::{
+use crate::{bytecompiler::ByteCompiler, gc::Heap, gc::default_heap, gc::shadowstack::ShadowStack, gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
@@ -25,15 +20,9 @@ use std::{
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
-use swc_common::{
-    errors::{DiagnosticBuilder, Emitter, Handler},
-    sync::Lrc,
-};
+use swc_common::{errors::{DiagnosticBuilder, Emitter, Handler}, sync::Lrc};
 use swc_common::{FileName, SourceMap};
-use swc_ecmascript::{
-    ast::Program,
-    parser::{error::Error, *},
-};
+use swc_ecmascript::{ast::{ExprOrSpread, Program}, parser::{error::Error, *}};
 #[macro_use]
 pub mod class;
 #[macro_use]
@@ -140,6 +129,7 @@ pub struct Runtime {
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
     pub(crate) module_loader: Option<GcPointer<JsObject>>,
     pub(crate) modules: HashMap<String, ModuleKind>,
+    pub(crate) codegen_plugins: HashMap<String, Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>>,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
     #[allow(dead_code)]
@@ -477,6 +467,7 @@ impl Runtime {
             module_loader: None,
             symbol_table: HashMap::new(),
             eval_history: String::new(),
+            codegen_plugins: HashMap::new()
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
@@ -581,6 +572,7 @@ impl Runtime {
             perf: perf::Perf::new(),
             symbol_table: HashMap::new(),
             module_loader: None,
+            codegen_plugins: HashMap::new()
         });
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -652,6 +644,15 @@ impl Runtime {
         let msg = JsString::new(self, msg);
         JsSyntaxError::new(self, msg, None)
     }
+
+    pub fn register_codegen_plugin(&mut self,plugin_name: &str, codegen_func: Box<dyn Fn(&mut ByteCompiler,&Vec<ExprOrSpread>)->Result<(),JsValue>>) -> Result<(),&str> {
+        if !self.options.codegen_plugins {
+            return Err("Need enable codegen_plugins option to register codegen plugin!");
+        }
+        self.codegen_plugins.insert(String::from(plugin_name), codegen_func);
+        Ok(())
+    }
+
 }
 
 use starlight_derive::GcTrace;
@@ -816,4 +817,55 @@ pub(crate) fn init_es_config() -> EsConfig {
     let mut es_config: EsConfig = Default::default();
     es_config.dynamic_import = true;
     es_config
+}
+
+
+#[cfg(test)]
+mod tests {
+    use swc_ecmascript::ast::ExprOrSpread;
+
+    use crate::{Platform, bytecode::opcodes::Opcode, bytecompiler::ByteCompiler, gc::{default_heap}, prelude::Options};
+
+    use super::{Runtime};
+
+    #[test]
+    fn test_register_codegen_plugin() {
+        Platform::initialize();
+        let options:Options = Options::default().with_codegen_plugins(true);
+        let heap = default_heap(&options);
+        let mut rt = Runtime::with_heap(heap, options , None);
+
+        
+        let result = rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
+        {
+            compiler.expr(&call_args[0].expr, true, false)?;
+            compiler.expr(&call_args[1].expr,true,false)?;
+            compiler.emit(Opcode::OP_ADD,&[0],false);
+            Ok(())
+        }));
+        assert!(result.is_ok(),"Should register success!");
+        let result =rt.eval("MyOwnAddFn(2,3)");
+        assert!(result.is_ok(),"Should get result");
+        if let Ok(value) = result {
+            assert_eq!(5,value.get_int32());
+        }
+
+        Platform::initialize();
+        let options:Options = Options::default();
+        let heap = default_heap(&options);
+        let mut rt = Runtime::with_heap(heap, options , None); 
+
+        
+        let result = rt.register_codegen_plugin("MyOwnAddFn",  Box::new(|compiler:&mut ByteCompiler,call_args:&Vec<ExprOrSpread>| 
+        {
+            compiler.expr(&call_args[0].expr, true, false)?;
+            compiler.expr(&call_args[1].expr,true,false)?;
+            compiler.emit(Opcode::OP_ADD,&[0],false);
+            Ok(())
+        }));
+        assert!(result.is_err(),"Should can't register codegen plugin!");
+        let result =rt.eval("MyOwnAddFn(2,3)");
+        assert!(result.is_err(),"Should return JsValue error");
+        //
+    }
 }

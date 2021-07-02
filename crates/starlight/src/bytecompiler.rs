@@ -1616,6 +1616,11 @@ impl ByteCompiler {
                     self.handle_builtin_call(call)?;
                 }
             }
+            x if is_codegen_plugin_call(self.rt, x,self.builtins) => {
+                if let Expr::Call(call) = x {
+                    self.handle_codegen_plugin_call(call)?;
+                }
+            }
             Expr::Call(call) if !is_builtin_call(expr, self.builtins) => {
                 match call.callee {
                     ExprOrSuper::Super(_) => {
@@ -2253,6 +2258,27 @@ impl Visit for IdentFinder<'_> {
     }
 }
 
+fn is_codegen_plugin_call(rt: RuntimeRef, e: &Expr, builtins: bool) -> bool{
+    if !builtins && !rt.options.codegen_plugins {
+        return false;
+    }
+    if let Expr::Call(call) = e {
+        if let ExprOrSuper::Expr(expr) = &call.callee {
+            match &**expr {
+                // ___foo(x,y)
+                Expr::Ident(x) => {
+                    let str = &*x.sym;
+                    return rt.codegen_plugins.contains_key(str);
+                }
+                _ => {
+                    return false;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     if !builtin_compilation {
         return false;
@@ -2282,6 +2308,23 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     false
 }
 impl ByteCompiler {
+    pub fn handle_codegen_plugin_call(&mut self, call: &CallExpr) -> Result<(), JsValue> {
+        let plugin_name = if let ExprOrSuper::Expr(expr) = &call.callee {
+            if let Expr::Ident(x) = &**expr {
+                let str = &*x.sym;
+                str
+            } else {
+                return Err(JsValue::new(self.rt.new_syntax_error("Incorrect codegen plugin syntax")));
+            }
+        } else {
+            return Err(JsValue::new(self.rt.new_syntax_error("Incorrect codegen plugin syntax")));
+        };
+        let runtime = self.rt;
+        let plugin = runtime.codegen_plugins.get(plugin_name).unwrap();
+        plugin(self,&call.args)
+    }
+
+
     /// TODO List:
     /// - Implement  `___call` ,`___tailcall`.
     /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
