@@ -44,7 +44,7 @@ no-inline-caching = []
 perf = []
 ffi = ["libloading", "libffi"]
 
-default = ["ffi", "val-as-u64"]
+default = ["val-as-u64"]
 
 [dev-dependencies]
 criterion = "0.3"

@@ -376,9 +376,7 @@ impl Space {
     }
     pub fn is_heap_pointer(&self, ptr: *const u8) -> bool {
         unsafe {
-            if (*self.block_allocator).is_in_space(Address::from_ptr(ptr))
-                && is_aligned(ptr as _, 16)
-            {
+            if self.bitmap.has_address(ptr) {
                 return self.bitmap.test(ptr as _);
             }
             self.precise_allocations.contains(Address::from_ptr(ptr))

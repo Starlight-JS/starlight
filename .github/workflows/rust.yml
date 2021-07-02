@@ -10,9 +10,45 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  check-linux:
 
     runs-on: ubuntu-latest 
+
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup nightly
+      run: rustup default nightly
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose -- --test-threads 1
+    - name: Submodule update
+      run: git submodule update --init
+    - name: Run test262 tests
+      run: cargo run --release --bin test262-runner run 
+
+      
+  check-macos:
+
+    runs-on: macos-latest 
+
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup nightly
+      run: rustup default nightly
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose -- --test-threads 1
+    - name: Submodule update
+      run: git submodule update --init
+    - name: Run test262 tests
+      run: cargo run --release --bin test262-runner run 
+  check-windows:
+
+    runs-on: windows-latest 
 
 
     steps:
