@@ -74,6 +74,7 @@ pub mod pmarking;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;
+pub mod marking;
 pub trait MarkingConstraint {
     fn name(&self) -> &str {
         "<anonymous name>"
@@ -465,33 +466,25 @@ impl Tracer for SlotVisitor {
         }
     }
 
-    fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
-        let base = *cell;
+    fn visit_raw(&mut self, cell: *mut GcPointerBase) {
+        let base = cell;
         unsafe {
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
-                return GcPointer {
-                    base: NonNull::new_unchecked(base as *mut _),
-                    marker: Default::default(),
-                };
+                return;
             }
-            self.heap.mark(*cell);
+            self.heap.mark(cell);
             self.queue.push(base as *mut _);
-            GcPointer {
-                base: NonNull::new_unchecked(base as *mut _),
-                marker: Default::default(),
-            }
         }
     }
 
-    fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell> {
+    fn visit(&mut self, cell: GcPointer<dyn GcCell>) {
         unsafe {
             let base = cell.base.as_ptr();
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
-                return *cell;
+                return;
             }
             self.heap.mark(cell.base.as_ptr());
             self.queue.push(base);
-            *cell
         }
     }
 
@@ -507,7 +500,7 @@ impl Tracer for SlotVisitor {
 
                 if (*self.heap).is_heap_pointer(ptr) {
                     let mut ptr = ptr.cast::<GcPointerBase>();
-                    self.visit_raw(&mut ptr);
+                    self.visit_raw(ptr);
                     scan += size_of::<usize>();
                     continue;
                 }
@@ -542,11 +535,13 @@ pub struct Heap {
     max_heap_size: usize,
     space: Space,
     verbose: bool,
+    allocation_color: u8,
 }
 
 impl Heap {
     pub fn new(opts: &Options) -> Self {
         Self {
+            allocation_color: DEFINETELY_WHITE,
             weak_slots: LinkedList::new(),
             constraints: vec![],
             sp: 0,
@@ -732,7 +727,7 @@ impl Heap {
         self.allocated = th;
         unsafe {
             ptr.write(GcPointerBase::new(vtable, type_id));
-            (*ptr).force_set_state(DEFINETELY_WHITE);
+            (*ptr).force_set_state(self.allocation_color);
 
             Some(NonNull::new_unchecked(ptr))
         }
