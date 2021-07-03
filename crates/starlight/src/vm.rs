@@ -46,6 +46,7 @@ pub mod attributes;
 pub mod bigint;
 pub mod builtins;
 pub mod code_block;
+pub mod data_view;
 pub mod environment;
 pub mod error;
 pub mod function;
@@ -811,6 +812,7 @@ pub struct GlobalData {
     pub(crate) regexp_object: Option<GcPointer<JsObject>>,
     pub(crate) array_buffer_prototype: Option<GcPointer<JsObject>>,
     pub(crate) array_buffer_structure: Option<GcPointer<Structure>>,
+    pub(crate) data_view_structure: Option<GcPointer<Structure>>,
 }
 
 impl GlobalData {

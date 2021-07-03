@@ -67,6 +67,9 @@ impl JsArrayBuffer {
         Some(array_buffer_serialize),
         Some(array_buffer_size)
     );
+    pub fn get_data_block(&self) -> *mut u8 {
+        self.data
+    }
 
     pub fn new(rt: &mut Runtime) -> GcPointer<JsObject> {
         let structure = rt.global_data().array_buffer_structure.unwrap();
