@@ -74,7 +74,6 @@ pub mod pmarking;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;
-pub mod marking;
 pub trait MarkingConstraint {
     fn name(&self) -> &str {
         "<anonymous name>"
@@ -466,25 +465,33 @@ impl Tracer for SlotVisitor {
         }
     }
 
-    fn visit_raw(&mut self, cell: *mut GcPointerBase) {
-        let base = cell;
+    fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
+        let base = *cell;
         unsafe {
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
-                return;
+                return GcPointer {
+                    base: NonNull::new_unchecked(base as *mut _),
+                    marker: Default::default(),
+                };
             }
-            self.heap.mark(cell);
+            self.heap.mark(*cell);
             self.queue.push(base as *mut _);
+            GcPointer {
+                base: NonNull::new_unchecked(base as *mut _),
+                marker: Default::default(),
+            }
         }
     }
 
-    fn visit(&mut self, cell: GcPointer<dyn GcCell>) {
+    fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell> {
         unsafe {
             let base = cell.base.as_ptr();
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
-                return;
+                return *cell;
             }
             self.heap.mark(cell.base.as_ptr());
             self.queue.push(base);
+            *cell
         }
     }
 
@@ -500,7 +507,7 @@ impl Tracer for SlotVisitor {
 
                 if (*self.heap).is_heap_pointer(ptr) {
                     let mut ptr = ptr.cast::<GcPointerBase>();
-                    self.visit_raw(ptr);
+                    self.visit_raw(&mut ptr);
                     scan += size_of::<usize>();
                     continue;
                 }

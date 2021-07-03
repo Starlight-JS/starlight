@@ -515,7 +515,7 @@ impl JsValue {
 unsafe impl Trace for JsValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         if self.is_object() && !self.is_empty() && !self.is_int32() {
-            visitor.visit(self.get_object());
+            *self = JsValue::new(visitor.visit(&mut self.get_object()));
         }
     }
 }
