@@ -17,7 +17,7 @@ pub fn array_ctor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
         return Ok(JsValue::encode_object_value(JsArray::new(vm, 0)));
     }
     if size == 1 {
-        let first = args.at(1);
+        let first = args.at(0);
         if first.is_number() {
             let val = first.to_number(vm)?;
             let len = val as u32;

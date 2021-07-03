@@ -1,6 +1,18 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+//! Mostly precise garbage collector.
+//!
+//! # Overview
+//! This GC is simple mark&sweep with segregated storage for allocation, large objects are allocated directly using
+//! mimalloc. To search for GC pointers on stack we use bitmap for small objects and mimalloc API for large objects.
+//! Object is usually large when its allocation size exceeds 8KB (depends on size class progression option).
+//!
+//! ## Rooting
+//! This GC does not require you to manually root any object since it is able to identify GC pointers on the stack. Thus
+//! `letroot!` is not required to use anymore.
+//!
 #![allow(dead_code, unused_variables)]
 use crate::options::Options;
 use crate::vm::Runtime;
@@ -504,7 +516,7 @@ impl Tracer for SlotVisitor {
                 {
                     // on 64 bit platforms we have nice opportunity to check if JS value on stack is
                     // object.
-                    let val = transmute::<_, JsValue>(ptr);
+                    let val = core::mem::transmute::<_, crate::JsValue>(ptr);
                     if val.is_pointer() && !val.is_empty() {
                         let ptr = val.get_pointer();
                         if (*self.heap).is_heap_pointer(ptr.cast()) {
@@ -611,7 +623,6 @@ impl Heap {
 
     /// This function marks all potential roots. This simply means it executes
     /// all the constraints supplied to GC.
-
     fn process_roots(&mut self, visitor: &mut SlotVisitor) {
         unsafe {
             let mut constraints = std::mem::take(&mut self.constraints);
@@ -668,6 +679,11 @@ impl Heap {
         crate::vm::thread::THREAD.with(|thread| {
             visitor.add_conservative(thread.bounds.origin as _, sp as usize);
         });
+        /*let regs = crate::vm::thread::Thread::capture_registers();
+        visitor.add_conservative(
+            regs.as_ptr() as usize,
+            regs.last().unwrap() as *const _ as usize,
+        );*/
         self.process_roots(&mut visitor);
 
         if let Some(ref mut pool) = self.threadpool {

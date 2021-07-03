@@ -209,7 +209,7 @@ impl LargeObjectSpace {
             }
             retain
         });
-        self.allocations.sort_unstable();
+
         sweeped
     }
     #[allow(clippy::collapsible_if)]
@@ -218,18 +218,6 @@ impl LargeObjectSpace {
             return false;
         }
         unsafe {
-            /*
-            if (&*self.allocations[0]).above_lower_bound(p.to_mut_ptr())
-                && (&**self.allocations.last().unwrap()).below_upper_bound(p.to_mut_ptr())
-            {
-                if self
-                    .allocations
-                    .binary_search(&PreciseAllocation::from_cell(p.to_mut_ptr()))
-                    .is_ok()
-                {
-                    return true;
-                }
-            }*/
             let alloc = PreciseAllocation::from_cell(p.to_mut_ptr());
             if mi_is_in_heap_region(alloc.cast()) {
                 if mi_heap_contains_block(self.heap, alloc.cast()) {
@@ -248,11 +236,7 @@ impl LargeObjectSpace {
                 return Address::null();
             }
             self.allocations.push(cell);
-            /*if (cell as usize) < self.allocations[self.allocations.len() - 1] as usize
-                || (cell as usize) < self.allocations[0] as usize
-            {
-                self.allocations.sort_unstable();
-            }*/
+
             *th += (*cell).cell_size();
             let raw = (&*cell).cell();
 
@@ -265,6 +249,7 @@ impl Drop for LargeObjectSpace {
     fn drop(&mut self) {
         while let Some(alloc) = self.allocations.pop() {
             unsafe {
+                //(&mut *alloc).sweep();
                 (&mut *alloc).destroy();
             }
         }

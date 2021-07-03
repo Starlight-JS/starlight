@@ -3,7 +3,6 @@ use super::{
     TestSuite, IGNORED,
 };
 use colored::Colorize;
-use rayon::iter::*;
 use starlight::{
     gc::default_heap,
     prelude::{Deserializer, Options},

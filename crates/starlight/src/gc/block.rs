@@ -1,8 +1,6 @@
-use std::{num::NonZeroU16, ptr::null_mut};
-
-use crate::gc::{mem::is_aligned, Address};
-
 use super::constants::BLOCK_SIZE;
+use crate::gc::{mem::is_aligned, Address};
+use std::{num::NonZeroU16, ptr::null_mut};
 
 pub struct FreeList {
     pub(super) next: *mut FreeEntry,
@@ -38,12 +36,17 @@ pub struct FreeEntry {
     preserved: u64,
     next: *mut Self,
 }
-
+// A block is a page-aligned container for heap-allocated objects.
+// Objects are allocated within cells of the marked block. For a given
+// marked block, all cells have the same size. Objects smaller than the
+// cell size may be allocated in the block, in which case the
+// allocation suffers from internal fragmentation: wasted space whose
+// size is equal to the difference between the cell size and the object
+// size.
 #[repr(C, align(16))]
 pub struct Block {
     pub next: *mut Self,
-    /// Link in local allocator so iteration is simplified.
-    pub link2: *mut Self,
+
     /// Is this block actually allocated
     pub allocated: bool,
     pub cell_size: NonZeroU16,
@@ -69,7 +72,7 @@ impl Block {
             ptr.write(Self {
                 next: null_mut(),
                 allocated: false,
-                link2: null_mut(),
+
                 freelist: FreeList::new(),
                 cell_size: NonZeroU16::new_unchecked(u16::MAX),
                 data_start: [],

@@ -233,112 +233,19 @@ impl Space {
 
             while !alloc.is_null() {
                 let next = (*alloc).next;
-                let mut available = null_mut();
-                let mut unavailable = null_mut();
-                let mut cursor = (*alloc).current;
-
-                while !cursor.is_null() {
-                    let next = (*cursor).next;
-                    let mut freelist = FreeList::new();
-                    let mut has_free = false;
-                    let mut fully_free = true;
-                    (*cursor).walk(|cell| {
-                        if self.live_bitmap.test(cell as _) {
-                            let cell = cell.cast::<GcPointerBase>();
-                            let state = (*cell).state();
-                            debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
-                            if self.mark_bitmap.clear(cell as _) {
-                                fully_free = false;
-
-                                (*cell).force_set_state(DEFINETELY_WHITE);
-                                allocated += (*cursor).cell_size.get() as usize;
-                            } else {
-                                debug_assert!(!self.mark_bitmap.test(cell as _));
-                                self.live_bitmap.clear(cell as _);
-                                has_free = true;
-                                drop_in_place((*cell).get_dyn());
-                                freelist.add(cell.cast());
-                            }
-                        } else {
-                            debug_assert!(!self.mark_bitmap.test(cell as _));
-                            has_free = true;
-                            debug_assert!(!self.live_bitmap.test(cell as _));
-                            freelist.add(cell.cast());
-                        }
-                    });
-                    (*cursor).freelist = freelist;
-                    if (*cursor).freelist.next.is_null() {
-                        // if block is full we do not want to try to allocate from it.
-                        (*cursor).next = unavailable;
-                        unavailable = cursor;
-                    } else if fully_free {
-                        assert!(!(*cursor).freelist.next.is_null());
-                        (*self.block_allocator).return_block(cursor);
-                    } else {
-                        (*cursor).next = available;
-                        available = cursor;
-                    }
-                    cursor = next;
-                }
-                cursor = (*alloc).unavail;
-                while !cursor.is_null() {
-                    let next = (*cursor).next;
-                    let mut freelist = FreeList::new();
-                    let mut has_free = false;
-                    let mut fully_free = true;
-                    (*cursor).walk(|cell| {
-                        if self.live_bitmap.test(cell as _) {
-                            let cell = cell.cast::<GcPointerBase>();
-                            let state = (*cell).state();
-                            debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
-                            if self.mark_bitmap.clear(cell as _) {
-                                fully_free = false;
-
-                                (*cell).force_set_state(DEFINETELY_WHITE);
-                                allocated += (*cursor).cell_size.get() as usize;
-                            } else {
-                                debug_assert!(!self.mark_bitmap.test(cell as _));
-                                self.live_bitmap.clear(cell as _);
-                                has_free = true;
-                                drop_in_place((*cell).get_dyn());
-                                freelist.add(cell.cast());
-                            }
-                        } else {
-                            debug_assert!(!self.mark_bitmap.test(cell as _));
-                            has_free = true;
-                            debug_assert!(!self.live_bitmap.test(cell as _));
-                            freelist.add(cell.cast());
-                        }
-                    });
-                    (*cursor).freelist = freelist;
-                    if (*cursor).freelist.next.is_null() {
-                        // if block is full we do not want to try to allocate from it.
-                        (*cursor).next = unavailable;
-                        unavailable = cursor;
-                    } else if fully_free {
-                        assert!(!(*cursor).freelist.next.is_null());
-                        (*self.block_allocator).return_block(cursor);
-                    } else {
-                        (*cursor).next = available;
-                        available = cursor;
-                    }
-                    cursor = next;
-                }
-                (*alloc).current = available;
-                (*alloc).unavail = unavailable;
-
+                (*alloc).sweep(&mut allocated, &self.live_bitmap, &self.mark_bitmap);
                 alloc = next;
             }
         }
         allocated
     }
+    #[inline]
     pub fn allocate(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
         let ptr = if size <= LARGE_CUTOFF {
             let p = self.allocate_small(size, threshold);
             debug_assert!(!self.live_bitmap.test(p as _));
             self.live_bitmap.set(p as _);
             debug_assert!(self.live_bitmap.test(p as _));
-
             p
         } else {
             self.precise_allocations.alloc(size, threshold).to_mut_ptr()
@@ -411,6 +318,106 @@ pub struct LocalAllocator {
     allocator: *mut BlockAllocator,
 }
 impl LocalAllocator {
+    unsafe fn sweep(
+        &mut self,
+        allocated: &mut usize,
+        live_bitmap: &SpaceBitmap<16>,
+        mark_bitmap: &SpaceBitmap<16>,
+    ) {
+        let mut available = null_mut();
+        let mut unavailable = null_mut();
+        let mut cursor = self.current;
+
+        while !cursor.is_null() {
+            let next = (*cursor).next;
+            let mut freelist = FreeList::new();
+            let mut has_free = false;
+            let mut fully_free = true;
+            (*cursor).walk(|cell| {
+                if live_bitmap.test(cell as _) {
+                    let cell = cell.cast::<GcPointerBase>();
+                    let state = (*cell).state();
+                    debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
+                    if mark_bitmap.clear(cell as _) {
+                        fully_free = false;
+
+                        (*cell).force_set_state(DEFINETELY_WHITE);
+                        *allocated += (*cursor).cell_size.get() as usize;
+                    } else {
+                        debug_assert!(!mark_bitmap.test(cell as _));
+                        live_bitmap.clear(cell as _);
+                        has_free = true;
+                        drop_in_place((*cell).get_dyn());
+                        freelist.add(cell.cast());
+                    }
+                } else {
+                    debug_assert!(!mark_bitmap.test(cell as _));
+                    has_free = true;
+                    debug_assert!(!live_bitmap.test(cell as _));
+                    freelist.add(cell.cast());
+                }
+            });
+            (*cursor).freelist = freelist;
+            if (*cursor).freelist.next.is_null() {
+                // if block is full we do not want to try to allocate from it.
+                (*cursor).next = unavailable;
+                unavailable = cursor;
+            } else if fully_free {
+                assert!(!(*cursor).freelist.next.is_null());
+                (*self.allocator).return_block(cursor);
+            } else {
+                (*cursor).next = available;
+                available = cursor;
+            }
+            cursor = next;
+        }
+        cursor = self.unavail;
+        while !cursor.is_null() {
+            let next = (*cursor).next;
+            let mut freelist = FreeList::new();
+            let mut has_free = false;
+            let mut fully_free = true;
+            (*cursor).walk(|cell| {
+                if live_bitmap.test(cell as _) {
+                    let cell = cell.cast::<GcPointerBase>();
+                    let state = (*cell).state();
+                    debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
+                    if mark_bitmap.clear(cell as _) {
+                        fully_free = false;
+
+                        (*cell).force_set_state(DEFINETELY_WHITE);
+                        *allocated += (*cursor).cell_size.get() as usize;
+                    } else {
+                        debug_assert!(!mark_bitmap.test(cell as _));
+                        live_bitmap.clear(cell as _);
+                        has_free = true;
+                        drop_in_place((*cell).get_dyn());
+                        freelist.add(cell.cast());
+                    }
+                } else {
+                    debug_assert!(!mark_bitmap.test(cell as _));
+                    has_free = true;
+                    debug_assert!(!live_bitmap.test(cell as _));
+                    freelist.add(cell.cast());
+                }
+            });
+            (*cursor).freelist = freelist;
+            if (*cursor).freelist.next.is_null() {
+                // if block is full we do not want to try to allocate from it.
+                (*cursor).next = unavailable;
+                unavailable = cursor;
+            } else if fully_free {
+                assert!(!(*cursor).freelist.next.is_null());
+                (*self.allocator).return_block(cursor);
+            } else {
+                (*cursor).next = available;
+                available = cursor;
+            }
+            cursor = next;
+        }
+        self.current = available;
+        self.unavail = unavailable;
+    }
     pub fn new(cell_size: usize, allocator: *mut BlockAllocator) -> Self {
         Self {
             cell_size,

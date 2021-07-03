@@ -438,7 +438,7 @@ mod tests {
     }
 }
 */
-
+#[allow(dead_code)]
 pub struct JsTypedArrayBase {
     length: usize,
     byte_width: u8,
