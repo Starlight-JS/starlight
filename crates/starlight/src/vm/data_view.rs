@@ -1,3 +1,6 @@
+use wtf_rs::endian::{byte_swap, Endianess};
+use wtf_rs::swap_byte_order::SwapByteOrder;
+
 use super::method_table::MethodTable;
 use super::{array_buffer::JsArrayBuffer, object::JsObject, Runtime};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
@@ -26,7 +29,7 @@ impl JsDataView {
     pub fn attached(&self) -> bool {
         self.buffer.data::<JsArrayBuffer>().attached()
     }
-    pub unsafe fn get<T: Copy>(&self, offset: usize, _little_endian: bool) -> T {
+    pub unsafe fn get<T: Copy + SwapByteOrder>(&self, offset: usize, little_endian: bool) -> T {
         assert!(self.attached(), "Cannot get on a detached buffer");
         assert!(
             offset + size_of::<T>() <= self.length,
@@ -42,16 +45,32 @@ impl JsDataView {
             result.as_mut_ptr().cast::<u8>(),
             size_of::<T>(),
         );
-        // TODO: Reverse order of bytes
-        result.assume_init()
+        byte_swap(
+            result.assume_init(),
+            if little_endian {
+                Endianess::Little
+            } else {
+                Endianess::Big
+            },
+        )
     }
 
-    pub unsafe fn set<T: Copy>(&self, offset: usize, value: T, _little_endian: bool) {
+    pub unsafe fn set<T: Copy + SwapByteOrder>(
+        &self,
+        offset: usize,
+        value: T,
+        little_endian: bool,
+    ) {
         assert!(self.attached(), "Cannot set on a detached buffer");
         assert!(
             offset + size_of::<T>() <= self.length,
             "Trying to write past the end of the buffer"
         );
+        let value = if little_endian {
+            byte_swap(value, Endianess::Little)
+        } else {
+            byte_swap(value, Endianess::Big)
+        };
         copy_nonoverlapping(
             &value as *const T as *const u8,
             self.buffer
