@@ -630,15 +630,35 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if likely(object.is_jsobject()) {
                     letroot!(obj = gcstack, object.get_jsobject());
                     #[cfg(not(feature = "no-inline-caching"))]
-                    if let TypeFeedBack::PropertyCache { structure, offset } =
-                        unwrap_unchecked(frame.code_block)
-                            .feedback
-                            .get_unchecked(fdbk as usize)
+                    if let TypeFeedBack::PropertyCache {
+                        structure,
+                        offset,
+                        mode,
+                    } = unwrap_unchecked(frame.code_block)
+                        .feedback
+                        .get_unchecked(fdbk as usize)
                     {
-                        if GcPointer::ptr_eq(structure, &obj.structure()) {
-                            frame.push(*obj.direct(*offset as _));
+                        match mode {
+                            &GetByIdMode::Default => {
+                                if GcPointer::ptr_eq(structure, &obj.structure()) {
+                                    frame.push(*obj.direct(*offset as _));
 
-                            continue;
+                                    continue;
+                                }
+                            }
+                            &GetByIdMode::ProtoLoad(base) => {
+                                if GcPointer::ptr_eq(structure, &obj.structure()) {
+                                    frame.push(*base.direct(*offset as _));
+
+                                    continue;
+                                }
+                            }
+                            &GetByIdMode::ArrayLength => {
+                                if obj.is_class(JsArray::get_class()) {
+                                    frame.push(JsValue::new(obj.indexed.length()));
+                                    continue;
+                                }
+                            }
                         }
                     }
 
@@ -653,18 +673,59 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         is_try: bool,
                     ) -> Result<(), JsValue> {
                         let mut slot = Slot::new();
+                        if name == length_id() {
+                            if obj.is_class(JsArray::get_class()) {
+                                *unwrap_unchecked(frame.code_block)
+                                    .feedback
+                                    .get_unchecked_mut(fdbk as usize) =
+                                    TypeFeedBack::PropertyCache {
+                                        structure: obj.structure(),
+                                        mode: GetByIdMode::ArrayLength,
+                                        offset: u32::MAX,
+                                    };
+                                frame.push(JsValue::new(obj.indexed.length()));
+                                return Ok(());
+                            }
+                        }
                         let found = obj.get_property_slot(rt, name, &mut slot);
                         #[cfg(not(feature = "no-inline-caching"))]
                         if slot.is_load_cacheable() {
+                            let (structure, mode) = match slot.base() {
+                                Some(object) => {
+                                    if let Some(proto) = obj.prototype() {
+                                        if GcPointer::ptr_eq(proto, object) {
+                                            (
+                                                obj.structure(),
+                                                GetByIdMode::ProtoLoad(object.downcast_unchecked()),
+                                            )
+                                        } else {
+                                            (
+                                                slot.base()
+                                                    .unwrap()
+                                                    .downcast_unchecked::<JsObject>()
+                                                    .structure(),
+                                                GetByIdMode::Default,
+                                            )
+                                        }
+                                    } else {
+                                        (
+                                            slot.base()
+                                                .unwrap()
+                                                .downcast_unchecked::<JsObject>()
+                                                .structure(),
+                                            GetByIdMode::Default,
+                                        )
+                                    }
+                                }
+
+                                None => unreachable!(),
+                            };
+
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
                                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                                structure: slot
-                                    .base()
-                                    .unwrap()
-                                    .downcast_unchecked::<JsObject>()
-                                    .structure(),
-
+                                structure,
+                                mode,
                                 offset: slot.offset(),
                             }
                         }

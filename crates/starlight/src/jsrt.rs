@@ -5,7 +5,7 @@ use crate::{
     gc::cell::{GcPointer, WeakRef},
     vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
-        array_storage::ArrayStorage, attributes::*, code_block::CodeBlock,
+        array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, data_view::JsDataView,
         environment::Environment, error::*, function::*, global::JsGlobal,
         indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*,
         property_descriptor::*, string::*, structure::*, structure_chain::StructureChain,
@@ -15,6 +15,7 @@ use crate::{
 use std::collections::HashMap;
 pub mod array;
 pub mod array_buffer;
+pub mod data_view;
 pub mod error;
 #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
 pub mod ffi;
@@ -25,10 +26,10 @@ pub mod jsstd;
 pub mod math;
 pub mod number;
 pub mod object;
+pub mod promise;
 pub mod regexp;
 pub mod string;
 pub mod symbol;
-pub mod promise;
 use array::*;
 use error::*;
 use function::*;
@@ -251,7 +252,6 @@ impl Runtime {
         );
     }
     pub(crate) fn init_promise(&mut self) -> Result<(), JsValue> {
-
         let rt = self;
         // copied from file
 
@@ -1143,6 +1143,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array_buffer::array_buffer_byte_length as _,
         array_buffer::array_buffer_slice as _,
         JsArrayBuffer::get_class() as *const _ as usize,
+        JsDataView::get_class() as *const _ as usize,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

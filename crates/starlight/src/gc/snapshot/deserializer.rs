@@ -9,7 +9,7 @@ macro_rules! unique {
     () => {};
 }
 use crate::{
-    bytecode::TypeFeedBack,
+    bytecode::{GetByIdMode, TypeFeedBack},
     gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
     gc::Heap,
     jsrt::VM_NATIVE_REFERENCES,
@@ -1467,9 +1467,20 @@ impl Deserializable for TypeFeedBack {
             0x01 => {
                 let structure = deser.get_reference();
                 let offset = deser.get_u32();
+                let mode = deser.get_u8();
+                let mode = match mode {
+                    0 => GetByIdMode::ArrayLength,
+                    1 => GetByIdMode::Default,
+                    2 => {
+                        let gc = GcPointer::<JsObject>::deserialize_inplace(deser);
+                        GetByIdMode::ProtoLoad(gc)
+                    }
+                    _ => unreachable!(),
+                };
                 Self::PropertyCache {
                     structure: transmute(structure),
                     offset,
+                    mode,
                 }
             }
             0x02 => {

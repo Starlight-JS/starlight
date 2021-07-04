@@ -173,8 +173,13 @@ macro_rules! intern_builtins {
 pub(crate) fn initialize_symbol_table() {
     unsafe {
         SYMBOL_TABLE.as_mut_ptr().write(SymbolTable::new());
+        LENGTH = "length".intern();
     }
     builtin_symbols!(intern_builtins);
+}
+
+pub fn length_id() -> Symbol {
+    unsafe { LENGTH }
 }
 pub fn symbol_table() -> &'static SymbolTable {
     unsafe { &*SYMBOL_TABLE.as_ptr() }
@@ -236,3 +241,5 @@ impl std::fmt::Display for SymbolID {
         write!(f, "{}", symbol_table().description(*self))
     }
 }
+
+static mut LENGTH: Symbol = Symbol::Key(SymbolID(0));

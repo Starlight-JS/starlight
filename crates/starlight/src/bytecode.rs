@@ -3,12 +3,17 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
     gc::cell::{GcPointer, Trace, Tracer},
-    vm::{structure::Structure, structure_chain::StructureChain},
+    vm::{object::JsObject, structure::Structure, structure_chain::StructureChain},
 };
 
 pub mod opcodes;
 pub mod profile;
-
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GetByIdMode {
+    Default,
+    ProtoLoad(GcPointer<JsObject> /*cached slot */),
+    ArrayLength,
+}
 pub enum TypeFeedBack {
     StructureCache {
         structure: GcPointer<Structure>,
@@ -16,6 +21,7 @@ pub enum TypeFeedBack {
     PropertyCache {
         structure: GcPointer<Structure>,
         offset: u32,
+        mode: GetByIdMode,
     },
     PutByIdFeedBack {
         new_structure: Option<GcPointer<Structure>>,
@@ -29,7 +35,15 @@ pub enum TypeFeedBack {
 unsafe impl Trace for TypeFeedBack {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         match self {
-            Self::PropertyCache { structure, .. } => structure.trace(visitor),
+            Self::PropertyCache {
+                structure, mode, ..
+            } => {
+                structure.trace(visitor);
+                match mode {
+                    GetByIdMode::ProtoLoad(slot) => slot.trace(visitor),
+                    _ => (),
+                }
+            }
             Self::StructureCache { structure } => structure.trace(visitor),
             Self::PutByIdFeedBack {
                 new_structure,

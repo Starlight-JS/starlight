@@ -472,10 +472,22 @@ impl Serializable for u32 {
 impl Serializable for TypeFeedBack {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         match self {
-            TypeFeedBack::PropertyCache { structure, offset } => {
+            TypeFeedBack::PropertyCache {
+                structure,
+                offset,
+                mode,
+            } => {
                 serializer.write_u8(0x01);
                 serializer.write_gcpointer(*structure);
                 serializer.write_u32(*offset);
+                match mode {
+                    &crate::bytecode::GetByIdMode::ArrayLength => serializer.write_u8(0),
+                    &crate::bytecode::GetByIdMode::Default => serializer.write_u8(1),
+                    &crate::bytecode::GetByIdMode::ProtoLoad(slot) => {
+                        serializer.write_u8(2);
+                        slot.serialize(serializer);
+                    }
+                }
             }
             &TypeFeedBack::StructureCache { structure } => {
                 serializer.write_u8(0x02);

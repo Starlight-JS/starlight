@@ -21,6 +21,9 @@ pub struct JsDataView {
 }
 
 impl JsDataView {
+    pub fn get_buffer(&self) -> GcPointer<JsObject> {
+        self.buffer
+    }
     pub fn set_buffer(&mut self, buffer: GcPointer<JsObject>, offset: usize, length: usize) {
         self.buffer = buffer;
         self.offset = offset;
