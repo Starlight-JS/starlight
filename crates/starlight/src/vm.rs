@@ -618,6 +618,7 @@ impl Runtime {
         .unwrap();
         assert!(this.modules.contains_key("std"));
         jsrt::array_buffer::array_buffer_init(&mut this);
+        jsrt::data_view::init_data_view(&mut this);
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -724,6 +725,11 @@ impl Runtime {
         let msg = JsString::new(self, msg);
         JsSyntaxError::new(self, msg, None)
     }
+    /// Construct new range error from provided string.
+    pub fn new_range_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsRangeError::new(self, msg, None)
+    }
 
     pub fn register_codegen_plugin(
         &mut self,
@@ -761,7 +767,7 @@ use starlight_derive::GcTrace;
 use wtf_rs::unwrap_unchecked;
 
 use self::{
-    error::{JsReferenceError, JsTypeError},
+    error::{JsRangeError, JsReferenceError, JsTypeError},
     function::JsNativeFunction,
     global::JsGlobal,
     interpreter::{frame::CallFrame, stack::Stack},

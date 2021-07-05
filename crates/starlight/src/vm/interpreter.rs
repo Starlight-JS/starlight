@@ -646,8 +646,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                                     continue;
                                 }
                             }
-                            &GetByIdMode::ProtoLoad(base) => {
-                                if GcPointer::ptr_eq(structure, &obj.structure()) {
+                            GetByIdMode::ProtoLoad(base) => {
+                                if false && GcPointer::ptr_eq(structure, &obj.structure()) {
                                     frame.push(*base.direct(*offset as _));
 
                                     continue;

@@ -1,9 +1,5 @@
-function Foo() { }
+let buffer = new ArrayBuffer(128);
 
-Foo.prototype.a = 42;
-let f = new Foo();
-f.a = 43;
-
-for (let i = 0; i < 10; i++) {
-    f.a;
-}
+let view = new DataView(buffer, 0, 8);
+view.setUint8(0, 42);
+print(view.getUint16(0));

@@ -1144,6 +1144,26 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array_buffer::array_buffer_slice as _,
         JsArrayBuffer::get_class() as *const _ as usize,
         JsDataView::get_class() as *const _ as usize,
+        data_view::data_view_constructor as _,
+        data_view::data_view_prototype_buffer as _,
+        data_view::data_view_prototype_byte_length as _,
+        data_view::data_view_prototype_byte_offset as _,
+        data_view::data_view_prototype_get::<u8> as _,
+        data_view::data_view_prototype_get::<u16> as _,
+        data_view::data_view_prototype_get::<u32> as _,
+        data_view::data_view_prototype_get::<i8> as _,
+        data_view::data_view_prototype_get::<i16> as _,
+        data_view::data_view_prototype_get::<i32> as _,
+        data_view::data_view_prototype_get::<f32> as _,
+        data_view::data_view_prototype_get::<f64> as _,
+        data_view::data_view_prototype_set::<u8> as _,
+        data_view::data_view_prototype_set::<u16> as _,
+        data_view::data_view_prototype_set::<u32> as _,
+        data_view::data_view_prototype_set::<i8> as _,
+        data_view::data_view_prototype_set::<i16> as _,
+        data_view::data_view_prototype_set::<i32> as _,
+        data_view::data_view_prototype_set::<f32> as _,
+        data_view::data_view_prototype_set::<f64> as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {
@@ -1354,4 +1374,22 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     rt.modules
         .insert(spath.clone(), ModuleKind::Initialized(*module_object));
     Ok(JsValue::new(*module_object))
+}
+
+pub fn to_index(rt: &mut Runtime, val: JsValue) -> Result<usize, JsValue> {
+    let value = if val.is_undefined() {
+        JsValue::new(0)
+    } else {
+        val
+    };
+    let res = value.to_number(rt)?;
+    if res < 0.0 {
+        return Err(JsValue::new(rt.new_range_error("Negative index")));
+    }
+    if res >= 9007199254740991.0 {
+        return Err(JsValue::new(rt.new_range_error(
+            "The value given for the index must be between 0 and 2 ^ 53 - 1",
+        )));
+    }
+    Ok(res as _)
 }
