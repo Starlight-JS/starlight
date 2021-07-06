@@ -1,5 +1,10 @@
-let buffer = new ArrayBuffer(128);
+function* foo() {
+    yield 1;
+    yield 2;
+    yield 3;
+    return 4;
+}
 
-let view = new DataView(buffer, 0, 8);
-view.setUint8(0, 42);
-print(view.getUint16(0));
+for (x of foo()) {
+    print(x);
+}
