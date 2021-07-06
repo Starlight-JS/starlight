@@ -798,6 +798,7 @@ impl Serializable for GlobalData {
         self.array_buffer_prototype.serialize(serializer);
         self.array_buffer_structure.serialize(serializer);
         self.data_view_structure.serialize(serializer);
+        self.data_view_prototype.serialize(serializer);
     }
 }
 

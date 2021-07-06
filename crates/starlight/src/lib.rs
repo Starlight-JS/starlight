@@ -30,7 +30,7 @@
     clippy::needless_range_loop
 )]
 
-use gc::{cell::GcPointer, default_heap, snapshot::deserializer::Deserializer};
+use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
 use vm::{arguments::Arguments, object::JsObject, value::JsValue, Runtime};
 #[macro_export]

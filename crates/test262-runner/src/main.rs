@@ -13,7 +13,6 @@ use fxhash::{FxHashMap, FxHashSet};
 use once_cell::sync::Lazy;
 use results::{compare_results, write_json};
 use serde::{Deserialize, Serialize};
-use starlight::gc::default_heap;
 use starlight::prelude::Options;
 use starlight::{prelude::Snapshot, vm::Runtime, Platform};
 
