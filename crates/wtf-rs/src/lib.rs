@@ -5,6 +5,7 @@ pub mod endian;
 pub mod segmented_vec;
 pub mod stack_bounds;
 pub mod swap_byte_order;
+pub mod tagged_ptr;
 #[allow(dead_code)]
 pub(crate) fn thread_self() -> u64 {
     #[cfg(windows)]
