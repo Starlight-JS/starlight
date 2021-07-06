@@ -33,6 +33,7 @@ use super::{
 pub const CMP_FALSE: i32 = 0;
 pub const CMP_TRUE: i32 = 1;
 pub const CMP_UNDEF: i32 = -1;
+
 /*#[cfg(target_pointer_width = "64")]
 pub use new_value::*;*/
 #[cfg(target_pointer_width = "64")]
@@ -1057,6 +1058,7 @@ impl Serializable for HashValueZero {
 }
 
 pub mod new_value {
+    //! TODO: This JS values results in nearly ~0.3% reduction in currently passing tests, we need to figure out why
     use super::*;
     use wtf_rs::pure_nan::{pure_nan, purify_nan};
     #[derive(Copy, Clone)]
