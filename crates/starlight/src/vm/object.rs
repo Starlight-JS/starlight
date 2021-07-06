@@ -1785,3 +1785,13 @@ impl<T: JsClass> Deserializable for TypedJsObject<T> {
         unreachable!()
     }
 }
+
+impl<T: JsClass> Clone for TypedJsObject<T> {
+    fn clone(&self) -> Self {
+        *self   
+    }
+}
+
+impl<T: JsClass> Copy for TypedJsObject<T> {
+    
+}   
