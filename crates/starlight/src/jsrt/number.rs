@@ -1,8 +1,9 @@
-use std::u8;
-
 use num::traits::float::FloatCore;
 
-use crate::{prelude::*, vm::number::NumberObject};
+use crate::{
+    prelude::*,
+    vm::{number::NumberObject},
+};
 pub fn number_value_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
@@ -513,77 +514,91 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-pub(crate) fn init_number(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
-    let structure = Structure::new_unique_indexed(rt, Some(obj_proto), false);
-    let mut proto = NumberObject::new_plain(rt, structure, 0.0);
-
-    rt.global_data()
-        .number_structure
-        .unwrap()
-        .change_prototype_with_no_transition(proto);
-
-    let mut constructor = JsNativeFunction::new(rt, "Number".intern(), number_constructor, 1);
-
-    let _ = rt.global_object().define_own_property(
-        rt,
-        "Number".intern(),
-        &*DataDescriptor::new(JsValue::new(constructor), W | C),
-        false,
-    );
-
-    let _ = constructor.define_own_property(
-        rt,
-        "prototype".intern(),
-        &*DataDescriptor::new(JsValue::new(proto), NONE),
-        false,
-    );
-
-    let _ = constructor.put(rt, "MAX_VALUE".intern(), JsValue::new(f64::MAX), false);
-    let _ = constructor.put(rt, "MIN_VALUE".intern(), JsValue::new(f64::MIN), false);
-    let _ = constructor.put(rt, "NaN".intern(), JsValue::new(f64::NAN), false);
-    let _ = constructor.put(
-        rt,
-        "NEGATIVE_INFINITY".intern(),
-        JsValue::new(f64::NEG_INFINITY),
-        false,
-    );
-    let _ = constructor.put(
-        rt,
-        "POSITIVE_INFINITY".intern(),
-        JsValue::new(f64::INFINITY),
-        false,
-    );
-
-    let _ = constructor.put(rt, "EPSILON".intern(), JsValue::new(f64::EPSILON), false);
-    let _ = constructor.put(
-        rt,
-        "MAX_SAFE_INTEGER".intern(),
-        JsValue::new(9007199254740991.0),
-        false,
-    );
-    let is_nan = JsNativeFunction::new(rt, "isNaN".intern(), number_is_nan, 0);
-    let _ = constructor.put(rt, "isNaN".intern(), JsValue::new(is_nan), false);
-    let is_finite = JsNativeFunction::new(rt, "isFinite".intern(), number_is_finite, 0);
-    let _ = constructor.put(rt, "isFinite".intern(), JsValue::new(is_finite), false);
-    let is_int = JsNativeFunction::new(rt, "isInteger".intern(), number_is_integer, 0);
-    let _ = constructor.put(rt, "isInteger".intern(), JsValue::new(is_int), false);
-
-    {
-        let _ = proto.put(rt, "constructor".intern(), JsValue::new(constructor), false);
-        let f = JsNativeFunction::new(rt, "toString".intern(), number_to_string, 1);
-        let _ = proto.put(rt, "toString".intern(), JsValue::new(f), false);
-
-        let f = JsNativeFunction::new(rt, "valueOf".intern(), number_value_of, 0);
-        let _ = proto.put(rt, "valueOf".intern(), JsValue::new(f), false);
-
-        let f = JsNativeFunction::new(rt, "toPrecision".intern(), number_to_precisiion, 1);
-        let _ = proto.put(rt, "toPrecision".intern(), JsValue::new(f), false);
-        let f = JsNativeFunction::new(rt, "toFixed".intern(), number_to_fixed, 1);
-        let _ = proto.put(rt, "toFixed".intern(), JsValue::new(f), false);
-
-        let f = JsNativeFunction::new(rt, "clz".intern(), number_clz, 1);
-        let _ = proto.put(rt, "clz".intern(), JsValue::new(f), false);
+impl Runtime {
+    pub(crate) fn init_number_in_realm(&mut self) {
+        let mut proto = self.global_data.number_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            "Number".intern(),
+            &*DataDescriptor::new(JsValue::new(constructor), W | C),
+            false,
+        );
     }
 
-    rt.global_data.number_prototype = Some(proto);
+    pub(crate) fn init_number_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
+        let mut proto = NumberObject::new_plain(self, structure, 0.0);
+
+        self.global_data()
+            .number_structure
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        let mut constructor = JsNativeFunction::new(self, "Number".intern(), number_constructor, 1);
+
+        let _ = constructor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::new(proto), NONE),
+            false,
+        );
+
+        let _ = constructor.put(self, "MAX_VALUE".intern(), JsValue::new(f64::MAX), false);
+        let _ = constructor.put(self, "MIN_VALUE".intern(), JsValue::new(f64::MIN), false);
+        let _ = constructor.put(self, "NaN".intern(), JsValue::new(f64::NAN), false);
+        let _ = constructor.put(
+            self,
+            "NEGATIVE_INFINITY".intern(),
+            JsValue::new(f64::NEG_INFINITY),
+            false,
+        );
+        let _ = constructor.put(
+            self,
+            "POSITIVE_INFINITY".intern(),
+            JsValue::new(f64::INFINITY),
+            false,
+        );
+
+        let _ = constructor.put(self, "EPSILON".intern(), JsValue::new(f64::EPSILON), false);
+        let _ = constructor.put(
+            self,
+            "MAX_SAFE_INTEGER".intern(),
+            JsValue::new(9007199254740991.0),
+            false,
+        );
+        let is_nan = JsNativeFunction::new(self, "isNaN".intern(), number_is_nan, 0);
+        let _ = constructor.put(self, "isNaN".intern(), JsValue::new(is_nan), false);
+        let is_finite = JsNativeFunction::new(self, "isFinite".intern(), number_is_finite, 0);
+        let _ = constructor.put(self, "isFinite".intern(), JsValue::new(is_finite), false);
+        let is_int = JsNativeFunction::new(self, "isInteger".intern(), number_is_integer, 0);
+        let _ = constructor.put(self, "isInteger".intern(), JsValue::new(is_int), false);
+
+        {
+            let _ = proto.put(
+                self,
+                "constructor".intern(),
+                JsValue::new(constructor),
+                false,
+            );
+            let f = JsNativeFunction::new(self, "toString".intern(), number_to_string, 1);
+            let _ = proto.put(self, "toString".intern(), JsValue::new(f), false);
+
+            let f = JsNativeFunction::new(self, "valueOf".intern(), number_value_of, 0);
+            let _ = proto.put(self, "valueOf".intern(), JsValue::new(f), false);
+
+            let f = JsNativeFunction::new(self, "toPrecision".intern(), number_to_precisiion, 1);
+            let _ = proto.put(self, "toPrecision".intern(), JsValue::new(f), false);
+            let f = JsNativeFunction::new(self, "toFixed".intern(), number_to_fixed, 1);
+            let _ = proto.put(self, "toFixed".intern(), JsValue::new(f), false);
+
+            let f = JsNativeFunction::new(self, "clz".intern(), number_clz, 1);
+            let _ = proto.put(self, "clz".intern(), JsValue::new(f), false);
+        }
+
+        self.global_data.number_prototype = Some(proto);
+    }
 }

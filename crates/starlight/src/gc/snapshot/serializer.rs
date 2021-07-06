@@ -792,7 +792,7 @@ impl Serializable for GlobalData {
         self.set_prototype.serialize(serializer);
         self.set_structure.serialize(serializer);
         self.regexp_structure.serialize(serializer);
-        self.regexp_object.serialize(serializer);
+        self.regexp_prototype.serialize(serializer);
         self.generator_prototype.serialize(serializer);
         self.generator_structure.serialize(serializer);
         self.array_buffer_prototype.serialize(serializer);
@@ -804,7 +804,7 @@ impl Serializable for GlobalData {
 impl Serializable for Runtime {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.global_data.serialize(serializer);
-        self.global_object.serialize(serializer);
+        self.realm().global_object.serialize(serializer);
         self.symbol_table.serialize(serializer);
         self.module_loader.serialize(serializer);
         self.modules.serialize(serializer);

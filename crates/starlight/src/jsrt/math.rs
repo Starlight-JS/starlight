@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*};
 pub fn math_abs(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         if args.at(0).is_int32() {
@@ -117,7 +117,7 @@ pub fn math_sqrt(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     Ok(JsValue::new(args.at(0).to_number(rt)?.sqrt()))
 }
 impl Runtime {
-    pub(crate) fn init_math(&mut self) {
+    pub(crate) fn init_math_in_realm(&mut self) {
         let mut init = || -> Result<(), JsValue> {
             let mut math = JsObject::new_empty(self);
             /* let f = JsNativeFunction::new(self, "trunc".intern(), math_trunc, 1);
@@ -140,7 +140,8 @@ impl Runtime {
                 JsValue::new(std::f64::consts::PI),
                 false,
             )?;
-            self.global_object()
+            self.realm()
+                .global_object()
                 .put(self, "Math".intern(), JsValue::new(math), false)?;
             let source = include_str!("../builtins/Math.js");
 

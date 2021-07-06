@@ -13,6 +13,8 @@ use fxhash::{FxHashMap, FxHashSet};
 use once_cell::sync::Lazy;
 use results::{compare_results, write_json};
 use serde::{Deserialize, Serialize};
+use starlight::gc::default_heap;
+use starlight::prelude::Options;
 use starlight::{prelude::Snapshot, vm::Runtime, Platform};
 
 use std::sync::Arc;
@@ -419,7 +421,8 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     let harness = read_harness(test262_path).expect("could not read initialization bindings");
 
     if suite.to_string_lossy().ends_with(".js") {
-        let mut rt = Runtime::new(Default::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(default_heap(&options), options, None);
         let buf = Snapshot::take(false, &mut rt, |_, _| {});
         let test = read_test(&test262_path.join(suite), Arc::new(buf.buffer))
             .expect("could not get the test to run");

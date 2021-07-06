@@ -3,7 +3,6 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
     bytecompiler::ByteCompiler,
-    gc::default_heap,
     gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{
@@ -12,7 +11,7 @@ use crate::{
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
     },
-    jsrt::{self, object::*, regexp::RegExp},
+    jsrt::{self},
     options::Options,
 };
 use arguments::Arguments;
@@ -69,9 +68,9 @@ pub mod thread;
 pub mod typedarray;
 pub mod value;
 use crate::gc::snapshot::{deserializer::*, serializer::*};
-use attributes::*;
+
 use object::*;
-use property_descriptor::*;
+
 use value::*;
 pub mod promise;
 
@@ -129,12 +128,50 @@ impl Deserializable for ModuleKind {
     }
 }
 
+pub struct Realm {
+    pub(crate) global_object: Option<GcPointer<JsObject>>,
+    pub(crate) intrinsics: HashMap<String, JsValue>,
+}
+
+impl Realm {
+    pub fn global_object(&self) -> GcPointer<JsObject> {
+        self.global_object.unwrap()
+    }
+
+    pub fn new() -> Self {
+        Realm {
+            global_object: None,
+            intrinsics: HashMap::new(),
+        }
+    }
+
+    pub fn create(rt: &mut Runtime) -> Result<(), JsValue> {
+        let mut realm = Realm {
+            global_object: Some(JsGlobal::new(rt)),
+            intrinsics: HashMap::new(),
+        };
+        rt.realm = Some(realm);
+        rt.init_object_in_realm();
+        rt.init_func_in_realm();
+        rt.init_number_in_realm();
+        rt.init_array_in_realm();
+        rt.init_math_in_realm();
+        rt.init_error_in_realm();
+        rt.init_builtin_in_realm();
+        rt.init_symbol_in_realm();
+        rt.init_regexp_in_realm()?;
+        rt.init_promise_in_realm().ok().expect("init prom failed");
+        rt.init_array_buffer_in_realm()?;
+        rt.init_data_view_in_realm()?;
+        Ok(())
+    }
+}
+
 /// JavaScript runtime instance.
 pub struct Runtime {
     pub(crate) gc: Heap,
     pub(crate) stack: Stack,
     pub(crate) global_data: GlobalData,
-    pub(crate) global_object: Option<GcPointer<JsObject>>,
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: Options,
     pub(crate) shadowstack: ShadowStack,
@@ -151,9 +188,14 @@ pub struct Runtime {
     pub(crate) eval_history: String,
     persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
     sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
+    pub(crate) realm: Option<Realm>,
 }
 
 impl Runtime {
+    pub fn realm(&self) -> &Realm {
+        unwrap_unchecked(self.realm.as_ref())
+    }
+
     /// initialize a Runtime with an async scheduler
     /// the async scheduler is used to asynchronously run jobs with the Runtime
     /// this can be used for things like Promises, setImmediate, async functions
@@ -227,6 +269,32 @@ impl Runtime {
             frame = self.stack.current;
         }
         None
+    }
+
+    pub fn global_object(&self) -> GcPointer<JsObject> {
+        self.realm().global_object()
+    }
+
+    pub fn new(gc: Heap, options: Options, external_references: Option<&'static [usize]>) -> Self {
+        Self {
+            gc,
+            options,
+            stack: Stack::new(),
+            modules: HashMap::new(),
+            stacktrace: String::new(),
+            global_data: GlobalData::default(),
+            external_references,
+            shadowstack: ShadowStack::new(),
+            #[cfg(feature = "perf")]
+            perf: perf::Perf::new(),
+            module_loader: None,
+            symbol_table: HashMap::new(),
+            eval_history: String::new(),
+            persistent_roots: Default::default(),
+            sched_async_func: None,
+            codegen_plugins: HashMap::new(),
+            realm: None,
+        }
     }
 
     /// Collect stacktrace.
@@ -487,7 +555,7 @@ impl Runtime {
             letroot!(
                 args = stack,
                 Arguments::new(
-                    JsValue::encode_object_value(self.global_object()),
+                    JsValue::encode_object_value(self.realm().global_object()),
                     &mut args
                 )
             );
@@ -499,7 +567,11 @@ impl Runtime {
     }
     /// Get global variable, on error returns `None`
     pub fn get_global(&mut self, name: impl AsRef<str>) -> Option<JsValue> {
-        match self.global_object().get(self, name.as_ref().intern()) {
+        match self
+            .realm()
+            .global_object()
+            .get(self, name.as_ref().intern())
+        {
             Ok(var) => Some(var),
             Err(_) => None,
         }
@@ -513,42 +585,80 @@ impl Runtime {
             Symbol::Index(x) => x.to_string(),
         }
     }
+
     /// Get mutable heap reference.
     pub fn heap(&mut self) -> &mut Heap {
         &mut self.gc
     }
+
+    pub fn init_global_data(&mut self) {
+        self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
+        let s = Structure::new_unique_indexed(self, None, false);
+        let mut proto = JsObject::new(self, &s, JsObject::get_class(), ObjectTag::Ordinary);
+
+        self.global_data.object_prototype = Some(proto);
+        self.global_data.function_struct = Some(Structure::new_indexed(self, None, false));
+        self.global_data.normal_arguments_structure =
+            Some(Structure::new_indexed(self, None, false));
+        self.global_data
+            .empty_object_struct
+            .as_mut()
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        self.global_data
+            .empty_object_struct
+            .as_mut()
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
+        // Init global data structure
+        self.init_object_in_global_data(proto);
+        self.init_func_global_data(proto);
+        self.init_error_in_global_data(proto);
+        self.init_array_in_global_data(proto);
+        self.init_number_in_global_data(proto);
+        self.init_symbol_in_global_data(proto);
+        self.init_regexp_in_global_data(proto);
+        self.init_generator_in_global_data(proto);
+        self.init_array_buffer_in_global_data();
+        self.init_data_view_in_global_data();
+    }
+
+    pub fn init_module_loader(&mut self) {
+        let loader = JsNativeFunction::new(self, "@loader".intern(), jsrt::module_load, 1);
+        self.module_loader = Some(loader);
+    }
+
+    pub fn init_internal_modules(&mut self) {
+        self.add_module(
+            "std",
+            ModuleKind::NativeUninit(crate::jsrt::jsstd::init_js_std),
+        )
+        .unwrap();
+        assert!(self.modules.contains_key("std"));
+    }
+
     /// Construct runtime instance with specific GC heap.
     pub fn with_heap(
         gc: Heap,
         options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
-        let mut this = Box::new(Self {
-            gc,
-            options,
-            stack: Stack::new(),
-            modules: HashMap::new(),
-            global_object: None,
-            stacktrace: String::new(),
-            global_data: GlobalData::default(),
-            external_references,
-            shadowstack: ShadowStack::new(),
-            #[cfg(feature = "perf")]
-            perf: perf::Perf::new(),
-            module_loader: None,
-            symbol_table: HashMap::new(),
-            eval_history: String::new(),
-            persistent_roots: Default::default(),
-            sched_async_func: None,
-            codegen_plugins: HashMap::new(),
-        });
+        let mut this = Box::new(Runtime::new(gc, options, external_references));
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
         this.gc.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",
             move |visitor| {
                 let rt = unsafe { &mut *vm };
-                rt.global_object.trace(visitor);
+                match &rt.realm {
+                    Some(realm) => {
+                        realm.global_object().trace(visitor);
+                    }
+                    None => {}
+                }
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
                 rt.shadowstack.trace(visitor);
@@ -556,69 +666,16 @@ impl Runtime {
                 rt.modules.trace(visitor);
             },
         ));
-        this.global_data.empty_object_struct = Some(Structure::new_indexed(&mut this, None, false));
-        let s = Structure::new_unique_indexed(&mut this, None, false);
-        let mut proto = JsObject::new(&mut this, &s, JsObject::get_class(), ObjectTag::Ordinary);
-        this.global_data.object_prototype = Some(proto);
-        this.global_data.function_struct = Some(Structure::new_indexed(&mut this, None, false));
-        this.global_data.normal_arguments_structure =
-            Some(Structure::new_indexed(&mut this, None, false));
-        this.global_object = Some(JsGlobal::new(&mut this));
-        this.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
+        this.init_global_data();
+        this.init_module_loader();
+        this.init_internal_modules();
 
-        this.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
-        this.global_data.number_structure = Some(Structure::new_indexed(&mut this, None, false));
-        this.init_func(proto);
-        this.init_error(proto);
-        this.init_array(proto);
-        this.init_promise().ok().expect("init prom failed");
-        this.init_math();
-        crate::jsrt::number::init_number(&mut this, proto);
-        this.init_builtin();
-
-        jsrt::symbol::symbol_init(&mut this, proto);
-
-        let name = "Object".intern();
-        let mut obj_constructor = JsNativeFunction::new(&mut this, name, object_constructor, 1);
-        super::jsrt::object_init(&mut this, obj_constructor, proto);
-
-        let _ = this.global_object().define_own_property(
-            &mut this,
-            name,
-            &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
-            false,
-        );
-        let global = this.global_object();
-
-        let _name = "Object".intern();
-        let _ = this.global_object().put(
-            &mut this,
-            "globalThis".intern(),
-            JsValue::encode_object_value(global),
-            false,
-        );
-        RegExp::init(&mut this, proto);
-        jsrt::generator::init_generator(&mut this, proto);
+        match Realm::create(&mut this) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
         this.init_self_hosted();
 
-        let loader = JsNativeFunction::new(&mut this, "@loader".intern(), jsrt::module_load, 1);
-        this.module_loader = Some(loader);
-        this.add_module(
-            "std",
-            ModuleKind::NativeUninit(crate::jsrt::jsstd::init_js_std),
-        )
-        .unwrap();
-        assert!(this.modules.contains_key("std"));
-        jsrt::array_buffer::array_buffer_init(&mut this);
-        jsrt::data_view::init_data_view(&mut this);
         this.gc.undefer();
         this.gc.collect_if_necessary();
         this
@@ -632,31 +689,18 @@ impl Runtime {
         options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
-        let mut this = Box::new(Self {
-            gc,
-            options,
-            modules: HashMap::new(),
-            stack: Stack::new(),
-            global_object: None,
-            eval_history: String::new(),
-            global_data: GlobalData::default(),
-            external_references,
-            stacktrace: String::new(),
-            shadowstack: ShadowStack::new(),
-            #[cfg(feature = "perf")]
-            perf: perf::Perf::new(),
-            symbol_table: HashMap::new(),
-            module_loader: None,
-            persistent_roots: Default::default(),
-            sched_async_func: None,
-            codegen_plugins: HashMap::new(),
-        });
+        let mut this = Box::new(Runtime::new(gc, options, external_references));
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",
             move |visitor| {
                 let rt = unsafe { &mut *vm };
-                rt.global_object.trace(visitor);
+                match &rt.realm {
+                    Some(realm) => {
+                        realm.global_object().trace(visitor);
+                    }
+                    None => {}
+                }
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
                 rt.shadowstack.trace(visitor);
@@ -671,15 +715,7 @@ impl Runtime {
 
         this
     }
-    /// Create new JS runtime with `MiGC` set as GC.
-    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Runtime> {
-        Self::with_heap(default_heap(&options), options, external_references)
-    }
 
-    /// Obtain global object reference.
-    pub fn global_object(&self) -> GcPointer<JsObject> {
-        unwrap_unchecked(self.global_object)
-    }
     pub fn add_module(
         &mut self,
         name: &str,
@@ -815,10 +851,11 @@ pub struct GlobalData {
     pub(crate) map_prototype: Option<GcPointer<JsObject>>,
     pub(crate) set_prototype: Option<GcPointer<JsObject>>,
     pub(crate) regexp_structure: Option<GcPointer<Structure>>,
-    pub(crate) regexp_object: Option<GcPointer<JsObject>>,
+    pub(crate) regexp_prototype: Option<GcPointer<JsObject>>,
     pub(crate) array_buffer_prototype: Option<GcPointer<JsObject>>,
     pub(crate) array_buffer_structure: Option<GcPointer<Structure>>,
     pub(crate) data_view_structure: Option<GcPointer<Structure>>,
+    pub(crate) data_view_prototype: Option<GcPointer<JsObject>>,
 }
 
 impl GlobalData {
@@ -960,7 +997,7 @@ pub mod tests {
                 opt.replace(Box::new(job));
             }));
 
-        let mut global = starlight_runtime.global_object();
+        let mut global = starlight_runtime.realm().global_object();
 
         // create a symbol for the functions name
         let name_symbol = "setImmediate".intern();

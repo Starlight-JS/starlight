@@ -30,7 +30,7 @@
     clippy::needless_range_loop
 )]
 
-use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
+use gc::{cell::GcPointer, default_heap, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
 use vm::{arguments::Arguments, object::JsObject, value::JsValue, Runtime};
 #[macro_export]
@@ -85,7 +85,7 @@ impl Platform {
         external_references: Option<&'static [usize]>,
     ) -> Box<Runtime> {
         Self::initialize();
-        vm::Runtime::new(options, external_references)
+        Box::new(vm::Runtime::new(default_heap(&options), options, external_references))
     }
 }
 
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     letroot!(funcc = stack, *function);
     assert!(function.is_callable(), "Not a callable function");
 
-    let global = rt.global_object();
+    let global = rt.realm().global_object();
     letroot!(
         args = stack,
         Arguments::new(JsValue::encode_object_value(global), &mut [])

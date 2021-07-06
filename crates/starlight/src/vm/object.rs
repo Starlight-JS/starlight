@@ -1481,10 +1481,11 @@ impl Env {
                 )));
             } else {
                 let mut slot = Slot::new();
-                vm.global_object().put(vm, name, val, false)?;
-                vm.global_object()
+                vm.realm().global_object().put(vm, name, val, false)?;
+                vm.realm()
+                    .global_object()
                     .get_own_property_slot(vm, name, &mut slot);
-                return Ok((vm.global_object(), slot));
+                return Ok((vm.realm().global_object(), slot));
             }
         }
     }
@@ -1508,7 +1509,7 @@ impl Env {
                 current = unsafe { cur.prototype_mut() };
             }
 
-            if !vm.global_object().has_property(vm, name) {
+            if !vm.realm().global_object().has_property(vm, name) {
                 let desc = vm.description(name);
                 let msg = JsString::new(vm, format!("Can't find variable '{}'", desc));
                 return Err(JsValue::encode_object_value(JsReferenceError::new(
@@ -1516,7 +1517,7 @@ impl Env {
                 )));
             }
 
-            let prop = vm.global_object().get(vm, name)?;
+            let prop = vm.realm().global_object().get(vm, name)?;
             slot.make_uncacheable();
             slot.make_put_uncacheable();
             Ok(prop)
@@ -1552,15 +1553,13 @@ impl Env {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        vm::{object::*, value::*, *},
-        Platform,
-    };
+    use crate::{Platform, gc::default_heap, vm::{object::*, value::*, *}};
 
     #[test]
     fn test_put() {
         Platform::initialize();
-        let mut rt = Runtime::new(Options::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(default_heap(&options), options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1582,7 +1581,8 @@ mod tests {
     #[test]
     fn test_indexed() {
         Platform::initialize();
-        let mut rt = Runtime::new(Options::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(default_heap(&options), options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));

@@ -1,4 +1,9 @@
-use starlight::{gc::snapshot::Snapshot, vm::Runtime, Platform};
+
+use starlight::{
+    gc::{default_heap, snapshot::Snapshot},
+    vm::Runtime,
+    Platform,
+};
 use std::path::PathBuf;
 use structopt::*;
 
@@ -22,7 +27,12 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut rt = Runtime::new(starlight::options::Options::default(), None);
+    let options = starlight::options::Options::default();
+    let mut rt = Runtime::new(
+        default_heap(&options),
+        starlight::options::Options::default(),
+        None,
+    );
     rt.heap().defer();
     let func = rt
         .compile(

@@ -1,7 +1,11 @@
 use super::{Harness, Locale, Phase, Test, TestSuite, IGNORED};
 use fxhash::FxHashMap;
 use serde::Deserialize;
-use starlight::{prelude::Snapshot, vm::Runtime};
+use starlight::{
+    gc::default_heap,
+    prelude::{Options, Snapshot},
+    vm::Runtime,
+};
 use std::{fs, io, path::Path, str::FromStr, sync::Arc};
 /// Representation of the YAML metadata in Test262 tests.
 #[derive(Debug, Clone, Deserialize)]
@@ -119,7 +123,8 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
 
     let mut suites = Vec::new();
     let mut tests = Vec::new();
-    let mut rt = Runtime::new(Default::default(), None);
+    let options = Options::default();
+    let mut rt = Runtime::new(default_heap(&options), options, None);
     let buf = Arc::new(Snapshot::take(false, &mut rt, |_, _| {}).buffer);
     // TODO: iterate in parallel
     for entry in path.read_dir()? {
