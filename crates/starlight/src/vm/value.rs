@@ -1278,3 +1278,212 @@ impl Serializable for HashValueZero {
         self.0.serialize(serializer);
     }
 }
+
+pub mod new_value {
+    use super::*;
+    pub struct JsValue(EncodedValueDescriptor);
+    union EncodedValueDescriptor {
+        as_int64: i64,
+        as_double: f64,
+        ptr: GcPointer<dyn GcCell>,
+        as_bits: AsBits,
+    }
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[cfg(target_endian = "little")]
+    #[repr(C)]
+    struct AsBits {
+        payload: i32,
+        tag: i32,
+    }
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[cfg(target_endian = "big")]
+    #[repr(C)]
+    struct AsBits {
+        tag: i32,
+        payload: i32,
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    impl JsValue {
+        pub const INT32_TAG: u64 = 0xffffffff;
+        pub const BOOLEAN_TAG: u64 = 0xfffffffe;
+        pub const NULL_TAG: u64 = 0xfffffffd;
+        pub const UNDEFINED_TAG: u64 = 0xfffffffc;
+        pub const CELL_TAG: u64 = 0xfffffffb;
+        pub const EMPTY_VALUE_TAG: u64 = 0xfffffffa;
+        pub const DELETED_VALUE_TAG: u64 = 0xfffffff9;
+        pub const LOWEST_TAG: u64 = Self::DELETED_VALUE_TAG;
+        #[inline]
+        pub fn encode_null_value() -> Self {
+            Self(EncodedValueDescriptor {
+                as_bits: AsBits {
+                    tag: Self::NULL_TAG as _,
+                    payload: 0,
+                },
+            })
+        }
+        #[inline]
+        pub fn encode_undefined_value() -> Self {
+            Self(EncodedValueDescriptor {
+                as_bits: AsBits {
+                    tag: Self::UNDEFINED_TAG as _,
+                    payload: 0,
+                },
+            })
+        }
+        #[inline]
+        pub fn encode_bool_value(x: bool) -> Self {
+            Self(EncodedValueDescriptor {
+                as_bits: AsBits {
+                    tag: Self::BOOLEAN_TAG as _,
+                    payload: x as _,
+                },
+            })
+        }
+
+        #[inline]
+        pub fn encode_object_value<T: GcCell + ?Sized>(val: GcPointer<T>) -> Self {
+            Self(EncodedValueDescriptor {
+                as_bits: AsBits {
+                    tag: Self::CELL_TAG as _,
+                    payload: unsafe { std::mem::transmute(val) },
+                },
+            })
+        }
+        #[inline]
+        pub fn encode_empty_value() -> Self {
+            Self(EncodedValueDescriptor {
+                as_bits: AsBits {
+                    tag: Self::EMPTY_VALUE_TAG as _,
+                    payload: 0,
+                },
+            })
+        }
+        #[inline]
+        pub fn is_undefined(self) -> bool {
+            self.tag() == Self::UNDEFINED_TAG as _
+        }
+
+        #[inline]
+        pub fn is_null(self) -> bool {
+            self.tag() == Self::NULL_TAG as _
+        }
+        #[inline]
+        pub fn is_pointer(self) -> bool {
+            self.tag() == Self::CELL_TAG as _
+        }
+        #[inline]
+        pub fn is_int32(self) -> bool {
+            self.tag() == Self::INT32_TAG as _
+        }
+        #[inline]
+        pub fn is_double(self) -> bool {
+            (self.tag() as u64) < Self::LOWEST_TAG
+        }
+        pub fn is_bool(self) -> bool {
+            self.tag() == Self::BOOL_TAG as _
+        }
+        #[inline]
+        pub fn get_bool(self) -> bool {
+            assert!(self.is_bool());
+            self.payload() == 1
+        }
+        #[inline]
+        pub fn is_empty(self) -> bool {
+            self.tag() == Self::EMPTY_TAG as _
+        }
+        #[inline]
+        pub fn tag(&self) -> i32 {
+            unsafe { self.0.as_bits.tag }
+        }
+        #[inline]
+        pub fn payload(&self) -> i32 {
+            unsafe { self.0.as_bits.payload }
+        }
+    }
+    #[cfg(target_pointer_width = "64")]
+    impl JsValue {
+        /*
+         * On 64-bit platforms USE(JSVALUE64) should be defined, and we use a NaN-encoded
+         * form for immediates.
+         *
+         * The encoding makes use of unused NaN space in the IEEE754 representation.  Any value
+         * with the top 13 bits set represents a QNaN (with the sign bit set).  QNaN values
+         * can encode a 51-bit payload.  Hardware produced and C-library payloads typically
+         * have a payload of zero.  We assume that non-zero payloads are available to encode
+         * pointer and integer values.  Since any 64-bit bit pattern where the top 15 bits are
+         * all set represents a NaN with a non-zero payload, we can use this space in the NaN
+         * ranges to encode other values (however there are also other ranges of NaN space that
+         * could have been selected).
+         *
+         * This range of NaN space is represented by 64-bit numbers begining with the 15-bit
+         * hex patterns 0xFFFC and 0xFFFE - we rely on the fact that no valid double-precision
+         * numbers will fall in these ranges.
+         *
+         * The top 15-bits denote the type of the encoded JSValue:
+         *
+         *     Pointer {  0000:PPPP:PPPP:PPPP
+         *              / 0002:****:****:****
+         *     Double  {         ...
+         *              \ FFFC:****:****:****
+         *     Integer {  FFFE:0000:IIII:IIII
+         *
+         * The scheme we have implemented encodes double precision values by performing a
+         * 64-bit integer addition of the value 2^49 to the number. After this manipulation
+         * no encoded double-precision value will begin with the pattern 0x0000 or 0xFFFE.
+         * Values must be decoded by reversing this operation before subsequent floating point
+         * operations may be peformed.
+         *
+         * 32-bit signed integers are marked with the 16-bit tag 0xFFFE.
+         *
+         * The tag 0x0000 denotes a pointer, or another form of tagged immediate. Boolean,
+         * null and undefined values are represented by specific, invalid pointer values:
+         *
+         *     False:     0x06
+         *     True:      0x07
+         *     Undefined: 0x0a
+         *     Null:      0x02
+         *
+         * These values have the following properties:
+         * - Bit 1 (OtherTag) is set for all four values, allowing real pointers to be
+         *   quickly distinguished from all immediate values, including these invalid pointers.
+         * - With bit 3 masked out (UndefinedTag), Undefined and Null share the
+         *   same value, allowing null & undefined to be quickly detected.
+         *
+         * No valid JSValue will have the bit pattern 0x0, this is used to represent array
+         * holes, and as a C++ 'no value' result (e.g. JSValue() has an internal value of 0).
+         *
+         * When USE(BIGINT32), we have a special representation for BigInts that are small (32-bit at most):
+         *      0000:XXXX:XXXX:0012
+         * This representation works because of the following things:
+         * - It cannot be confused with a Double or Integer thanks to the top bits
+         * - It cannot be confused with a pointer to a Cell, thanks to bit 1 which is set to true
+         * - It cannot be confused with a pointer to wasm thanks to bit 0 which is set to false
+         * - It cannot be confused with true/false because bit 2 is set to false
+         * - It cannot be confused for null/undefined because bit 4 is set to true
+         */
+
+        pub const DOUBLE_ENCODE_OFFSET_BIT: usize = 49;
+        pub const DOUBLE_ENCODE_OFFSET: i64 = 1 << Self::DOUBLE_ENCODE_OFFSET_BIT as i64;
+        pub const NUMBER_TAG: i64 = 0xfffe000000000000u64 as i64;
+        pub const LOWEST_OF_HIGH_BITS: i64 = 1 << 49;
+
+        pub const OTHER_TAG: i32 = 0x2;
+        pub const BOOL_TAG: i32 = 0x4;
+        pub const UNDEFINED_TAG: i32 = 0x8;
+        pub const NATIVE32_TAG: i32 = 0x12;
+        pub const NATIVE32_MASK: i64 = Self::NUMBER_TAG | Self::NATIVE32_TAG as i64;
+
+        pub const VALUE_FALSE: i32 = Self::OTHER_TAG | Self::BOOL_TAG | false as i32;
+        pub const VALUE_TRUE: i32 = Self::OTHER_TAG | Self::BOOL_TAG | true as i32;
+        pub const VALUE_UNDEFINED: i32 = Self::OTHER_TAG | Self::UNDEFINED_TAG;
+        pub const VALUE_NULL: i32 = Self::OTHER_TAG;
+
+        pub const MISC_TAG: i64 =
+            Self::OTHER_TAG as i64 | Self::BOOL_TAG as i64 | Self::UNDEFINED_TAG as i64;
+        pub const NOT_CELL_MASK: i64 = Self::NUMBER_TAG as i64 | Self::OTHER_TAG as i64;
+
+        pub const VALUE_EMPTY: i64 = 0x0;
+        pub const VALUE_DELETED: i64 = 0x4;
+    }
+}

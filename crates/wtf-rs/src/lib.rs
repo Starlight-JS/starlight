@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 pub mod endian;
+pub mod pure_nan;
 pub mod segmented_vec;
 pub mod stack_bounds;
 pub mod swap_byte_order;
