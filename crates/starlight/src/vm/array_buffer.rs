@@ -5,6 +5,8 @@ use std::{
     mem::{size_of, ManuallyDrop},
     ptr::null_mut,
 };
+
+use super::class::JsClass;
 pub struct JsArrayBuffer {
     pub(crate) data: *mut u8,
     pub(crate) size: usize,
@@ -141,5 +143,11 @@ impl JsArrayBuffer {
             self.size = size;
         }
         Ok(())
+    }
+}
+
+impl JsClass for JsArrayBuffer {
+    fn class() -> &'static Class {
+        Self::get_class()
     }
 }
