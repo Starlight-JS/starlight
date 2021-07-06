@@ -85,7 +85,7 @@ impl Platform {
         external_references: Option<&'static [usize]>,
     ) -> Box<Runtime> {
         Self::initialize();
-        Box::new(vm::Runtime::new(default_heap(&options), options, external_references))
+        vm::Runtime::new(options, external_references)
     }
 }
 

@@ -12,14 +12,14 @@ criterion_main!(benches);
 fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
     let options = Options::default();
-    let mut initial_rt = Runtime::new(default_heap(&options), options, None);
+    let mut initial_rt = Runtime::new(options, None);
     let snapshot = Snapshot::take(false, &mut initial_rt, |_, _| {})
         .buffer
         .to_vec();
 
     c.bench_function("runtime from scratch", |b| {
         let options = Options::default();
-        b.iter_with_large_drop(|| Runtime::new(default_heap(&options), Options::default(), None));
+        b.iter_with_large_drop(|| Runtime::new(Options::default(), None));
     });
 
     c.bench_function("runtime from snapshot", |b| {

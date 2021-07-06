@@ -1553,13 +1553,17 @@ impl Env {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Platform, gc::default_heap, vm::{object::*, value::*, *}};
+    use crate::{
+        gc::default_heap,
+        vm::{object::*, value::*, *},
+        Platform,
+    };
 
     #[test]
     fn test_put() {
         Platform::initialize();
         let options = Options::default();
-        let mut rt = Runtime::new(default_heap(&options), options, None);
+        let mut rt = Runtime::new(options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1582,7 +1586,7 @@ mod tests {
     fn test_indexed() {
         Platform::initialize();
         let options = Options::default();
-        let mut rt = Runtime::new(default_heap(&options), options, None);
+        let mut rt = Runtime::new(options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));

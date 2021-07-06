@@ -1,19 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    bytecompiler::ByteCompiler,
-    gc::shadowstack::ShadowStack,
-    gc::Heap,
-    gc::{
-        cell::GcPointer,
-        cell::Trace,
-        cell::{GcCell, GcPointerBase, Tracer},
-        SimpleMarkingConstraint,
-    },
-    jsrt::{self},
-    options::Options,
-};
+use crate::{bytecompiler::ByteCompiler, gc::Heap, gc::shadowstack::ShadowStack, gc::{SimpleMarkingConstraint, cell::GcPointer, cell::Trace, cell::{GcCell, GcPointerBase, Tracer}, default_heap}, jsrt::{self}, options::Options};
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
@@ -275,7 +263,11 @@ impl Runtime {
         self.realm().global_object()
     }
 
-    pub fn new(gc: Heap, options: Options, external_references: Option<&'static [usize]>) -> Self {
+    pub fn new_raw(
+        gc: Heap,
+        options: Options,
+        external_references: Option<&'static [usize]>,
+    ) -> Self {
         Self {
             gc,
             options,
@@ -295,6 +287,10 @@ impl Runtime {
             codegen_plugins: HashMap::new(),
             realm: None,
         }
+    }
+
+    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Self> {
+        Self::with_heap(default_heap(&options), options, external_references)
     }
 
     /// Collect stacktrace.
@@ -646,7 +642,7 @@ impl Runtime {
         options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
-        let mut this = Box::new(Runtime::new(gc, options, external_references));
+        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
         let vm = &mut *this as *mut Runtime;
         this.gc.defer();
         this.gc.add_constraint(SimpleMarkingConstraint::new(
@@ -689,7 +685,7 @@ impl Runtime {
         options: Options,
         external_references: Option<&'static [usize]>,
     ) -> Box<Self> {
-        let mut this = Box::new(Runtime::new(gc, options, external_references));
+        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
         let vm = &mut *this as *mut Runtime;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",

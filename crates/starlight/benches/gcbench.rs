@@ -15,7 +15,7 @@ use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
     let options = Options::default();
-    let rrt = Runtime::new(default_heap(&options), Options::default(), None);
+    let rrt = Runtime::new(Options::default(), None);
     let stack = rrt.shadowstack();
     let mut rt = rrt;
 

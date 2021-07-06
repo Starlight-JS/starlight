@@ -422,7 +422,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
 
     if suite.to_string_lossy().ends_with(".js") {
         let options = Options::default();
-        let mut rt = Runtime::new(default_heap(&options), options, None);
+        let mut rt = Runtime::new(options, None);
         let buf = Snapshot::take(false, &mut rt, |_, _| {});
         let test = read_test(&test262_path.join(suite), Arc::new(buf.buffer))
             .expect("could not get the test to run");
