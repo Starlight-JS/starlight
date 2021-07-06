@@ -83,7 +83,6 @@ path = "src/bin/sl.rs"
 name = "starlight"
 crate-type = ["dylib", "rlib"]
 [target.'cfg(all(not(wasm),target_pointer_width="64"))'.dependencies]
-tagged-box = { version="0.1", features=["57bits"], default-features=false }
 libffi = { version="1.0.0", optional=true }
 libloading = { version="0.7.0", optional=true }
 
