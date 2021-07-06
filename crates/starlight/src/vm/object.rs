@@ -5,7 +5,7 @@ use super::{
     arguments::*,
     array_storage::ArrayStorage,
     attributes::*,
-    class::Class,
+    class::{Class, JsClass},
     error::*,
     function::*,
     global::JsGlobal,
@@ -20,15 +20,22 @@ use super::{
     Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
-use crate::gc::{
-    cell::{GcCell, GcPointer, Trace, Tracer},
-    snapshot::deserializer::Deserializable,
-};
 use crate::vm::promise::JsPromise;
+use crate::{
+    gc::{
+        cell::{GcCell, GcPointer, Trace, Tracer},
+        snapshot::{deserializer::Deserializable, serializer::Serializable},
+    },
+    JsTryFrom,
+};
 use std::{
     collections::hash_map::Entry,
+    intrinsics::{likely, transmute, unlikely},
+    marker::PhantomData,
     mem::{size_of, ManuallyDrop},
+    ops::{Deref, DerefMut},
 };
+
 use wtf_rs::object_offsetof;
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EnumerationMode {
@@ -95,6 +102,7 @@ pub struct JsObject {
     pub(crate) indexed: IndexedElements,
     pub(crate) slots: FixedStorage,
     pub(crate) flags: u32,
+
     pub(crate) object_data_start: u8,
 }
 impl JsObject {
@@ -1428,127 +1436,6 @@ impl GcPointer<JsObject> {
         Ok(true)
     }
 }
-pub struct Env {
-    pub record: GcPointer<JsObject>,
-}
-
-impl Env {
-    pub fn is_mutable(&mut self, vm: &mut Runtime, name: Symbol) -> bool {
-        let prop = self.record.get_property(vm, name);
-
-        prop.is_writable()
-    }
-    pub fn set_localiable(
-        &mut self,
-        vm: &mut Runtime,
-        name: Symbol,
-        val: JsValue,
-        strict: bool,
-    ) -> Result<(GcPointer<JsObject>, Slot), JsValue> {
-        if self.record.has_own_property(vm, name) {
-            if !self.is_mutable(vm, name) {
-                let msg = JsString::new(vm, "Assignment to constant variable");
-                return Err(JsValue::encode_object_value(JsTypeError::new(
-                    vm, msg, None,
-                )));
-            }
-            let mut slot = Slot::new();
-            self.record.put_slot(vm, name, val, &mut slot, strict)?;
-            return Ok((self.record, slot));
-        } else {
-            let mut current = self.record.prototype().cloned();
-            while let Some(mut cur) = current {
-                if cur.has_own_property(vm, name) {
-                    let prop = cur.get_property(vm, name);
-                    if !(prop.is_writable() && prop.raw != NONE) {
-                        let msg = JsString::new(vm, "Assignment to constant variable");
-                        return Err(JsValue::encode_object_value(JsTypeError::new(
-                            vm, msg, None,
-                        )));
-                    }
-                    let mut slot = Slot::new();
-                    cur.put_slot(vm, name, val, &mut slot, strict)?;
-                    return Ok((cur, slot));
-                }
-                current = cur.prototype().cloned();
-            }
-
-            if strict {
-                let desc = vm.description(name);
-                let msg = JsString::new(vm, format!("Variable '{}' does not exist", desc));
-                return Err(JsValue::encode_object_value(JsTypeError::new(
-                    vm, msg, None,
-                )));
-            } else {
-                let mut slot = Slot::new();
-                vm.global_object().put(vm, name, val, false)?;
-                vm.global_object()
-                    .get_own_property_slot(vm, name, &mut slot);
-                return Ok((vm.global_object(), slot));
-            }
-        }
-    }
-    pub fn get_localiable(&mut self, vm: &mut Runtime, name: Symbol) -> Result<JsValue, JsValue> {
-        self.record.get(vm, name)
-    }
-    pub fn get_localiable_slot(
-        &mut self,
-        vm: &mut Runtime,
-        name: Symbol,
-        slot: &mut Slot,
-    ) -> Result<JsValue, JsValue> {
-        if self.record.get_own_property_slot(vm, name, slot) {
-            return Ok(slot.value());
-        } else {
-            let mut current = unsafe { self.record.prototype_mut() };
-            while let Some(cur) = current {
-                if cur.get_own_property_slot(vm, name, slot) {
-                    return Ok(slot.value());
-                }
-                current = unsafe { cur.prototype_mut() };
-            }
-
-            if !vm.global_object().has_property(vm, name) {
-                let desc = vm.description(name);
-                let msg = JsString::new(vm, format!("Can't find variable '{}'", desc));
-                return Err(JsValue::encode_object_value(JsReferenceError::new(
-                    vm, msg, None,
-                )));
-            }
-
-            let prop = vm.global_object().get(vm, name)?;
-            slot.make_uncacheable();
-            slot.make_put_uncacheable();
-            Ok(prop)
-        }
-    }
-    pub fn has_own_variable(&mut self, vm: &mut Runtime, name: Symbol) -> bool {
-        self.record.has_own_property(vm, name)
-    }
-    pub fn declare_variable(
-        &mut self,
-        vm: &mut Runtime,
-        name: Symbol,
-        val: JsValue,
-        mutable: bool,
-    ) -> Result<(), JsValue> {
-        let desc = DataDescriptor::new(val, if mutable { W | C | E } else { C | E });
-
-        if self.has_own_variable(vm, name) {
-            let desc = vm.description(name);
-            let msg = JsString::new(
-                vm,
-                format!("Identifier '{}' already exists in this scope", desc),
-            );
-            return Err(JsValue::encode_object_value(JsSyntaxError::new(
-                vm, msg, None,
-            )));
-        }
-
-        let _ = self.record.define_own_property(vm, name, &*desc, false);
-        Ok(())
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -1635,5 +1522,266 @@ mod tests {
                 unreachable!();
             }
         }
+    }
+}
+
+impl JsClass for JsObject {
+    fn class() -> &'static Class {
+        Self::get_class()
+    }
+}
+
+impl JsClass for () {
+    fn class() -> &'static Class {
+        JsObject::get_class()
+    }
+}
+
+pub struct TypedJsObject<T: JsClass> {
+    object: GcPointer<JsObject>,
+    marker: PhantomData<T>,
+}
+impl<T: JsClass> JsTryFrom<GcPointer<JsObject>> for TypedJsObject<T> {
+    #[inline]
+    fn try_from(vm: &mut Runtime, value: GcPointer<JsObject>) -> Result<Self, JsValue> {
+        if likely(value.is_class(T::class())) {
+            return Ok(Self {
+                object: value,
+                marker: PhantomData,
+            });
+        } else {
+            Err(JsValue::new(vm.new_type_error(format!(
+                "Expected class '{}' but found '{}'",
+                T::class().name,
+                value.class.name
+            ))))
+        }
+    }
+}
+
+impl<T: JsClass> JsTryFrom<JsValue> for TypedJsObject<T> {
+    #[inline]
+    fn try_from(vm: &mut Runtime, value: JsValue) -> Result<Self, JsValue> {
+        if unlikely(!value.is_jsobject()) {
+            return Err(JsValue::new(vm.new_type_error("Expected object")));
+        }
+        Self::try_from(vm, value.get_jsobject())
+    }
+}
+impl<T: JsClass> TypedJsObject<T> {
+    pub fn new(value: impl Into<Self>) -> Self {
+        value.into()
+    }
+    pub fn object(&self) -> GcPointer<JsObject> {
+        self.object
+    }
+
+    pub fn seal(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {
+        self.object.seal(vm)
+    }
+    pub fn freeze(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {
+        self.object.freeze(vm)
+    }
+
+    pub fn get_own_property(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+    ) -> Option<PropertyDescriptor> {
+        self.object.get_own_property(vm, name)
+    }
+    pub fn define_own_property(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object.define_own_property(vm, name, desc, throwable)
+    }
+
+    pub fn define_own_non_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object
+            .define_own_non_indexed_property_slot(vm, name, desc, slot, throwable)
+    }
+
+    pub fn define_own_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object
+            .define_own_property_slot(vm, name, desc, slot, throwable)
+    }
+
+    pub fn get_own_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        index: u32,
+        slot: &mut Slot,
+    ) -> bool {
+        self.object.get_own_indexed_property_slot(vm, index, slot)
+    }
+
+    pub fn get_non_indexed_slot(
+        &mut self,
+        rt: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        self.object.get_non_indexed_slot(rt, name, slot)
+    }
+
+    pub fn get_indexed_slot(
+        &mut self,
+        rt: &mut Runtime,
+        index: u32,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        self.object.get_indexed_slot(rt, index, slot)
+    }
+
+    pub fn get_slot(
+        &mut self,
+        rt: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        self.object.get_slot(rt, name, slot)
+    }
+
+    pub fn get(&mut self, rt: &mut Runtime, name: Symbol) -> Result<JsValue, JsValue> {
+        self.object.get(rt, name)
+    }
+
+    pub fn get_own_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        self.object.get_own_property_slot(vm, name, slot)
+    }
+
+    pub fn define_own_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        index: u32,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object
+            .define_own_indexed_property_slot(vm, index, desc, slot, throwable)
+    }
+
+    pub fn has_own_property(&mut self, rt: &mut Runtime, name: Symbol) -> bool {
+        self.object.has_own_property(rt, name)
+    }
+
+    pub fn has_property(&mut self, rt: &mut Runtime, name: Symbol) -> bool {
+        self.object.has_property(rt, name)
+    }
+
+    pub fn put(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        val: JsValue,
+        throwable: bool,
+    ) -> Result<(), JsValue> {
+        self.object.put(vm, name, val, throwable)
+    }
+    pub fn get_property(&mut self, vm: &mut Runtime, name: Symbol) -> PropertyDescriptor {
+        self.object.get_property(vm, name)
+    }
+}
+
+impl<T: JsClass> From<JsValue> for TypedJsObject<T> {
+    fn from(value: JsValue) -> Self {
+        assert!(value.is_jsobject(), "Object expected");
+        let object = value.get_jsobject();
+        assert!(
+            object.is_class(T::class()),
+            "Expected class '{}' but found '{}'",
+            T::class().name,
+            object.class.name
+        );
+        Self {
+            object,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<T: JsClass> From<GcPointer<JsObject>> for TypedJsObject<T> {
+    fn from(value: GcPointer<JsObject>) -> Self {
+        let object = value;
+        assert!(
+            object.is_class(T::class()),
+            "Expected class '{}' but found '{}'",
+            T::class().name,
+            object.class.name
+        );
+        Self {
+            object,
+            marker: PhantomData,
+        }
+    }
+}
+impl<T: JsClass> Deref for TypedJsObject<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &**self.object.data::<T>()
+    }
+}
+
+impl<T: JsClass> DerefMut for TypedJsObject<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut **self.object.data::<T>()
+    }
+}
+unsafe impl<T: JsClass> Trace for TypedJsObject<T> {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.object.trace(visitor)
+    }
+}
+impl<T: JsClass> Serializable for TypedJsObject<T> {
+    fn serialize(&self, serializer: &mut crate::gc::snapshot::serializer::SnapshotSerializer) {
+        self.object.serialize(serializer);
+    }
+}
+
+impl<T: JsClass> Deserializable for TypedJsObject<T> {
+    unsafe fn deserialize_inplace(
+        deser: &mut crate::gc::snapshot::deserializer::Deserializer,
+    ) -> Self {
+        Self {
+            object: unsafe { transmute(deser.get_reference()) },
+            marker: PhantomData,
+        }
+    }
+    unsafe fn deserialize(
+        _at: *mut u8,
+        _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
+    ) {
+        unreachable!()
+    }
+
+    unsafe fn allocate(
+        _rt: &mut Runtime,
+        _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
+    ) -> *mut crate::gc::cell::GcPointerBase {
+        unreachable!()
     }
 }

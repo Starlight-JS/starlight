@@ -163,3 +163,7 @@ macro_rules! define_jsclass {
         define_jsclass_with_symbol!($class, $name, $name);
     };
 }
+
+pub trait JsClass {
+    fn class() -> &'static Class;
+}

@@ -172,3 +172,7 @@ pub mod prelude {
     };
     pub use super::Platform;
 }
+
+pub trait JsTryFrom<T>: Sized {
+    fn try_from(vm: &mut Runtime, value: T) -> Result<Self, JsValue>;
+}

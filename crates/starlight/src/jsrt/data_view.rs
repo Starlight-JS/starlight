@@ -4,7 +4,8 @@ use wtf_rs::swap_byte_order::SwapByteOrder;
 
 use crate::{
     prelude::*,
-    vm::{array_buffer::JsArrayBuffer, data_view::JsDataView},
+    vm::{array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject},
+    JsTryFrom,
 };
 pub fn data_view_prototype_buffer(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(rt)?;
@@ -78,24 +79,19 @@ pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static
     rt: &mut Runtime,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
-    let this = args.this.to_object(rt)?;
-    if !this.is_class(JsDataView::get_class()) {
-        return Err(JsValue::new(rt.new_type_error(
-            "DataView.prototype.set<T> called on a non DataView object",
-        )));
-    }
+    let this = TypedJsObject::<JsDataView>::try_from(rt, args.this)?;
 
     let res = super::to_index(rt, args.at(0))?;
     let byte_offset = res as usize;
     let little_endian = args.at(2).to_boolean();
 
-    if !this.data::<JsDataView>().attached() {
+    if !this.attached() {
         return Err(JsValue::new(rt.new_type_error(
             "DataView.prototype.set<T> called on a detached ArrayBuffer",
         )));
     }
 
-    if byte_offset + size_of::<T>() > this.data::<JsDataView>().byte_length() {
+    if byte_offset + size_of::<T>() > this.byte_length() {
         return Err(JsValue::new(rt.new_range_error(format!(
             "DataView.prototype.set<T>(): Cannot write that many bytes {}",
             byte_offset + size_of::<T>()
@@ -106,35 +102,25 @@ pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static
     unsafe {
         if TypeId::of::<u8>() == TypeId::of::<T>() {
             let dest = num.clamp(u8::MIN as _, u8::MAX as _);
-            this.data::<JsDataView>()
-                .set::<u8>(byte_offset, dest as _, little_endian);
+            this.set::<u8>(byte_offset, dest as _, little_endian);
         } else if TypeId::of::<f64>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<f64>(byte_offset, num, little_endian);
+            this.set::<f64>(byte_offset, num, little_endian);
         } else if TypeId::of::<f32>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<f32>(byte_offset, num as _, little_endian);
+            this.set::<f32>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<i64>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<i64>(byte_offset, num as _, little_endian);
+            this.set::<i64>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<u64>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<u64>(byte_offset, num as _, little_endian);
+            this.set::<u64>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<u32>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<u32>(byte_offset, num as _, little_endian);
+            this.set::<u32>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<u16>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<f64>(byte_offset, num as _, little_endian);
+            this.set::<f64>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<i32>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<f64>(byte_offset, num as _, little_endian);
+            this.set::<f64>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<i16>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<f64>(byte_offset, num as _, little_endian);
+            this.set::<f64>(byte_offset, num as _, little_endian);
         } else if TypeId::of::<i8>() == TypeId::of::<T>() {
-            this.data::<JsDataView>()
-                .set::<f64>(byte_offset, num as _, little_endian);
+            this.set::<f64>(byte_offset, num as _, little_endian);
         } else {
             unreachable!();
         }
@@ -156,17 +142,17 @@ pub fn data_view_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsVal
             None
         }
     });
-    let buffer = if buffer.is_none() {
+    let buffer = TypedJsObject::<JsArrayBuffer>::new(if buffer.is_none() {
         return Err(JsValue::new(rt.new_type_error(
             "new DataView(buffer, [byteOffset], [byteLength]): buffer must be an ArrayBuffer",
         )));
     } else {
         buffer.unwrap()
-    };
+    });
     let byte_length = args.at(2);
     let res = super::to_index(rt, args.at(1))?;
     let offset = res as usize;
-    let buffer_length = buffer.data::<JsArrayBuffer>().size();
+    let buffer_length = buffer.size();
     if offset > buffer_length {
         return Err(JsValue::new(rt.new_range_error("new DataView(buffer, [byteOffset], byteLength]): byteOffset must be <= the buffer's byte length")));
     }

@@ -22,9 +22,10 @@ use std::{
 
 use super::{
     attributes::*,
+    class::JsClass,
     error::*,
     number::*,
-    object::{JsHint, JsObject},
+    object::{JsHint, JsObject, TypedJsObject},
     slot::*,
     string::*,
     symbol_table::*,
@@ -830,7 +831,11 @@ impl JsValue {
         Ok(())
     }
 }
-
+impl<T: JsClass> From<TypedJsObject<T>> for JsValue {
+    fn from(x: TypedJsObject<T>) -> Self {
+        Self::from(x.object())
+    }
+}
 impl From<f64> for JsValue {
     fn from(x: f64) -> Self {
         Self::encode_untrusted_f64_value(x)
