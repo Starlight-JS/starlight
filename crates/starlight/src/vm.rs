@@ -4,7 +4,6 @@
 use crate::{
     bytecompiler::ByteCompiler,
     gc::default_heap,
-    gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{
         cell::GcPointer,
@@ -12,6 +11,7 @@ use crate::{
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
     },
+    gc::{safepoint::GlobalSafepoint, shadowstack::ShadowStack},
     jsrt::{self, object::*, regexp::RegExp},
     options::Options,
 };
@@ -151,6 +151,7 @@ pub struct Runtime {
     pub(crate) eval_history: String,
     persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
     sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
+    pub(crate) safepoint: GlobalSafepoint,
 }
 
 impl Runtime {
@@ -525,6 +526,7 @@ impl Runtime {
     ) -> Box<Self> {
         let mut this = Box::new(Self {
             gc,
+            safepoint: GlobalSafepoint::new(),
             options,
             stack: Stack::new(),
             modules: HashMap::new(),
@@ -635,6 +637,7 @@ impl Runtime {
         let mut this = Box::new(Self {
             gc,
             options,
+            safepoint: GlobalSafepoint::new(),
             modules: HashMap::new(),
             stack: Stack::new(),
             global_object: None,
@@ -671,7 +674,7 @@ impl Runtime {
 
         this
     }
-    /// Create new JS runtime with `MiGC` set as GC.
+    /// Create new JS runtime.
     pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Runtime> {
         Self::with_heap(default_heap(&options), options, external_references)
     }
