@@ -1,6 +1,3 @@
-[submodule "mir"]
-    path = crates/libmir-sys/mir
-    url = https://github.com/vnmakarov/mir
 [submodule "test262"]
-	path = test262
-	url = https://github.com/tc39/test262
+    url = https://github.com/tc39/test262
+    path = test262
