@@ -73,6 +73,7 @@ impl Runtime {
             JsValue::encode_undefined_value(),
             false,
         );
+        let _ = global.put(self, "NaN".intern(), JsValue::encode_nan_value(), false);
         let func = JsNativeFunction::new(self, "isFinite".intern(), global::is_finite, 1);
         let _ = global.put(
             self,

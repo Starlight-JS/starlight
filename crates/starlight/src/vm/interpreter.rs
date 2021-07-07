@@ -1369,6 +1369,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 return Ok(JsValue::encode_native_u32(FuncRet::YieldStar as u32));
             }
             Opcode::OP_AWAIT => return Ok(JsValue::encode_native_u32(FuncRet::Await as u32)),
+            Opcode::OP_IS_OBJECT => {
+                let val = frame.pop();
+                frame.push(JsValue::new(val.is_jsobject()));
+            }
             x => {
                 panic!("NYI: {:?}", x);
             }

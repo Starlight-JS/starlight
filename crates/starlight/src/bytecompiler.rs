@@ -2383,6 +2383,10 @@ impl ByteCompiler {
 
                 self.emit(Opcode::OP_IS_CALLABLE, &[], false);
             }
+            "___isObject" => {
+                self.expr(&call.args[0].expr, true, false)?;
+                self.emit(Opcode::OP_IS_OBJECT, &[], false);
+            }
             "___isConstructor" => {
                 self.expr(&call.args[0].expr, true, false)?;
 

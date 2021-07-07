@@ -8,8 +8,23 @@ let strCharCodeAt = String.prototype.charCodeAt;
 let strSubstring = String.prototype.substring;
 let arrayPush = Array.prototype.push;
 let regexExec = RegExp.prototype.exec;
+let regexBuiltinExec = regexExec;
 let splitFast = RegExp.___splitFast;
 let match = RegExp.prototype[Symbol.match];
+
+let regExpExec = function (regexp, str) {
+    "use strict";
+    var exec = regexp.exec;
+    var builtinExec = regexBuiltinExec;
+    if (exec != builtinExec && ___isCallable(exec)) {
+        var result = exec.___call(regexp, str);
+        if (result !== null && !___isObject(result))
+            throw new TypeError("The result of a RegExp exec must be null or an object");
+        return result;
+    }
+
+    return builtinExec.___call(regexp, str);
+}
 RegExp.prototype[Symbol.matchAll] = function matchAll(strArg) {
     "use strict";
 
@@ -151,7 +166,8 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
 
     while (!done) {
 
-        result = regexExec.___call(regexp, str) // regexp.exec(str);
+        result = regExpExec(regexp, str) // regexp.exec(str);
+
         if (result === null)
             done = true;
         else {
@@ -171,6 +187,7 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
     var nextSourcePosition = 0;
 
     for (var i = 0, resultListLength = resultList.length; i < resultListLength; ++i) {
+
         var result = resultList[i];
         var nCaptures = result.length - 1;
         if (nCaptures < 0)
@@ -234,7 +251,8 @@ RegExp.prototype[Symbol.replace] = function (strArg, replace) {
 let hasObservableSideEffectsForSplit = function (regexp) {
     if (regexp[Symbol.match] !== match)
         return true;
-
+    if (regexp.exec !== regexBuiltinExec)
+        return true
     return typeof regexp.lastIndex !== "number";
 }
 
@@ -263,7 +281,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
 
     let size = str.length;
     if (!size) {
-        var z = regexExec.___call(splitter, str);
+        var z = regExpExec(splitter, str);
         if (z !== null)
             return result;
         result[0] = str;
@@ -279,7 +297,7 @@ RegExp.prototype[Symbol.split] = function (string, limit) {
         // a. Perform ? Set(splitter, "lastIndex", q, true).
         splitter.lastIndex = matchPosition;
         // b. Let z be ? RegExpExec(splitter, S).
-        var matches = regexExec.___call(splitter, str);
+        var matches = regExpExec(splitter, str);
         // c. If z is null, let q be AdvanceStringIndex(S, q, unicodeMatching).
         if (matches === null)
             matchPosition = __advanceStringIndex__(str, matchPosition, unicodeMatching);
