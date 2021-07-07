@@ -108,7 +108,7 @@ fn generate_size_classes(dump_size_classes: bool, sz_class_progression: f64) -> 
 
     add(&mut result, 256);
     //add(&mut result, size_of::<JsObject>());
-    result.sort();
+    result.sort_unstable();
     result.dedup();
     result.shrink_to_fit();
     logln_if!(dump_size_classes, "Heap size class dump: {:?}", result);
@@ -241,7 +241,9 @@ impl Space {
     }
     #[inline]
     pub fn allocate(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
-        let ptr = if size <= LARGE_CUTOFF {
+        
+
+        if size <= LARGE_CUTOFF {
             let p = self.allocate_small(size, threshold);
             debug_assert!(!self.live_bitmap.test(p as _));
             self.live_bitmap.set(p as _);
@@ -249,9 +251,7 @@ impl Space {
             p
         } else {
             self.precise_allocations.alloc(size, threshold).to_mut_ptr()
-        };
-
-        ptr
+        }
     }
     fn allocate_small(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
         unsafe {

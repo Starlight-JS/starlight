@@ -2308,8 +2308,8 @@ impl ByteCompiler {
     pub fn handle_codegen_plugin_call(&mut self, call: &CallExpr) -> Result<(), JsValue> {
         let plugin_name = if let ExprOrSuper::Expr(expr) = &call.callee {
             if let Expr::Ident(x) = &**expr {
-                let str = &*x.sym;
-                str
+                
+                &*x.sym
             } else {
                 return Err(JsValue::new(
                     self.rt.new_syntax_error("Incorrect codegen plugin syntax"),
@@ -2382,6 +2382,10 @@ impl ByteCompiler {
                 self.expr(&call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_IS_CALLABLE, &[], false);
+            }
+            "___isObject" => {
+                self.expr(&call.args[0].expr, true, false)?;
+                self.emit(Opcode::OP_IS_OBJECT, &[], false);
             }
             "___isConstructor" => {
                 self.expr(&call.args[0].expr, true, false)?;

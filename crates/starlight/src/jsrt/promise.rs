@@ -153,7 +153,7 @@ pub fn promise_static_resolve(vm: &mut Runtime, args: &Arguments) -> Result<JsVa
 
     let res = JsPromise::new_unresolving(vm);
     let value = args.at(0);
-    if let Some(prom_val) = res.ok() {
+    if let Ok(prom_val) = res {
         let mut prom_js_obj = prom_val.get_jsobject();
         let prom: &mut JsPromise = prom_js_obj.as_promise_mut();
         prom.resolve(vm, prom_val, value)?;
@@ -171,7 +171,7 @@ pub fn promise_static_reject(vm: &mut Runtime, args: &Arguments) -> Result<JsVal
 
     let res = JsPromise::new_unresolving(vm);
     let value = args.at(0);
-    if let Some(prom_val) = res.ok() {
+    if let Ok(prom_val) = res {
         let mut prom_js_obj = prom_val.get_jsobject();
         let prom: &mut JsPromise = prom_js_obj.as_promise_mut();
         prom.reject(vm, prom_val, value)?;

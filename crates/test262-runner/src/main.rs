@@ -4,6 +4,7 @@
     clippy::field_reassign_with_default
 )]
 pub mod exec;
+pub mod js262;
 pub mod read;
 pub mod results;
 use self::read::{read_harness, read_suite, read_test, MetaData, Negative, TestFlag};

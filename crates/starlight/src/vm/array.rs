@@ -5,6 +5,7 @@ use std::intrinsics::unlikely;
 
 use super::{
     attributes::*,
+    class::JsClass,
     error::{JsRangeError, JsTypeError},
     indexed_elements::MAX_VECTOR_SIZE,
     object::*,
@@ -420,5 +421,11 @@ impl GcPointer<JsObject> {
         self.indexed.set_length(len);
 
         Ok(true)
+    }
+}
+
+impl JsClass for JsArray {
+    fn class() -> &'static super::class::Class {
+        Self::get_class()
     }
 }

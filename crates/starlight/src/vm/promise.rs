@@ -321,7 +321,7 @@ impl JsPromise {
                 let mut prom_js_object = prom_val.get_jsobject();
                 let prom_self: &mut JsPromise = prom_js_object.as_promise_mut();
 
-                if let Some(ok_resolution) = prom_self.resolution.unwrap().ok() {
+                if let Ok(ok_resolution) = prom_self.resolution.unwrap() {
                     for sub in &prom_self.subs {
                         // invoke 0, resolve 3
                         if let Some(jsFunc) = sub.0 {
