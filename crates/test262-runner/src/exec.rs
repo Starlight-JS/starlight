@@ -2,7 +2,7 @@ use super::{
     Harness, Outcome, Phase, SuiteResult, Test, TestFlags, TestOutcomeResult, TestResult,
     TestSuite, IGNORED,
 };
-use colored::Colorize;
+
 use colored::Colorize;
 use rayon::prelude::*;
 use starlight::{
@@ -11,7 +11,7 @@ use starlight::{
     vm::{parse, Runtime},
 };
 use std::panic;
-use std::panic::{self, AssertUnwindSafe};
+use std::panic::AssertUnwindSafe;
 
 impl TestSuite {
     pub(crate) fn run_main(&self, harness: &Harness, verbose: u8) -> SuiteResult {
