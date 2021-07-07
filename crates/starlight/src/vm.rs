@@ -3,8 +3,9 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
     bytecompiler::ByteCompiler,
-    gc::shadowstack::ShadowStack,
     gc::default_heap,
+    gc::safepoint::GlobalSafepoint,
+    gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{
         cell::GcPointer,
@@ -13,7 +14,6 @@ use crate::{
         SimpleMarkingConstraint,
     },
     jsrt::{self},
-    gc::{safepoint::GlobalSafepoint},
     options::Options,
 };
 use arguments::Arguments;
@@ -181,7 +181,6 @@ unsafe impl Trace for Realm {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.global_object.trace(visitor);
     }
-    
 }
 
 impl Runtime {
@@ -205,6 +204,9 @@ impl Runtime {
         self.init_promise_in_realm().ok().expect("init prom failed");
         self.init_array_buffer_in_realm()?;
         self.init_data_view_in_realm()?;
+
+        self.init_self_hosted();
+
         Ok(())
     }
 
@@ -701,7 +703,6 @@ impl Runtime {
         ));
 
         this.create_realm();
-        this.init_self_hosted();
         this.init_module_loader();
         this.init_internal_modules();
 

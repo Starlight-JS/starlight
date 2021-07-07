@@ -179,7 +179,6 @@ struct TestSuite {
     name: Box<str>,
     suites: Vec<TestSuite>,
     tests: Vec<Test>,
-    snapshot: Arc<Box<[u8]>>,
 }
 
 /// Outcome of a test suite.
@@ -422,8 +421,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
         let options = Options::default();
         let mut rt = Runtime::new(options, None);
         let buf = Snapshot::take(false, &mut rt, |_, _| {});
-        let test = read_test(&test262_path.join(suite))
-            .expect("could not get the test to run");
+        let test = read_test(&test262_path.join(suite)).expect("could not get the test to run");
 
         if verbose != 0 {
             println!("Test loaded, starting...");
