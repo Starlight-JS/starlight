@@ -372,7 +372,7 @@ impl Test {
     ) -> Result<(), String> {
         // Create new Realm
         // TODO: in parallel.
-        context.create_realm();
+        context.create_realm().unwrap_or_else(|_| unreachable!());
 
         /*let mut context = Runtime::new(
             RuntimeParams::default().with_dump_bytecode(false),
