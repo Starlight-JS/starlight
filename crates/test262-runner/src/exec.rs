@@ -3,11 +3,16 @@ use super::{
     TestSuite, IGNORED,
 };
 use colored::Colorize;
-use starlight::{gc::default_heap, prelude::{Deserializer, Options}, vm::{Realm, Runtime, parse}};
+use starlight::vm::{parse, Runtime};
 use std::panic::{self, AssertUnwindSafe};
 
 impl TestSuite {
-    pub(crate) fn run_main(&self, harness: &Harness, verbose: u8, rt: &mut Box<Runtime>) -> SuiteResult {
+    pub(crate) fn run_main(
+        &self,
+        harness: &Harness,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
         }
@@ -16,14 +21,14 @@ impl TestSuite {
         let suites: Vec<_> = self
             .suites
             .iter()
-            .map(|suite| suite.run(harness, verbose,rt))
+            .map(|suite| suite.run(harness, verbose, rt))
             .collect();
 
         // TODO: in parallel
         let tests: Vec<_> = self
             .tests
             .iter()
-            .map(|test| test.run(harness, verbose,rt))
+            .map(|test| test.run(harness, verbose, rt))
             .flatten()
             .collect();
 
@@ -78,7 +83,7 @@ impl TestSuite {
         }
     }
     /// Runs the test suite.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8,rt: &mut Box<Runtime>) -> SuiteResult {
+    pub(crate) fn run(&self, harness: &Harness, verbose: u8, rt: &mut Box<Runtime>) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
         }
@@ -87,14 +92,14 @@ impl TestSuite {
         let suites: Vec<_> = self
             .suites
             .iter()
-            .map(|suite| suite.run(harness, verbose,rt))
+            .map(|suite| suite.run(harness, verbose, rt))
             .collect();
 
         // TODO: in parallel
         let tests: Vec<_> = self
             .tests
             .iter()
-            .map(|test| test.run(harness, verbose,rt))
+            .map(|test| test.run(harness, verbose, rt))
             .flatten()
             .collect();
 
@@ -152,7 +157,12 @@ impl TestSuite {
 
 impl Test {
     /// Runs the test.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8, rt: &mut Box<Runtime>) -> Vec<TestResult> {
+    pub(crate) fn run(
+        &self,
+        harness: &Harness,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> Vec<TestResult> {
         let mut results = Vec::new();
         if self.flags.contains(TestFlags::STRICT) {
             results.push(self.run_once(harness, true, verbose, rt));
@@ -166,7 +176,13 @@ impl Test {
     }
 
     /// Runs the test once, in strict or non-strict mode
-    fn run_once(&self, harness: &Harness, strict: bool, verbose: u8, rt: &mut Box<Runtime>) -> TestResult {
+    fn run_once(
+        &self,
+        harness: &Harness,
+        strict: bool,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> TestResult {
         if verbose >= 1 {
             eprintln!(
                 "Starting `{}` {}",
@@ -216,9 +232,7 @@ impl Test {
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => val
-                                    .to_string(rt)
-                                    .unwrap_or_else(|_| String::new()),
+                                Ok(val) => val.to_string(rt).unwrap_or_else(|_| String::new()),
                                 Err(e) => format!(
                                     "Uncaught {}",
                                     e.to_string(rt).unwrap_or_else(|_| String::new())
@@ -261,19 +275,12 @@ impl Test {
                     if let Err(e) = parse(&self.content.as_ref(), strict) {
                         (false, format!("Uncaught {:?}", e))
                     } else {
-                        match self.set_up_env(&harness, strict,rt) {
+                        match self.set_up_env(&harness, strict, rt) {
                             Ok(_) => {
-                                match rt.eval_internal(
-                                    None,
-                                    false,
-                                    &self.content.as_ref(),
-                                    false,
-                                ) {
-                                    Ok(res) => (
-                                        false,
-                                        res.to_string(rt)
-                                            .unwrap_or_else(|_| String::new()),
-                                    ),
+                                match rt.eval_internal(None, false, &self.content.as_ref(), false) {
+                                    Ok(res) => {
+                                        (false, res.to_string(rt).unwrap_or_else(|_| String::new()))
+                                    }
                                     Err(e) => {
                                         let passed = e
                                             .to_string(rt)
@@ -284,8 +291,7 @@ impl Test {
                                             passed,
                                             format!(
                                                 "Uncaught {}",
-                                                e.to_string(rt)
-                                                    .unwrap_or_else(|_| String::new())
+                                                e.to_string(rt).unwrap_or_else(|_| String::new())
                                             ),
                                         )
                                     }
@@ -357,10 +363,15 @@ impl Test {
     }
 
     /// Sets the environment up to run the test.
-    fn set_up_env(&self, harness: &Harness, _strict: bool, context: &mut Box<Runtime>) -> Result<(), String> {
+    fn set_up_env(
+        &self,
+        harness: &Harness,
+        _strict: bool,
+        context: &mut Box<Runtime>,
+    ) -> Result<(), String> {
         // Create new Realm
         // TODO: in parallel.
-        Realm::create(context);
+        context.create_realm();
 
         /*let mut context = Runtime::new(
             RuntimeParams::default().with_dump_bytecode(false),

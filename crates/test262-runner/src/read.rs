@@ -2,7 +2,6 @@ use super::{Harness, Locale, Phase, Test, TestSuite, IGNORED};
 use fxhash::FxHashMap;
 use serde::Deserialize;
 use starlight::{
-    gc::default_heap,
     prelude::{Options, Snapshot},
     vm::Runtime,
 };
