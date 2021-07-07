@@ -313,11 +313,13 @@ impl Test {
                     }
                 })
                 .unwrap_or_else(|_| {
-                    eprintln!("last panic was on test \"{}\"", self.name);
+                    if verbose >= 1 {
+                        eprintln!("last panic was on test \"{}\"", self.name);
+                    }
                     (TestOutcomeResult::Panic, String::new())
                 });
 
-            if verbose > 1 {
+            if verbose >= 1 {
                 println!(
                     "Result: {}",
                     if matches!(result, (TestOutcomeResult::Passed, _)) {
@@ -328,23 +330,11 @@ impl Test {
                         "⚠ Panic ⚠".red()
                     }
                 );
-            } else {
-                print!(
-                    "{}",
-                    if matches!(result, (TestOutcomeResult::Passed, _)) {
-                        ".".green()
-                    } else {
-                        ".".red()
-                    }
-                );
             }
-
             result
         } else {
             if verbose >= 1 {
                 println!("Result: {}", "Ignored".yellow());
-            } else {
-                print!("{}", ".".yellow());
             }
             (TestOutcomeResult::Ignored, String::new())
         };

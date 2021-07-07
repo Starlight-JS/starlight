@@ -1,9 +1,12 @@
+use crate::{TestOutcomeResult, TestResult};
+
 use super::SuiteResult;
 #[cfg(target_pointer_width = "64")]
 use git2::Repository;
 use hex::ToHex;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     env, fs,
     io::{self, BufReader, BufWriter},
     path::Path,
@@ -175,8 +178,18 @@ fn update_gh_pages_repo(path: &Path, verbose: u8) {
     }
 }
 
+pub(crate) fn get_all_tests_from_suite(suite: SuiteResult) -> Vec<TestResult> {
+    let mut tests = suite.tests;
+    let suites = suite.suites;
+    for sub_suite in suites.into_iter() {
+        let mut sub_tests = get_all_tests_from_suite(sub_suite);
+        tests.append(&mut sub_tests);
+    }
+    return tests;
+}
+
 /// Compares the results of two test suite runs.
-pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool) {
+pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: bool) {
     let base_results: ResultInfo = serde_json::from_reader(BufReader::new(
         fs::File::open(base).expect("could not open the base results file"),
     ))
@@ -306,4 +319,51 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool) {
             base_panics - new_panics
         );
     }
+    if !detail {
+        return;
+    }
+    let base_tests = get_all_tests_from_suite(base_results.results);
+        let new_tests = get_all_tests_from_suite(new_results.results);
+        let mut base_tests_map = HashMap::new();
+        let mut new_test_map = HashMap::new();
+
+        for test in base_tests {
+            base_tests_map.insert(test.name.clone(), test);
+        }
+        for test in new_tests {
+            new_test_map.insert(test.name.clone(), test);
+        }
+
+        println!("============================");
+        println!("Base Failed But New Passed:");
+        let mut failed_tests:Vec<String> = Vec::new();
+        for test in base_tests_map.values() {
+            if matches!(test.result, TestOutcomeResult::Failed) {
+                let new_test = new_test_map.get(&test.name).unwrap();
+                if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
+                    failed_tests.push(test.name.to_string());
+                }
+            }
+        }
+        println!("============================");
+        for name in failed_tests {
+            println!("{}",name);
+        }
+
+        println!();
+        println!("=============================");
+        let mut failed_tests:Vec<String> = Vec::new();
+        println!("New Failed But Base Passed");
+        println!("=============================");
+        for test in new_test_map.values() {
+            if matches!(test.result, TestOutcomeResult::Failed) {
+                let base_test = base_tests_map.get(&test.name).unwrap();
+                if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
+                    failed_tests.push(test.name.to_string());
+                }
+            }
+        }
+        for name in failed_tests {
+            println!("{}",name);
+        }
 }
