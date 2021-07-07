@@ -15,6 +15,7 @@
 //!
 #![allow(dead_code, unused_variables)]
 use crate::options::Options;
+use crate::vm::object::JsObject;
 use crate::vm::Runtime;
 use crate::{
     gc::cell::*,
@@ -25,12 +26,13 @@ use crate::{
     },
 };
 use std::intrinsics::unlikely;
-use std::usize;
+use std::ops::Deref;
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
     mem::size_of,
     ptr::{null_mut, NonNull},
 };
+use std::{u8, usize};
 
 /// Like C's offsetof but you can use it with GC-able objects to get offset from GC header to field.
 ///
@@ -810,6 +812,24 @@ impl Heap {
         );
         unsafe {
             (*memory).data::<T>().write(value);
+            GcPointer {
+                base: NonNull::new_unchecked(memory),
+                marker: PhantomData,
+            }
+        }
+    }
+
+    #[inline]
+    pub fn copy<T: GcCell>(&mut self, value: GcPointer<T>) -> GcPointer<T> {
+        let obj = value.deref();
+        let size = value.compute_size();
+        let memory = self.allocate_raw(vtable_of(obj) as _, size, TypeId::of::<T>());
+        unsafe {
+            let base = &*(value.base.as_ptr());
+            for index in 0..size {
+                let pos = (base.data::<u8>() as usize + index) as *mut u8;
+                (*memory).data::<u8>().write(*pos);
+            }
             GcPointer {
                 base: NonNull::new_unchecked(memory),
                 marker: PhantomData,

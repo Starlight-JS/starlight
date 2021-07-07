@@ -194,13 +194,41 @@ impl Runtime {
         );
     }
     pub(crate) fn init_func_in_realm(&mut self) {
+        let mut proto = self.global_data.func_prototype.unwrap();
         let name = "Function".intern();
-        let mut func_proto = self.global_data.func_prototype.unwrap();
-        let func_ctor = JsNativeFunction::new(self, name, function_prototype, 1);
+        let constrcutor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
         let _ = self
             .realm()
             .global_object()
-            .put(self, name, JsValue::from(func_ctor), false);
+            .put(self, name, JsValue::from(constrcutor), false);
+    }
+    pub(crate) fn init_func_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+        let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
+        let name = "Function".intern();
+
+        let mut func_proto =
+            JsNativeFunction::new_with_struct(self, &_structure, name, function_prototype, 1);
+        self.global_data
+            .function_struct
+            .unwrap()
+            .change_prototype_with_no_transition(func_proto);
+        self.global_data.func_prototype = Some(func_proto);
+        let s = func_proto
+            .structure()
+            .change_prototype_transition(self, Some(obj_proto));
+        (*func_proto).structure = s;
+
+        let mut func_ctor = JsNativeFunction::new(self, name, function_prototype, 1);
+
+        let _ = func_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(func_proto), NONE),
+            false,
+        );
 
         let _ = func_proto.define_own_property(
             self,
@@ -239,22 +267,6 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(f), W | C),
             false,
         );
-    }
-    pub(crate) fn init_func_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
-        let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
-        let name = "Function".intern();
-
-        let mut func_proto =
-            JsNativeFunction::new_with_struct(self, &_structure, name, function_prototype, 1);
-        self.global_data
-            .function_struct
-            .unwrap()
-            .change_prototype_with_no_transition(func_proto);
-        self.global_data.func_prototype = Some(func_proto);
-        let s = func_proto
-            .structure()
-            .change_prototype_transition(self, Some(obj_proto));
-        (*func_proto).structure = s;
     }
     pub(crate) fn init_promise_in_realm(&mut self) -> Result<(), JsValue> {
         // copied from file

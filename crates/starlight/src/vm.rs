@@ -1,7 +1,19 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{bytecompiler::ByteCompiler, gc::Heap, gc::shadowstack::ShadowStack, gc::{SimpleMarkingConstraint, cell::GcPointer, cell::Trace, cell::{GcCell, GcPointerBase, Tracer}, default_heap}, jsrt::{self}, options::Options};
+use crate::{
+    bytecompiler::ByteCompiler,
+    gc::shadowstack::ShadowStack,
+    gc::Heap,
+    gc::{
+        cell::GcPointer,
+        cell::Trace,
+        cell::{GcCell, GcPointerBase, Tracer},
+        default_heap, SimpleMarkingConstraint,
+    },
+    jsrt::{self},
+    options::Options,
+};
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
@@ -117,7 +129,9 @@ impl Deserializable for ModuleKind {
 }
 
 pub struct Realm {
+    // save global object
     pub(crate) global_object: Option<GcPointer<JsObject>>,
+    // save all intrinsics value
     pub(crate) intrinsics: HashMap<String, JsValue>,
 }
 
@@ -131,27 +145,6 @@ impl Realm {
             global_object: None,
             intrinsics: HashMap::new(),
         }
-    }
-
-    pub fn create(rt: &mut Runtime) -> Result<(), JsValue> {
-        let mut realm = Realm {
-            global_object: Some(JsGlobal::new(rt)),
-            intrinsics: HashMap::new(),
-        };
-        rt.realm = Some(realm);
-        rt.init_object_in_realm();
-        rt.init_func_in_realm();
-        rt.init_number_in_realm();
-        rt.init_array_in_realm();
-        rt.init_math_in_realm();
-        rt.init_error_in_realm();
-        rt.init_builtin_in_realm();
-        rt.init_symbol_in_realm();
-        rt.init_regexp_in_realm()?;
-        rt.init_promise_in_realm().ok().expect("init prom failed");
-        rt.init_array_buffer_in_realm()?;
-        rt.init_data_view_in_realm()?;
-        Ok(())
     }
 }
 
@@ -176,10 +169,41 @@ pub struct Runtime {
     pub(crate) eval_history: String,
     persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
     sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
+
+    // execute realm
     pub(crate) realm: Option<Realm>,
 }
 
+unsafe impl Trace for Realm {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.global_object.trace(visitor);
+    }
+}
+
 impl Runtime {
+    pub fn create_realm(&mut self) -> Result<(), JsValue> {
+        self.init_global_data();
+
+        let mut realm = Realm {
+            global_object: Some(JsGlobal::new(self)),
+            intrinsics: HashMap::new(),
+        };
+        self.realm = Some(realm);
+        self.init_object_in_realm();
+        self.init_func_in_realm();
+        self.init_number_in_realm();
+        self.init_array_in_realm();
+        self.init_math_in_realm();
+        self.init_error_in_realm();
+        self.init_builtin_in_realm();
+        self.init_symbol_in_realm();
+        self.init_regexp_in_realm()?;
+        self.init_promise_in_realm().ok().expect("init prom failed");
+        self.init_array_buffer_in_realm()?;
+        self.init_data_view_in_realm()?;
+        Ok(())
+    }
+
     pub fn realm(&self) -> &Realm {
         unwrap_unchecked(self.realm.as_ref())
     }
@@ -649,12 +673,7 @@ impl Runtime {
             "Mark VM roots",
             move |visitor| {
                 let rt = unsafe { &mut *vm };
-                match &rt.realm {
-                    Some(realm) => {
-                        realm.global_object().trace(visitor);
-                    }
-                    None => {}
-                }
+                rt.realm.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
                 rt.shadowstack.trace(visitor);
@@ -662,15 +681,11 @@ impl Runtime {
                 rt.modules.trace(visitor);
             },
         ));
-        this.init_global_data();
+
+        this.create_realm();
+        this.init_self_hosted();
         this.init_module_loader();
         this.init_internal_modules();
-
-        match Realm::create(&mut this) {
-            Ok(_) => {}
-            Err(_) => {}
-        }
-        this.init_self_hosted();
 
         this.gc.undefer();
         this.gc.collect_if_necessary();
