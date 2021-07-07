@@ -206,6 +206,8 @@ impl Runtime {
         self.init_data_view_in_realm()?;
 
         self.init_self_hosted();
+        self.init_module_loader();
+        self.init_internal_modules();
 
         Ok(())
     }
@@ -703,8 +705,6 @@ impl Runtime {
         ));
 
         this.create_realm();
-        this.init_module_loader();
-        this.init_internal_modules();
 
         this.gc.undefer();
         this.gc.collect_if_necessary();
