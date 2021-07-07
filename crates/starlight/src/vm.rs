@@ -656,12 +656,12 @@ impl Runtime {
 
         self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
         // Init global data structure
-        self.init_object_in_global_data(proto);
         self.init_func_global_data(proto);
         self.init_error_in_global_data(proto);
         self.init_array_in_global_data(proto);
         self.init_number_in_global_data(proto);
         self.init_symbol_in_global_data(proto);
+        self.init_object_in_global_data(proto);
         self.init_regexp_in_global_data(proto);
         self.init_generator_in_global_data(proto);
         self.init_array_buffer_in_global_data();

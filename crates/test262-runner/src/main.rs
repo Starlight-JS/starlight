@@ -420,7 +420,6 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     if suite.to_string_lossy().ends_with(".js") {
         let options = Options::default();
         let mut rt = Runtime::new(options, None);
-        let buf = Snapshot::take(false, &mut rt, |_, _| {});
         let test = read_test(&test262_path.join(suite)).expect("could not get the test to run");
 
         if verbose != 0 {
