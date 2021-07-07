@@ -104,12 +104,10 @@ pub fn object_constructor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
             return val.to_object(vm).map(JsValue::encode_object_value);
         }
         return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
+    } else if val.is_undefined() || val.is_null() {
+        return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
     } else {
-        if val.is_undefined() || val.is_null() {
-            return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
-        } else {
-            return val.to_object(vm).map(JsValue::encode_object_value);
-        }
+        return val.to_object(vm).map(JsValue::encode_object_value);
     }
 }
 

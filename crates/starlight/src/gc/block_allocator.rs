@@ -99,7 +99,7 @@ pub mod _unix {
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
             let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
-            unsafe { self.start.offset(offset as isize) as *mut u8 }
+            unsafe { self.start.add(offset) as *mut u8 }
         }
 
         pub fn start(&self) -> *mut u8 {

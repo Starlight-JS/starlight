@@ -92,14 +92,13 @@ impl<const ALIGN: usize> SpaceBitmap<ALIGN> {
                 if (old_word & mask) != 0 {
                     return true;
                 }
-                !atomic_entry
+                atomic_entry
                     .compare_exchange_weak(
                         old_word,
                         old_word | mask,
                         Ordering::Relaxed,
                         Ordering::Relaxed,
-                    )
-                    .is_ok()
+                    ).is_err()
             } {}
 
             false
