@@ -47,15 +47,16 @@ pub fn print(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
 }
 
 impl Runtime {
-    pub(crate) fn init_builtin(&mut self) {
-        let _ = self.global_object().put(
+    pub(crate) fn init_builtin_in_realm(&mut self) {
+        let _ = self.realm().global_object().put(
             self,
             "Infinity".intern(),
             JsValue::new(std::f64::INFINITY),
             false,
         );
         let func = JsNativeFunction::new(self, "print".intern(), print, 0);
-        self.global_object()
+        self.realm()
+            .global_object()
             .put(
                 self,
                 "print".intern(),
@@ -66,7 +67,7 @@ impl Runtime {
 
         string::initialize(self, self.global_data().object_prototype.unwrap());
 
-        let mut global = self.global_object();
+        let mut global = self.realm().global_object();
         let _ = global.put(
             self,
             "undefined".intern(),
@@ -199,7 +200,19 @@ impl Runtime {
             include_str!("builtins/StringIterator.js"),
         );
     }
-    pub(crate) fn init_func(&mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_func_in_realm(&mut self) {
+        let mut proto = self.global_data.func_prototype.unwrap();
+        let name = "Function".intern();
+        let constrcutor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+        let _ = self
+            .realm()
+            .global_object()
+            .put(self, name, JsValue::from(constrcutor), false);
+    }
+    pub(crate) fn init_func_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let name = "Function".intern();
 
@@ -210,15 +223,19 @@ impl Runtime {
             .unwrap()
             .change_prototype_with_no_transition(func_proto);
         self.global_data.func_prototype = Some(func_proto);
-        let func_ctor = JsNativeFunction::new(self, name, function_prototype, 1);
-
-        let _ = self
-            .global_object()
-            .put(self, name, JsValue::from(func_ctor), false);
         let s = func_proto
             .structure()
             .change_prototype_transition(self, Some(obj_proto));
         (*func_proto).structure = s;
+
+        let mut func_ctor = JsNativeFunction::new(self, name, function_prototype, 1);
+
+        let _ = func_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(func_proto), NONE),
+            false,
+        );
 
         let _ = func_proto.define_own_property(
             self,
@@ -258,36 +275,57 @@ impl Runtime {
             false,
         );
     }
-    pub(crate) fn init_promise(&mut self) -> Result<(), JsValue> {
-        let rt = self;
+    pub(crate) fn init_promise_in_realm(&mut self) -> Result<(), JsValue> {
         // copied from file
+        let mut ctor = JsNativeFunction::new(self, "Promise".intern(), promise_constructor, 1);
 
-        let mut ctor = JsNativeFunction::new(rt, "Promise".intern(), promise_constructor, 1);
-
-        let mut proto = JsObject::new_empty(rt);
+        let mut proto = JsObject::new_empty(self);
         // members / proto
-        def_native_method!(rt, proto, then, promise_then, 2)?;
-        def_native_method!(rt, proto, catch, promise_catch, 1)?;
-        def_native_method!(rt, proto, finally, promise_finally, 1)?;
-        def_native_method!(rt, proto, resolve, promise_resolve, 1)?;
-        def_native_method!(rt, proto, reject, promise_reject, 1)?;
+        def_native_method!(self, proto, then, promise_then, 2)?;
+        def_native_method!(self, proto, catch, promise_catch, 1)?;
+        def_native_method!(self, proto, finally, promise_finally, 1)?;
+        def_native_method!(self, proto, resolve, promise_resolve, 1)?;
+        def_native_method!(self, proto, reject, promise_reject, 1)?;
         // statics
-        def_native_method!(rt, ctor, all, promise_static_all, 1)?;
-        def_native_method!(rt, ctor, allSettled, promise_static_all_settled, 1)?;
-        def_native_method!(rt, ctor, any, promise_static_any, 1)?;
-        def_native_method!(rt, ctor, race, promise_static_race, 1)?;
-        def_native_method!(rt, ctor, reject, promise_static_reject, 1)?;
-        def_native_method!(rt, ctor, resolve, promise_static_resolve, 1)?;
+        def_native_method!(self, ctor, all, promise_static_all, 1)?;
+        def_native_method!(self, ctor, allSettled, promise_static_all_settled, 1)?;
+        def_native_method!(self, ctor, any, promise_static_any, 1)?;
+        def_native_method!(self, ctor, race, promise_static_race, 1)?;
+        def_native_method!(self, ctor, reject, promise_static_reject, 1)?;
+        def_native_method!(self, ctor, resolve, promise_static_resolve, 1)?;
 
         // add to global
-        rt.global_object()
-            .put(rt, "Promise".intern(), JsValue::new(ctor), false)?;
+        self.realm()
+            .global_object()
+            .put(self, "Promise".intern(), JsValue::new(ctor), false)?;
 
-        ctor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
+        ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
 
         Ok(())
     }
-    pub(crate) fn init_array(&mut self, obj_proto: GcPointer<JsObject>) {
+
+    pub(crate) fn init_array_in_realm(&mut self) {
+        let mut proto = self.global_data.array_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+
+        let arr = "Array".intern();
+        // let name = "Array".intern();
+        // let _ = self
+        //     .global_object()
+        //     .put(self, name, JsValue::from(constructor), false);
+
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            arr,
+            &*DataDescriptor::new(JsValue::from(constructor), W | C),
+            false,
+        );
+    }
+
+    pub(crate) fn init_array_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -297,11 +335,6 @@ impl Runtime {
             .unwrap()
             .change_prototype_with_no_transition(proto);
         let mut constructor = JsNativeFunction::new(self, "constructor".intern(), array_ctor, 1);
-
-        let name = "Array".intern();
-        let _ = self
-            .global_object()
-            .put(self, name, JsValue::from(constructor), false);
 
         let _ = constructor.define_own_property(
             self,
@@ -412,25 +445,19 @@ impl Runtime {
             false,
         );
         self.global_data.array_prototype = Some(proto);
-        let arr = "Array".intern();
-        let _ = self.global_object().define_own_property(
-            self,
-            arr,
-            &*DataDescriptor::new(JsValue::from(constructor), W | C),
-            false,
-        );
     }
-    pub(crate) fn init_error(&mut self, obj_proto: GcPointer<JsObject>) {
-        self.global_data.error_structure = Some(Structure::new_indexed(self, None, false));
-        self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
-        self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
-        self.global_data.reference_error_structure =
-            Some(Structure::new_indexed(self, None, false));
-        self.global_data.type_error_structure = Some(Structure::new_indexed(self, None, false));
-        self.global_data.syntax_error_structure = Some(Structure::new_indexed(self, None, false));
-        let structure = Structure::new_unique_with_proto(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, &structure, JsError::get_class(), ObjectTag::Ordinary);
-        self.global_data.error = Some(proto);
+
+    pub(crate) fn init_error_in_realm(&mut self) {
+        self.init_base_error_in_realm();
+        self.init_eval_error_in_realm();
+        self.init_type_error_in_realm();
+        self.init_syntax_error_in_realm();
+        self.init_reference_error_in_realm();
+        self.init_range_error_in_realm();
+    }
+
+    pub(crate) fn init_base_error_in_realm(&mut self) {
+        let mut proto = self.global_data.error.unwrap();
         let e = "Error".intern();
         let mut ctor = JsNativeFunction::new(self, e, error_constructor, 1);
         let _ = ctor.define_own_property(
@@ -472,12 +499,280 @@ impl Runtime {
             false,
         );
         let sym = "Error".intern();
-        let _ = self.global_object().define_own_property(
+        let _ = self.realm().global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(ctor), W | C),
             false,
         );
+    }
+
+    pub(crate) fn init_eval_error_in_realm(&mut self) {
+        let mut sub_proto = self.global_data.eval_error.unwrap();
+        let sym = "EvalError".intern();
+        let mut sub_ctor = JsNativeFunction::new(self, sym, eval_error_constructor, 1);
+        let _ = sub_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
+            false,
+        );
+        let _ = sub_proto.define_own_property(
+            self,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+
+        let n = "name".intern();
+        let s = JsString::new(self, "EvalError");
+        let e = JsString::new(self, "");
+        let m = "message".intern();
+        let _ = sub_proto.define_own_property(
+            self,
+            n,
+            &*DataDescriptor::new(JsValue::from(s), W | C),
+            false,
+        );
+
+        let _ = sub_proto.define_own_property(
+            self,
+            m,
+            &*DataDescriptor::new(JsValue::from(e), W | C),
+            false,
+        );
+        let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
+        let _ = sub_proto.define_own_property(
+            self,
+            "toString".intern(),
+            &*DataDescriptor::new(JsValue::from(to_str), W | C),
+            false,
+        );
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            sym,
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+    }
+
+    pub(crate) fn init_type_error_in_realm(&mut self) {
+        let mut sub_proto = self.global_data.type_error.unwrap();
+        let sym = "TypeError".intern();
+        let mut sub_ctor = JsNativeFunction::new(self, sym, type_error_constructor, 1);
+        let _ = sub_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
+            false,
+        );
+        let _ = sub_proto.define_own_property(
+            self,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+
+        let n = "name".intern();
+        let s = JsString::new(self, "TypeError");
+        let e = JsString::new(self, "");
+        let m = "message".intern();
+        let _ = sub_proto
+            .define_own_property(
+                self,
+                n,
+                &*DataDescriptor::new(JsValue::from(s), W | C),
+                false,
+            )
+            .unwrap_or_else(|_| panic!());
+
+        let _ = sub_proto.define_own_property(
+            self,
+            m,
+            &*DataDescriptor::new(JsValue::from(e), W | C),
+            false,
+        );
+        let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
+        let _ = sub_proto
+            .define_own_property(
+                self,
+                "toString".intern(),
+                &*DataDescriptor::new(JsValue::from(to_str), W | C),
+                false,
+            )
+            .unwrap_or_else(|_| panic!());
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            sym,
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+    }
+
+    pub(crate) fn init_syntax_error_in_realm(&mut self) {
+        let mut sub_proto = self.global_data.syntax_error.unwrap();
+        let sym = "SyntaxError".intern();
+        let mut sub_ctor = JsNativeFunction::new(self, sym, syntax_error_constructor, 1);
+        let _ = sub_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
+            false,
+        );
+        let _ = sub_proto.define_own_property(
+            self,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+
+        let n = "name".intern();
+        let s = JsString::new(self, "SyntaxError");
+        let e = JsString::new(self, "");
+        let m = "message".intern();
+        let _ = sub_proto
+            .define_own_property(
+                self,
+                n,
+                &*DataDescriptor::new(JsValue::from(s), W | C),
+                false,
+            )
+            .unwrap_or_else(|_| panic!());
+
+        let _ = sub_proto.define_own_property(
+            self,
+            m,
+            &*DataDescriptor::new(JsValue::from(e), W | C),
+            false,
+        );
+        let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
+        let _ = sub_proto
+            .define_own_property(
+                self,
+                "toString".intern(),
+                &*DataDescriptor::new(JsValue::from(to_str), W | C),
+                false,
+            )
+            .unwrap_or_else(|_| panic!());
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            sym,
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+    }
+
+    pub(crate) fn init_reference_error_in_realm(&mut self) {
+        let mut sub_proto = self.global_data.reference_error.unwrap();
+        let sym = "ReferenceError".intern();
+        let mut sub_ctor = JsNativeFunction::new(self, sym, reference_error_constructor, 1);
+        let _ = sub_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
+            false,
+        );
+        let _ = sub_proto.define_own_property(
+            self,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+
+        let n = "name".intern();
+        let s = JsString::new(self, "ReferenceError");
+        let e = JsString::new(self, "");
+        let m = "message".intern();
+        let _ = sub_proto.define_own_property(
+            self,
+            n,
+            &*DataDescriptor::new(JsValue::from(s), W | C),
+            false,
+        );
+
+        let _ = sub_proto.define_own_property(
+            self,
+            m,
+            &*DataDescriptor::new(JsValue::from(e), W | C),
+            false,
+        );
+        let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
+        let _ = sub_proto.define_own_property(
+            self,
+            "toString".intern(),
+            &*DataDescriptor::new(JsValue::from(to_str), W | C),
+            false,
+        );
+
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            sym,
+            &*DataDescriptor::new(JsValue::from(sub_proto), W | C),
+            false,
+        );
+    }
+
+    pub(crate) fn init_range_error_in_realm(&mut self) {
+        let mut sub_proto = self.global_data.range_error.unwrap();
+        let sym = "RangeError".intern();
+        let mut sub_ctor = JsNativeFunction::new(self, sym, range_error_constructor, 1);
+        let _ = sub_ctor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
+            false,
+        );
+        let _ = sub_proto.define_own_property(
+            self,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
+            false,
+        );
+
+        let n = "name".intern();
+        let s = JsString::new(self, "RangeError");
+        let e = JsString::new(self, "");
+        let m = "message".intern();
+        let _ = sub_proto.define_own_property(
+            self,
+            n,
+            &*DataDescriptor::new(JsValue::from(s), W | C),
+            false,
+        );
+
+        let _ = sub_proto.define_own_property(
+            self,
+            m,
+            &*DataDescriptor::new(JsValue::from(e), W | C),
+            false,
+        );
+        let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
+        let _ = sub_proto.define_own_property(
+            self,
+            "toString".intern(),
+            &*DataDescriptor::new(JsValue::from(to_str), W | C),
+            false,
+        );
+
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            sym,
+            &*DataDescriptor::new(JsValue::from(sub_proto), W | C),
+            false,
+        );
+    }
+
+    pub(crate) fn init_error_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+        self.global_data.error_structure = Some(Structure::new_indexed(self, None, false));
+        self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
+        self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
+        self.global_data.reference_error_structure =
+            Some(Structure::new_indexed(self, None, false));
+        self.global_data.type_error_structure = Some(Structure::new_indexed(self, None, false));
+        self.global_data.syntax_error_structure = Some(Structure::new_indexed(self, None, false));
+        let structure = Structure::new_unique_with_proto(self, Some(obj_proto), false);
+        let mut proto = JsObject::new(self, &structure, JsError::get_class(), ObjectTag::Ordinary);
+        self.global_data.error = Some(proto);
 
         {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
@@ -492,52 +787,6 @@ impl Runtime {
                 .eval_error_structure
                 .unwrap()
                 .change_prototype_with_no_transition(sub_proto);
-            let sym = "EvalError".intern();
-            let mut sub_ctor = JsNativeFunction::new(self, sym, eval_error_constructor, 1);
-            let _ = sub_ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
-                false,
-            );
-            let _ = sub_proto.define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
-            let n = "name".intern();
-            let s = JsString::new(self, "EvalError");
-            let e = JsString::new(self, "");
-            let m = "message".intern();
-            let _ = sub_proto.define_own_property(
-                self,
-                n,
-                &*DataDescriptor::new(JsValue::from(s), W | C),
-                false,
-            );
-
-            let _ = sub_proto.define_own_property(
-                self,
-                m,
-                &*DataDescriptor::new(JsValue::from(e), W | C),
-                false,
-            );
-            let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
-            let _ = sub_proto.define_own_property(
-                self,
-                "toString".intern(),
-                &*DataDescriptor::new(JsValue::from(to_str), W | C),
-                false,
-            );
-            let _ = self.global_object().define_own_property(
-                self,
-                sym,
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
             self.global_data.eval_error = Some(sub_proto);
         }
 
@@ -556,56 +805,6 @@ impl Runtime {
                 .type_error_structure
                 .unwrap()
                 .change_prototype_with_no_transition(sub_proto);
-            let sym = "TypeError".intern();
-            let mut sub_ctor = JsNativeFunction::new(self, sym, type_error_constructor, 1);
-            let _ = sub_ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
-                false,
-            );
-            let _ = sub_proto.define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
-            let n = "name".intern();
-            let s = JsString::new(self, "TypeError");
-            let e = JsString::new(self, "");
-            let m = "message".intern();
-            let _ = sub_proto
-                .define_own_property(
-                    self,
-                    n,
-                    &*DataDescriptor::new(JsValue::from(s), W | C),
-                    false,
-                )
-                .unwrap_or_else(|_| panic!());
-
-            let _ = sub_proto.define_own_property(
-                self,
-                m,
-                &*DataDescriptor::new(JsValue::from(e), W | C),
-                false,
-            );
-            let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
-            let _ = sub_proto
-                .define_own_property(
-                    self,
-                    "toString".intern(),
-                    &*DataDescriptor::new(JsValue::from(to_str), W | C),
-                    false,
-                )
-                .unwrap_or_else(|_| panic!());
-            let _ = self.global_object().define_own_property(
-                self,
-                sym,
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
             self.global_data.type_error = Some(sub_proto);
         }
         {
@@ -623,56 +822,6 @@ impl Runtime {
                 .syntax_error_structure
                 .unwrap()
                 .change_prototype_with_no_transition(sub_proto);
-            let sym = "SyntaxError".intern();
-            let mut sub_ctor = JsNativeFunction::new(self, sym, syntax_error_constructor, 1);
-            let _ = sub_ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
-                false,
-            );
-            let _ = sub_proto.define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
-            let n = "name".intern();
-            let s = JsString::new(self, "SyntaxError");
-            let e = JsString::new(self, "");
-            let m = "message".intern();
-            let _ = sub_proto
-                .define_own_property(
-                    self,
-                    n,
-                    &*DataDescriptor::new(JsValue::from(s), W | C),
-                    false,
-                )
-                .unwrap_or_else(|_| panic!());
-
-            let _ = sub_proto.define_own_property(
-                self,
-                m,
-                &*DataDescriptor::new(JsValue::from(e), W | C),
-                false,
-            );
-            let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
-            let _ = sub_proto
-                .define_own_property(
-                    self,
-                    "toString".intern(),
-                    &*DataDescriptor::new(JsValue::from(to_str), W | C),
-                    false,
-                )
-                .unwrap_or_else(|_| panic!());
-            let _ = self.global_object().define_own_property(
-                self,
-                sym,
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
             self.global_data.syntax_error = Some(sub_proto);
         }
 
@@ -689,53 +838,6 @@ impl Runtime {
                 .reference_error_structure
                 .unwrap()
                 .change_prototype_with_no_transition(sub_proto);
-            let sym = "ReferenceError".intern();
-            let mut sub_ctor = JsNativeFunction::new(self, sym, reference_error_constructor, 1);
-            let _ = sub_ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
-                false,
-            );
-            let _ = sub_proto.define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
-            let n = "name".intern();
-            let s = JsString::new(self, "ReferenceError");
-            let e = JsString::new(self, "");
-            let m = "message".intern();
-            let _ = sub_proto.define_own_property(
-                self,
-                n,
-                &*DataDescriptor::new(JsValue::from(s), W | C),
-                false,
-            );
-
-            let _ = sub_proto.define_own_property(
-                self,
-                m,
-                &*DataDescriptor::new(JsValue::from(e), W | C),
-                false,
-            );
-            let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
-            let _ = sub_proto.define_own_property(
-                self,
-                "toString".intern(),
-                &*DataDescriptor::new(JsValue::from(to_str), W | C),
-                false,
-            );
-
-            let _ = self.global_object().define_own_property(
-                self,
-                sym,
-                &*DataDescriptor::new(JsValue::from(sub_proto), W | C),
-                false,
-            );
-
             self.global_data.reference_error = Some(sub_proto);
         }
 
@@ -753,53 +855,6 @@ impl Runtime {
                 .range_error_structure
                 .unwrap()
                 .change_prototype_with_no_transition(sub_proto);
-            let sym = "RangeError".intern();
-            let mut sub_ctor = JsNativeFunction::new(self, sym, range_error_constructor, 1);
-            let _ = sub_ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_proto), NONE),
-                false,
-            );
-            let _ = sub_proto.define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
-                false,
-            );
-
-            let n = "name".intern();
-            let s = JsString::new(self, "RangeError");
-            let e = JsString::new(self, "");
-            let m = "message".intern();
-            let _ = sub_proto.define_own_property(
-                self,
-                n,
-                &*DataDescriptor::new(JsValue::from(s), W | C),
-                false,
-            );
-
-            let _ = sub_proto.define_own_property(
-                self,
-                m,
-                &*DataDescriptor::new(JsValue::from(e), W | C),
-                false,
-            );
-            let to_str = JsNativeFunction::new(self, "toString".intern(), error_to_string, 0);
-            let _ = sub_proto.define_own_property(
-                self,
-                "toString".intern(),
-                &*DataDescriptor::new(JsValue::from(to_str), W | C),
-                false,
-            );
-
-            let _ = self.global_object().define_own_property(
-                self,
-                sym,
-                &*DataDescriptor::new(JsValue::from(sub_proto), W | C),
-                false,
-            );
-
             self.global_data.range_error = Some(sub_proto);
         }
     }
@@ -807,133 +862,161 @@ impl Runtime {
 
 use object::*;
 
-pub(crate) fn object_init(
-    rt: &mut Runtime,
-    mut obj_constructor: GcPointer<JsObject>,
-    mut proto: GcPointer<JsObject>,
-) {
-    let func = JsNativeFunction::new(rt, "defineProperty".intern(), object_define_property, 3);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "defineProperty".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+impl Runtime {
+    pub(crate) fn init_object_in_realm(&mut self) {
+        let name = "Object".intern();
+        let mut proto = self.global_data.object_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            name,
+            &*DataDescriptor::new(JsValue::from(constructor), W | C),
+            false,
+        );
+        let global = self.realm().global_object();
 
-    let func = JsNativeFunction::new(rt, "seal".intern(), object_seal, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "seal".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+        let _name = "Object".intern();
+        let _ = self.realm().global_object().put(
+            self,
+            "globalThis".intern(),
+            JsValue::encode_object_value(global),
+            false,
+        );
+    }
 
-    let func = JsNativeFunction::new(rt, "freeze".intern(), object_freeze, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "freeze".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+    pub(crate) fn init_object_in_global_data(&mut self, mut proto: GcPointer<JsObject>) {
+        let name = "Object".intern();
+        let mut obj_constructor = JsNativeFunction::new(self, name, object_constructor, 1);
 
-    let func = JsNativeFunction::new(rt, "isSealed".intern(), object_is_sealed, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "isSealed".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+        let func =
+            JsNativeFunction::new(self, "defineProperty".intern(), object_define_property, 3);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "defineProperty".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
 
-    let func = JsNativeFunction::new(rt, "isFrozen".intern(), object_is_frozen, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "isFrozen".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+        let func = JsNativeFunction::new(self, "seal".intern(), object_seal, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "seal".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
 
-    let func = JsNativeFunction::new(rt, "isExtensible".intern(), object_is_extensible, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "isExtensible".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
-    let func = JsNativeFunction::new(rt, "getPrototypeOf".intern(), object_get_prototype_of, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "getPrototypeOf".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
-    let func = JsNativeFunction::new(
-        rt,
-        "preventExtensions".intern(),
-        object_prevent_extensions,
-        1,
-    );
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "preventExtensions".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+        let func = JsNativeFunction::new(self, "freeze".intern(), object_freeze, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "freeze".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
 
-    let func = JsNativeFunction::new(rt, "keys".intern(), object_keys, 1);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "keys".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
-    let func = JsNativeFunction::new(
-        rt,
-        "getOwnPropertyDescriptor".intern(),
-        object_get_own_property_descriptor,
-        2,
-    );
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "getOwnPropertyDescriptor".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
-    let func = JsNativeFunction::new(rt, "create".intern(), object_create, 3);
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "create".intern(),
-        &*DataDescriptor::new(JsValue::new(func), NONE),
-        false,
-    );
+        let func = JsNativeFunction::new(self, "isSealed".intern(), object_is_sealed, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "isSealed".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
 
-    let _ = obj_constructor.define_own_property(
-        rt,
-        "prototype".intern(),
-        &*DataDescriptor::new(JsValue::from(proto), NONE),
-        false,
-    );
-    let _ = proto.define_own_property(
-        rt,
-        "constructor".intern(),
-        &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
-        false,
-    );
-    let obj_to_string = JsNativeFunction::new(rt, "toString".intern(), object_to_string, 0);
-    let _ = proto.define_own_property(
-        rt,
-        "toString".intern(),
-        &*DataDescriptor::new(JsValue::from(obj_to_string), W | C),
-        false,
-    );
+        let func = JsNativeFunction::new(self, "isFrozen".intern(), object_is_frozen, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "isFrozen".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
 
-    let func = JsNativeFunction::new(rt, "hasOwnProperty".intern(), has_own_property, 1);
-    let _ = proto.define_own_property(
-        rt,
-        "hasOwnProperty".intern(),
-        &*DataDescriptor::new(JsValue::from(func), W | C),
-        false,
-    );
+        let func = JsNativeFunction::new(self, "isExtensible".intern(), object_is_extensible, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "isExtensible".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+        let func =
+            JsNativeFunction::new(self, "getPrototypeOf".intern(), object_get_prototype_of, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "getPrototypeOf".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+        let func = JsNativeFunction::new(
+            self,
+            "preventExtensions".intern(),
+            object_prevent_extensions,
+            1,
+        );
+        let _ = obj_constructor.define_own_property(
+            self,
+            "preventExtensions".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+
+        let func = JsNativeFunction::new(self, "keys".intern(), object_keys, 1);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "keys".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+        let func = JsNativeFunction::new(
+            self,
+            "getOwnPropertyDescriptor".intern(),
+            object_get_own_property_descriptor,
+            2,
+        );
+        let _ = obj_constructor.define_own_property(
+            self,
+            "getOwnPropertyDescriptor".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+        let func = JsNativeFunction::new(self, "create".intern(), object_create, 3);
+        let _ = obj_constructor.define_own_property(
+            self,
+            "create".intern(),
+            &*DataDescriptor::new(JsValue::new(func), NONE),
+            false,
+        );
+
+        let _ = obj_constructor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::from(proto), NONE),
+            false,
+        );
+        let _ = proto.define_own_property(
+            self,
+            "constructor".intern(),
+            &*DataDescriptor::new(JsValue::from(obj_constructor), W | C),
+            false,
+        );
+        let obj_to_string = JsNativeFunction::new(self, "toString".intern(), object_to_string, 0);
+        let _ = proto.define_own_property(
+            self,
+            "toString".intern(),
+            &*DataDescriptor::new(JsValue::from(obj_to_string), W | C),
+            false,
+        );
+
+        let func = JsNativeFunction::new(self, "hasOwnProperty".intern(), has_own_property, 1);
+        let _ = proto.define_own_property(
+            self,
+            "hasOwnProperty".intern(),
+            &*DataDescriptor::new(JsValue::from(func), W | C),
+            false,
+        );
+    }
 }
+
 use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 

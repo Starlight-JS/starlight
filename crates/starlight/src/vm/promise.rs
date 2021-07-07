@@ -89,6 +89,7 @@ impl JsPromise {
     }
     pub fn new_unresolving(vm: &mut Runtime) -> Result<JsValue, JsValue> {
         let proto = vm
+            .realm()
             .global_object()
             .get(vm, "Promise".intern())?
             .to_object(vm)?
@@ -112,6 +113,7 @@ impl JsPromise {
         promises_array: JsValue,
     ) -> Result<JsValue, JsValue> {
         let proto = vm
+            .realm()
             .global_object()
             .get(vm, "Promise".intern())?
             .to_object(vm)?

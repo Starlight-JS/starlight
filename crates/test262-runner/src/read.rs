@@ -1,8 +1,9 @@
-use super::{Harness, Locale, Phase, Test, TestSuite, IGNORED};
+use crate::IGNORED;
+
+use super::{Harness, Locale, Phase, Test, TestSuite};
 use fxhash::FxHashMap;
 use serde::Deserialize;
-use starlight::{prelude::Snapshot, vm::Runtime};
-use std::{fs, io, path::Path, str::FromStr, sync::Arc};
+use std::{fs, io, path::Path, str::FromStr};
 
 /// Representation of the YAML metadata in Test262 tests.
 #[derive(Debug, Clone, Deserialize)]
@@ -120,8 +121,6 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
 
     let mut suites = Vec::new();
     let mut tests = Vec::new();
-    let mut rt = Runtime::new(Default::default(), None);
-    let buffer = Arc::new(Snapshot::take(false, &mut rt, |_, _| {}).buffer);
     // TODO: iterate in parallel
     for entry in path.read_dir()? {
         let entry = entry?;
@@ -135,21 +134,19 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
             test.set_name(entry.file_name().to_string_lossy());
             tests.push(test)
         } else {
-            tests.push(read_test(entry.path().as_path(), buffer.clone())?);
+            tests.push(read_test(entry.path().as_path())?);
         }
     }
 
     Ok(TestSuite {
         name: name.into(),
-
         suites: suites,
         tests: tests,
-        snapshot: buffer,
     })
 }
 
 /// Reads information about a given test case.
-pub(super) fn read_test(path: &Path, snapshot: Arc<Box<[u8]>>) -> io::Result<Test> {
+pub(super) fn read_test(path: &Path) -> io::Result<Test> {
     let name = path
         .file_stem()
         .ok_or_else(|| {
@@ -169,7 +166,7 @@ pub(super) fn read_test(path: &Path, snapshot: Arc<Box<[u8]>>) -> io::Result<Tes
     let content = fs::read_to_string(path)?;
     let metadata = read_metadata(&content, path)?;
 
-    Ok(Test::new(name, content, metadata, snapshot))
+    Ok(Test::new(name, content, metadata))
 }
 
 /// Reads the metadata from the input test code.

@@ -554,7 +554,8 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         .change_prototype_with_no_transition(proto);
     let mut ctor = JsNativeFunction::new(rt, "String".intern(), string_constructor, 1);
 
-    rt.global_object()
+    rt.realm()
+        .global_object()
         .put(
             rt,
             "String".intern(),

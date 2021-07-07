@@ -1447,7 +1447,8 @@ mod tests {
     #[test]
     fn test_put() {
         Platform::initialize();
-        let mut rt = Runtime::new(Options::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1469,7 +1470,8 @@ mod tests {
     #[test]
     fn test_indexed() {
         Platform::initialize();
-        let mut rt = Runtime::new(Options::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1788,10 +1790,8 @@ impl<T: JsClass> Deserializable for TypedJsObject<T> {
 
 impl<T: JsClass> Clone for TypedJsObject<T> {
     fn clone(&self) -> Self {
-        *self   
+        *self
     }
 }
 
-impl<T: JsClass> Copy for TypedJsObject<T> {
-    
-}   
+impl<T: JsClass> Copy for TypedJsObject<T> {}

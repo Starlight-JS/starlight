@@ -88,7 +88,7 @@ impl Runtime {
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
         } else if args_.this.is_undefined() {
-            JsValue::encode_object_value(self.global_object())
+            JsValue::encode_object_value(self.realm().global_object())
         } else {
             args_.this
         };
@@ -179,7 +179,7 @@ impl Runtime {
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
         } else if args_.this.is_undefined() {
-            JsValue::encode_object_value(self.global_object())
+            JsValue::encode_object_value(self.realm().global_object())
         } else {
             args_.this
         };
@@ -1149,7 +1149,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_GLOBALTHIS => {
-                let global = rt.global_object();
+                let global = rt.realm().global_object();
                 frame.push(JsValue::encode_object_value(global));
             }
 

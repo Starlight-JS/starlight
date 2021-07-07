@@ -2,42 +2,45 @@ use std::intrinsics::unlikely;
 
 use crate::prelude::*;
 use crate::vm::function::*;
-pub(crate) fn init_generator(rt: &mut Runtime, _obj_proto: GcPointer<JsObject>) {
-    let mut init = || -> Result<(), JsValue> {
-        let f = Some(rt.global_data().func_prototype.unwrap());
-        let generator_structure = Structure::new_indexed(rt, f, false);
 
-        let mut generator = JsObject::new(
-            rt,
-            &generator_structure,
-            JsObject::get_class(),
-            ObjectTag::Ordinary,
-        );
+impl Runtime {
+    pub(crate) fn init_generator_in_global_data(&mut self, _obj_proto: GcPointer<JsObject>) {
+        let mut init = || -> Result<(), JsValue> {
+            let f = Some(self.global_data().func_prototype.unwrap());
+            let generator_structure = Structure::new_indexed(self, f, false);
 
-        def_native_method!(rt, generator, next, generator_next, 0)?;
-        def_native_method!(rt, generator, throw, generator_throw, 0)?;
-        def_native_method!(rt, generator, r#return, generator_return, 0)?;
-        let iter = JsNativeFunction::new(
-            rt,
-            "Symbol.iterator".intern().private(),
-            generator_iterator,
-            0,
-        );
-        generator.put(
-            rt,
-            "Symbol.iterator".intern().private(),
-            JsValue::new(iter),
-            false,
-        )?;
-        rt.global_data.generator_prototype = Some(generator);
-        rt.global_data.generator_structure =
-            Some(Structure::new_indexed(rt, Some(generator), false));
-        Ok(())
-    };
+            let mut generator = JsObject::new(
+                self,
+                &generator_structure,
+                JsObject::get_class(),
+                ObjectTag::Ordinary,
+            );
 
-    match init() {
-        Ok(_) => (),
-        Err(_) => panic!("Failed to initialize generator object"),
+            def_native_method!(self, generator, next, generator_next, 0)?;
+            def_native_method!(self, generator, throw, generator_throw, 0)?;
+            def_native_method!(self, generator, r#return, generator_return, 0)?;
+            let iter = JsNativeFunction::new(
+                self,
+                "Symbol.iterator".intern().private(),
+                generator_iterator,
+                0,
+            );
+            generator.put(
+                self,
+                "Symbol.iterator".intern().private(),
+                JsValue::new(iter),
+                false,
+            )?;
+            self.global_data.generator_prototype = Some(generator);
+            self.global_data.generator_structure =
+                Some(Structure::new_indexed(self, Some(generator), false));
+            Ok(())
+        };
+
+        match init() {
+            Ok(_) => (),
+            Err(_) => panic!("Failed to initialize generator object"),
+        }
     }
 }
 

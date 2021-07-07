@@ -171,98 +171,115 @@ pub fn data_view_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsVal
     Ok(JsValue::new(this))
 }
 
-pub(crate) fn init_data_view(rt: &mut Runtime) {
-    let mut init = || -> Result<(), JsValue> {
-        let obj_proto = rt.global_data().object_prototype.unwrap();
-        rt.global_data.data_view_structure = Some(Structure::new_indexed(rt, None, false));
-        let proto_map = rt
-            .global_data
-            .data_view_structure
+impl Runtime {
+    pub(crate) fn init_data_view_in_realm(&mut self) -> Result<(), JsValue> {
+        let mut proto = self.global_data.data_view_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
             .unwrap()
-            .change_prototype_transition(rt, Some(obj_proto));
-        let mut proto = JsObject::new(rt, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
-        rt.global_data
-            .data_view_structure
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
-        let mut ctor = JsNativeFunction::new(rt, "DataView".intern(), data_view_constructor, 1);
-
-        rt.global_object()
-            .put(rt, "DataView".intern(), JsValue::new(ctor), false)?;
-
-        ctor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
-        proto.put(rt, "constructor".intern(), JsValue::new(ctor), false)?;
-        def_native_method!(rt, proto, getInt8, data_view_prototype_get::<i8>, 1)?;
-        def_native_method!(rt, proto, getUint8, data_view_prototype_get::<u8>, 1)?;
-        def_native_method!(rt, proto, getInt16, data_view_prototype_get::<i16>, 2)?;
-        def_native_method!(rt, proto, getUint16, data_view_prototype_get::<u16>, 2)?;
-        def_native_method!(rt, proto, getInt32, data_view_prototype_get::<i32>, 2)?;
-        def_native_method!(rt, proto, getUint32, data_view_prototype_get::<u32>, 2)?;
-        def_native_method!(rt, proto, getFloat64, data_view_prototype_get::<f64>, 2)?;
-        def_native_method!(rt, proto, getFloat32, data_view_prototype_get::<f32>, 2)?;
-
-        def_native_method!(rt, proto, setInt8, data_view_prototype_set::<i8>, 2)?;
-        def_native_method!(rt, proto, setUint8, data_view_prototype_set::<u8>, 2)?;
-        def_native_method!(rt, proto, setInt16, data_view_prototype_set::<i16>, 3)?;
-        def_native_method!(rt, proto, setUint16, data_view_prototype_set::<u16>, 3)?;
-        def_native_method!(rt, proto, setInt32, data_view_prototype_set::<i32>, 3)?;
-        def_native_method!(rt, proto, setUint32, data_view_prototype_set::<u32>, 3)?;
-        def_native_method!(rt, proto, setFloat64, data_view_prototype_set::<f64>, 3)?;
-        def_native_method!(rt, proto, setFloat32, data_view_prototype_set::<f32>, 3)?;
-
-        let byte_length = JsNativeFunction::new(
-            rt,
-            "byteLength".intern(),
-            data_view_prototype_byte_length,
-            0,
-        );
-        proto.define_own_property(
-            rt,
-            "byteLength".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_length),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
-        let byte_offset = JsNativeFunction::new(
-            rt,
-            "byteOffset".intern(),
-            data_view_prototype_byte_offset,
-            0,
-        );
-        proto.define_own_property(
-            rt,
-            "byteOffset".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_offset),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
-        let buffer = JsNativeFunction::new(rt, "buffer".intern(), data_view_prototype_buffer, 0);
-        proto.define_own_property(
-            rt,
-            "buffer".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(buffer),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
+            .value();
+        self.realm().global_object().put(
+            self,
+            "DataView".intern(),
+            JsValue::new(constructor),
             false,
         )?;
         Ok(())
-    };
+    }
 
-    match init() {
-        Ok(_) => (),
-        Err(e) => {
-            panic!(
-                "Failed to initialize DataView: {}",
-                e.to_string(rt).ok().expect("failed to convert to string")
-            )
+    pub(crate) fn init_data_view_in_global_data(&mut self) {
+        let mut init = || -> Result<(), JsValue> {
+            let obj_proto = self.global_data().object_prototype.unwrap();
+            self.global_data.data_view_structure = Some(Structure::new_indexed(self, None, false));
+            let proto_map = self
+                .global_data
+                .data_view_structure
+                .unwrap()
+                .change_prototype_transition(self, Some(obj_proto));
+            let mut proto =
+                JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+            self.global_data
+                .data_view_structure
+                .unwrap()
+                .change_prototype_with_no_transition(proto);
+            let mut ctor =
+                JsNativeFunction::new(self, "DataView".intern(), data_view_constructor, 1);
+            ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
+            proto.put(self, "constructor".intern(), JsValue::new(ctor), false)?;
+            def_native_method!(self, proto, getInt8, data_view_prototype_get::<i8>, 1)?;
+            def_native_method!(self, proto, getUint8, data_view_prototype_get::<u8>, 1)?;
+            def_native_method!(self, proto, getInt16, data_view_prototype_get::<i16>, 2)?;
+            def_native_method!(self, proto, getUint16, data_view_prototype_get::<u16>, 2)?;
+            def_native_method!(self, proto, getInt32, data_view_prototype_get::<i32>, 2)?;
+            def_native_method!(self, proto, getUint32, data_view_prototype_get::<u32>, 2)?;
+            def_native_method!(self, proto, getFloat64, data_view_prototype_get::<f64>, 2)?;
+            def_native_method!(self, proto, getFloat32, data_view_prototype_get::<f32>, 2)?;
+
+            def_native_method!(self, proto, setInt8, data_view_prototype_set::<i8>, 2)?;
+            def_native_method!(self, proto, setUint8, data_view_prototype_set::<u8>, 2)?;
+            def_native_method!(self, proto, setInt16, data_view_prototype_set::<i16>, 3)?;
+            def_native_method!(self, proto, setUint16, data_view_prototype_set::<u16>, 3)?;
+            def_native_method!(self, proto, setInt32, data_view_prototype_set::<i32>, 3)?;
+            def_native_method!(self, proto, setUint32, data_view_prototype_set::<u32>, 3)?;
+            def_native_method!(self, proto, setFloat64, data_view_prototype_set::<f64>, 3)?;
+            def_native_method!(self, proto, setFloat32, data_view_prototype_set::<f32>, 3)?;
+
+            let byte_length = JsNativeFunction::new(
+                self,
+                "byteLength".intern(),
+                data_view_prototype_byte_length,
+                0,
+            );
+            proto.define_own_property(
+                self,
+                "byteLength".intern(),
+                &*AccessorDescriptor::new(
+                    JsValue::new(byte_length),
+                    JsValue::encode_undefined_value(),
+                    NONE,
+                ),
+                false,
+            )?;
+            let byte_offset = JsNativeFunction::new(
+                self,
+                "byteOffset".intern(),
+                data_view_prototype_byte_offset,
+                0,
+            );
+            proto.define_own_property(
+                self,
+                "byteOffset".intern(),
+                &*AccessorDescriptor::new(
+                    JsValue::new(byte_offset),
+                    JsValue::encode_undefined_value(),
+                    NONE,
+                ),
+                false,
+            )?;
+            let buffer =
+                JsNativeFunction::new(self, "buffer".intern(), data_view_prototype_buffer, 0);
+            proto.define_own_property(
+                self,
+                "buffer".intern(),
+                &*AccessorDescriptor::new(
+                    JsValue::new(buffer),
+                    JsValue::encode_undefined_value(),
+                    NONE,
+                ),
+                false,
+            )?;
+            self.global_data.data_view_prototype = Some(proto);
+            Ok(())
+        };
+
+        match init() {
+            Ok(_) => (),
+            Err(e) => {
+                panic!(
+                    "Failed to initialize DataView: {}",
+                    e.to_string(self).ok().expect("failed to convert to string")
+                )
+            }
         }
     }
 }

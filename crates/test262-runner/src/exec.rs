@@ -5,16 +5,17 @@ use super::{
 
 use colored::Colorize;
 use rayon::prelude::*;
-use starlight::{
-    gc::default_heap,
-    prelude::{Deserializer, Options},
-    vm::{parse, Runtime},
-};
+use starlight::vm::{parse, Runtime};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
 impl TestSuite {
-    pub(crate) fn run_main(&self, harness: &Harness, verbose: u8) -> SuiteResult {
+    pub(crate) fn run_main(
+        &self,
+        harness: &Harness,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
         }
@@ -23,14 +24,14 @@ impl TestSuite {
         let suites: Vec<_> = self
             .suites
             .iter()
-            .map(|suite| suite.run(harness, verbose))
+            .map(|suite| suite.run(harness, verbose, rt))
             .collect();
 
         // TODO: in parallel
         let tests: Vec<_> = self
             .tests
             .iter()
-            .map(|test| test.run(harness, verbose))
+            .map(|test| test.run(harness, verbose, rt))
             .flatten()
             .collect();
 
@@ -85,21 +86,21 @@ impl TestSuite {
         }
     }
     /// Runs the test suite.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8) -> SuiteResult {
+    pub(crate) fn run(&self, harness: &Harness, verbose: u8, rt: &mut Box<Runtime>) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
         }
 
         let suites: Vec<_> = self
             .suites
-            .par_iter()
-            .map(|suite| suite.run(harness, verbose))
+            .iter()
+            .map(|suite| suite.run(harness, verbose, rt))
             .collect();
 
         let tests: Vec<_> = self
             .tests
-            .par_iter()
-            .map(|test| test.run(harness, verbose))
+            .iter()
+            .map(|test| test.run(harness, verbose, rt))
             .flatten()
             .collect();
 
@@ -157,21 +158,32 @@ impl TestSuite {
 
 impl Test {
     /// Runs the test.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8) -> Vec<TestResult> {
+    pub(crate) fn run(
+        &self,
+        harness: &Harness,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> Vec<TestResult> {
         let mut results = Vec::new();
         if self.flags.contains(TestFlags::STRICT) {
-            results.push(self.run_once(harness, true, verbose));
+            results.push(self.run_once(harness, true, verbose, rt));
         }
 
         if self.flags.contains(TestFlags::NO_STRICT) || self.flags.contains(TestFlags::RAW) {
-            results.push(self.run_once(harness, false, verbose));
+            results.push(self.run_once(harness, false, verbose, rt));
         }
 
         results
     }
 
     /// Runs the test once, in strict or non-strict mode
-    fn run_once(&self, harness: &Harness, strict: bool, verbose: u8) -> TestResult {
+    fn run_once(
+        &self,
+        harness: &Harness,
+        strict: bool,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> TestResult {
         if verbose >= 1 {
             eprintln!(
                 "Starting `{}` {}",
@@ -210,23 +222,21 @@ impl Test {
                 Outcome::Positive => {
                     // TODO: implement async and add `harness/doneprintHandle.js` to the includes.
 
-                    match self.set_up_env(&harness, strict) {
-                        Ok(mut context) => {
+                    match self.set_up_env(&harness, strict, rt) {
+                        Ok(_) => {
                             let content = if strict {
                                 format!("\"use strict\";\n {}", self.content)
                             } else {
                                 self.content.to_string()
                             };
-                            let res = context.eval_internal(None, false, &content, false);
+                            let res = rt.eval_internal(None, false, &content, false);
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => val
-                                    .to_string(&mut context)
-                                    .unwrap_or_else(|_| String::new()),
+                                Ok(val) => val.to_string(rt).unwrap_or_else(|_| String::new()),
                                 Err(e) => format!(
                                     "Uncaught {}",
-                                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                                    e.to_string(rt).unwrap_or_else(|_| String::new())
                                 ),
                             };
 
@@ -266,22 +276,15 @@ impl Test {
                     if let Err(e) = parse(&self.content.as_ref(), strict) {
                         (false, format!("Uncaught {:?}", e))
                     } else {
-                        match self.set_up_env(&harness, strict) {
-                            Ok(mut context) => {
-                                match context.eval_internal(
-                                    None,
-                                    false,
-                                    &self.content.as_ref(),
-                                    false,
-                                ) {
-                                    Ok(res) => (
-                                        false,
-                                        res.to_string(&mut context)
-                                            .unwrap_or_else(|_| String::new()),
-                                    ),
+                        match self.set_up_env(&harness, strict, rt) {
+                            Ok(_) => {
+                                match rt.eval_internal(None, false, &self.content.as_ref(), false) {
+                                    Ok(res) => {
+                                        (false, res.to_string(rt).unwrap_or_else(|_| String::new()))
+                                    }
                                     Err(e) => {
                                         let passed = e
-                                            .to_string(&mut context)
+                                            .to_string(rt)
                                             .unwrap_or_else(|_| String::new())
                                             .contains(error_type.as_ref());
 
@@ -289,8 +292,7 @@ impl Test {
                                             passed,
                                             format!(
                                                 "Uncaught {}",
-                                                e.to_string(&mut context)
-                                                    .unwrap_or_else(|_| String::new())
+                                                e.to_string(rt).unwrap_or_else(|_| String::new())
                                             ),
                                         )
                                     }
@@ -362,19 +364,15 @@ impl Test {
     }
 
     /// Sets the environment up to run the test.
-    fn set_up_env(&self, harness: &Harness, _strict: bool) -> Result<Box<Runtime>, String> {
+    fn set_up_env(
+        &self,
+        harness: &Harness,
+        _strict: bool,
+        context: &mut Box<Runtime>,
+    ) -> Result<(), String> {
         // Create new Realm
         // TODO: in parallel.
-        let options = Options::default();
-        let gc = default_heap(&options);
-        let mut context = Deserializer::deserialize(
-            false,
-            &self.snapshot,
-            Default::default(),
-            gc,
-            None,
-            |_, _| {},
-        );
+        context.create_realm();
 
         /*let mut context = Runtime::new(
             RuntimeParams::default().with_dump_bytecode(false),
@@ -388,7 +386,7 @@ impl Test {
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    e.to_string(context).unwrap_or_else(|_| String::new())
                 )
             })?;
         context
@@ -396,7 +394,7 @@ impl Test {
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    e.to_string(context).unwrap_or_else(|_| String::new())
                 )
             })?;
 
@@ -416,11 +414,11 @@ impl Test {
                     format!(
                         "could not run the {} include file:\nUncaught {}",
                         include,
-                        e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                        e.to_string(context).unwrap_or_else(|_| String::new())
                     )
                 })?;
         }
 
-        Ok(context)
+        Ok(())
     }
 }

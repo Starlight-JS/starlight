@@ -1,4 +1,8 @@
-use starlight::{gc::snapshot::Snapshot, vm::Runtime, Platform};
+use starlight::{
+    gc::{default_heap, snapshot::Snapshot},
+    vm::Runtime,
+    Platform,
+};
 use std::path::PathBuf;
 use structopt::*;
 

@@ -208,7 +208,12 @@ impl<'a> Deserializer<'a> {
         self.pc = last_stop;
 
         rt.global_data = self.deserialize_global_data();
-        rt.global_object = self.read_opt_gc();
+        let global_object = self.read_opt_gc();
+
+        let mut realm = Realm::new();
+        realm.global_object = global_object;
+        rt.realm = Some(realm);
+
         rt.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
         rt.module_loader = self.read_opt_gc();
         rt.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
@@ -250,12 +255,13 @@ impl<'a> Deserializer<'a> {
             set_prototype: self.read_opt_gc(),
             set_structure: self.read_opt_gc(),
             regexp_structure: self.read_opt_gc(),
-            regexp_object: self.read_opt_gc(),
+            regexp_prototype: self.read_opt_gc(),
             generator_prototype: self.read_opt_gc(),
             generator_structure: self.read_opt_gc(),
             array_buffer_prototype: self.read_opt_gc(),
             array_buffer_structure: self.read_opt_gc(),
             data_view_structure: self.read_opt_gc(),
+            data_view_prototype: self.read_opt_gc(),
             spread_builtin: self.read_opt_gc(),
         }
     }

@@ -1,4 +1,7 @@
-use crate::{prelude::*, vm::array_buffer::JsArrayBuffer};
+use crate::{
+    prelude::*,
+    vm::{array_buffer::JsArrayBuffer},
+};
 pub fn array_buffer_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Err(JsValue::new(rt.new_type_error(
@@ -71,56 +74,74 @@ pub fn array_buffer_slice(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     todo!()
 }
 
-pub(crate) fn array_buffer_init(rt: &mut Runtime) {
-    // Do not care about GC since no GC is possible when initializing runtime.
-    let mut init = || -> Result<(), JsValue> {
-        let mut structure =
-            Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
-        let mut proto = JsObject::new(
-            rt,
-            &structure,
-            JsArrayBuffer::get_class(),
-            ObjectTag::ArrayBuffer,
-        );
-        *proto.data::<JsArrayBuffer>() = std::mem::ManuallyDrop::new(JsArrayBuffer {
-            data: std::ptr::null_mut(),
-            size: 0,
-            attached: false,
-        });
-        let map = structure.change_prototype_transition(rt, Some(proto));
-        rt.global_data.array_buffer_prototype = Some(proto);
-        rt.global_data.array_buffer_structure = Some(map);
-
-        let mut ctor =
-            JsNativeFunction::new(rt, "ArrayBuffer".intern(), array_buffer_constructor, 1);
-        ctor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
-        proto.put(rt, "constructor".intern(), JsValue::new(ctor), false)?;
-        let byte_length =
-            JsNativeFunction::new(rt, "byteLength".intern(), array_buffer_byte_length, 0);
-        proto.define_own_property(
-            rt,
-            "byteLength".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_length),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
+impl Runtime {
+    pub(crate) fn init_array_buffer_in_realm(&mut self) -> Result<(), JsValue> {
+        let mut proto = self.global_data.array_buffer_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+        self.realm().global_object().put(
+            self,
+            "ArrayBuffer".intern(),
+            JsValue::new(constructor),
             false,
         )?;
-        //def_native_method!(rt, proto, byteLength, array_buffer_byte_length, 0)?;
-        def_native_method!(rt, proto, slice, array_buffer_slice, 2)?;
-        rt.global_object()
-            .put(rt, "ArrayBuffer".intern(), JsValue::new(ctor), false)?;
         Ok(())
-    };
+    }
 
-    match init() {
-        Ok(_) => {}
-        Err(e) => {
-            unreachable!(
-                "Failed to initialize ArrayBuffer: '{}'",
-                e.to_string(rt).unwrap_or_else(|_| unreachable!())
+    pub(crate) fn init_array_buffer_in_global_data(&mut self) {
+        // Do not care about GC since no GC is possible when initializing runtime.
+        let mut init = || -> Result<(), JsValue> {
+            let mut structure = Structure::new_indexed(
+                self,
+                Some(self.global_data.object_prototype.unwrap()),
+                false,
             );
+            let mut proto = JsObject::new(
+                self,
+                &structure,
+                JsArrayBuffer::get_class(),
+                ObjectTag::ArrayBuffer,
+            );
+            *proto.data::<JsArrayBuffer>() = std::mem::ManuallyDrop::new(JsArrayBuffer {
+                data: std::ptr::null_mut(),
+                size: 0,
+                attached: false,
+            });
+            let map = structure.change_prototype_transition(self, Some(proto));
+            self.global_data.array_buffer_prototype = Some(proto);
+            self.global_data.array_buffer_structure = Some(map);
+
+            let mut ctor =
+                JsNativeFunction::new(self, "ArrayBuffer".intern(), array_buffer_constructor, 1);
+            ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
+            proto.put(self, "constructor".intern(), JsValue::new(ctor), false)?;
+            let byte_length =
+                JsNativeFunction::new(self, "byteLength".intern(), array_buffer_byte_length, 0);
+            proto.define_own_property(
+                self,
+                "byteLength".intern(),
+                &*AccessorDescriptor::new(
+                    JsValue::new(byte_length),
+                    JsValue::encode_undefined_value(),
+                    NONE,
+                ),
+                false,
+            )?;
+            //def_native_method!(rt, proto, byteLength, array_buffer_byte_length, 0)?;
+            def_native_method!(self, proto, slice, array_buffer_slice, 2)?;
+            Ok(())
+        };
+
+        match init() {
+            Ok(_) => {}
+            Err(e) => {
+                unreachable!(
+                    "Failed to initialize ArrayBuffer: '{}'",
+                    e.to_string(self).unwrap_or_else(|_| unreachable!())
+                );
+            }
         }
     }
 }
