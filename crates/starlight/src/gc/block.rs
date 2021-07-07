@@ -148,8 +148,8 @@ impl Block {
         self.cell(index)
     }
     pub fn cell_index(&self, ptr: *const u8) -> usize {
-        let index = (ptr as usize - self.begin()) / self.cell_size.get() as usize;
-        index
+        
+        (ptr as usize - self.begin()) / self.cell_size.get() as usize
     }
     pub fn cell(&self, idx: usize) -> *mut u8 {
         (self

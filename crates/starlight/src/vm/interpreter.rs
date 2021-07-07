@@ -673,19 +673,17 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         is_try: bool,
                     ) -> Result<(), JsValue> {
                         let mut slot = Slot::new();
-                        if name == length_id() {
-                            if obj.is_class(JsArray::get_class()) {
-                                *unwrap_unchecked(frame.code_block)
-                                    .feedback
-                                    .get_unchecked_mut(fdbk as usize) =
-                                    TypeFeedBack::PropertyCache {
-                                        structure: obj.structure(),
-                                        mode: GetByIdMode::ArrayLength,
-                                        offset: u32::MAX,
-                                    };
-                                frame.push(JsValue::new(obj.indexed.length()));
-                                return Ok(());
-                            }
+                        if name == length_id() && obj.is_class(JsArray::get_class()) {
+                            *unwrap_unchecked(frame.code_block)
+                                .feedback
+                                .get_unchecked_mut(fdbk as usize) =
+                                TypeFeedBack::PropertyCache {
+                                    structure: obj.structure(),
+                                    mode: GetByIdMode::ArrayLength,
+                                    offset: u32::MAX,
+                                };
+                            frame.push(JsValue::new(obj.indexed.length()));
+                            return Ok(());
                         }
                         let found = obj.get_property_slot(rt, name, &mut slot);
                         #[cfg(not(feature = "no-inline-caching"))]

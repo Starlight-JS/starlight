@@ -130,6 +130,6 @@ fn parse_size_from_str(s: &str) -> Result<usize, ParseIntError> {
 
     number
         .parse::<usize>()
-        .map_err(|x| x.into())
+        .map_err(|x| x)
         .map(|x| x * multiplier)
 }
