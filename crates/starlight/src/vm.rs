@@ -4,14 +4,16 @@
 use crate::{
     bytecompiler::ByteCompiler,
     gc::shadowstack::ShadowStack,
+    gc::default_heap,
     gc::Heap,
     gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
-        default_heap, SimpleMarkingConstraint,
+        SimpleMarkingConstraint,
     },
     jsrt::{self},
+    gc::{safepoint::GlobalSafepoint},
     options::Options,
 };
 use arguments::Arguments;
@@ -172,12 +174,14 @@ pub struct Runtime {
 
     // execute realm
     pub(crate) realm: Option<Realm>,
+    pub(crate) safepoint: GlobalSafepoint,
 }
 
 unsafe impl Trace for Realm {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         self.global_object.trace(visitor);
     }
+    
 }
 
 impl Runtime {
@@ -295,6 +299,7 @@ impl Runtime {
         Self {
             gc,
             options,
+            safepoint: GlobalSafepoint::new(),
             stack: Stack::new(),
             modules: HashMap::new(),
             stacktrace: String::new(),
