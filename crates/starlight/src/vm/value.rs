@@ -37,7 +37,7 @@ pub const CMP_UNDEF: i32 = -1;
 
 /*#[cfg(target_pointer_width = "64")]
 pub use new_value::*;*/
-#[cfg(target_pointer_width = "64")]
+
 pub use old_value::*;
 pub mod old_value {
     use super::*;

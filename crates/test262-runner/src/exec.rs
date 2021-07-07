@@ -2,13 +2,16 @@ use super::{
     Harness, Outcome, Phase, SuiteResult, Test, TestFlags, TestOutcomeResult, TestResult,
     TestSuite, IGNORED,
 };
+
 use colored::Colorize;
+use rayon::prelude::*;
 use starlight::{
     gc::default_heap,
     prelude::{Deserializer, Options},
     vm::{parse, Runtime},
 };
-use std::panic::{self, AssertUnwindSafe};
+use std::panic;
+use std::panic::AssertUnwindSafe;
 
 impl TestSuite {
     pub(crate) fn run_main(&self, harness: &Harness, verbose: u8) -> SuiteResult {
@@ -87,17 +90,15 @@ impl TestSuite {
             println!("Suite {}:", self.name);
         }
 
-        // TODO: in parallel
         let suites: Vec<_> = self
             .suites
-            .iter()
+            .par_iter()
             .map(|suite| suite.run(harness, verbose))
             .collect();
 
-        // TODO: in parallel
         let tests: Vec<_> = self
             .tests
-            .iter()
+            .par_iter()
             .map(|test| test.run(harness, verbose))
             .flatten()
             .collect();
