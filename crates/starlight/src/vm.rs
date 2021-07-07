@@ -704,7 +704,7 @@ impl Runtime {
             },
         ));
 
-        this.create_realm();
+        this.create_realm().unwrap_or_else(|| unreachable!());
 
         this.gc.undefer();
         this.gc.collect_if_necessary();
