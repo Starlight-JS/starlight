@@ -25,7 +25,7 @@ use crate::{
         serializer::{Serializable, SnapshotSerializer},
     },
 };
-use std::intrinsics::unlikely;
+use std::intrinsics::{copy_nonoverlapping, unlikely};
 use std::ops::Deref;
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
@@ -822,14 +822,11 @@ impl Heap {
     #[inline]
     pub fn copy<T: GcCell>(&mut self, value: GcPointer<T>) -> GcPointer<T> {
         let obj = value.deref();
-        let size = value.compute_size();
+        let size = obj.compute_size();
         let memory = self.allocate_raw(vtable_of(obj) as _, size, TypeId::of::<T>());
         unsafe {
             let base = &*(value.base.as_ptr());
-            for index in 0..size {
-                let pos = (base.data::<u8>() as usize + index) as *mut u8;
-                (*memory).data::<u8>().write(*pos);
-            }
+            copy_nonoverlapping(base.data::<u8>(), (*memory).data::<u8>(), size);
             GcPointer {
                 base: NonNull::new_unchecked(memory),
                 marker: PhantomData,
