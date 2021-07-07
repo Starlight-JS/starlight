@@ -247,6 +247,19 @@ impl Runtime {
         }
         result
     }
+    pub fn compile_function(
+        &mut self,
+        name: &str,
+        code: &str,
+        params: &[String],
+    ) -> Result<JsValue, JsValue> {
+        let mut vmref = RuntimeRef(self);
+
+        let mut code = ByteCompiler::compile_code(&mut *vmref, params, "", code.to_owned(), false)?;
+        code.get_jsobject().as_function_mut().as_vm_mut().code.name = name.intern();
+
+        Ok(code)
+    }
     /// Compile provided script into JS function. If error when compiling happens `SyntaxError` instance
     /// is returned.
     pub fn compile(
@@ -822,6 +835,7 @@ pub struct GlobalData {
     pub(crate) array_buffer_prototype: Option<GcPointer<JsObject>>,
     pub(crate) array_buffer_structure: Option<GcPointer<Structure>>,
     pub(crate) data_view_structure: Option<GcPointer<Structure>>,
+    pub(crate) spread_builtin: Option<GcPointer<JsObject>>,
 }
 
 impl GlobalData {

@@ -1383,23 +1383,21 @@ pub struct SpreadValue {
 
 impl SpreadValue {
     pub fn new(rt: &mut Runtime, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
-        unsafe {
-            if value.is_jsobject()
-                && value.get_object().downcast_unchecked::<JsObject>().tag() == ObjectTag::Array
-            {
-                let mut object = value.get_jsobject();
-                let mut arr = vec![];
-                for i in 0..crate::jsrt::get_length(rt, &mut object)? {
-                    arr.push(object.get(rt, Symbol::Index(i))?);
+        let mut builtin = rt.global_data.spread_builtin.unwrap();
+        let mut slice = [value];
+        let mut args = Arguments::new(JsValue::encode_undefined_value(), &mut slice);
+        builtin
+            .as_function_mut()
+            .call(rt, &mut args, JsValue::encode_undefined_value())
+            .and_then(|x| {
+                assert!(x.is_jsobject() && x.get_jsobject().is_class(JsArray::get_class()));
+                let mut array = TypedJsObject::<JsArray>::new(x);
+                let mut vec = vec![];
+                for i in 0..crate::jsrt::get_length(rt, &mut array.object())? {
+                    vec.push(array.get(rt, Symbol::Index(i))?);
                 }
-                return Ok(rt.heap().allocate(Self { array: arr }));
-            }
-
-            let msg = JsString::new(rt, "cannot create spread from non-array value");
-            Err(JsValue::encode_object_value(JsTypeError::new(
-                rt, msg, None,
-            )))
-        }
+                Ok(rt.gc.allocate(Self { array: vec }))
+            })
     }
 }
 

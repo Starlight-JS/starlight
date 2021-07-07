@@ -12,7 +12,7 @@ use crate::{
         symbol_table::*, value::*, ModuleKind, Runtime,
     },
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
 pub mod data_view;
@@ -155,6 +155,12 @@ impl Runtime {
         );
     }
     pub(crate) fn init_self_hosted(&mut self) {
+        let spread = include_str!("builtins/Spread.js");
+        let func = self
+            .compile_function("@spread", spread, &["iterable".to_string()])
+            .unwrap_or_else(|_| panic!());
+        assert!(func.is_callable());
+        self.global_data.spread_builtin = Some(func.get_jsobject());
         let mut eval = |path, source| {
             self.eval_internal(Some(path), false, source, true)
                 .unwrap_or_else(|error| match error.to_string(self) {
@@ -1392,4 +1398,40 @@ pub fn to_index(rt: &mut Runtime, val: JsValue) -> Result<usize, JsValue> {
         )));
     }
     Ok(res as _)
+}
+
+pub fn define_lazy_property(
+    vm: &mut Runtime,
+    mut object: GcPointer<JsObject>,
+    name: Symbol,
+    init: Rc<dyn Fn() -> PropertyDescriptor>,
+    throwable: bool,
+) -> Result<(), JsValue> {
+    let c = init.clone();
+    let getter = JsClosureFunction::new(
+        vm,
+        "<init_property>".intern(),
+        move |vm, args| {
+            let desc = init();
+            let mut this = args.this.to_object(vm)?;
+            this.define_own_property(vm, name, &desc, throwable)?;
+            this.get(vm, name)
+        },
+        0,
+    );
+    let setter = JsClosureFunction::new(
+        vm,
+        "<init_property>".intern(),
+        move |vm, args| {
+            let mut this = args.this.to_object(vm)?;
+            let desc = c();
+            this.define_own_property(vm, name, &desc, throwable)?;
+            this.put(vm, name, args.at(0), true)?;
+            Ok(JsValue::encode_undefined_value())
+        },
+        0,
+    );
+    let desc = AccessorDescriptor::new(JsValue::new(getter), JsValue::new(setter), C | E);
+    object.define_own_property(vm, name, &*desc, throwable)?;
+    Ok(())
 }
