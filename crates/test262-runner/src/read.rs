@@ -131,9 +131,10 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
             continue;
         } else if IGNORED.contains_file(&entry.file_name().to_string_lossy()) {
             let mut test = Test::default();
-            test.set_name(entry.file_name().to_string_lossy());
-            tests.push(test)
+            test.set_name(entry.path().to_string_lossy());
+            tests.push(test);
         } else {
+            
             tests.push(read_test(entry.path().as_path())?);
         }
     }
@@ -148,24 +149,10 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
 /// Reads information about a given test case.
 pub(super) fn read_test(path: &Path) -> io::Result<Test> {
     let name = path
-        .file_stem()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("test with no file name found: {}", path.display()),
-            )
-        })?
-        .to_str()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("non-UTF-8 file name found: {}", path.display()),
-            )
-        })?;
+        .to_string_lossy();
 
     let content = fs::read_to_string(path)?;
     let metadata = read_metadata(&content, path)?;
-
     Ok(Test::new(name, content, metadata))
 }
 

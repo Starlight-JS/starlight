@@ -38,7 +38,12 @@ impl Ignored {
     /// Checks if the ignore list contains the given test name in the list of
     /// tests to ignore.
     pub(crate) fn contains_test(&self, test: &str) -> bool {
-        self.tests.contains(test)
+        for ign in self.tests.iter() {
+            if test.contains(&**ign) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Checks if the ignore list contains the given feature name in the list
@@ -162,6 +167,9 @@ enum Cli {
         /// Whether to use markdown output
         #[structopt(short, long)]
         markdown: bool,
+
+        #[structopt(short, long)]
+        detail: bool
     },
 }
 
@@ -395,8 +403,28 @@ fn main() {
             base,
             new,
             markdown,
-        } => compare_results(base.as_path(), new.as_path(), markdown),
+            detail
+        } => compare_results(base.as_path(), new.as_path(), markdown,detail),
     }
+}
+
+fn show_result(results: &SuiteResult) {
+    println!();
+    println!("Results:");
+    println!("Total tests: {}", results.total);
+    println!("Passed tests: {}", results.passed.to_string().green());
+    println!("Ignored tests: {}", results.ignored.to_string().yellow());
+    println!(
+        "Failed tests: {} (panics: {})",
+        (results.total - results.passed - results.ignored)
+            .to_string()
+            .red(),
+        results.panic.to_string().red()
+    );
+    println!(
+        "Conformance: {:.2}%",
+        (results.passed as f64 / results.total as f64) * 100.0
+    );
 }
 
 /// Runs the full test suite.
@@ -417,7 +445,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     }
     let harness = read_harness(test262_path).expect("could not read initialization bindings");
 
-    if suite.to_string_lossy().ends_with(".js") {
+    let results = if suite.to_string_lossy().ends_with(".js") {
         let options = Options::default();
         let mut rt = Runtime::new(options, None);
         let test = read_test(&test262_path.join(suite)).expect("could not get the test to run");
@@ -425,9 +453,13 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
         if verbose != 0 {
             println!("Test loaded, starting...");
         }
-        test.run(&harness, verbose, &mut rt);
+        let suite = TestSuite {
+            name: test.name.clone(),
+            suites: Vec::new(),
+            tests: vec![test]
+        };
+        suite.run_main(&harness, verbose, &mut rt)
 
-        println!();
     } else {
         let suite =
             read_suite(&test262_path.join(suite)).expect("could not get the list of tests to run");
@@ -437,26 +469,9 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
         }
         let options = Options::default();
         let mut rt = Runtime::new(options, None);
-        let results = suite.run_main(&harness, verbose, &mut rt);
-
-        println!();
-        println!("Results:");
-        println!("Total tests: {}", results.total);
-        println!("Passed tests: {}", results.passed.to_string().green());
-        println!("Ignored tests: {}", results.ignored.to_string().yellow());
-        println!(
-            "Failed tests: {} (panics: {})",
-            (results.total - results.passed - results.ignored)
-                .to_string()
-                .red(),
-            results.panic.to_string().red()
-        );
-        println!(
-            "Conformance: {:.2}%",
-            (results.passed as f64 / results.total as f64) * 100.0
-        );
-
-        write_json(results, output, verbose)
-            .expect("could not write the results to the output JSON file");
-    }
+        suite.run_main(&harness, verbose, &mut rt)
+    };
+    show_result(&results);
+    write_json(results, output, verbose)
+        .expect("could not write the results to the output JSON file");
 }
