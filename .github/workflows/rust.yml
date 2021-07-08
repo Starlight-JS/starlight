@@ -43,8 +43,8 @@ jobs:
       - name: Checkout GitHub pages
         uses: actions/checkout@v2.3.4
         with:
-          repository: Starlight-JS/test262.git
-          path: test262-base
+          repository: Starlight-JS/test262
+          path: test262-bases
       # Run the results comparison
       - name: Compare results
         if: github.event_name == 'pull_request'
