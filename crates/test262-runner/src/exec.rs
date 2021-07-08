@@ -4,7 +4,6 @@ use super::{
 };
 
 use colored::Colorize;
-use rayon::prelude::*;
 use starlight::vm::{parse, Runtime};
 use std::panic;
 use std::panic::AssertUnwindSafe;

@@ -1,6 +1,5 @@
 #![allow(dead_code, clippy::float_cmp)]
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use starlight::gc::default_heap;
 use starlight::letroot;
 use starlight::prelude::Options;
 use starlight::{
@@ -14,7 +13,6 @@ use starlight::{
 use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let options = Options::default();
     let rrt = Runtime::new(Options::default(), None);
     let stack = rrt.shadowstack();
     let mut rt = rrt;

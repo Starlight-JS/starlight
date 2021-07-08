@@ -134,6 +134,7 @@ pub struct Realm {
     // save global object
     pub(crate) global_object: Option<GcPointer<JsObject>>,
     // save all intrinsics value
+    #[allow(dead_code)]
     pub(crate) intrinsics: HashMap<String, JsValue>,
 }
 
