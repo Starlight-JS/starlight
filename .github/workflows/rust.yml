@@ -43,7 +43,7 @@ jobs:
       - name: Checkout GitHub pages
         uses: actions/checkout@v2.3.4
         with:
-          repository: git@github.com:Starlight-JS/test262.git
+          repository: Starlight-JS/test262.git
           path: test262-base
       # Run the results comparison
       - name: Compare results
