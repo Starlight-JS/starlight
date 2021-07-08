@@ -10,22 +10,67 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check-linux:
-    runs-on: ubuntu-latest
-
+  check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        rust: [nightly]
+        include:
+          - os: ubuntu-latest
+            sccache-path: /home/runner/.cache/sccache
+          - os: macos-latest
+            sccache-path: /Users/runner/Library/Caches/Mozilla.sccache
+    env:
+      RUST_BACKTRACE: full
+      RUSTC_WRAPPER: sccache
+      RUSTV: ${{ matrix.rust }}
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_DIR: ${{ matrix.sccache-path }}
     steps:
       - uses: actions/checkout@v2
-      - name: Setup nightly
-        run: rustup default nightly
-      - uses: actions/cache@v2
+      - name: Install sccache (ubuntu-latest)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          LINK: https://github.com/mozilla/sccache/releases/download
+          SCCACHE_VERSION: 0.2.13
+        run: |
+          SCCACHE_FILE=sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl
+          mkdir -p $HOME/.local/bin
+          curl -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
+          mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Install sccache (macos-latest)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install sccache
+      - name: Install Rust ${{ matrix.rust }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          override: true
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        continue-on-error: false
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-v1-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-v1
+      - name: Save sccache
+        uses: actions/cache@v2
+        continue-on-error: false
+        with:
+          path: ${{ matrix.sccache-path }}
+          key: ${{ runner.os }}-sccache-v1-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-sccache-v1
+      - name: Start sccache server
+        run: sccache --start-server
       - name: Build
         run: cargo build --verbose
       - name: Run tests
@@ -33,53 +78,48 @@ jobs:
       - name: Submodule update
         run: git submodule update --init
       - name: Run test262 tests
-        run: cargo run --release --bin test262-runner run
-
-  check-macos:
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: Setup nightly
-        run: rustup default nightly
-      - uses: actions/cache@v2
+        run: cargo run --release --bin test262-runner run -o new
+      # Run the test suite and upload the results
+      # Run the results comparison
+      - name: Checkout Test262 Results
+        uses: actions/checkout@v2.3.4
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose -- --test-threads 1
-      - name: Submodule update
-        run: git submodule update --init
-      - name: Run test262 tests
-        run: cargo run --release --bin test262-runner run
-  check-windows:
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: Setup nightly
-        run: rustup default nightly
-      - uses: actions/cache@v2
+          ref: test262-base
+          path: test262-base
+      - name: Compare results
+        id: compare
+        shell: bash
+        run: |
+          comment=$(cargo run --release --bin test262-runner compare test262-base/basic/latest.json new/latest.json -m -d | jq --raw-input --slurp '.')
+          echo $comment > ./comment.txt
+          echo $comment
+      - name: Upload comment artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose -- --test-threads 1
-      - name: Submodule update
-        run: git submodule update --init
-      - name: Run test262 tests
-        run: cargo run --release --bin test262-runner run
+          name: comment
+          path: ./comment.txt
+          retention-days: 3
+
+      # Upload PR id for next workflow use
+      - name: Save PR number
+        if: github.event_name == 'pull_request'
+        run: echo ${{ github.event.number }} > ./pr-id.txt
+
+      - name: Upload PR number
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v2
+        with:
+          name: pr
+          path: ./pr-id.txt
+
+      - name: Upload New Results
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v2
+        with:
+          name: new
+          path: ./new/
+      - name: Print sccache stats
+        run: sccache --show-stats
+      - name: Stop sccache server
+        run: sccache --stop-server || true
