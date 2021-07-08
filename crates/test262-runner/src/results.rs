@@ -296,9 +296,10 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     let mut failed_tests: Vec<String> = Vec::new();
     for test in base_tests_map.values() {
         if matches!(test.result, TestOutcomeResult::Failed) {
-            let new_test = new_test_map.get(&test.name).unwrap();
-            if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
-                failed_tests.push(test.name.to_string());
+            if let Some(new_test) = new_test_map.get(&test.name) {
+                if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
+                    failed_tests.push(test.name.to_string());
+                }
             }
         }
     }
@@ -314,9 +315,10 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     let mut failed_tests: Vec<String> = Vec::new();
     for test in new_test_map.values() {
         if matches!(test.result, TestOutcomeResult::Failed) {
-            let base_test = base_tests_map.get(&test.name).unwrap();
-            if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
-                failed_tests.push(test.name.to_string());
+            if let Some(base_test) = base_tests_map.get(&test.name) {
+                if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
+                    failed_tests.push(test.name.to_string());
+                }
             }
         }
     }
