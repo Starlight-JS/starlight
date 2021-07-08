@@ -1,0 +1,67 @@
+name: Test262
+
+on:
+  workflow_run:
+    workflows: ["Rust"]
+    types:
+      - completed
+
+jobs:
+  test262:
+    name: check-test262
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      # Get PR id first
+      - name: download pr artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          name: pr
+      # Save PR id to output
+      - name: save PR id
+        id: pr
+        run: echo "::set-output name=id::$(<pr-id.txt)"
+      - name: Checkout Test262 Results
+        uses: actions/checkout@v2.3.4
+        with:
+          repository: Starlight-JS/test262
+          path: test262-base
+      # Download comment artifact
+      - name: download site artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          workflow_conclusion: success
+          name: comment
+      - name: save comment
+        id: comment
+        run: echo "::set-output name=comment::$(<comment.txt)"
+      - name: maintain-comment
+        if: github.event_name == 'pull_request'
+        uses: actions-cool/maintain-one-comment@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.comment.outputs.comment }}
+          body-include: "Test262 conformance changes"
+          number: ${{ steps.pr.outputs.id }}
+
+      # Commit changes to GitHub pages.
+      - name: Commit files
+        if: github.event_name == 'push'
+        run: |
+          cp -r new/* test262-base/basic
+          cd test262-base
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Add new test262 results" -a
+          cd ..
+      - name: Upload results
+        if: github.event_name == 'push'
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          directory: test262-base
+          github_token: ${{ secrets.GITHUB_TOKEN }}

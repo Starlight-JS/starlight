@@ -40,11 +40,6 @@ jobs:
       # - name: Run test262 tests
       #   run: cargo run --release --bin test262-runner run -o new
       # Run the test suite and upload the results
-      - name: Checkout Test262 Results
-        uses: actions/checkout@v2.3.4
-        with:
-          repository: Starlight-JS/test262
-          path: test262-base
       # Run the results comparison
       - name: Compare results
         if: github.event_name == 'pull_request'
@@ -55,29 +50,23 @@ jobs:
           comment="${comment//'%'/'%25'}"
           comment="${comment//$'\n'/'%0A'}"
           comment="${comment//$'\r'/'%0D'}"
-          echo "::set-output name=comment::$comment"
-      - name: maintain-comment
-        if: github.event_name == 'pull_request'
-        uses: actions-cool/maintain-one-comment@v2.0.0
+          echo $comment > ./comment.txt
+      - name: upload site artifact
+        if: startsWith(matrix.os,'ubuntu')
+        uses: actions/upload-artifact@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          body: ${{ steps.compare.outputs.comment }}
-          body-include: "Test262 conformance changes"
+          name: comment
+          path: ./comment.txt
+          retention-days: 3
 
-      # Commit changes to GitHub pages.
-      - name: Commit files
-        if: github.event_name == 'push'
-        run: |
-          cp -r new/* test262-base/basic
-          cd test262-base
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Add new test262 results" -a
-          cd ..
-      - name: Upload results
-        if: github.event_name == 'push'
-        uses: ad-m/github-push-action@v0.6.0
+      # Upload PR id for next workflow use
+      - name: Save PR number
+        if: ${{ always() }}
+        run: echo ${{ github.event.number }} > ./pr-id.txt
+
+      - name: Upload PR number
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v2
         with:
-          directory: test262-base
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          name: pr
+          path: ./pr-id.txt
