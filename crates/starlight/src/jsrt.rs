@@ -16,6 +16,7 @@ use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
 pub mod data_view;
+pub mod date;
 pub mod error;
 #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
 pub mod ffi;

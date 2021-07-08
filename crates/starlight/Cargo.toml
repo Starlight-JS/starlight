@@ -34,6 +34,7 @@ memmap2 = "0.3"
 num = "0.4"
 parking_lot = "0.11.1"
 mimalloc = "0.1.25"
+chrono = "0.4"
 
 const-random = "0.1.13"
 [features]
