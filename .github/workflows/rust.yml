@@ -10,9 +10,14 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check-linux:
-    runs-on: ubuntu-latest
-
+  check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+          - os: ubuntu-latest
+          - os: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Setup nightly
@@ -33,53 +38,68 @@ jobs:
       - name: Submodule update
         run: git submodule update --init
       - name: Run test262 tests
-        run: cargo run --release --bin test262-runner run
-
-  check-macos:
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: Setup nightly
-        run: rustup default nightly
-      - uses: actions/cache@v2
+        run: cargo run --release --bin test262-runner run -o new
+      # Run the test suite and upload the results
+      - name: Checkout GitHub pages
+        uses: actions/checkout@v2.3.4
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose -- --test-threads 1
-      - name: Submodule update
-        run: git submodule update --init
-      - name: Run test262 tests
-        run: cargo run --release --bin test262-runner run
-  check-windows:
-    runs-on: windows-latest
+          repository: git@github.com:Starlight-JS/test262.git
+          path: test262-base
+      # Run the results comparison
+      - name: Compare results
+        if: github.event_name == 'pull_request'
+        id: compare
+        shell: bash
+        run: |
+          comment="$(cargo run --release --bin test262-runner compare test262-base/basic/latest.json new/latest.json -m -d)"
+          comment="${comment//'%'/'%25'}"
+          comment="${comment//$'\n'/'%0A'}"
+          comment="${comment//$'\r'/'%0D'}"
+          echo "::set-output name=comment::$comment"
+      - name: Get the PR number
+        if: github.event_name == 'pull_request'
+        id: pr-number
+        uses: kkak10/pr-number-action@v1.3
 
-    steps:
-      - uses: actions/checkout@v2
-      - name: Setup nightly
-        run: rustup default nightly
-      - uses: actions/cache@v2
+      - name: Find Previous Comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v1.2.0
+        id: previous-comment
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose -- --test-threads 1
-      - name: Submodule update
-        run: git submodule update --init
-      - name: Run test262 tests
-        run: cargo run --release --bin test262-runner run
+          issue-number: ${{ steps.pr-number.outputs.pr }}
+          body-includes: Test262 conformance changes
+
+      - name: Update comment
+        if: github.event_name == 'pull_request' && steps.previous-comment.outputs.comment-id
+        uses: peter-evans/create-or-update-comment@v1.4.5
+        continue-on-error: true
+        with:
+          comment-id: ${{ steps.previous-comment.outputs.comment-id }}
+          body: ${{ steps.compare.outputs.comment }}
+          edit-mode: replace
+
+      - name: Write a new comment
+        if: github.event_name == 'pull_request' && !steps.previous-comment.outputs.comment-id
+        uses: peter-evans/create-or-update-comment@v1.4.5
+        continue-on-error: true
+        with:
+          issue-number: ${{ steps.pr-number.outputs.pr }}
+          body: ${{ steps.compare.outputs.comment }}
+
+      # Commit changes to GitHub pages.
+      - name: Commit files
+        if: github.event_name == 'push'
+        run: |
+          cp -r new/* test262-base/basic
+          cd test262-base
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Add new test262 results" -a
+          cd ..
+      - name: Upload results
+        if: github.event_name == 'push'
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          directory: test262-base
+          github_token: ${{ secrets.GITHUB_TOKEN }}
