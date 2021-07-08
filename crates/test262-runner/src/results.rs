@@ -69,21 +69,7 @@ pub(crate) fn write_json(
     verbose: u8,
 ) -> io::Result<()> {
     if let Some(path) = output {
-        let mut branch = env::var("GITHUB_REF").unwrap_or_default();
-        if branch.starts_with("refs/pull") {
-            branch = "pull".to_owned();
-        }
-
-        let path = if branch.is_empty() {
-            path.to_path_buf()
-        } else {
-            let folder = path.join(branch);
-            fs::create_dir_all(&folder)?;
-            folder
-        };
-
-        // We make sure we are using the latest commit information in GitHub pages:
-        update_gh_pages_repo(path.as_path(), verbose);
+        fs::create_dir_all(&path)?;
 
         if verbose != 0 {
             println!("Writing the results to {}...", path.display());
@@ -148,33 +134,6 @@ fn get_test262_commit() -> Box<str> {
     #[cfg(target_pointer_width = "32")]
     {
         "".to_string().into_boxed_str()
-    }
-}
-
-/// Updates the GitHub pages repository by pulling latest changes before writing the new things.
-fn update_gh_pages_repo(path: &Path, verbose: u8) {
-    if env::var("GITHUB_REF").is_ok() {
-        use std::process::Command;
-
-        // We run the command to pull the gh-pages branch: git -C ../gh-pages/ pull origin
-        Command::new("git")
-            .args(&["-C", "../gh-pages", "pull", "--ff-only"])
-            .output()
-            .expect("could not update GitHub Pages");
-
-        // Copy the full results file
-        let from = Path::new("../gh-pages/test262/refs/heads/master/").join(RESULTS_FILE_NAME);
-        let to = path.join(RESULTS_FILE_NAME);
-
-        if verbose != 0 {
-            println!(
-                "Copying the {} file to {} in order to add the results",
-                from.display(),
-                to.display()
-            );
-        }
-
-        fs::copy(from, to).expect("could not copy the master results file");
     }
 }
 
@@ -323,47 +282,47 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         return;
     }
     let base_tests = get_all_tests_from_suite(base_results.results);
-        let new_tests = get_all_tests_from_suite(new_results.results);
-        let mut base_tests_map = HashMap::new();
-        let mut new_test_map = HashMap::new();
+    let new_tests = get_all_tests_from_suite(new_results.results);
+    let mut base_tests_map = HashMap::new();
+    let mut new_test_map = HashMap::new();
 
-        for test in base_tests {
-            base_tests_map.insert(test.name.clone(), test);
-        }
-        for test in new_tests {
-            new_test_map.insert(test.name.clone(), test);
-        }
+    for test in base_tests {
+        base_tests_map.insert(test.name.clone(), test);
+    }
+    for test in new_tests {
+        new_test_map.insert(test.name.clone(), test);
+    }
 
-        println!("============================");
-        println!("Base Failed But New Passed:");
-        let mut failed_tests:Vec<String> = Vec::new();
-        for test in base_tests_map.values() {
-            if matches!(test.result, TestOutcomeResult::Failed) {
-                let new_test = new_test_map.get(&test.name).unwrap();
-                if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
-                    failed_tests.push(test.name.to_string());
-                }
+    let mut failed_tests: Vec<String> = Vec::new();
+    for test in base_tests_map.values() {
+        if matches!(test.result, TestOutcomeResult::Failed) {
+            let new_test = new_test_map.get(&test.name).unwrap();
+            if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
+                failed_tests.push(test.name.to_string());
             }
         }
-        println!("============================");
-        for name in failed_tests {
-            println!("{}",name);
-        }
+    }
 
-        println!();
-        println!("=============================");
-        let mut failed_tests:Vec<String> = Vec::new();
-        println!("New Failed But Base Passed");
-        println!("=============================");
-        for test in new_test_map.values() {
-            if matches!(test.result, TestOutcomeResult::Failed) {
-                let base_test = base_tests_map.get(&test.name).unwrap();
-                if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
-                    failed_tests.push(test.name.to_string());
-                }
+    println!(
+        "<details><summary>{}</summary>{}</details>",
+        "Base Failed But New Passed",
+        failed_tests.join("\n")
+    );
+
+    println!();
+
+    let mut failed_tests: Vec<String> = Vec::new();
+    for test in new_test_map.values() {
+        if matches!(test.result, TestOutcomeResult::Failed) {
+            let base_test = base_tests_map.get(&test.name).unwrap();
+            if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
+                failed_tests.push(test.name.to_string());
             }
         }
-        for name in failed_tests {
-            println!("{}",name);
-        }
+    }
+    println!(
+        "<details><summary>{}</summary>{}</details>",
+        "New Failed But Base Passed",
+        failed_tests.join("\n")
+    );
 }

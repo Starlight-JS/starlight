@@ -15,9 +15,8 @@ use once_cell::sync::Lazy;
 use results::{compare_results, write_json};
 use serde::{Deserialize, Serialize};
 use starlight::prelude::Options;
-use starlight::{prelude::Snapshot, vm::Runtime, Platform};
+use starlight::{vm::Runtime, Platform};
 
-use std::sync::Arc;
 use std::{
     fs,
     path::{Path, PathBuf},

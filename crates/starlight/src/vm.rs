@@ -134,6 +134,7 @@ pub struct Realm {
     // save global object
     pub(crate) global_object: Option<GcPointer<JsObject>>,
     // save all intrinsics value
+    #[allow(dead_code)]
     pub(crate) intrinsics: HashMap<String, JsValue>,
 }
 
@@ -704,7 +705,7 @@ impl Runtime {
             },
         ));
 
-        this.create_realm();
+        this.create_realm().unwrap_or_else(|_| unreachable!());
 
         this.gc.undefer();
         this.gc.collect_if_necessary();
