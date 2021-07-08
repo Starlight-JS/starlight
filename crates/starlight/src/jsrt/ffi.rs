@@ -74,7 +74,7 @@ pub fn initialize_ffi(rt: &mut Runtime) {
             false,
         )?;
 
-        rt.eval(None, false, include_str!("../builtins/FFI.js"), true)?;
+        rt.eval_internal(None, false, include_str!("../builtins/FFI.js"), true)?;
         Ok(())
     };
 
@@ -671,7 +671,7 @@ impl FFIFunction {
             ffi_arg_types.push(ffi_type_for(*ptr, rt)?);
         }
 
-        Self::create(rt, func_ptr, ffi_arg_types, ffi_rtype).map_err(|e| e.into())
+        Self::create(rt, func_ptr, ffi_arg_types, ffi_rtype).map_err(|e| e)
     }
 
     /// Creates a new prepared function.

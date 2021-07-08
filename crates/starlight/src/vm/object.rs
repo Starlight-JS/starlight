@@ -5,7 +5,7 @@ use super::{
     arguments::*,
     array_storage::ArrayStorage,
     attributes::*,
-    class::Class,
+    class::{Class, JsClass},
     error::*,
     function::*,
     global::JsGlobal,
@@ -20,14 +20,22 @@ use super::{
     Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
-use crate::gc::{
-    cell::{GcCell, GcPointer, Trace, Tracer},
-    snapshot::deserializer::Deserializable,
+use crate::vm::promise::JsPromise;
+use crate::{
+    gc::{
+        cell::{GcCell, GcPointer, Trace, Tracer},
+        snapshot::{deserializer::Deserializable, serializer::Serializable},
+    },
+    JsTryFrom,
 };
 use std::{
     collections::hash_map::Entry,
+    intrinsics::{likely, transmute, unlikely},
+    marker::PhantomData,
     mem::{size_of, ManuallyDrop},
+    ops::{Deref, DerefMut},
 };
+
 use wtf_rs::object_offsetof;
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EnumerationMode {
@@ -94,11 +102,12 @@ pub struct JsObject {
     pub(crate) indexed: IndexedElements,
     pub(crate) slots: FixedStorage,
     pub(crate) flags: u32,
+
     pub(crate) object_data_start: u8,
 }
 impl JsObject {
     pub fn direct(&self, n: usize) -> &JsValue {
-        &self.slots.at(n as _)
+        self.slots.at(n as _)
     }
 
     pub fn direct_mut(&mut self, n: usize) -> &mut JsValue {
@@ -109,7 +118,7 @@ impl JsObject {
     }
 
     pub fn is_class(&self, cls: &Class) -> bool {
-        self.class as *const Class == cls as *const Class
+        std::ptr::eq(self.class, cls)
     }
 
     #[allow(clippy::mut_from_ref)]
@@ -129,7 +138,16 @@ impl JsObject {
 
         &mut *self.data::<JsFunction>()
     }
-
+    pub fn as_promise(&self) -> &JsPromise {
+        assert_eq!(self.tag, ObjectTag::Ordinary);
+        assert!(self.is_class(JsPromise::get_class()));
+        &*self.data::<JsPromise>()
+    }
+    pub fn as_promise_mut(&mut self) -> &mut JsPromise {
+        assert_eq!(self.tag, ObjectTag::Ordinary);
+        assert!(self.is_class(JsPromise::get_class()));
+        &mut *self.data::<JsPromise>()
+    }
     pub fn as_string_object(&self) -> &JsStringObject {
         assert_eq!(self.tag, ObjectTag::String);
         &*self.data::<JsStringObject>()
@@ -256,7 +274,7 @@ impl JsObject {
                 break true;
             }
             match obj.prototype() {
-                Some(proto) => *obj = proto.clone(),
+                Some(proto) => *obj = *proto,
                 _ => break false,
             }
         }
@@ -304,7 +322,7 @@ impl JsObject {
         }
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(&base, &obj) && slot.attributes().is_data() {
+                if GcPointer::ptr_eq(base, obj) && slot.attributes().is_data() {
                     obj.define_own_non_indexed_property_slot(
                         vm,
                         name,
@@ -368,7 +386,7 @@ impl JsObject {
             if index < obj.indexed.length() {
                 let it = map.get(&index);
                 if let Some(it) = it {
-                    slot.set_from_slot(it, Some(obj.clone().as_dyn()));
+                    slot.set_from_slot(it, Some((*obj).as_dyn()));
                     return true;
                 }
             }
@@ -409,7 +427,7 @@ impl JsObject {
         }
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(&base, &obj) && slot.attributes().is_data() {
+                if GcPointer::ptr_eq(base, obj) && slot.attributes().is_data() {
                     obj.define_own_indexed_property_slot(
                         vm,
                         index,
@@ -468,7 +486,7 @@ impl JsObject {
             }
 
             match obj.prototype() {
-                Some(proto) => *obj = proto.clone(),
+                Some(proto) => *obj = *proto,
                 None => break false,
             }
         }
@@ -506,7 +524,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         if !slot.is_not_found() {
             if let Some(base) = slot.base() {
-                if GcPointer::ptr_eq(&base, &obj) {
+                if GcPointer::ptr_eq(base, obj) {
                     let mut returned = false;
                     if slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
                         if slot.has_offset() {
@@ -600,10 +618,10 @@ impl JsObject {
             let mut returned = false;
             if !slot.is_not_found() {
                 if let Some(base) = slot.base() {
-                    if GcPointer::ptr_eq(&base, &obj) {
-                        if !slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
-                            return Ok(returned);
-                        }
+                    if GcPointer::ptr_eq(base, obj)
+                        && !slot.is_defined_property_accepted(vm, desc, throwable, &mut returned)?
+                    {
+                        return Ok(returned);
                     }
                 }
             }
@@ -808,7 +826,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         letroot!(
             args = stack,
-            Arguments::new(JsValue::encode_object_value(obj.clone()), &mut [])
+            Arguments::new(JsValue::encode_object_value(*obj), &mut [])
         );
 
         macro_rules! try_ {
@@ -854,7 +872,7 @@ impl JsObject {
         let stack = vm.shadowstack();
         letroot!(
             structure = stack,
-            vm.global_data().empty_object_struct.clone().unwrap()
+            vm.global_data().empty_object_struct.unwrap()
         );
         Self::new(vm, &structure, Self::get_class(), ObjectTag::Ordinary)
     }
@@ -929,7 +947,7 @@ impl GcPointer<JsObject> {
         let stack = vm.shadowstack();
         let exotic_to_prim = self.get_method(vm, "toPrimitive".intern());
 
-        letroot!(obj = stack, self.clone());
+        letroot!(obj = stack, *self);
         match exotic_to_prim {
             Ok(val) => {
                 // downcast_unchecked here is safe because `get_method` returns `Err` if property is not a function.
@@ -984,13 +1002,13 @@ impl GcPointer<JsObject> {
     }
 
     pub fn has_indexed_property(&self) -> bool {
-        let mut obj = self.clone();
+        let mut obj = *self;
         loop {
             if obj.structure.is_indexed() {
                 return true;
             }
             match obj.prototype() {
-                Some(proto) => obj = proto.clone(),
+                Some(proto) => obj = *proto,
                 None => break false,
             }
         }
@@ -1064,7 +1082,7 @@ impl GcPointer<JsObject> {
         }
     }
     pub fn structure(&self) -> GcPointer<Structure> {
-        self.structure.clone()
+        self.structure
     }
     pub fn get_property_slot(&mut self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
         if let Symbol::Index(index) = name {
@@ -1111,14 +1129,12 @@ impl GcPointer<JsObject> {
     }
 
     pub fn can_put_non_indexed(&mut self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
-        if self.get_non_indexed_property_slot(vm, name, slot) {
+        if self.get_non_indexed_property_slot(vm, name, slot) && slot.attributes().is_accessor() {
             if slot.attributes().is_accessor() {
-                if slot.attributes().is_accessor() {
-                    return slot.accessor().setter().is_pointer()
-                        && !slot.accessor().setter().is_empty();
-                } else {
-                    return slot.attributes().is_writable();
-                }
+                return slot.accessor().setter().is_pointer()
+                    && !slot.accessor().setter().is_empty();
+            } else {
+                return slot.attributes().is_writable();
             }
         }
         self.is_extensible()
@@ -1207,12 +1223,12 @@ impl GcPointer<JsObject> {
         absent: bool,
     ) {
         if index < self.indexed.vector.size() {
-            if !absent {
+            /*if !absent {
                 self.indexed.non_gc &= !val.is_object();
                 *self.indexed.vector.at_mut(index) = val;
             } else {
                 *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
-            }
+            }*/
         } else {
             if !self.structure.is_indexed() {
                 let s = self.structure.change_indexed_transition(vm);
@@ -1223,12 +1239,12 @@ impl GcPointer<JsObject> {
             letroot!(vector = stack, self.indexed.vector);
             vector.mut_handle().resize(vm.heap(), index + 1);
             self.indexed.vector = *vector;
-            if !absent {
-                self.indexed.non_gc &= !val.is_object();
-                *self.indexed.vector.at_mut(index) = val;
-            } else {
-                *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
-            }
+        }
+        if !absent {
+            self.indexed.non_gc &= !val.is_object();
+            *self.indexed.vector.at_mut(index) = val;
+        } else {
+            *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
         }
         if index >= self.indexed.length() {
             self.indexed.set_length(index + 1);
@@ -1266,16 +1282,15 @@ impl GcPointer<JsObject> {
                     return Ok(true);
                 }
             } else {
-                if is_absent_descriptor(desc) {
-                    if index < self.indexed.vector.size()
-                        && !self.indexed.vector.at(index).is_empty()
-                    {
-                        if !desc.is_value_absent() {
-                            self.indexed.non_gc &= !desc.value().is_object();
-                            *self.indexed.vector.at_mut(index) = desc.value();
-                        }
-                        return Ok(true);
+                if is_absent_descriptor(desc)
+                    && index < self.indexed.vector.size()
+                    && !self.indexed.vector.at(index).is_empty()
+                {
+                    if !desc.is_value_absent() {
+                        self.indexed.non_gc &= !desc.value().is_object();
+                        *self.indexed.vector.at_mut(index) = desc.value();
                     }
+                    return Ok(true);
                 }
 
                 if index < MAX_VECTOR_SIZE as u32 {
@@ -1421,127 +1436,6 @@ impl GcPointer<JsObject> {
         Ok(true)
     }
 }
-pub struct Env {
-    pub record: GcPointer<JsObject>,
-}
-
-impl Env {
-    pub fn is_mutable(&mut self, vm: &mut Runtime, name: Symbol) -> bool {
-        let prop = self.record.get_property(vm, name);
-
-        prop.is_writable()
-    }
-    pub fn set_localiable(
-        &mut self,
-        vm: &mut Runtime,
-        name: Symbol,
-        val: JsValue,
-        strict: bool,
-    ) -> Result<(GcPointer<JsObject>, Slot), JsValue> {
-        if self.record.has_own_property(vm, name) {
-            if !self.is_mutable(vm, name) {
-                let msg = JsString::new(vm, "Assignment to constant variable");
-                return Err(JsValue::encode_object_value(JsTypeError::new(
-                    vm, msg, None,
-                )));
-            }
-            let mut slot = Slot::new();
-            self.record.put_slot(vm, name, val, &mut slot, strict)?;
-            return Ok((self.record.clone(), slot));
-        } else {
-            let mut current = self.record.prototype().cloned();
-            while let Some(mut cur) = current {
-                if cur.has_own_property(vm, name) {
-                    let prop = cur.get_property(vm, name);
-                    if !(prop.is_writable() && prop.raw != NONE) {
-                        let msg = JsString::new(vm, "Assignment to constant variable");
-                        return Err(JsValue::encode_object_value(JsTypeError::new(
-                            vm, msg, None,
-                        )));
-                    }
-                    let mut slot = Slot::new();
-                    cur.put_slot(vm, name, val, &mut slot, strict)?;
-                    return Ok((cur.clone(), slot));
-                }
-                current = cur.prototype().cloned();
-            }
-
-            if strict {
-                let desc = vm.description(name);
-                let msg = JsString::new(vm, format!("Variable '{}' does not exist", desc));
-                return Err(JsValue::encode_object_value(JsTypeError::new(
-                    vm, msg, None,
-                )));
-            } else {
-                let mut slot = Slot::new();
-                vm.global_object().put(vm, name, val, false)?;
-                vm.global_object()
-                    .get_own_property_slot(vm, name, &mut slot);
-                return Ok((vm.global_object(), slot));
-            }
-        }
-    }
-    pub fn get_localiable(&mut self, vm: &mut Runtime, name: Symbol) -> Result<JsValue, JsValue> {
-        self.record.get(vm, name)
-    }
-    pub fn get_localiable_slot(
-        &mut self,
-        vm: &mut Runtime,
-        name: Symbol,
-        slot: &mut Slot,
-    ) -> Result<JsValue, JsValue> {
-        if self.record.get_own_property_slot(vm, name, slot) {
-            return Ok(slot.value());
-        } else {
-            let mut current = unsafe { self.record.prototype_mut() };
-            while let Some(cur) = current {
-                if cur.get_own_property_slot(vm, name, slot) {
-                    return Ok(slot.value());
-                }
-                current = unsafe { cur.prototype_mut() };
-            }
-
-            if !vm.global_object().has_property(vm, name) {
-                let desc = vm.description(name);
-                let msg = JsString::new(vm, format!("Can't find variable '{}'", desc));
-                return Err(JsValue::encode_object_value(JsReferenceError::new(
-                    vm, msg, None,
-                )));
-            }
-
-            let prop = vm.global_object().get(vm, name)?;
-            slot.make_uncacheable();
-            slot.make_put_uncacheable();
-            Ok(prop)
-        }
-    }
-    pub fn has_own_variable(&mut self, vm: &mut Runtime, name: Symbol) -> bool {
-        self.record.has_own_property(vm, name)
-    }
-    pub fn declare_variable(
-        &mut self,
-        vm: &mut Runtime,
-        name: Symbol,
-        val: JsValue,
-        mutable: bool,
-    ) -> Result<(), JsValue> {
-        let desc = DataDescriptor::new(val, if mutable { W | C | E } else { C | E });
-
-        if self.has_own_variable(vm, name) {
-            let desc = vm.description(name);
-            let msg = JsString::new(
-                vm,
-                format!("Identifier '{}' already exists in this scope", desc),
-            );
-            return Err(JsValue::encode_object_value(JsSyntaxError::new(
-                vm, msg, None,
-            )));
-        }
-
-        let _ = self.record.define_own_property(vm, name, &*desc, false);
-        Ok(())
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -1553,7 +1447,8 @@ mod tests {
     #[test]
     fn test_put() {
         Platform::initialize();
-        let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1567,7 +1462,7 @@ mod tests {
                 assert_eq!(val.get_number(), 42.4242);
             }
             Err(_) => {
-                assert!(false);
+                unreachable!();
             }
         }
     }
@@ -1575,7 +1470,8 @@ mod tests {
     #[test]
     fn test_indexed() {
         Platform::initialize();
-        let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+        let options = Options::default();
+        let mut rt = Runtime::new(options, None);
         let stack = rt.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(&mut rt));
@@ -1593,7 +1489,7 @@ mod tests {
                     assert_eq!(val.get_number() as u32, i);
                 }
                 Err(_) => {
-                    assert!(false);
+                    unreachable!();
                 }
             }
         }
@@ -1614,7 +1510,7 @@ mod tests {
                     assert_eq!(val.get_number() as u32, i);
                 }
                 Err(_) => {
-                    assert!(false);
+                    unreachable!();
                 }
             }
         }
@@ -1625,8 +1521,277 @@ mod tests {
                 assert_eq!(val.get_number(), 42.42);
             }
             Err(_) => {
-                assert!(false);
+                unreachable!();
             }
         }
     }
 }
+
+impl JsClass for JsObject {
+    fn class() -> &'static Class {
+        Self::get_class()
+    }
+}
+
+impl JsClass for () {
+    fn class() -> &'static Class {
+        JsObject::get_class()
+    }
+}
+
+pub struct TypedJsObject<T: JsClass> {
+    object: GcPointer<JsObject>,
+    marker: PhantomData<T>,
+}
+impl<T: JsClass> JsTryFrom<GcPointer<JsObject>> for TypedJsObject<T> {
+    #[inline]
+    fn try_from(vm: &mut Runtime, value: GcPointer<JsObject>) -> Result<Self, JsValue> {
+        if likely(value.is_class(T::class())) {
+            return Ok(Self {
+                object: value,
+                marker: PhantomData,
+            });
+        } else {
+            Err(JsValue::new(vm.new_type_error(format!(
+                "Expected class '{}' but found '{}'",
+                T::class().name,
+                value.class.name
+            ))))
+        }
+    }
+}
+
+impl<T: JsClass> JsTryFrom<JsValue> for TypedJsObject<T> {
+    #[inline]
+    fn try_from(vm: &mut Runtime, value: JsValue) -> Result<Self, JsValue> {
+        if unlikely(!value.is_jsobject()) {
+            return Err(JsValue::new(vm.new_type_error("Expected object")));
+        }
+        Self::try_from(vm, value.get_jsobject())
+    }
+}
+impl<T: JsClass> TypedJsObject<T> {
+    pub fn new(value: impl Into<Self>) -> Self {
+        value.into()
+    }
+    pub fn object(&self) -> GcPointer<JsObject> {
+        self.object
+    }
+
+    pub fn seal(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {
+        self.object.seal(vm)
+    }
+    pub fn freeze(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {
+        self.object.freeze(vm)
+    }
+
+    pub fn get_own_property(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+    ) -> Option<PropertyDescriptor> {
+        self.object.get_own_property(vm, name)
+    }
+    pub fn define_own_property(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object.define_own_property(vm, name, desc, throwable)
+    }
+
+    pub fn define_own_non_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object
+            .define_own_non_indexed_property_slot(vm, name, desc, slot, throwable)
+    }
+
+    pub fn define_own_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object
+            .define_own_property_slot(vm, name, desc, slot, throwable)
+    }
+
+    pub fn get_own_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        index: u32,
+        slot: &mut Slot,
+    ) -> bool {
+        self.object.get_own_indexed_property_slot(vm, index, slot)
+    }
+
+    pub fn get_non_indexed_slot(
+        &mut self,
+        rt: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        self.object.get_non_indexed_slot(rt, name, slot)
+    }
+
+    pub fn get_indexed_slot(
+        &mut self,
+        rt: &mut Runtime,
+        index: u32,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        self.object.get_indexed_slot(rt, index, slot)
+    }
+
+    pub fn get_slot(
+        &mut self,
+        rt: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        self.object.get_slot(rt, name, slot)
+    }
+
+    pub fn get(&mut self, rt: &mut Runtime, name: Symbol) -> Result<JsValue, JsValue> {
+        self.object.get(rt, name)
+    }
+
+    pub fn get_own_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        self.object.get_own_property_slot(vm, name, slot)
+    }
+
+    pub fn define_own_indexed_property_slot(
+        &mut self,
+        vm: &mut Runtime,
+        index: u32,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        self.object
+            .define_own_indexed_property_slot(vm, index, desc, slot, throwable)
+    }
+
+    pub fn has_own_property(&mut self, rt: &mut Runtime, name: Symbol) -> bool {
+        self.object.has_own_property(rt, name)
+    }
+
+    pub fn has_property(&mut self, rt: &mut Runtime, name: Symbol) -> bool {
+        self.object.has_property(rt, name)
+    }
+
+    pub fn put(
+        &mut self,
+        vm: &mut Runtime,
+        name: Symbol,
+        val: JsValue,
+        throwable: bool,
+    ) -> Result<(), JsValue> {
+        self.object.put(vm, name, val, throwable)
+    }
+    pub fn get_property(&mut self, vm: &mut Runtime, name: Symbol) -> PropertyDescriptor {
+        self.object.get_property(vm, name)
+    }
+}
+
+impl<T: JsClass> From<JsValue> for TypedJsObject<T> {
+    fn from(value: JsValue) -> Self {
+        assert!(value.is_jsobject(), "Object expected");
+        let object = value.get_jsobject();
+        assert!(
+            object.is_class(T::class()),
+            "Expected class '{}' but found '{}'",
+            T::class().name,
+            object.class.name
+        );
+        Self {
+            object,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<T: JsClass> From<GcPointer<JsObject>> for TypedJsObject<T> {
+    fn from(value: GcPointer<JsObject>) -> Self {
+        let object = value;
+        assert!(
+            object.is_class(T::class()),
+            "Expected class '{}' but found '{}'",
+            T::class().name,
+            object.class.name
+        );
+        Self {
+            object,
+            marker: PhantomData,
+        }
+    }
+}
+impl<T: JsClass> Deref for TypedJsObject<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &**self.object.data::<T>()
+    }
+}
+
+impl<T: JsClass> DerefMut for TypedJsObject<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut **self.object.data::<T>()
+    }
+}
+unsafe impl<T: JsClass> Trace for TypedJsObject<T> {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.object.trace(visitor)
+    }
+}
+impl<T: JsClass> Serializable for TypedJsObject<T> {
+    fn serialize(&self, serializer: &mut crate::gc::snapshot::serializer::SnapshotSerializer) {
+        self.object.serialize(serializer);
+    }
+}
+
+impl<T: JsClass> Deserializable for TypedJsObject<T> {
+    unsafe fn deserialize_inplace(
+        deser: &mut crate::gc::snapshot::deserializer::Deserializer,
+    ) -> Self {
+        Self {
+            object: unsafe { transmute(deser.get_reference()) },
+            marker: PhantomData,
+        }
+    }
+    unsafe fn deserialize(
+        _at: *mut u8,
+        _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
+    ) {
+        unreachable!()
+    }
+
+    unsafe fn allocate(
+        _rt: &mut Runtime,
+        _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
+    ) -> *mut crate::gc::cell::GcPointerBase {
+        unreachable!()
+    }
+}
+
+impl<T: JsClass> Clone for TypedJsObject<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: JsClass> Copy for TypedJsObject<T> {}

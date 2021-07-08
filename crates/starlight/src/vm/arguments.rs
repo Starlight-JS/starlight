@@ -124,17 +124,15 @@ impl JsArguments {
                     if mapped != DUMMY_SYMBOL {
                         if desc.is_accessor() {
                             arg.mapping[index as usize] = DUMMY_SYMBOL;
-                        } else {
-                            if desc.is_data() {
-                                let data = DataDescriptor { parent: *desc };
-                                if !data.is_value_absent() {
-                                    arg.env.as_slice_mut()[mapped.get_index() as usize].value =
-                                        desc.value();
-                                }
+                        } else if desc.is_data() {
+                            let data = DataDescriptor { parent: *desc };
+                            if !data.is_value_absent() {
+                                arg.env.as_slice_mut()[mapped.get_index() as usize].value =
+                                    desc.value();
+                            }
 
-                                if !data.is_writable_absent() && !data.is_writable() {
-                                    arg.mapping[index as usize] = DUMMY_SYMBOL;
-                                }
+                            if !data.is_writable_absent() && !data.is_writable() {
+                                arg.mapping[index as usize] = DUMMY_SYMBOL;
                             }
                         }
                     }
@@ -305,7 +303,7 @@ impl JsArguments {
     ) -> GcPointer<JsObject> {
         letroot!(
             struct_ = vm.shadowstack(),
-            vm.global_data().normal_arguments_structure.clone().unwrap()
+            vm.global_data().normal_arguments_structure.unwrap()
         );
         let mut obj = JsObject::new(
             vm,
@@ -331,7 +329,7 @@ impl JsArguments {
                 &*DataDescriptor::new(
                     init.get(i as usize)
                         .copied()
-                        .unwrap_or_else(|| JsValue::encode_undefined_value()),
+                        .unwrap_or_else(JsValue::encode_undefined_value),
                     create_data(AttrExternal::new(Some(W | C | E))).raw(),
                 ),
                 &mut slot,

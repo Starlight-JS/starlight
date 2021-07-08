@@ -1,6 +1,6 @@
 use starlight::{
-    gc::snapshot::Snapshot,
-    vm::{GcParams, Runtime, RuntimeParams},
+    gc::{default_heap, snapshot::Snapshot},
+    vm::Runtime,
     Platform,
 };
 use std::path::PathBuf;
@@ -26,7 +26,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut rt = Runtime::new(RuntimeParams::default(), GcParams::default(), None);
+    let mut rt = Runtime::new(starlight::options::Options::default(), None);
     rt.heap().defer();
     let func = rt
         .compile(

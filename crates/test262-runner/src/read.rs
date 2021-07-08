@@ -1,8 +1,10 @@
-use super::{Harness, Locale, Phase, Test, TestSuite, IGNORED};
+use crate::IGNORED;
+
+use super::{Harness, Locale, Phase, Test, TestSuite};
 use fxhash::FxHashMap;
 use serde::Deserialize;
-use starlight::{prelude::Snapshot, vm::Runtime};
-use std::{fs, io, path::Path, rc::Rc, str::FromStr};
+use std::{fs, io, path::Path, str::FromStr};
+
 /// Representation of the YAML metadata in Test262 tests.
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct MetaData {
@@ -119,36 +121,32 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
 
     let mut suites = Vec::new();
     let mut tests = Vec::new();
-    let mut rt = Runtime::new(Default::default(), Default::default(), None);
-    let buf = Rc::new(Snapshot::take(false, &mut rt, |_, _| {}).buffer);
     // TODO: iterate in parallel
     for entry in path.read_dir()? {
         let entry = entry?;
 
         if entry.file_type()?.is_dir() {
             suites.push(read_suite(entry.path().as_path())?);
-        } else if entry.file_name().to_string_lossy().ends_with("_FIXTURE.js") {
+        } else if entry.file_name().to_string_lossy().contains("_FIXTURE") {
             continue;
         } else if IGNORED.contains_file(&entry.file_name().to_string_lossy()) {
             let mut test = Test::default();
-            test.snapshot = buf.clone();
             test.set_name(entry.file_name().to_string_lossy());
             tests.push(test)
         } else {
-            tests.push(read_test(entry.path().as_path(), buf.clone())?);
+            tests.push(read_test(entry.path().as_path())?);
         }
     }
 
     Ok(TestSuite {
         name: name.into(),
-        suites: suites.into_boxed_slice(),
-        tests: tests.into_boxed_slice(),
-        snapshot: buf,
+        suites: suites,
+        tests: tests,
     })
 }
 
 /// Reads information about a given test case.
-pub(super) fn read_test(path: &Path, snapshot: Rc<Box<[u8]>>) -> io::Result<Test> {
+pub(super) fn read_test(path: &Path) -> io::Result<Test> {
     let name = path
         .file_stem()
         .ok_or_else(|| {
@@ -166,13 +164,13 @@ pub(super) fn read_test(path: &Path, snapshot: Rc<Box<[u8]>>) -> io::Result<Test
         })?;
 
     let content = fs::read_to_string(path)?;
-    let metadata = read_metadata(&content)?;
+    let metadata = read_metadata(&content, path)?;
 
-    Ok(Test::new(name, content, metadata, snapshot))
+    Ok(Test::new(name, content, metadata))
 }
 
 /// Reads the metadata from the input test code.
-fn read_metadata(code: &str) -> io::Result<MetaData> {
+fn read_metadata(code: &str, test: &Path) -> io::Result<MetaData> {
     use once_cell::sync::Lazy;
     use regex::Regex;
 
@@ -184,9 +182,19 @@ fn read_metadata(code: &str) -> io::Result<MetaData> {
 
     let yaml = META_REGEX
         .captures(code)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no metadata found"))?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("no metadata found for test {}", test.display()),
+            )
+        })?
         .get(1)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no metadata found"))?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("no metadata found for test {}", test.display()),
+            )
+        })?
         .as_str()
         .replace('\r', "\n");
 

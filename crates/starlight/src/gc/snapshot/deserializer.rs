@@ -9,11 +9,11 @@ macro_rules! unique {
     () => {};
 }
 use crate::{
-    bytecode::TypeFeedBack,
+    bytecode::{GetByIdMode, TypeFeedBack},
     gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
     gc::Heap,
     jsrt::VM_NATIVE_REFERENCES,
-    prelude::Class,
+    prelude::{Class, Options},
     vm::{
         self,
         arguments::JsArguments,
@@ -118,7 +118,7 @@ impl<'a> Deserializer<'a> {
                 ix += 1;
             });
 
-        if let Some(ref references) = rt.external_references {
+        if let Some(references) = rt.external_references {
             for reference in references.iter() {
                 *self.reference_map.get_mut(ix as usize).unwrap() = *reference;
                 ix += 1;
@@ -173,7 +173,7 @@ impl<'a> Deserializer<'a> {
         for _ in 0..weak_count {
             let is_null = self.get_u8() == 0x0;
             let ptr = if is_null {
-                0 as *const u8
+                std::ptr::null::<u8>()
             } else {
                 self.get_reference()
             };
@@ -208,7 +208,12 @@ impl<'a> Deserializer<'a> {
         self.pc = last_stop;
 
         rt.global_data = self.deserialize_global_data();
-        rt.global_object = self.read_opt_gc();
+        let global_object = self.read_opt_gc();
+
+        let mut realm = Realm::new();
+        realm.global_object = global_object;
+        rt.realm = Some(realm);
+
         rt.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
         rt.module_loader = self.read_opt_gc();
         rt.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
@@ -250,9 +255,14 @@ impl<'a> Deserializer<'a> {
             set_prototype: self.read_opt_gc(),
             set_structure: self.read_opt_gc(),
             regexp_structure: self.read_opt_gc(),
-            regexp_object: self.read_opt_gc(),
+            regexp_prototype: self.read_opt_gc(),
             generator_prototype: self.read_opt_gc(),
             generator_structure: self.read_opt_gc(),
+            array_buffer_prototype: self.read_opt_gc(),
+            array_buffer_structure: self.read_opt_gc(),
+            data_view_structure: self.read_opt_gc(),
+            data_view_prototype: self.read_opt_gc(),
+            spread_builtin: self.read_opt_gc(),
         }
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
@@ -276,7 +286,7 @@ impl<'a> Deserializer<'a> {
     pub fn deserialize(
         log_deser: bool,
         snapshot: &'a [u8],
-        options: RuntimeParams,
+        options: Options,
         gc: Heap,
         external_refs: Option<&'static [usize]>,
         callback: impl FnOnce(&mut Self, &mut Runtime),
@@ -325,14 +335,14 @@ impl Deserializable for JsValue {
     }
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         let ty = deser.get_u8();
-        let val = if ty == 0xff {
+
+        if ty == 0xff {
             JsValue::encode_object_value(std::mem::transmute::<_, GcPointer<u8>>(
                 deser.get_reference(),
             ))
         } else {
             std::mem::transmute::<_, JsValue>(deser.get_u64())
-        };
-        val
+        }
     }
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
         let val = Self::deserialize_inplace(deser);
@@ -1464,9 +1474,20 @@ impl Deserializable for TypeFeedBack {
             0x01 => {
                 let structure = deser.get_reference();
                 let offset = deser.get_u32();
+                let mode = deser.get_u8();
+                let mode = match mode {
+                    0 => GetByIdMode::ArrayLength,
+                    1 => GetByIdMode::Default,
+                    2 => {
+                        let gc = GcPointer::<JsObject>::deserialize_inplace(deser);
+                        GetByIdMode::ProtoLoad(gc)
+                    }
+                    _ => unreachable!(),
+                };
                 Self::PropertyCache {
                     structure: transmute(structure),
                     offset,
+                    mode,
                 }
             }
             0x02 => {

@@ -20,6 +20,3 @@ subst-matched
 // segfaults, probably stack overflow
 not-a-constructor
 
-// These generate a stack overflow since we disabled TAILNEW opcode for now
-tco-call
-tco-member

@@ -58,9 +58,7 @@ pub fn function_prototype(vm: &mut Runtime, args: &Arguments) -> Result<JsValue,
         format!("{{ {} }}", args.at(args.size() - 1).to_string(vm)?)
     };
     let rel_path = unsafe { (*vm.stack.current).code_block.unwrap().path.clone() };
-    Ok(ByteCompiler::compile_code(
-        vm, &params, &rel_path, body, false,
-    )?)
+    ByteCompiler::compile_code(vm, &params, &rel_path, body, false)
 }
 
 pub fn function_bind(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -110,7 +108,7 @@ pub fn function_apply(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
     letroot!(this = stack, args.this);
     if this.is_callable() {
         letroot!(obj = stack, this.get_jsobject());
-        letroot!(objc = stack, *&*obj);
+        letroot!(objc = stack, *obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
@@ -152,7 +150,7 @@ pub fn function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
     let stack = rt.shadowstack();
     if this.is_callable() {
         letroot!(obj = stack, this.get_jsobject());
-        letroot!(objc = stack, *&*obj);
+        letroot!(objc = stack, *obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();

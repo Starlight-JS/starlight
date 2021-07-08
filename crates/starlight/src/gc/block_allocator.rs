@@ -1,7 +1,7 @@
-use super::block::*;
+use super::{block::*, constants::*};
 use crate::gc::Address;
 #[cfg(windows)]
-mod _win {
+pub mod _win {
     use super::*;
     use core::{ptr::null_mut, usize};
 
@@ -66,7 +66,7 @@ mod _win {
 }
 
 #[cfg(unix)]
-mod _unix {
+pub mod _unix {
     use super::*;
     pub struct Mmap {
         start: *mut u8,
@@ -99,7 +99,7 @@ mod _unix {
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
             let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
-            unsafe { self.start.offset(offset as isize) as *mut u8 }
+            unsafe { self.start.add(offset) as *mut u8 }
         }
 
         pub fn start(&self) -> *mut u8 {
@@ -144,7 +144,7 @@ use core::sync::atomic::Ordering;
 pub struct BlockAllocator {
     #[cfg(feature = "threaded")]
     lock: ReentrantMutex,
-    free_blocks: Vec<*mut ImmixBlock>,
+    free_blocks: Vec<*mut Block>,
 
     //pub bitmap: SpaceBitmap<16>,
     pub data_bound: *mut u8,
@@ -173,7 +173,7 @@ impl BlockAllocator {
     }
 
     /// Get a new block aligned to `BLOCK_SIZE`.
-    pub fn get_block(&mut self) -> Option<*mut ImmixBlock> {
+    pub fn get_block(&mut self) -> Option<*mut Block> {
         if self.free_blocks.is_empty() {
             return self.build_block();
         }
@@ -183,11 +183,13 @@ impl BlockAllocator {
             .pop()
             .map(|x| {
                 self.mmap.commit(x as *mut u8, BLOCK_SIZE);
-                ImmixBlock::new(x as *mut u8);
+                Block::new(x as *mut u8);
                 x
             })
             .or_else(|| self.build_block());
-
+        if block.is_none() {
+            panic!("OOM");
+        }
         block
     }
 
@@ -195,7 +197,7 @@ impl BlockAllocator {
         self.mmap.start() < object.to_mut_ptr() && object.to_mut_ptr() <= self.data_bound
     }
     #[allow(unused_unsafe)]
-    fn build_block(&mut self) -> Option<*mut ImmixBlock> {
+    fn build_block(&mut self) -> Option<*mut Block> {
         unsafe {
             let data = as_atomic!(&self.data;AtomicUsize);
             let mut old = data.load(Ordering::Relaxed);
@@ -213,26 +215,20 @@ impl BlockAllocator {
             }
             debug_assert!(old % BLOCK_SIZE == 0, "block is not aligned for block_size");
             self.mmap.commit(old as *mut u8, BLOCK_SIZE);
-            Some(old as *mut ImmixBlock)
+            Some(old as *mut Block)
         }
     }
 
     /// Return a collection of blocks.
-    pub fn return_blocks(&mut self, blocks: impl IntoIterator<Item = *mut ImmixBlock>) {
-        #[cfg(feature = "threaded")]
-        {
-            self.lock.lock_nogc();
-        }
-        let iter = blocks.into_iter();
-
-        iter.for_each(|block| {
+    pub fn return_blocks(&mut self, blocks: impl Iterator<Item = *mut Block>) {
+        blocks.for_each(|block| {
             self.mmap.dontneed(block as *mut u8, BLOCK_SIZE); // MADV_DONTNEED or MEM_DECOMMIT
             self.free_blocks.push(block);
         });
-        #[cfg(feature = "threaded")]
-        {
-            self.lock.unlock()
-        }
+    }
+    pub fn return_block(&mut self, block: *mut Block) {
+        self.mmap.dontneed(block as *mut u8, BLOCK_SIZE); // MADV_DONTNEED or MEM_DECOMMIT
+        self.free_blocks.push(block);
     }
 
     /// Return the number of unallocated blocks.

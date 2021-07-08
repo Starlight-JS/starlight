@@ -11,6 +11,7 @@ pub struct NativeIterator {
 }
 
 impl NativeIterator {
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<Symbol> {
         if self.at != self.names.len() as u32 {
             let result = self.names[self.at as usize];

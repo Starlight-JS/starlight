@@ -73,7 +73,7 @@ impl SnapshotSerializer {
                 indexx += 1;
             });
 
-        if let Some(ref references) = rt.external_references {
+        if let Some(references) = rt.external_references {
             for (_index, reference) in references.iter().enumerate() {
                 /* let result = self.reference_map.insert(*reference, indexx);
                 indexx += 1;
@@ -432,6 +432,9 @@ impl Serializable for JsFunction {
                 serializer.write_u8(0x02);
                 serializer.write_reference(native_fn.func as *const u8);
             }
+            FuncType::Closure(_) => {
+                panic!("Cannot serialize a Function based on a rust closure");
+            }
             FuncType::Bound(bound_fn) => {
                 serializer.write_u8(0x03);
                 bound_fn.args.serialize(serializer);
@@ -469,10 +472,22 @@ impl Serializable for u32 {
 impl Serializable for TypeFeedBack {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         match self {
-            TypeFeedBack::PropertyCache { structure, offset } => {
+            TypeFeedBack::PropertyCache {
+                structure,
+                offset,
+                mode,
+            } => {
                 serializer.write_u8(0x01);
                 serializer.write_gcpointer(*structure);
                 serializer.write_u32(*offset);
+                match mode {
+                    &crate::bytecode::GetByIdMode::ArrayLength => serializer.write_u8(0),
+                    &crate::bytecode::GetByIdMode::Default => serializer.write_u8(1),
+                    &crate::bytecode::GetByIdMode::ProtoLoad(slot) => {
+                        serializer.write_u8(2);
+                        slot.serialize(serializer);
+                    }
+                }
             }
             &TypeFeedBack::StructureCache { structure } => {
                 serializer.write_u8(0x02);
@@ -777,16 +792,21 @@ impl Serializable for GlobalData {
         self.set_prototype.serialize(serializer);
         self.set_structure.serialize(serializer);
         self.regexp_structure.serialize(serializer);
-        self.regexp_object.serialize(serializer);
+        self.regexp_prototype.serialize(serializer);
         self.generator_prototype.serialize(serializer);
         self.generator_structure.serialize(serializer);
+        self.array_buffer_prototype.serialize(serializer);
+        self.array_buffer_structure.serialize(serializer);
+        self.data_view_structure.serialize(serializer);
+        self.data_view_prototype.serialize(serializer);
+        self.spread_builtin.serialize(serializer);
     }
 }
 
 impl Serializable for Runtime {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.global_data.serialize(serializer);
-        self.global_object.serialize(serializer);
+        self.realm().global_object.serialize(serializer);
         self.symbol_table.serialize(serializer);
         self.module_loader.serialize(serializer);
         self.modules.serialize(serializer);

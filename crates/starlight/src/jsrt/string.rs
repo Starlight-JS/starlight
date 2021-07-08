@@ -217,16 +217,42 @@ pub fn string_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
     } else {
         0
     };
-    let start = start.max(0).min(length as i32);
+    let start = (start.max(0).min(length as i32)) as usize;
 
     if search_string.is_empty() {
-        return Ok(JsValue::new(start.min(length as _)));
+        return Ok(JsValue::new(start as u32));
     }
 
-    if start < length as i32 {
-        if let Some(pos) = string.find(search_string.as_str()) {
+    if start < length {
+        if let Some(pos) = string[start..].find(search_string.as_str()) {
             return Ok(JsValue::new(string[..pos].chars().count() as u32));
         }
+    }
+
+    Ok(JsValue::new(-1))
+}
+
+pub fn string_last_index_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    args.this.check_object_coercible(rt)?;
+    let string: String = args.this.to_string(rt)?;
+    let search_string: String = args.at(0).to_string(rt)?;
+
+    let length = string.chars().count();
+    let search_string_length = search_string.chars().count();
+    let max_search_index = (length - search_string_length) as i32;
+    let start = if args.size() > 1 {
+        args.at(1).to_int32(rt)?
+    } else {
+        max_search_index
+    };
+
+    let start = (start.max(0).min(max_search_index)) as usize;
+    if search_string.is_empty() {
+        return Ok(JsValue::new(start as u32));
+    }
+
+    if let Some(pos) = string[..(start + search_string_length)].rfind(search_string.as_str()) {
+        return Ok(JsValue::new(string[..pos].chars().count() as u32));
     }
 
     Ok(JsValue::new(-1))
@@ -507,15 +533,13 @@ pub fn string_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         Ok(JsValue::encode_object_value(JsTypeError::new(
             rt, msg, None,
         )))
+    } else if args.size() != 0 {
+        let str = args.at(0).to_string(rt)?;
+        let jsttr = JsString::new(rt, str);
+        return Ok(JsValue::encode_object_value(jsttr));
     } else {
-        if args.size() != 0 {
-            let str = args.at(0).to_string(rt)?;
-            let jsttr = JsString::new(rt, str);
-            return Ok(JsValue::encode_object_value(jsttr));
-        } else {
-            let jsttr = JsString::new(rt, "");
-            return Ok(JsValue::encode_object_value(jsttr));
-        }
+        let jsttr = JsString::new(rt, "");
+        return Ok(JsValue::encode_object_value(jsttr));
     }
 }
 
@@ -530,7 +554,8 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         .change_prototype_with_no_transition(proto);
     let mut ctor = JsNativeFunction::new(rt, "String".intern(), string_constructor, 1);
 
-    rt.global_object()
+    rt.realm()
+        .global_object()
         .put(
             rt,
             "String".intern(),
@@ -594,10 +619,12 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         .unwrap_or_else(|_| panic!());
 
     let mut init = || -> Result<(), JsValue> {
+        def_native_method!(rt, proto, charAt, string_char_at, 1)?;
         def_native_method!(rt, proto, charCodeAt, string_char_code_at, 1)?;
         def_native_method!(rt, proto, toUpperCase, string_to_uppercase, 0)?;
         def_native_method!(rt, proto, toLowerCase, string_to_lowercase, 0)?;
         def_native_method!(rt, proto, indexOf, string_index_of, 2)?;
+        def_native_method!(rt, proto, lastIndexOf, string_last_index_of, 2)?;
         def_native_method!(rt, proto, substr, string_substr, 2)?;
         def_native_method!(rt, proto, substring, string_substring, 2)?;
         def_native_method!(rt, proto, codePointAt, string_code_point_at, 1)?;
@@ -608,6 +635,13 @@ pub(super) fn initialize(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
         def_native_method!(rt, proto, slice, string_slice, 1)?;
         def_native_method!(rt, ctor, ___replace, string_replace, 2)?;
         def_native_method!(rt, proto, trim, string_trim, 0)?;
+        def_native_method!(rt, proto, trimStart, string_trim_start, 0)?;
+        def_native_method!(rt, proto, trimEnd, string_trim_end, 0)?;
+        def_native_method!(rt, proto, trimLeft, string_trim_start, 0)?;
+        def_native_method!(rt, proto, trimRight, string_trim_end, 0)?;
+        def_native_method!(rt, proto, padStart, string_pad_start, 2)?;
+        def_native_method!(rt, proto, padEnd, string_pad_end, 2)?;
+        def_native_method!(rt, proto, repeat, string_repeat, 1)?;
         Ok(())
     };
 
@@ -687,4 +721,72 @@ fn get_regex_string(_rt: &mut Runtime, val: JsValue) -> Result<(String, String),
 pub fn string_trim(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let prim = args.this.to_string(rt)?;
     Ok(JsValue::new(JsString::new(rt, prim.trim())))
+}
+
+pub fn string_trim_start(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let prim = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt, prim.trim_start())))
+}
+
+pub fn string_trim_end(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let prim = args.this.to_string(rt)?;
+    Ok(JsValue::new(JsString::new(rt, prim.trim_end())))
+}
+
+pub enum Alignment {
+    Start,
+    End,
+}
+
+pub fn string_pad(
+    rt: &mut Runtime,
+    args: &Arguments,
+    alignment: Alignment,
+) -> Result<JsValue, JsValue> {
+    let mut string = args.this.to_string(rt)?;
+    let target_length = args.at(0).to_int32(rt)?;
+    let pad_str_arg = args.at(1);
+    let mut pad_str = String::from(" ");
+    if !pad_str_arg.is_undefined() {
+        pad_str = pad_str_arg.to_string(rt)?;
+    }
+    let length = string.chars().count();
+    if target_length <= length as i32 || pad_str.is_empty() {
+        Ok(JsValue::new(JsString::new(rt, string)))
+    } else {
+        let pad_num = target_length as usize - length;
+
+        let mut pad_str_iter = pad_str.chars();
+        let mut to_pad_str = String::from("");
+        let mut index = 0;
+        while index < pad_num {
+            match pad_str_iter.next() {
+                Some(ch) => {
+                    to_pad_str.push(ch);
+                    index += 1;
+                }
+                None => {
+                    pad_str_iter = pad_str.chars();
+                }
+            }
+        }
+        match alignment {
+            Alignment::Start => {
+                to_pad_str.push_str(&string);
+                Ok(JsValue::new(JsString::new(rt, to_pad_str)))
+            }
+            Alignment::End => {
+                string.push_str(&to_pad_str);
+                Ok(JsValue::new(JsString::new(rt, string)))
+            }
+        }
+    }
+}
+
+pub fn string_pad_end(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    string_pad(rt, args, Alignment::End)
+}
+
+pub fn string_pad_start(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    string_pad(rt, args, Alignment::Start)
 }

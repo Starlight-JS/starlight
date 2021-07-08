@@ -13,7 +13,7 @@ Array.prototype.some = function some(callback, thisArg) {
             continue;
         }
 
-        if (callback.call(thisArg, array[i], i, array)) {
+        if (callback.___call(thisArg, array[i], i, array)) {
             return true;
         }
     }
@@ -30,7 +30,7 @@ Array.prototype.find = function find(callback, thisArg) {
 
     for (var i = 0; i < length; i += 1) {
         var kValue = array[i];
-        if (callback.call(thisArg, kValue, i, array)) {
+        if (callback.___call(thisArg, kValue, i, array)) {
             return kValue;
         }
     }
@@ -46,7 +46,7 @@ Array.prototype.findIndex = function findIndex(callback, thisArg) {
 
     for (var i = 0; i < length; i += 1) {
         var kValue = array[i];
-        if (callback.call(thisArg, kValue, i, array)) {
+        if (callback.___call(thisArg, kValue, i, array)) {
             return i;
         }
     }
@@ -108,7 +108,7 @@ Array.prototype.map = function map(callback, thisArg) {
             continue;
         }
 
-        var mappedValue = callback.call(thisArg, array[i], i, array);
+        var mappedValue = callback.___call(thisArg, array[i], i, array);
         result[i] = mappedValue;
     }
     return result;
@@ -124,7 +124,7 @@ Array.prototype.forEach = function forEach(callback, thisArg) {
 
     for (var i = 0; i < length; i++) {
         if (i in array) {
-            callback.call(thisArg, array[i], i, array);
+            callback.___call(thisArg, array[i], i, array);
         }
     }
 }
@@ -142,7 +142,7 @@ Array.prototype.filter = function filter(callback, thisArg) {
         }
 
         var current = array[i];
-        if (callback.call(thisArg, current, i, array)) {
+        if (callback.___call(thisArg, current, i, array)) {
             result[nextIndex] = current;
             ++nextIndex;
         }
@@ -413,7 +413,7 @@ let flatIntoArrayWithCallback = function flatIntoArrayWithCallback(target, sourc
 
     for (var sourceIndex = 0; sourceIndex < sourceLength; ++sourceIndex) {
         if (sourceIndex in source) {
-            var element = callback.call(thisArg, source[sourceIndex], sourceIndex, source);
+            var element = callback.___call(thisArg, source[sourceIndex], sourceIndex, source);
             if (Array.isArray(element))
                 targetIndex = flatIntoArray(target, element, ___toLength(element.length), targetIndex, 0);
             else {
@@ -469,7 +469,7 @@ Array.from = function from(items, mapFn, thisArg) {
 
         var result = this !== ctor && ___isConstructor(this) ? new this() : [];
         var k = 0
-        var iterator = iteratorMethod.call(items);
+        var iterator = iteratorMethod.___call(items);
 
         var wrapper = {};
         wrapper[Symbol.iterator] = function () {
@@ -480,7 +480,7 @@ Array.from = function from(items, mapFn, thisArg) {
             if (k >= MAX_SAFE_INTEGER)
                 throw new TypeError("Length exceeded the maximum array length");
             if (mapFn)
-                result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
+                result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.___call(thisArg, value, k)
             else
                 result[k] = value;
             k += 1;
@@ -495,7 +495,7 @@ Array.from = function from(items, mapFn, thisArg) {
     while (k < arrayLikeLength) {
         var value = arrayLike[k];
         if (mapFn)
-            result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.call(thisArg, value, k)
+            result[k] = thisArg === undefined ? mapFn(value, k) : mapFn.___call(thisArg, value, k)
         else
             result[k] = value
 
@@ -539,7 +539,7 @@ Array.from = function from(items, mapFn, thisArg) {
             }
             let value = next.value;
             if (mapping) {
-                value = thisArg === undefined ? mapFn(value) : mapFn.call(thisArg, value)
+                value = thisArg === undefined ? mapFn(value) : mapFn.___call(thisArg, value)
             }
             A[k] = value;
             k += 1;
@@ -553,7 +553,7 @@ Array.from = function from(items, mapFn, thisArg) {
     while (k < len) {
         let kValue = arrayLike[k];
         if (mapping) {
-            A[k] = thisArg === undefined ? mapFn(kValue) : mapFn.call(thisArg, kValue)
+            A[k] = thisArg === undefined ? mapFn(kValue) : mapFn.___call(thisArg, kValue)
         } else {
             A[k] = kValue;
         }

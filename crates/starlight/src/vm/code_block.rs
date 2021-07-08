@@ -250,6 +250,9 @@ impl CodeBlock {
                     Opcode::OP_SHR => {
                         writeln!(output, "rshift")?;
                     }
+                    Opcode::OP_IS_OBJECT => {
+                        writeln!(output, "is_object")?;
+                    }
                     Opcode::OP_SHL => {
                         writeln!(output, "lshift")?;
                     }

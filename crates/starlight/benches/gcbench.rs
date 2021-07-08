@@ -1,22 +1,21 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::float_cmp)]
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use starlight::gc::default_heap;
 use starlight::letroot;
+use starlight::prelude::Options;
 use starlight::{
     gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
     },
-    vm::{array_storage::ArrayStorage, value::JsValue, GcParams, Runtime, RuntimeParams},
+    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
     Platform,
 };
 use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let rrt = Runtime::new(
-        RuntimeParams::default(),
-        GcParams::default().with_parallel_marking(false),
-        None,
-    );
+    let options = Options::default();
+    let rrt = Runtime::new(Options::default(), None);
     let stack = rrt.shadowstack();
     let mut rt = rrt;
 
@@ -139,7 +138,7 @@ fn make_tree(gc: &mut Runtime, idepth: i32) -> GcPointer<Node> {
     letroot!(n1 = stack, make_tree(gc, idepth - 1));
     letroot!(n2 = stack, make_tree(gc, idepth - 1));
     gc.heap().collect_if_necessary();
-    gc.heap().allocate(Node::new(Some(*&*n1), Some(*&*n2)))
+    gc.heap().allocate(Node::new(Some(*n1), Some(*n2)))
 }
 
 impl Node {

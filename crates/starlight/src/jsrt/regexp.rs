@@ -117,39 +117,60 @@ impl RegExp {
         Some(ser),
         Some(fsz)
     );
+}
 
-    pub(crate) fn init(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
-        rt.global_data.regexp_structure = Some(Structure::new_indexed(rt, None, false));
-        let proto_map = rt
+impl Runtime {
+    pub(crate) fn init_regexp_in_realm(&mut self) -> Result<(), JsValue> {
+        let mut proto = self.global_data.regexp_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+        self.realm().global_object().put(
+            self,
+            "RegExp".intern(),
+            JsValue::new(constructor),
+            false,
+        )?;
+        let mut sym = self
+            .realm()
+            .global_object()
+            .get(self, "Symbol".intern())?
+            .get_jsobject();
+        let sym_match = sym.get(self, "match".intern())?.to_symbol(self)?;
+        let f = JsNativeFunction::new(self, sym_match, regexp_match, 1);
+        proto.put(self, sym_match, JsValue::new(f), false)?;
+        Ok(())
+    }
+
+    pub(crate) fn init_regexp_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+        self.global_data.regexp_structure = Some(Structure::new_indexed(self, None, false));
+        let proto_map = self
             .global_data
             .regexp_structure
             .unwrap()
             .change_prototype_with_no_transition(obj_proto);
         let mut init = || -> Result<(), JsValue> {
             let mut proto =
-                JsObject::new(rt, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+                JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
 
             let mut constructor =
-                JsNativeFunction::new(rt, "RegExp".intern(), regexp_constructor, 2);
+                JsNativeFunction::new(self, "RegExp".intern(), regexp_constructor, 2);
 
-            rt.global_object()
-                .put(rt, "RegExp".intern(), JsValue::new(constructor), false)?;
+            constructor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
 
-            constructor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
+            proto.put(
+                self,
+                "constructor".intern(),
+                JsValue::new(constructor),
+                false,
+            )?;
+            def_native_method!(self, constructor, ___splitFast, regexp_split_fast, 3)?;
+            def_native_method!(self, proto, exec, regexp_exec, 1)?;
+            def_native_method!(self, proto, test, regexp_test, 1)?;
+            def_native_method!(self, proto, toString, regexp_to_string, 0)?;
 
-            proto.put(rt, "constructor".intern(), JsValue::new(constructor), false)?;
-            def_native_method!(rt, constructor, ___splitFast, regexp_split_fast, 3)?;
-            def_native_method!(rt, proto, exec, regexp_exec, 1)?;
-            def_native_method!(rt, proto, test, regexp_test, 1)?;
-            def_native_method!(rt, proto, toString, regexp_to_string, 0)?;
-            let mut sym = rt
-                .global_object()
-                .get(rt, "Symbol".intern())?
-                .get_jsobject();
-            let sym_match = sym.get(rt, "match".intern())?.to_symbol(rt)?;
-            let f = JsNativeFunction::new(rt, sym_match, regexp_match, 1);
-            proto.put(rt, sym_match, JsValue::new(f), false)?;
-            rt.global_data.regexp_object = Some(proto);
+            self.global_data.regexp_prototype = Some(proto);
             Ok(())
         };
 
@@ -159,6 +180,7 @@ impl RegExp {
         }
     }
 }
+
 pub fn regexp_split_fast(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.at(0).is_jsobject()) {
         return Err(JsValue::new(rt.new_type_error(
@@ -207,7 +229,7 @@ pub fn regexp_split_fast(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
     Ok(JsValue::new(result))
 }
 pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let proto = rt.global_data().regexp_object.unwrap();
+    let proto = rt.global_data().regexp_prototype.unwrap();
     let structure = Structure::new_indexed(rt, Some(proto), false);
 
     let arg = args.at(0);
@@ -493,7 +515,7 @@ impl<'r, 't> Pattern<'t> for RegexPattern<'r> {
 
     fn into_searcher(self, haystack: &'t str) -> RegexSearcher<'r, 't> {
         RegexSearcher {
-            haystack: haystack,
+            haystack,
             it: self.0.find_iter(haystack),
             last_step_end: 0,
             next_match: None,

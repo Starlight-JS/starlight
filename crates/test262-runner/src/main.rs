@@ -1,4 +1,10 @@
+#![allow(
+    clippy::redundant_allocation,
+    clippy::needless_borrow,
+    clippy::field_reassign_with_default
+)]
 pub mod exec;
+pub mod js262;
 pub mod read;
 pub mod results;
 use self::read::{read_harness, read_suite, read_test, MetaData, Negative, TestFlag};
@@ -8,8 +14,9 @@ use fxhash::{FxHashMap, FxHashSet};
 use once_cell::sync::Lazy;
 use results::{compare_results, write_json};
 use serde::{Deserialize, Serialize};
-use starlight::{prelude::Snapshot, vm::Runtime, Platform};
-use std::rc::Rc;
+use starlight::prelude::Options;
+use starlight::{vm::Runtime, Platform};
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -169,9 +176,8 @@ struct Harness {
 #[derive(Debug, Clone)]
 struct TestSuite {
     name: Box<str>,
-    suites: Box<[TestSuite]>,
-    tests: Box<[Test]>,
-    snapshot: Rc<Box<[u8]>>,
+    suites: Vec<TestSuite>,
+    tests: Vec<Test>,
 }
 
 /// Outcome of a test suite.
@@ -233,13 +239,12 @@ struct Test {
     includes: Box<[Box<str>]>,
     locale: Locale,
     content: Box<str>,
-    snapshot: Rc<Box<[u8]>>,
 }
 
 impl Test {
     /// Creates a new test.
     #[inline]
-    fn new<N, C>(name: N, content: C, metadata: MetaData, snapshot: Rc<Box<[u8]>>) -> Self
+    fn new<N, C>(name: N, content: C, metadata: MetaData) -> Self
     where
         N: Into<Box<str>>,
         C: Into<Box<str>>,
@@ -255,7 +260,6 @@ impl Test {
             includes: metadata.includes,
             locale: metadata.locale,
             content: content.into(),
-            snapshot,
         }
     }
 
@@ -413,15 +417,14 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     let harness = read_harness(test262_path).expect("could not read initialization bindings");
 
     if suite.to_string_lossy().ends_with(".js") {
-        let mut rt = Runtime::new(Default::default(), Default::default(), None);
-        let buf = Snapshot::take(false, &mut rt, |_, _| {});
-        let test = read_test(&test262_path.join(suite), Rc::new(buf.buffer))
-            .expect("could not get the test to run");
+        let options = Options::default();
+        let mut rt = Runtime::new(options, None);
+        let test = read_test(&test262_path.join(suite)).expect("could not get the test to run");
 
         if verbose != 0 {
             println!("Test loaded, starting...");
         }
-        test.run(&harness, verbose);
+        test.run(&harness, verbose, &mut rt);
 
         println!();
     } else {
@@ -431,7 +434,9 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
         if verbose != 0 {
             println!("Test suite loaded, starting tests...");
         }
-        let results = suite.run(&harness, verbose);
+        let options = Options::default();
+        let mut rt = Runtime::new(options, None);
+        let results = suite.run_main(&harness, verbose, &mut rt);
 
         println!();
         println!("Results:");

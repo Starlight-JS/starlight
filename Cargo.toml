@@ -9,10 +9,9 @@ default-members = ["crates/starlight", "crates/test262-runner"]
 
 
 [profile.release]
-lto = true
+lto = "thin"
 opt-level = 3
 codegen-units = 1
-
 [profile.bench]
 lto = true
 debug = true

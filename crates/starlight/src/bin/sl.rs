@@ -1,75 +1,22 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use starlight::gc::formatted_size;
+use starlight::gc::default_heap;
 use starlight::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use structopt::*;
 
 #[cfg(not(debug_assertions))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[derive(Debug, StructOpt)]
-struct Options {
-    #[structopt(
-        long = "gc-threads",
-        default_value = "4",
-        help = "Set number of GC marker threads"
-    )]
-    gc_threads: u32,
-    #[structopt(long = "parallel-gc", help = "Enable parallel marking GC")]
-    parallel_marking: bool,
-    #[structopt(parse(from_os_str), help = "Input JS file")]
-    file: PathBuf,
-    #[structopt(short = "d", long = "dump-bytecode", help = "Dump bytecode")]
-    dump_bytecode: bool,
-    #[structopt(long = "disable-ic", help = "Disable inline caching")]
-    disable_ic: bool,
-    #[structopt(
-        long = "enable-malloc-gc",
-        help = "Enable MallocGC, use this GC only for debugging purposes!"
-    )]
-    use_malloc_gc: bool,
-    #[structopt(long = "enable-ffi", help = "Enable FFI and CFunction objects for use")]
-    enable_ffi: bool,
-    #[structopt(
-        long = "dump-stats",
-        help = "Dump various statistics at the end of execution"
-    )]
-    dump_stats: bool,
-    #[structopt(
-        long = "conservative-marking",
-        help = "Enable conservative pointer marking (works only for MiGC)"
-    )]
-    cons_gc: bool,
-    #[structopt(
-        long = "enable-region-gc",
-        help = "Enable region based garbage collector"
-    )]
-    region_gc: bool,
-}
-
 use const_random::const_random;
 const BIN_ID: u64 = const_random!(u64);
-const SNAPSHOT_FILENAME: &'static str = ".startup-snapshot";
+const SNAPSHOT_FILENAME: &str = ".startup-snapshot";
 fn main() {
     Platform::initialize();
     let options = Options::from_args();
 
-    let gc = if options.parallel_marking {
-        GcParams::default()
-            .with_parallel_marking(true)
-            .with_marker_threads(options.gc_threads)
-    } else {
-        GcParams::default().with_parallel_marking(false)
-    };
-    let gc = gc.with_conservative_marking(options.cons_gc);
-    let heap = if options.use_malloc_gc {
-        Heap::new(starlight::gc::malloc_gc::MallocGC::new(gc))
-    } else {
-        Heap::new(starlight::gc::migc::MiGC::new(gc))
-    };
     let mut deserialized = false;
     let mut rt = if Path::new(SNAPSHOT_FILENAME).exists() {
         let mut src = std::fs::read(SNAPSHOT_FILENAME);
@@ -77,49 +24,28 @@ fn main() {
             Ok(ref mut src) => {
                 let mut bytes: [u8; 8] = [0; 8];
                 bytes.copy_from_slice(&src[0..8]);
+                let heap = default_heap(&options);
                 if u64::from_ne_bytes(bytes) != BIN_ID {
-                    Runtime::with_heap(
-                        heap,
-                        RuntimeParams::default()
-                            .with_dump_bytecode(options.dump_bytecode)
-                            .with_inline_caching(!options.disable_ic),
-                        None,
-                    )
+                    Runtime::with_heap(heap, options, None)
                 } else {
                     let snapshot = &src[8..];
                     deserialized = true;
-
-                    Deserializer::deserialize(
-                        false,
-                        snapshot,
-                        RuntimeParams::default()
-                            .with_dump_bytecode(options.dump_bytecode)
-                            .with_inline_caching(!options.disable_ic),
-                        heap,
-                        None,
-                        |_, _| {},
-                    )
+                    let heap = default_heap(&options);
+                    Deserializer::deserialize(false, snapshot, options, heap, None, |_, _| {})
                 }
             }
-            Err(_) => Runtime::with_heap(
-                heap,
-                RuntimeParams::default()
-                    .with_dump_bytecode(options.dump_bytecode)
-                    .with_inline_caching(!options.disable_ic),
-                None,
-            ),
+            Err(_) => {
+                let heap = default_heap(&options);
+                Runtime::with_heap(heap, options, None)
+            }
         }
     } else {
-        Runtime::with_heap(
-            heap,
-            RuntimeParams::default()
-                .with_dump_bytecode(options.dump_bytecode)
-                .with_inline_caching(!options.disable_ic),
-            None,
-        )
+        let heap = default_heap(&options);
+        Runtime::with_heap(heap, options, None)
     };
+
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
-    if options.enable_ffi {
+    if rt.options().enable_ffi {
         rt.add_ffi();
     }
     if !deserialized {
@@ -129,19 +55,16 @@ fn main() {
         buf.extend(snapshot.buffer.iter());
         std::fs::write(SNAPSHOT_FILENAME, &buf).unwrap();
     }
-    let at_init = rt.heap().gc.stats();
+
     let gcstack = rt.shadowstack();
 
-    let string = std::fs::read_to_string(&options.file);
+    let string = std::fs::read_to_string(&rt.options().file);
     match string {
         Ok(source) => {
+            let name = rt.options().file.as_os_str().to_str().unwrap().to_string();
             letroot!(
                 function = gcstack,
-                match rt.compile_module(
-                    options.file.as_os_str().to_str().unwrap(),
-                    "<script>",
-                    &source,
-                ) {
+                match rt.compile_module(&name, "<script>", &source,) {
                     Ok(function) => function.get_jsobject(),
                     Err(e) => {
                         let string = e.to_string(&mut rt);
@@ -158,14 +81,14 @@ fn main() {
                     }
                 }
             );
-            letroot!(funcc = gcstack, *&*function);
+            letroot!(funcc = gcstack, *function);
             let global = rt.global_object();
             letroot!(module_object = gcstack, JsObject::new_empty(&mut rt));
             let exports = JsObject::new_empty(&mut rt);
             module_object
                 .put(&mut rt, "@exports".intern(), JsValue::new(exports), false)
                 .unwrap_or_else(|_| unreachable!());
-            let mut args = [JsValue::new(*&*module_object)];
+            let mut args = [JsValue::new(*module_object)];
             letroot!(
                 args = gcstack,
                 Arguments::new(JsValue::encode_object_value(global), &mut args)
@@ -195,17 +118,7 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let after_exec = rt.heap().gc.stats();
-    if options.dump_stats {
-        eprintln!(
-            "Memory used at start: {}",
-            formatted_size(at_init.allocated)
-        );
-        eprintln!(
-            "Memroy used at end: {}",
-            formatted_size(after_exec.allocated)
-        );
-    }
+
     drop(rt);
     std::process::exit(0);
 }

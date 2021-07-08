@@ -24,6 +24,12 @@ impl Drop for SymbolTable {
         self.ids.clear();
     }
 }
+
+impl Default for SymbolTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl SymbolTable {
     pub fn new() -> Self {
         Self {
@@ -54,25 +60,65 @@ impl SymbolTable {
     }
 }
 
+macro_rules! builtin_symbols {
+    ($m: ident) => {
+        $m! {
+            /*PROTOTYPE prototype 0,
+            TO_STRING toString 1,
+            CONSTRUCTOR constructor 2,
+            LENGTH length 3,
+            BYTE_LENGTH byteLength 4,
+            GET get 5,
+            SET set 6,
+            CALL call 7,
+            APPLY apply 8*/
+
+        }
+    };
+}
+
+macro_rules! def_sid {
+    ($($id: ident $val: ident $ix: expr),*) => {
+        $(pub const $id: SymbolID = SymbolID($ix);)*
+    };
+}
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct SymbolID(pub(crate) u32);
 
 impl SymbolID {
+    builtin_symbols! {
+        def_sid
+    }
+
     pub const PUBLIC_START: SymbolID = Self(128);
 }
 /// Runtime symbol type.
 ///
 ///
 /// This type is used as property names and inside JsSymbol.
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum Symbol {
+    /// Interned string.
+    Key(SymbolID),
+    /// Private symbol. You can't create it in JS world.
+    Private(SymbolID),
     /// Represents index value, this variant is used when you can definetely put array
     /// index inside u32 so it does not take space in interner gc.
-    Key(SymbolID),
-    Private(SymbolID),
     Index(u32),
 }
+
+macro_rules! def_sym {
+    ($($id: ident $val: ident $ix: expr),*) => {
+        $(
+            pub const $id: Symbol = Symbol::Key(SymbolID::$id);
+        )*
+    };
+}
+
 impl Symbol {
+    builtin_symbols! {
+        def_sym
+    }
     pub fn private(self) -> Self {
         match self {
             Self::Key(x) => Self::Private(x),
@@ -80,10 +126,11 @@ impl Symbol {
         }
     }
     pub fn is_index(self) -> bool {
-        match self {
+        /*match self {
             Self::Index(_) => true,
             _ => false,
-        }
+        }*/
+        matches!(self, Self::Index(_))
     }
     pub fn get_index(self) -> u32 {
         match self {
@@ -108,10 +155,31 @@ pub const DUMMY_SYMBOL: Symbol = Symbol::Key(SymbolID(0));
 #[doc(hidden)]
 pub static mut SYMBOL_TABLE: MaybeUninit<SymbolTable> = MaybeUninit::uninit();
 
+macro_rules! globals {
+    ($($id: ident $val: ident $ix: expr),*) => {
+       $( pub static $id: &'static str = stringify!($val);)*
+    };
+}
+builtin_symbols!(globals);
+macro_rules! intern_builtins {
+    ($($id: ident $val: ident $ix: expr),*) => {
+        let mut _symtab = symbol_table();
+        $(
+            _symtab.ids.insert($ix,$id);
+            _symtab.symbols.insert($id,$ix);
+        )*
+    };
+}
 pub(crate) fn initialize_symbol_table() {
     unsafe {
         SYMBOL_TABLE.as_mut_ptr().write(SymbolTable::new());
+        LENGTH = "length".intern();
     }
+    builtin_symbols!(intern_builtins);
+}
+
+pub fn length_id() -> Symbol {
+    unsafe { LENGTH }
 }
 pub fn symbol_table() -> &'static SymbolTable {
     unsafe { &*SYMBOL_TABLE.as_ptr() }
@@ -173,3 +241,5 @@ impl std::fmt::Display for SymbolID {
         write!(f, "{}", symbol_table().description(*self))
     }
 }
+
+static mut LENGTH: Symbol = Symbol::Key(SymbolID(0));

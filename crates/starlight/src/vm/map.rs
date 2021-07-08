@@ -107,6 +107,6 @@ impl JsMap {
                 )?;
             }
         }
-        Ok(JsValue::new(*&*obj))
+        Ok(JsValue::new(*obj))
     }
 }

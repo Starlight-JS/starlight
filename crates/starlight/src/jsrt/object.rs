@@ -5,12 +5,14 @@ use crate::{
     vm::{
         arguments::Arguments,
         array::*,
+        attributes::*,
         error::JsTypeError,
         object::{JsObject, ObjectTag, *},
+        property_descriptor::DataDescriptor,
         string::JsString,
         structure::Structure,
         symbol_table::*,
-        value::JsValue,
+        value::{JsValue, Undefined},
     },
 };
 
@@ -40,7 +42,7 @@ pub fn object_to_string(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     } else if this_binding.is_null() {
         return Ok(JsValue::encode_object_value(JsString::new(
             vm,
-            "[object Undefined]",
+            "[object Null]",
         )));
     }
     let obj = this_binding.to_object(vm)?;
@@ -75,7 +77,7 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
                     .global_data()
                     .object_prototype
                     .unwrap()
-                    .get(vm, "___defineProperties___".intern())?;
+                    .get(vm, "defineProperties".intern())?;
                 assert!(props.is_callable());
 
                 return props.get_jsobject().as_function_mut().call(
@@ -96,19 +98,16 @@ pub fn object_create(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
 }
 
 pub fn object_constructor(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let val = args.at(0);
     if args.ctor_call {
-        let val = args.at(0);
         if val.is_jsstring() || val.is_number() || val.is_bool() {
-            return val.to_object(vm).map(|x| JsValue::encode_object_value(x));
+            return val.to_object(vm).map(JsValue::encode_object_value);
         }
         return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
+    } else if val.is_undefined() || val.is_null() {
+        return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
     } else {
-        let val = args.at(0);
-        if val.is_undefined() || val.is_null() {
-            return Ok(JsValue::encode_object_value(JsObject::new_empty(vm)));
-        } else {
-            return val.to_object(vm).map(|x| JsValue::encode_object_value(x));
-        }
+        return val.to_object(vm).map(JsValue::encode_object_value);
     }
 }
 
@@ -124,7 +123,7 @@ pub fn object_define_property(vm: &mut Runtime, args: &Arguments) -> Result<JsVa
             let desc = super::to_property_descriptor(vm, attr)?;
 
             obj.define_own_property(vm, name, &desc, true)?;
-            return Ok(JsValue::new(*&*obj));
+            return Ok(JsValue::new(*obj));
         }
     }
 
@@ -140,6 +139,82 @@ pub fn has_own_property(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     let prop = args.at(0).to_symbol(vm)?;
     let mut obj = args.this.to_object(vm)?;
     Ok(JsValue::new(obj.get_own_property(vm, prop).is_some()))
+}
+
+pub fn object_get_own_property_descriptor(
+    vm: &mut Runtime,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
+    let stack = vm.shadowstack();
+    if args.size() < 2 {
+        return Ok(JsValue::new(Undefined));
+    }
+    let first = args.at(0);
+    let prop = args.at(1);
+    if first.is_jsobject() {
+        letroot!(obj = stack, first.get_jsobject());
+        let name = prop.to_symbol(vm)?;
+
+        match obj.get_own_property(vm, name) {
+            Some(property_descriptor) => {
+                letroot!(res = stack, JsObject::new_empty(vm));
+                res.define_own_property(
+                    vm,
+                    "configurable".intern(),
+                    &*DataDescriptor::new(
+                        JsValue::new(property_descriptor.is_configurable()),
+                        W | C,
+                    ),
+                    false,
+                )?;
+                res.define_own_property(
+                    vm,
+                    "enumerable".intern(),
+                    &*DataDescriptor::new(JsValue::new(property_descriptor.is_enumerable()), W | C),
+                    false,
+                )?;
+                if property_descriptor.is_data() {
+                    res.define_own_property(
+                        vm,
+                        "value".intern(),
+                        &*DataDescriptor::new(JsValue::new(property_descriptor.value()), W | C),
+                        false,
+                    )?;
+                    res.define_own_property(
+                        vm,
+                        "writable".intern(),
+                        &*DataDescriptor::new(
+                            JsValue::new(property_descriptor.is_writable()),
+                            W | C,
+                        ),
+                        false,
+                    )?;
+                } else {
+                    letroot!(getter = stack, property_descriptor.getter());
+                    letroot!(setter = stack, property_descriptor.setter());
+
+                    res.define_own_property(
+                        vm,
+                        "get".intern(),
+                        &*DataDescriptor::new(JsValue::new(*getter), W | C),
+                        false,
+                    )?;
+                    res.define_own_property(
+                        vm,
+                        "set".intern(),
+                        &*DataDescriptor::new(JsValue::new(*setter), W | C),
+                        false,
+                    )?;
+                }
+                Ok(JsValue::encode_object_value(*res))
+            }
+            None => Ok(JsValue::new(Undefined)),
+        }
+    } else {
+        Err(JsValue::new(vm.new_type_error(
+            "Object.getOwnPropertyDescriptor requires object argument",
+        )))
+    }
 }
 
 pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -161,7 +236,7 @@ pub fn object_keys(vm: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
                 let name = JsString::new(vm, desc);
                 arr.put(vm, Symbol::Index(i as _), JsValue::new(name), false)?;
             }
-            return Ok(JsValue::new(*&*arr));
+            return Ok(JsValue::new(*arr));
         }
     }
 

@@ -2,17 +2,20 @@ use super::{
     Harness, Outcome, Phase, SuiteResult, Test, TestFlags, TestOutcomeResult, TestResult,
     TestSuite, IGNORED,
 };
+
 use colored::Colorize;
-use starlight::{
-    gc::default_heap,
-    prelude::Deserializer,
-    vm::{parse, GcParams, Runtime},
-};
-use std::panic::{self, AssertUnwindSafe};
+use rayon::prelude::*;
+use starlight::vm::{parse, Runtime};
+use std::panic;
+use std::panic::AssertUnwindSafe;
 
 impl TestSuite {
-    /// Runs the test suite.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8) -> SuiteResult {
+    pub(crate) fn run_main(
+        &self,
+        harness: &Harness,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
         }
@@ -21,14 +24,83 @@ impl TestSuite {
         let suites: Vec<_> = self
             .suites
             .iter()
-            .map(|suite| suite.run(harness, verbose))
+            .map(|suite| suite.run(harness, verbose, rt))
             .collect();
 
         // TODO: in parallel
         let tests: Vec<_> = self
             .tests
             .iter()
-            .map(|test| test.run(harness, verbose))
+            .map(|test| test.run(harness, verbose, rt))
+            .flatten()
+            .collect();
+
+        if verbose != 0 {
+            println!();
+        }
+
+        // Count passed tests
+        let mut passed = 0;
+        let mut ignored = 0;
+        let mut panic = 0;
+        for test in &tests {
+            match test.result {
+                TestOutcomeResult::Passed => passed += 1,
+                TestOutcomeResult::Ignored => ignored += 1,
+                TestOutcomeResult::Panic => panic += 1,
+                TestOutcomeResult::Failed => {}
+            }
+        }
+
+        // Count total tests
+        let mut total = tests.len();
+        for suite in &suites {
+            total += suite.total;
+            passed += suite.passed;
+            ignored += suite.ignored;
+            panic += suite.panic;
+        }
+
+        if verbose != 0 {
+            println!(
+            "Suite {} results: total: {}, passed: {}, ignored: {}, failed: {} (panics: {}{}), conformance: {:.2}%",
+            self.name,
+            total,
+            passed.to_string().green(),
+            ignored.to_string().yellow(),
+            (total - passed - ignored).to_string().red(),
+            if panic == 0 {"0".normal()} else {panic.to_string().red()},
+            if panic != 0 {" ⚠"} else {""}.red(),
+            (passed as f64 / total as f64) * 100.0
+        );
+        }
+
+        SuiteResult {
+            name: self.name.clone(),
+            total,
+            passed,
+            ignored,
+            panic,
+            suites,
+            tests,
+        }
+    }
+    /// Runs the test suite.
+    pub(crate) fn run(&self, harness: &Harness, verbose: u8, rt: &mut Box<Runtime>) -> SuiteResult {
+        if verbose != 0 {
+            println!("Suite {}:", self.name);
+        }
+
+        let suites: Vec<_> = self
+            .suites
+            .iter()
+            .map(|suite| suite.run(harness, verbose, rt))
+            .collect();
+
+        let tests: Vec<_> = self
+            .tests
+            .iter()
+            .map(|test| test.run(harness, verbose, rt))
             .flatten()
             .collect();
 
@@ -86,22 +158,33 @@ impl TestSuite {
 
 impl Test {
     /// Runs the test.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8) -> Vec<TestResult> {
+    pub(crate) fn run(
+        &self,
+        harness: &Harness,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> Vec<TestResult> {
         let mut results = Vec::new();
         if self.flags.contains(TestFlags::STRICT) {
-            results.push(self.run_once(harness, true, verbose));
+            results.push(self.run_once(harness, true, verbose, rt));
         }
 
         if self.flags.contains(TestFlags::NO_STRICT) || self.flags.contains(TestFlags::RAW) {
-            results.push(self.run_once(harness, false, verbose));
+            results.push(self.run_once(harness, false, verbose, rt));
         }
 
         results
     }
 
     /// Runs the test once, in strict or non-strict mode
-    fn run_once(&self, harness: &Harness, strict: bool, verbose: u8) -> TestResult {
-        if verbose > 1 {
+    fn run_once(
+        &self,
+        harness: &Harness,
+        strict: bool,
+        verbose: u8,
+        rt: &mut Box<Runtime>,
+    ) -> TestResult {
+        if verbose >= 1 {
             eprintln!(
                 "Starting `{}` {}",
                 self.name,
@@ -139,25 +222,21 @@ impl Test {
                 Outcome::Positive => {
                     // TODO: implement async and add `harness/doneprintHandle.js` to the includes.
 
-                    match self.set_up_env(&harness, strict) {
-                        Ok(mut context) => {
+                    match self.set_up_env(&harness, strict, rt) {
+                        Ok(_) => {
                             let content = if strict {
                                 format!("\"use strict\";\n {}", self.content)
                             } else {
                                 self.content.to_string()
                             };
-                            let res = context.eval(None, false, &content, false);
+                            let res = rt.eval_internal(None, false, &content, false);
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => format!(
-                                    "{}",
-                                    val.to_string(&mut context)
-                                        .unwrap_or_else(|_| String::new())
-                                ),
+                                Ok(val) => val.to_string(rt).unwrap_or_else(|_| String::new()),
                                 Err(e) => format!(
                                     "Uncaught {}",
-                                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                                    e.to_string(rt).unwrap_or_else(|_| String::new())
                                 ),
                             };
 
@@ -197,20 +276,15 @@ impl Test {
                     if let Err(e) = parse(&self.content.as_ref(), strict) {
                         (false, format!("Uncaught {:?}", e))
                     } else {
-                        match self.set_up_env(&harness, strict) {
-                            Ok(mut context) => {
-                                match context.eval(None, false, &self.content.as_ref(), false) {
-                                    Ok(res) => (
-                                        false,
-                                        format!(
-                                            "{}",
-                                            res.to_string(&mut context)
-                                                .unwrap_or_else(|_| String::new())
-                                        ),
-                                    ),
+                        match self.set_up_env(&harness, strict, rt) {
+                            Ok(_) => {
+                                match rt.eval_internal(None, false, &self.content.as_ref(), false) {
+                                    Ok(res) => {
+                                        (false, res.to_string(rt).unwrap_or_else(|_| String::new()))
+                                    }
                                     Err(e) => {
                                         let passed = e
-                                            .to_string(&mut context)
+                                            .to_string(rt)
                                             .unwrap_or_else(|_| String::new())
                                             .contains(error_type.as_ref());
 
@@ -218,8 +292,7 @@ impl Test {
                                             passed,
                                             format!(
                                                 "Uncaught {}",
-                                                e.to_string(&mut context)
-                                                    .unwrap_or_else(|_| String::new())
+                                                e.to_string(rt).unwrap_or_else(|_| String::new())
                                             ),
                                         )
                                     }
@@ -268,7 +341,7 @@ impl Test {
 
             result
         } else {
-            if verbose > 1 {
+            if verbose >= 1 {
                 println!("Result: {}", "Ignored".yellow());
             } else {
                 print!("{}", ".".yellow());
@@ -276,7 +349,7 @@ impl Test {
             (TestOutcomeResult::Ignored, String::new())
         };
 
-        if verbose > 1 {
+        if verbose >= 1 {
             println!("Result text:");
             println!("{}", result_text);
             println!();
@@ -291,39 +364,43 @@ impl Test {
     }
 
     /// Sets the environment up to run the test.
-    fn set_up_env(&self, harness: &Harness, _strict: bool) -> Result<Box<Runtime>, String> {
+    fn set_up_env(
+        &self,
+        harness: &Harness,
+        _strict: bool,
+        context: &mut Box<Runtime>,
+    ) -> Result<(), String> {
         // Create new Realm
         // TODO: in parallel.
-        let mut context = Deserializer::deserialize(
-            false,
-            &self.snapshot,
-            Default::default(),
-            default_heap(GcParams::default().with_parallel_marking(false)),
-            None,
-            |_, _| {},
-        );
-        // Register the print() function.
+        context.create_realm().unwrap_or_else(|_| unreachable!());
 
+        /*let mut context = Runtime::new(
+            RuntimeParams::default().with_dump_bytecode(false),
+            GcParams::default()
+                .with_parallel_marking(false)
+                .with_conservative_marking(false),
+            None,
+        );*/
         context
-            .eval(None, false, &harness.assert.as_ref(), false)
+            .eval_internal(None, false, &harness.assert.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    e.to_string(context).unwrap_or_else(|_| String::new())
                 )
             })?;
         context
-            .eval(None, false, &harness.sta.as_ref(), false)
+            .eval_internal(None, false, &harness.sta.as_ref(), false)
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    e.to_string(context).unwrap_or_else(|_| String::new())
                 )
             })?;
 
         for include in self.includes.iter() {
             context
-                .eval(
+                .eval_internal(
                     None,
                     false,
                     &harness
@@ -337,11 +414,11 @@ impl Test {
                     format!(
                         "could not run the {} include file:\nUncaught {}",
                         include,
-                        e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                        e.to_string(context).unwrap_or_else(|_| String::new())
                     )
                 })?;
         }
 
-        Ok(context)
+        Ok(())
     }
 }

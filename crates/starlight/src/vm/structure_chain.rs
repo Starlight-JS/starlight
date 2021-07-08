@@ -6,7 +6,7 @@ use crate::gc::cell::GcPointer;
 use crate::prelude::*;
 use std::{any::TypeId, mem::size_of};
 pub struct StructureChain {
-    pub(super) vector: Box<[GcPointer<Structure>]>,
+    pub(crate) vector: Box<[GcPointer<Structure>]>,
 }
 
 impl StructureChain {

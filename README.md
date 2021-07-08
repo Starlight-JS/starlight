@@ -1,18 +1,14 @@
-# Development status
-Right now I'm preparing for exams and entire June I'll be passing exams and all this stuff so development will be much slower. Issues and PRs is still accepted and I will try to do some additions too when I will have some free time to work on Starlight.
 
 # Starlight
 
 Starlight is a JS engine in Rust which focuses on performance rather than ensuring 100% safety of JS runtime.
 
+[Discord](https://discord.gg/uKcQqG99) <- Starlight channel in Programming language dev community
 
 # Features
 - Bytecode interpreter
-- Mostly-precise GC without overhead for tracking GC objects
-- Polymorphic inline caches for objects and variable lookups
-- Small memory footprint, only around ~40KB of memory is used for a single runtime instance. 
-    **NOTE**: memory consumption will be larger in the future when more of JS builtins will be implemented but it should not exceed 100KB I believe.
-
+- Mostly-precise GC
+- Polymorphic inline caches
 - Startup snapshots
 - Executable JS bundles
 
@@ -58,8 +54,3 @@ rustup default nightly
 ```bash
 cargo run --bin sl examples/hello-world.js
 ```
-
-
-# TODO
-- [ ] Precise GC
-- [ ] ES support

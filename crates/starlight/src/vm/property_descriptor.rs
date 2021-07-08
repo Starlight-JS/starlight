@@ -333,32 +333,24 @@ impl StoredSlot {
             if !self.attributes().is_configurable() {
                 reject!("changing descriptor type of unconfigurable property not allowed");
             }
-        } else {
-            if self.attributes().is_data() {
-                if !self.attributes().is_configurable() {
-                    if !self.attributes().is_writable() {
-                        if desc.is_writable() {
-                            reject!("changing [[Writable]] of unconfigurable property not allowed");
-                        }
-
-                        if !JsValue::same_value(self.value, desc.value()) {
-                            reject!("changing [[Value]] of readonly property not allowed");
-                        }
-                    }
+        } else if self.attributes().is_data() {
+            if !self.attributes().is_configurable() && !self.attributes().is_writable() {
+                if desc.is_writable() {
+                    reject!("changing [[Writable]] of unconfigurable property not allowed");
                 }
-            } else {
-                if !self.attributes().is_configurable() {
-                    let lhs = self.accessor();
-                    let rhs = AccessorDescriptor { parent: *desc };
 
-                    if (!rhs.is_setter_absent() && (lhs.setter() != rhs.set()))
-                        || (!rhs.is_getter_absent() && (lhs.getter() != rhs.get()))
-                    {
-                        reject!(
-                            "changing [[Set]] or [[Get]] of unconfigurable property not allowed"
-                        )
-                    }
+                if !JsValue::same_value(self.value, desc.value()) {
+                    reject!("changing [[Value]] of readonly property not allowed");
                 }
+            }
+        } else if !self.attributes().is_configurable() {
+            let lhs = self.accessor();
+            let rhs = AccessorDescriptor { parent: *desc };
+
+            if (!rhs.is_setter_absent() && (lhs.setter() != rhs.set()))
+                || (!rhs.is_getter_absent() && (lhs.getter() != rhs.get()))
+            {
+                reject!("changing [[Set]] or [[Get]] of unconfigurable property not allowed")
             }
         }
         *returned = true;
@@ -424,7 +416,6 @@ impl StoredSlot {
             if !data.is_writable_absent() {
                 attr.set_writable(data.is_writable());
             }
-            self.attributes = AttrSafe::un_safe(attr);
         } else {
             attr.set_accessor();
             let accs = AccessorDescriptor { parent: *desc };
@@ -437,7 +428,7 @@ impl StoredSlot {
                     JsValue::encode_undefined_value(),
                     JsValue::encode_undefined_value(),
                 );
-                self.value = JsValue::encode_object_value(ac.clone().as_dyn());
+                self.value = JsValue::encode_object_value(ac.as_dyn());
                 ac
             };
             if !accs.is_getter_absent() {
@@ -446,8 +437,8 @@ impl StoredSlot {
             if !accs.is_setter_absent() {
                 ac.set_setter(accs.set());
             }
-            self.attributes = AttrSafe::un_safe(attr);
         }
+        self.attributes = AttrSafe::un_safe(attr);
     }
 
     pub fn new(context: &mut Runtime, desc: &PropertyDescriptor) -> Self {

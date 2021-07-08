@@ -49,11 +49,11 @@ function __advanceStringIndex__(string, index, unicode) {
     if (index + 1 >= string.length)
         return index + 1;
 
-    var first = charCodeAt.call(string, index);
+    var first = charCodeAt.___call(string, index);
     if (first < 0xD800 || first > 0xDBFF)
         return index + 1;
 
-    var second = charCodeAt.call(string, index + 1); //string.charCodeAt(index + 1);
+    var second = charCodeAt.___call(string, index + 1); //string.charCodeAt(index + 1);
     if (second < 0xDC00 || second > 0xDFFF)
         return index + 1;
 
@@ -79,7 +79,7 @@ RegExpStringIterator.prototype.next = function next() {
     var string = this.regExpStringIteratorString;
     var global = this.regExpStringIteratorGlobal;
     var fullUnicode = this.regExpStringIteratorUnicode
-    var match = regexExec.call(regExp, string); //regExp.exec(string);
+    var match = regexExec.___call(regExp, string); //regExp.exec(string);
     if (match === null) {
         this.regExpStringIteratorDone = true;
         return { value: undefined, done: true }

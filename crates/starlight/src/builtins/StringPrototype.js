@@ -14,7 +14,7 @@ String.prototype.match = function match(regexp) {
     if (regexp) {
         var matcher = regexp[Symbol.match];
         if (matcher) {
-            return matcher.call(regexp, this);
+            return matcher.___call(regexp, this);
         }
     }
 
@@ -35,7 +35,7 @@ String.prototype.matchAll = function matchAll(arg) {
 
         var matcher = arg[Symbol.matchAll];
         if (!matcher) {
-            return matcher.call(arg, this);
+            return matcher.___call(arg, this);
         }
     }
 
@@ -64,16 +64,16 @@ String.prototype.replace = function replace(search, replace) {
     if (search !== undefined & search !== null) {
         var replacer = search[symReplace];
         if (replacer) {
-            return replacer.call(search, this, replace);
+            return replacer.___call(search, this, replace);
         }
     }
 
-    return __replace.call(this, search, replace);
+    return __replace.___call(this, search, replace);
 }
 let split_sym = Symbol.split;
 let fastSplit = String.prototype.___splitFast;
 
-String.prototype.split = function (separator, limit) {
+String.prototype.split = function split(separator, limit) {
     "use strict";
     if (this === undefined | this === null)
         throw new TypeError("String.prototype.split requires that |this| not be null or undefined")
@@ -81,8 +81,8 @@ String.prototype.split = function (separator, limit) {
     if (separator !== undefined & separator !== null) {
         var splitter = separator[split_sym];
         if (splitter !== undefined & splitter !== null) {
-            return splitter.call(separator, this, limit);
+            return splitter.___call(separator, this, limit);
         }
     }
-    return fastSplit.call(this, separator, limit);
+    return fastSplit.___call(this, separator, limit);
 }

@@ -22,7 +22,8 @@ pub(super) fn std_init_file(rt: &mut Runtime, mut std: GcPointer<JsObject>) -> R
     def_native_method!(rt, proto, readBytesExact, std_file_read_bytes_exact, 1)?;
     def_native_method!(rt, proto, readBytesToEnd, std_file_read_bytes_to_end, 0)?;
     def_native_method!(rt, proto, close, std_file_close, 0)?;
-    rt.global_object()
+    rt.realm()
+        .global_object()
         .put(rt, "@@File".intern().private(), JsValue::new(proto), false)?;
     ctor.put(rt, "prototype".intern(), JsValue::new(proto), false)?;
     std.put(rt, "File".intern(), JsValue::new(ctor), false)?;
@@ -59,6 +60,7 @@ pub fn std_file_open(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVa
     };
 
     let proto = rt
+        .realm()
         .global_object()
         .get(rt, "@@File".intern().private())?
         .to_object(rt)?;

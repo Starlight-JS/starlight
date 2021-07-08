@@ -1,6 +1,9 @@
 use num::traits::float::FloatCore;
 
-use crate::{prelude::*, vm::number::NumberObject};
+use crate::{
+    prelude::*,
+    vm::{number::NumberObject},
+};
 pub fn number_value_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
@@ -40,12 +43,10 @@ pub fn number_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
             res = args.at(0).to_number(rt)?;
         }
         Ok(JsValue::new(NumberObject::new(rt, res)))
+    } else if args.size() == 0 {
+        return Ok(JsValue::new(0i32));
     } else {
-        if args.size() == 0 {
-            return Ok(JsValue::new(0i32));
-        } else {
-            return args.at(0).to_number(rt).map(|x| JsValue::new(x));
-        }
+        return args.at(0).to_number(rt).map(JsValue::new);
     }
 }
 pub fn number_is_nan(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -93,13 +94,13 @@ pub fn number_is_integer(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
 
 pub fn number_to_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
-    num.to_int32(rt).map(|x| JsValue::new(x))
+    num.to_int32(rt).map(JsValue::new)
 }
 pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let precision_var = args.at(0);
     let mut this_num = this_number_val(rt, args.this)?;
     if precision_var.is_undefined() || !this_num.is_finite() {
-        return Ok(number_to_string(rt, &Arguments::new(args.this, &mut []))?);
+        return number_to_string(rt, &Arguments::new(args.this, &mut []));
     }
 
     let precision = match precision_var.to_int32(rt)? {
@@ -148,7 +149,7 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
             suffix.remove(n);
         }
         // impl: having exactly `precision` digits in `suffix`
-        round_to_precision(&mut suffix, precision);
+        suffix = round_to_precision(&mut suffix, precision);
 
         // c: switching to scientific notation
         let great_exp = exponent >= precision_i32;
@@ -187,6 +188,30 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
     // 14
     Ok(JsValue::new(JsString::new(rt, prefix + &suffix)))
 }
+
+pub fn number_to_fixed(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+    let fixed_var = args.at(0);
+    let mut this_num = this_number_val(rt, args.this)?;
+
+    let mut fixed = 0;
+    if !fixed_var.is_undefined() {
+        fixed = fixed_var.to_int32(rt)?;
+    }
+
+    if !(0..=20).contains(&fixed) {
+        let msg = JsString::new(rt, "toFixed() digits argument must be between 0 and 20");
+        return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+    }
+
+    let fixed = fixed as usize;
+
+    let mut buffer = ryu_js::Buffer::new();
+    let mut string = buffer.format(this_num).to_string();
+    // after .
+    string = round_to_fixed(&mut string, fixed);
+    Ok(JsValue::new(JsString::new(rt, string)))
+}
+
 pub fn number_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let num;
@@ -213,7 +238,7 @@ pub fn number_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, J
         if radix == 10 {
             return Ok(JsValue::new(JsString::new(rt, num.to_string())));
         }
-        if 2 <= radix && radix <= 36 {
+        if (2..=36).contains(&radix) {
             if radix != 10 {
                 if num.is_nan() {
                     return Ok(JsValue::new(JsString::new(rt, "NaN")));
@@ -394,97 +419,186 @@ fn flt_str_to_exp(flt: &str) -> i32 {
 ///
 /// When this procedure returns, `digits` is exactly `precision` long.
 ///
-fn round_to_precision(digits: &mut String, precision: usize) {
+pub fn round_to_precision(digits: &mut String, precision: usize) -> String {
     if digits.len() > precision {
         let to_round = digits.split_off(precision);
-        let mut digit = digits.pop().unwrap() as u8;
+        let mut digit_bytes = digits.clone().into_bytes();
+        let mut stop_index = (digit_bytes.len() - 1) as i32;
+        let mut digit = *digit_bytes.last().unwrap();
 
         for c in to_round.chars() {
             match c {
                 c if c < '4' => break,
                 c if c > '4' => {
-                    digit += 1;
+                    while digit == b'9' {
+                        digit_bytes[stop_index as usize] = b'0';
+                        stop_index -= 1;
+                        if stop_index == -1 {
+                            break;
+                        }
+                        digit = digit_bytes[stop_index as usize];
+                    }
                     break;
                 }
                 _ => {}
             }
         }
-
-        digits.push(digit as char);
+        if stop_index == -1 {
+            digit_bytes.insert(0, b'1');
+            digit_bytes.pop();
+        } else {
+            digit_bytes[stop_index as usize] += 1;
+        }
+        return String::from_utf8(digit_bytes).unwrap();
     } else {
         digits.push_str(&"0".repeat(precision - digits.len()));
+        return digits.to_string();
     }
 }
 
-pub(crate) fn init_number(rt: &mut Runtime, obj_proto: GcPointer<JsObject>) {
-    let structure = Structure::new_unique_indexed(rt, Some(obj_proto), false);
-    let mut proto = NumberObject::new_plain(rt, structure, 0.0);
+pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
+    if let Some(n) = string.find('.') {
+        if (string.len() - 1 - n) > fixed {
+            let to_round = string.split_off(n + fixed + 1);
+            let mut digit_bytes = string.clone().into_bytes();
+            let mut stop_index = (digit_bytes.len() - 1) as i32;
+            let mut digit = *digit_bytes.last().unwrap();
 
-    rt.global_data()
-        .number_structure
-        .unwrap()
-        .change_prototype_with_no_transition(proto);
+            for c in to_round.chars() {
+                match c {
+                    c if c < '4' => break,
+                    c if c > '4' => {
+                        loop {
+                            if digit == b'9' {
+                                digit_bytes[stop_index as usize] = b'0';
+                                stop_index -= 1;
+                                if stop_index == -1 {
+                                    break;
+                                }
+                                digit = digit_bytes[stop_index as usize];
+                            } else if digit == b'.' {
+                                stop_index -= 1;
+                                digit = digit_bytes[stop_index as usize];
+                            } else {
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            if stop_index == -1 {
+                digit_bytes.insert(0, b'1');
+            } else {
+                digit_bytes[stop_index as usize] += 1;
+            }
+            if fixed == 0 {
+                digit_bytes.pop();
+            }
+            return String::from_utf8(digit_bytes).unwrap();
+        } else {
+            let mut digits = string.split_off(n + 1);
+            digits = round_to_precision(&mut digits, fixed);
+            string.push_str(&digits);
+            return string.to_string();
+        }
+    } else {
+        let mut digits = String::from("");
+        digits = round_to_precision(&mut digits, fixed);
+        if !digits.is_empty() {
+            string.push('.');
+            string.push_str(&digits);
+        }
+        return string.to_string();
+    }
+}
 
-    let mut constructor = JsNativeFunction::new(rt, "Number".intern(), number_constructor, 1);
-
-    let _ = rt.global_object().define_own_property(
-        rt,
-        "Number".intern(),
-        &*DataDescriptor::new(JsValue::new(constructor), W | C),
-        false,
-    );
-
-    let _ = constructor.define_own_property(
-        rt,
-        "prototype".intern(),
-        &*DataDescriptor::new(JsValue::new(proto), NONE),
-        false,
-    );
-
-    let _ = constructor.put(rt, "MAX_VALUE".intern(), JsValue::new(f64::MAX), false);
-    let _ = constructor.put(rt, "MIN_VALUE".intern(), JsValue::new(f64::MIN), false);
-    let _ = constructor.put(rt, "NaN".intern(), JsValue::new(f64::NAN), false);
-    let _ = constructor.put(
-        rt,
-        "NEGATIVE_INFINITY".intern(),
-        JsValue::new(f64::NEG_INFINITY),
-        false,
-    );
-    let _ = constructor.put(
-        rt,
-        "POSITIVE_INFINITY".intern(),
-        JsValue::new(f64::INFINITY),
-        false,
-    );
-
-    let _ = constructor.put(rt, "EPSILON".intern(), JsValue::new(f64::EPSILON), false);
-    let _ = constructor.put(
-        rt,
-        "MAX_SAFE_INTEGER".intern(),
-        JsValue::new(9007199254740991.0),
-        false,
-    );
-    let is_nan = JsNativeFunction::new(rt, "isNaN".intern(), number_is_nan, 0);
-    let _ = constructor.put(rt, "isNaN".intern(), JsValue::new(is_nan), false);
-    let is_finite = JsNativeFunction::new(rt, "isFinite".intern(), number_is_finite, 0);
-    let _ = constructor.put(rt, "isFinite".intern(), JsValue::new(is_finite), false);
-    let is_int = JsNativeFunction::new(rt, "isInteger".intern(), number_is_integer, 0);
-    let _ = constructor.put(rt, "isInteger".intern(), JsValue::new(is_int), false);
-
-    {
-        let _ = proto.put(rt, "constructor".intern(), JsValue::new(constructor), false);
-        let f = JsNativeFunction::new(rt, "toString".intern(), number_to_string, 1);
-        let _ = proto.put(rt, "toString".intern(), JsValue::new(f), false);
-
-        let f = JsNativeFunction::new(rt, "valueOf".intern(), number_value_of, 0);
-        let _ = proto.put(rt, "valueOf".intern(), JsValue::new(f), false);
-
-        let f = JsNativeFunction::new(rt, "toPrecision".intern(), number_to_precisiion, 1);
-        let _ = proto.put(rt, "toPrecision".intern(), JsValue::new(f), false);
-
-        let f = JsNativeFunction::new(rt, "clz".intern(), number_clz, 1);
-        let _ = proto.put(rt, "clz".intern(), JsValue::new(f), false);
+impl Runtime {
+    pub(crate) fn init_number_in_realm(&mut self) {
+        let mut proto = self.global_data.number_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, "constructor".intern())
+            .unwrap()
+            .value();
+        let _ = self.realm().global_object().define_own_property(
+            self,
+            "Number".intern(),
+            &*DataDescriptor::new(JsValue::new(constructor), W | C),
+            false,
+        );
     }
 
-    rt.global_data.number_prototype = Some(proto);
+    pub(crate) fn init_number_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
+        let mut proto = NumberObject::new_plain(self, structure, 0.0);
+
+        self.global_data()
+            .number_structure
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        let mut constructor = JsNativeFunction::new(self, "Number".intern(), number_constructor, 1);
+
+        let _ = constructor.define_own_property(
+            self,
+            "prototype".intern(),
+            &*DataDescriptor::new(JsValue::new(proto), NONE),
+            false,
+        );
+
+        let _ = constructor.put(self, "MAX_VALUE".intern(), JsValue::new(f64::MAX), false);
+        let _ = constructor.put(self, "MIN_VALUE".intern(), JsValue::new(f64::MIN), false);
+        let _ = constructor.put(self, "NaN".intern(), JsValue::new(f64::NAN), false);
+        let _ = constructor.put(
+            self,
+            "NEGATIVE_INFINITY".intern(),
+            JsValue::new(f64::NEG_INFINITY),
+            false,
+        );
+        let _ = constructor.put(
+            self,
+            "POSITIVE_INFINITY".intern(),
+            JsValue::new(f64::INFINITY),
+            false,
+        );
+
+        let _ = constructor.put(self, "EPSILON".intern(), JsValue::new(f64::EPSILON), false);
+        let _ = constructor.put(
+            self,
+            "MAX_SAFE_INTEGER".intern(),
+            JsValue::new(9007199254740991.0),
+            false,
+        );
+        let is_nan = JsNativeFunction::new(self, "isNaN".intern(), number_is_nan, 0);
+        let _ = constructor.put(self, "isNaN".intern(), JsValue::new(is_nan), false);
+        let is_finite = JsNativeFunction::new(self, "isFinite".intern(), number_is_finite, 0);
+        let _ = constructor.put(self, "isFinite".intern(), JsValue::new(is_finite), false);
+        let is_int = JsNativeFunction::new(self, "isInteger".intern(), number_is_integer, 0);
+        let _ = constructor.put(self, "isInteger".intern(), JsValue::new(is_int), false);
+
+        {
+            let _ = proto.put(
+                self,
+                "constructor".intern(),
+                JsValue::new(constructor),
+                false,
+            );
+            let f = JsNativeFunction::new(self, "toString".intern(), number_to_string, 1);
+            let _ = proto.put(self, "toString".intern(), JsValue::new(f), false);
+
+            let f = JsNativeFunction::new(self, "valueOf".intern(), number_value_of, 0);
+            let _ = proto.put(self, "valueOf".intern(), JsValue::new(f), false);
+
+            let f = JsNativeFunction::new(self, "toPrecision".intern(), number_to_precisiion, 1);
+            let _ = proto.put(self, "toPrecision".intern(), JsValue::new(f), false);
+            let f = JsNativeFunction::new(self, "toFixed".intern(), number_to_fixed, 1);
+            let _ = proto.put(self, "toFixed".intern(), JsValue::new(f), false);
+
+            let f = JsNativeFunction::new(self, "clz".intern(), number_clz, 1);
+            let _ = proto.put(self, "clz".intern(), JsValue::new(f), false);
+        }
+
+        self.global_data.number_prototype = Some(proto);
+    }
 }
