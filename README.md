@@ -1,10 +1,9 @@
-# Development status
-Right now I'm preparing for exams and entire June I'll be passing exams and all this stuff so development will be much slower. Issues and PRs is still accepted and I will try to do some additions too when I will have some free time to work on Starlight.
 
 # Starlight
 
 Starlight is a JS engine in Rust which focuses on performance rather than ensuring 100% safety of JS runtime.
 
+[Discord](https://discord.gg/uKcQqG99) <- Starlight channel in Programming language dev community
 
 # Features
 - Bytecode interpreter
