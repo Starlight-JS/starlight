@@ -1,0 +1,79 @@
+name: Test262
+
+on:
+  workflow_run:
+    workflows: ["Rust"]
+    types:
+      - completed
+
+jobs:
+  test262:
+    name: check-test262
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      # Get PR id first
+      - name: Download pr artifact
+        uses: dawidd6/action-download-artifact@v2
+        if: github.event.workflow_run.event == 'pull_request'
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          name: pr
+      # Save PR id to output
+      - name: Save PR id
+        id: pr
+        if: github.event.workflow_run.event == 'pull_request'
+        run: echo "::set-output name=id::$(<pr-id.txt)"
+      # Download comment artifact
+      - name: Download comment artifact
+        uses: dawidd6/action-download-artifact@v2
+        if: github.event.workflow_run.event == 'pull_request'
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          workflow_conclusion: success
+          name: comment
+      - name: Save comment
+        id: comment
+        if: github.event.workflow_run.event == 'pull_request'
+        run: echo "::set-output name=comment::$(<comment.txt)"
+      - name: Maintain comment
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: actions-cool/maintain-one-comment@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ fromJSON(steps.comment.outputs.comment) }}
+          body-include: "Test262 conformance changes"
+          number: ${{ steps.pr.outputs.id }}
+      - name: Checkout Test262 Results
+        uses: actions/checkout@v2.3.4
+        if: github.event.workflow_run.event == 'push'
+        with:
+          ref: test262-base
+          path: test262-base
+      - name: Download results artifact
+        if: github.event.workflow_run.event == 'push'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          workflow_conclusion: success
+          name: new
+      # Commit changes to GitHub pages.
+      - name: Commit files
+        if: github.event.workflow_run.event == 'push'
+        run: |
+          cp *.json test262-base/basic
+          cd test262-base
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          set +e
+          git add basic
+          git commit -m "Add new test262 results" -a
+          set -e
+          cd ..
+      - name: Push results
+        if: github.event.workflow_run.event == 'push'
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          directory: test262-base
+          branch: test262-base
+          github_token: ${{ secrets.GITHUB_TOKEN }}
