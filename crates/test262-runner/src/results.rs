@@ -293,7 +293,6 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         new_test_map.insert(test.name.clone(), test);
     }
 
-    println!("Base Failed But New Passed:");
     let mut failed_tests: Vec<String> = Vec::new();
     for test in base_tests_map.values() {
         if matches!(test.result, TestOutcomeResult::Failed) {

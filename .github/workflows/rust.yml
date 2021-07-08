@@ -40,11 +40,11 @@ jobs:
       # - name: Run test262 tests
       #   run: cargo run --release --bin test262-runner run -o new
       # Run the test suite and upload the results
-      - name: Checkout GitHub pages
+      - name: Checkout Test262 Results
         uses: actions/checkout@v2.3.4
         with:
           repository: Starlight-JS/test262
-          path: test262-bases
+          path: test262-base
       # Run the results comparison
       - name: Compare results
         if: github.event_name == 'pull_request'
