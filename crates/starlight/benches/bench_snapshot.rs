@@ -18,7 +18,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         .to_vec();
 
     c.bench_function("runtime from scratch", |b| {
-        let options = Options::default();
         b.iter_with_large_drop(|| Runtime::new(Options::default(), None));
     });
 
