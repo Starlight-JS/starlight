@@ -148,12 +148,13 @@ pub(crate) fn get_all_tests_from_suite(suite: SuiteResult) -> Vec<TestResult> {
 }
 
 pub(crate) fn get_key_of_test(test: &TestResult) -> String {
-    let key = test.name.to_string()
-        + if test.strict {
-            " strict"
-        } else {
-            " non-strict"
-        };
+    let key = (if test.strict {
+        "[strict] "
+    } else {
+        "[non-strict] "
+    })
+    .to_string()
+        + &test.name.to_string()[2..];
     return key;
 }
 
@@ -316,7 +317,6 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     }
 
     let mut failed_tests: Vec<String> = Vec::new();
-    let mut base_passed = 0;
     for test in base_tests_map.values() {
         if !matches!(test.result, TestOutcomeResult::Passed) {
             if let Some(new_test) = new_test_map.get(&get_key_of_test(test)) {
@@ -326,15 +326,12 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
             } else {
                 println!("Warn {}", test.name);
             }
-        } else {
-            base_passed += 1;
         }
     }
 
     show_detail_faled_tests("Base Failed But New Passed", failed_tests);
     println!();
 
-    let mut new_passed = 0;
     let mut failed_tests: Vec<String> = Vec::new();
     for test in new_test_map.values() {
         if !matches!(test.result, TestOutcomeResult::Passed) {
@@ -345,8 +342,6 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
             } else {
                 println!("Warn {}", test.name);
             }
-        } else {
-            new_passed += 1;
         }
     }
     show_detail_faled_tests("New Failed But Base Passed", failed_tests);
@@ -359,7 +354,6 @@ pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
             title,
             failed_tests
                 .iter()
-                .map(|s| s[2..].to_string())
                 .enumerate()
                 .map(|(i, s)| (i + 1).to_string() + ". " + &s)
                 .collect::<Vec<String>>()
