@@ -171,13 +171,13 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     let new_ignored = new_results.results.ignored as isize;
     let ignored_diff = new_ignored - base_ignored;
 
-    let base_failed = base_total - base_passed - base_ignored;
-    let new_failed = new_total - new_passed - new_ignored;
-    let failed_diff = new_failed - base_failed;
-
     let base_panics = base_results.results.panic as isize;
     let new_panics = new_results.results.panic as isize;
     let panic_diff = new_panics - base_panics;
+
+    let base_failed = base_total - base_passed - base_ignored - base_panics;
+    let new_failed = new_total - new_passed - new_ignored - new_panics;
+    let failed_diff = new_failed - base_failed;
 
     let base_conformance = (base_passed as f64 / base_total as f64) * 100_f64;
     let new_conformance = (new_passed as f64 / new_total as f64) * 100_f64;
@@ -283,6 +283,16 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     }
     let base_tests = get_all_tests_from_suite(base_results.results);
     let new_tests = get_all_tests_from_suite(new_results.results);
+
+    let base_tests: Vec<TestResult> = base_tests
+        .into_iter()
+        .filter(|t| !matches!(t.result, TestOutcomeResult::Ignored))
+        .collect();
+    let new_tests: Vec<TestResult> = new_tests
+        .into_iter()
+        .filter(|t| !matches!(t.result, TestOutcomeResult::Ignored))
+        .collect();
+
     let mut base_tests_map = HashMap::new();
     let mut new_test_map = HashMap::new();
 
@@ -295,11 +305,13 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
 
     let mut failed_tests: Vec<String> = Vec::new();
     for test in base_tests_map.values() {
-        if matches!(test.result, TestOutcomeResult::Failed) {
+        if !matches!(test.result, TestOutcomeResult::Passed) {
             if let Some(new_test) = new_test_map.get(&test.name) {
                 if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
                     failed_tests.push(test.name.to_string());
                 }
+            } else {
+                println!("Warn {}", test.name);
             }
         }
     }
@@ -309,11 +321,13 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
 
     let mut failed_tests: Vec<String> = Vec::new();
     for test in new_test_map.values() {
-        if matches!(test.result, TestOutcomeResult::Failed) {
+        if !matches!(test.result, TestOutcomeResult::Passed) {
             if let Some(base_test) = base_tests_map.get(&test.name) {
                 if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
                     failed_tests.push(test.name.to_string());
                 }
+            } else {
+                println!("Warn {}", test.name);
             }
         }
     }
