@@ -718,6 +718,13 @@ impl Heap {
                 "[GC] New threshold: {:.4}KB",
                 self.max_heap_size as f64 / 1024.
             );
+        } else if self.allocated <= (self.max_heap_size as f64 * 0.4) as usize {
+            self.max_heap_size = (self.allocated as f64 * 1.3f64) as usize;
+            logln_if!(
+                unlikely(self.verbose),
+                "[GC] New threshold: {:.4}KB",
+                self.max_heap_size as f64 / 1024.
+            );
         }
         logln_if!(unlikely(self.verbose), "[GC] End");
     }

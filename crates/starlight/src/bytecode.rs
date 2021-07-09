@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
-    gc::cell::{GcPointer, Trace, Tracer},
+    gc::cell::{GcPointer, Trace, Tracer, WeakRef},
     vm::{object::JsObject, structure::Structure, structure_chain::StructureChain},
 };
 
@@ -16,10 +16,10 @@ pub enum GetByIdMode {
 }
 pub enum TypeFeedBack {
     StructureCache {
-        structure: GcPointer<Structure>,
+        structure: WeakRef<Structure>,
     },
     PropertyCache {
-        structure: GcPointer<Structure>,
+        structure: WeakRef<Structure>,
         offset: u32,
         mode: GetByIdMode,
     },

@@ -241,8 +241,6 @@ impl Space {
     }
     #[inline]
     pub fn allocate(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
-        
-
         if size <= LARGE_CUTOFF {
             let p = self.allocate_small(size, threshold);
             debug_assert!(!self.live_bitmap.test(p as _));

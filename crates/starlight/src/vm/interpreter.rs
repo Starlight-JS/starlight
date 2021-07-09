@@ -640,17 +640,21 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     {
                         match mode {
                             &GetByIdMode::Default => {
-                                if GcPointer::ptr_eq(structure, &obj.structure()) {
-                                    frame.push(*obj.direct(*offset as _));
+                                if let Some(structure) = structure.upgrade() {
+                                    if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                        frame.push(*obj.direct(*offset as _));
 
-                                    continue;
+                                        continue;
+                                    }
                                 }
                             }
                             GetByIdMode::ProtoLoad(base) => {
-                                if false && GcPointer::ptr_eq(structure, &obj.structure()) {
-                                    frame.push(*base.direct(*offset as _));
+                                if let Some(structure) = structure.upgrade() {
+                                    if GcPointer::ptr_eq(&structure, &obj.structure()) {
+                                        frame.push(*base.direct(*offset as _));
 
-                                    continue;
+                                        continue;
+                                    }
                                 }
                             }
                             &GetByIdMode::ArrayLength => {
@@ -676,12 +680,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         if name == length_id() && obj.is_class(JsArray::get_class()) {
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
-                                .get_unchecked_mut(fdbk as usize) =
-                                TypeFeedBack::PropertyCache {
-                                    structure: obj.structure(),
-                                    mode: GetByIdMode::ArrayLength,
-                                    offset: u32::MAX,
-                                };
+                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                                structure: rt.gc.make_weak(obj.structure()),
+                                mode: GetByIdMode::ArrayLength,
+                                offset: u32::MAX,
+                            };
                             frame.push(JsValue::new(obj.indexed.length()));
                             return Ok(());
                         }
@@ -722,7 +725,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
                                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
-                                structure,
+                                structure: rt.gc.make_weak(structure),
                                 mode,
                                 offset: slot.offset(),
                             }
