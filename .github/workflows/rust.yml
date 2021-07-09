@@ -114,7 +114,6 @@ jobs:
           path: ./pr-id.txt
 
       - name: Upload New Results
-        if: github.event_name == 'push'
         uses: actions/upload-artifact@v2
         with:
           name: new
