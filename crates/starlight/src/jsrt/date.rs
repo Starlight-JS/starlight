@@ -1,5 +1,5 @@
 use chrono::{prelude::*, Duration, LocalResult};
-use std::{fmt::Display, mem::ManuallyDrop};
+use std::fmt::Display;
 
 use crate::{define_jsclass_with_symbol, prelude::*};
 

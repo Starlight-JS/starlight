@@ -72,9 +72,9 @@ jobs:
       - name: Start sccache server
         run: sccache --start-server
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --release
       - name: Run tests
-        run: cargo test --verbose -- --test-threads 1
+        run: cargo test --release -- --test-threads 1
       - name: Submodule update
         run: git submodule update --init
       - name: Run test262 tests
