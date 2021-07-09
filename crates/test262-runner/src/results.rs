@@ -339,7 +339,13 @@ pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
         println!(
             "<details><summary>{}</summary>\n\n```\n{}\n```\n</details>",
             title,
-            failed_tests.join("\n")
+            failed_tests
+                .iter()
+                .map(|s| s[2..].to_string())
+                .enumerate()
+                .map(|(i, s)| i.to_string() + ". " + &s)
+                .collect::<Vec<String>>()
+                .join("\n")
         );
     } else {
         println!("<details><summary>{}</summary></details>", title);
