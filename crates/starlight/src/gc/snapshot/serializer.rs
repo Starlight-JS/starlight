@@ -478,7 +478,7 @@ impl Serializable for TypeFeedBack {
                 mode,
             } => {
                 serializer.write_u8(0x01);
-                serializer.write_weakref(*structure);
+                serializer.write_gcpointer(*structure);
                 serializer.write_u32(*offset);
                 match mode {
                     &crate::bytecode::GetByIdMode::ArrayLength => serializer.write_u8(0),
@@ -491,8 +491,7 @@ impl Serializable for TypeFeedBack {
             }
             &TypeFeedBack::StructureCache { structure } => {
                 serializer.write_u8(0x02);
-                structure.serialize(serializer);
-                //serializer.write_gcpointer(structure);
+                serializer.write_gcpointer(structure);
             }
             &TypeFeedBack::PutByIdFeedBack {
                 new_structure,

@@ -1,14 +1,5 @@
-function main(foo) {
-    function bar() {
-        let array = [];
-        for (let i = 0; i < 10000; i++)
-            array[i] = [];
-        array = 42;
-    }
-    bar();
+let i = 0;
+for (; i < 10000; i++) {
 }
 
-main();
-
-gc();
-while (true) { }
+print(i);
