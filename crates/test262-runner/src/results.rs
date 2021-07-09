@@ -147,6 +147,16 @@ pub(crate) fn get_all_tests_from_suite(suite: SuiteResult) -> Vec<TestResult> {
     return tests;
 }
 
+pub(crate) fn get_key_of_test(test: &TestResult) -> String {
+    let key = test.name.to_string()
+        + if test.strict {
+            " strict"
+        } else {
+            " non-strict"
+        };
+    return key;
+}
+
 /// Compares the results of two test suite runs.
 pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: bool) {
     let base_results: ResultInfo = serde_json::from_reader(BufReader::new(
@@ -293,45 +303,55 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         .filter(|t| !matches!(t.result, TestOutcomeResult::Ignored))
         .collect();
 
+    println!("{} {}", base_tests.len(), new_tests.len());
     let mut base_tests_map = HashMap::new();
     let mut new_test_map = HashMap::new();
 
     for test in base_tests {
-        base_tests_map.insert(test.name.clone(), test);
+        let key = get_key_of_test(&test);
+        base_tests_map.insert(key, test);
     }
     for test in new_tests {
-        new_test_map.insert(test.name.clone(), test);
+        let key = get_key_of_test(&test);
+        new_test_map.insert(key, test);
     }
 
     let mut failed_tests: Vec<String> = Vec::new();
+    let mut base_passed = 0;
     for test in base_tests_map.values() {
         if !matches!(test.result, TestOutcomeResult::Passed) {
-            if let Some(new_test) = new_test_map.get(&test.name) {
+            if let Some(new_test) = new_test_map.get(&get_key_of_test(test)) {
                 if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
                     failed_tests.push(test.name.to_string());
                 }
             } else {
                 println!("Warn {}", test.name);
             }
+        } else {
+            base_passed += 1;
         }
     }
 
     show_detail_faled_tests("Base Failed But New Passed", failed_tests);
     println!();
 
+    let mut new_passed = 0;
     let mut failed_tests: Vec<String> = Vec::new();
     for test in new_test_map.values() {
         if !matches!(test.result, TestOutcomeResult::Passed) {
-            if let Some(base_test) = base_tests_map.get(&test.name) {
+            if let Some(base_test) = base_tests_map.get(&get_key_of_test(test)) {
                 if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
                     failed_tests.push(test.name.to_string());
                 }
             } else {
                 println!("Warn {}", test.name);
             }
+        } else {
+            new_passed += 1;
         }
     }
     show_detail_faled_tests("New Failed But Base Passed", failed_tests);
+    println!("{} {}", base_passed, new_passed,);
 }
 
 pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
@@ -343,7 +363,7 @@ pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
                 .iter()
                 .map(|s| s[2..].to_string())
                 .enumerate()
-                .map(|(i, s)| i.to_string() + ". " + &s)
+                .map(|(i, s)| (i + 1).to_string() + ". " + &s)
                 .collect::<Vec<String>>()
                 .join("\n")
         );
