@@ -14,13 +14,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [nightly]
         include:
           - os: ubuntu-latest
             sccache-path: /home/runner/.cache/sccache
           - os: macos-latest
             sccache-path: /Users/runner/Library/Caches/Mozilla.sccache
+          - os: windows-latest
+            sccache-path: C:\Users\runner\AppData\Local\Mozilla\sccache
     env:
       RUST_BACKTRACE: full
       RUSTC_WRAPPER: sccache
@@ -44,17 +46,23 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install sccache
+      - name: Install sccache (windows-latest)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install sccache
       - name: Install Rust ${{ matrix.rust }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
           profile: minimal
-          override: true
+          override: false
+          default: true
       - name: Cache cargo registry
         uses: actions/cache@v2
         continue-on-error: false
         with:
           path: |
+            ~/.cargo/bin/
             ~/.cargo/registry
             ~/.cargo/git
             target
