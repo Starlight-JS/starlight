@@ -162,8 +162,6 @@ pub fn default_heap(params: &Options) -> Heap {
     Heap::new(params)
 }
 
-impl Heap {}
-
 pub struct FreeObject {
     size: usize,
 }
@@ -476,7 +474,7 @@ impl Tracer for SlotVisitor {
                 };
             }
             (*base).force_set_state(POSSIBLY_GREY);
-            self.heap.mark(*cell);
+            //self.heap.mark(*cell);
             self.queue.push(base as *mut _);
             GcPointer {
                 base: NonNull::new_unchecked(base as *mut _),
@@ -492,7 +490,7 @@ impl Tracer for SlotVisitor {
                 return *cell;
             }
             (*base).force_set_state(POSSIBLY_GREY);
-            self.heap.mark(cell.base.as_ptr());
+            //self.heap.mark(cell.base.as_ptr());
             self.queue.push(base);
             *cell
         }
@@ -540,6 +538,8 @@ pub struct Heap {
     sp: usize,
     defers: usize,
     allocated: usize,
+    n_allocated: usize,
+    incremental: bool,
     threadpool: Option<Pool>,
     n_workers: u32,
     max_heap_size: usize,
@@ -562,6 +562,8 @@ impl Heap {
             sp: 0,
             current_white_part: DEFINETELY_WHITE,
             defers: 0,
+            incremental: opts.incremental_gc,
+            n_allocated: 0,
             progression: opts.incremental_gc_progression,
             verbose: opts.verbose_gc,
             allocated: 0,
@@ -712,12 +714,13 @@ impl Heap {
         self.update_weak_references();
         self.reset_weak_references();
         let alloc = self.allocated;
-        self.allocated = self.space.sweep();
+        (self.n_allocated, self.allocated) = self.space.sweep(self.current_white_part);
         logln_if!(
             unlikely(self.verbose),
-            "[GC] Sweep {:.4}->{:.4} KB",
+            "[GC] Sweep {:.4}->{:.4} KB (# of objects: {})",
             alloc as f64 / 1024.,
-            self.allocated as f64 / 1024.
+            self.allocated as f64 / 1024.,
+            self.n_allocated
         );
 
         if self.allocated > self.max_heap_size {
@@ -742,9 +745,10 @@ impl Heap {
             .allocate(size + 16, &mut th)
             .cast::<GcPointerBase>();
         self.allocated = th;
+        self.n_allocated += 1;
         unsafe {
             ptr.write(GcPointerBase::new(vtable, type_id));
-            (*ptr).force_set_state(self.allocation_color);
+            (*ptr).force_set_state(self.current_white_part);
 
             Some(NonNull::new_unchecked(ptr))
         }
@@ -865,6 +869,6 @@ impl Heap {
 
 impl Drop for Heap {
     fn drop(&mut self) {
-        self.space.sweep();
+        self.space.sweep(self.current_white_part);
     }
 }

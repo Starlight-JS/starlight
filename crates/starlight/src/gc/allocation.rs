@@ -17,6 +17,7 @@ use crate::{
 use super::{
     block::FreeList,
     block_allocator::BlockAllocator,
+    cell::{other_white_part, WHITES},
     large_object_space::{LargeObjectSpace, PreciseAllocation},
     space_bitmap::SpaceBitmap,
 };
@@ -226,23 +227,22 @@ impl Space {
         }
     }
 
-    pub fn sweep(&mut self) -> usize {
-        let mut allocated = self.precise_allocations.sweep();
+    pub fn sweep(&mut self, white: u8) -> (usize, usize) {
+        let (mut alive, mut allocated) = self.precise_allocations.sweep(white);
         unsafe {
             let mut alloc = self.allocators;
 
             while !alloc.is_null() {
                 let next = (*alloc).next;
-                (*alloc).sweep(&mut allocated, &self.live_bitmap, &self.mark_bitmap);
+                alive +=
+                    (*alloc).sweep(&mut allocated, &self.live_bitmap, &self.mark_bitmap, white);
                 alloc = next;
             }
         }
-        allocated
+        (alive, allocated)
     }
     #[inline]
     pub fn allocate(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
-        
-
         if size <= LARGE_CUTOFF {
             let p = self.allocate_small(size, threshold);
             debug_assert!(!self.live_bitmap.test(p as _));
@@ -323,11 +323,12 @@ impl LocalAllocator {
         allocated: &mut usize,
         live_bitmap: &SpaceBitmap<16>,
         mark_bitmap: &SpaceBitmap<16>,
-    ) {
+        white: u8,
+    ) -> usize {
         let mut available = null_mut();
         let mut unavailable = null_mut();
         let mut cursor = self.current;
-
+        let mut count = 0;
         while !cursor.is_null() {
             let next = (*cursor).next;
             let mut freelist = FreeList::new();
@@ -337,18 +338,19 @@ impl LocalAllocator {
                 if live_bitmap.test(cell as _) {
                     let cell = cell.cast::<GcPointerBase>();
                     let state = (*cell).state();
-                    debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
-                    if mark_bitmap.clear(cell as _) {
-                        fully_free = false;
 
-                        (*cell).force_set_state(DEFINETELY_WHITE);
-                        *allocated += (*cursor).cell_size.get() as usize;
-                    } else {
+                    if ((*cell).state() & other_white_part(white) & WHITES) != 0 {
+                        println!("{}", (*cell).state() & other_white_part(white) & WHITES);
                         debug_assert!(!mark_bitmap.test(cell as _));
                         live_bitmap.clear(cell as _);
                         has_free = true;
                         drop_in_place((*cell).get_dyn());
                         freelist.add(cell.cast());
+                    } else {
+                        fully_free = false;
+                        count += 1;
+                        (*cell).force_set_state(white);
+                        *allocated += (*cursor).cell_size.get() as usize;
                     }
                 } else {
                     debug_assert!(!mark_bitmap.test(cell as _));
@@ -381,18 +383,19 @@ impl LocalAllocator {
                 if live_bitmap.test(cell as _) {
                     let cell = cell.cast::<GcPointerBase>();
                     let state = (*cell).state();
-                    debug_assert!(state == DEFINETELY_WHITE || state == POSSIBLY_BLACK);
-                    if mark_bitmap.clear(cell as _) {
-                        fully_free = false;
 
-                        (*cell).force_set_state(DEFINETELY_WHITE);
-                        *allocated += (*cursor).cell_size.get() as usize;
-                    } else {
+                    if ((*cell).state() & other_white_part(white) & WHITES) != 0 {
+                        println!("{}", (*cell).state() & other_white_part(white) & WHITES);
                         debug_assert!(!mark_bitmap.test(cell as _));
                         live_bitmap.clear(cell as _);
                         has_free = true;
                         drop_in_place((*cell).get_dyn());
                         freelist.add(cell.cast());
+                    } else {
+                        fully_free = false;
+                        count += 1;
+                        (*cell).force_set_state(white);
+                        *allocated += (*cursor).cell_size.get() as usize;
                     }
                 } else {
                     debug_assert!(!mark_bitmap.test(cell as _));
@@ -417,6 +420,7 @@ impl LocalAllocator {
         }
         self.current = available;
         self.unavail = unavailable;
+        count
     }
     pub fn new(cell_size: usize, allocator: *mut BlockAllocator) -> Self {
         Self {

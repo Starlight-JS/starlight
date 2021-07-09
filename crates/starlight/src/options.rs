@@ -50,11 +50,17 @@ pub struct Options {
         default_value = "0.118"
     )]
     pub incremental_gc_progression: f64,
+    #[structopt(
+        long = "enableIncrementalGC",
+        help = "Enable incremental garbage collector"
+    )]
+    pub incremental_gc: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
+            incremental_gc: true,
             parallel_marking: false,
             dump_bytecode: false,
             disable_ic: false,

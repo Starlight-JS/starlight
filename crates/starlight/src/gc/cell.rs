@@ -101,7 +101,7 @@ pub const DEFINETELY_WHITE: u8 = 1;
 pub const DEFINETELY_WHITE2: u8 = 1 << 1;
 pub const WHITES: u8 = DEFINETELY_WHITE | DEFINETELY_WHITE2;
 
-pub(crate) fn other_white_part(x: u8) -> u8 {
+pub fn other_white_part(x: u8) -> u8 {
     x ^ WHITES
 }
 impl GcPointerBase {

@@ -5,6 +5,8 @@ use libmimalloc_sys::{
     mi_free, mi_heap_contains_block, mi_heap_destroy, mi_heap_malloc, mi_heap_new, mi_heap_t,
     mi_is_in_heap_region,
 };
+
+use super::cell::{other_white_part, WHITES};
 /// Precise allocation used for large objects (>= LARGE_CUTOFF).
 /// Starlight uses mimalloc that already knows what to do for large allocations. The GC shouldn't
 /// have to think about such things. That's where PreciseAllocation comes in. We will allocate large
@@ -115,15 +117,18 @@ impl PreciseAllocation {
         !self.is_marked() //&& !self.is_newly_allocated
     }
     /// Derop cell if this allocation is not marked.
-    pub fn sweep(&mut self) -> bool {
+    pub fn sweep(&mut self, white: u8) -> bool {
         let cell = self.cell();
-        if !self.is_marked() {
-            self.has_valid_cell = false;
 
-            unsafe {
-                core::ptr::drop_in_place((*cell).get_dyn());
+        unsafe {
+            if ((*cell).state() & other_white_part(white) & WHITES) != 0 {
+                self.has_valid_cell = false;
+
+                unsafe {
+                    core::ptr::drop_in_place((*cell).get_dyn());
+                }
+                return false;
             }
-            return false;
         }
         true
     }
@@ -196,21 +201,23 @@ impl LargeObjectSpace {
             heap: unsafe { mi_heap_new() },
         }
     }
-    pub fn sweep(&mut self) -> usize {
+    pub fn sweep(&mut self, white: u8) -> (usize, usize) {
         let mut sweeped = 0;
+        let mut alive = 0;
         self.allocations.retain(|ptr| unsafe {
             let p = &mut **ptr;
-            let retain = p.sweep();
+            let retain = p.sweep(white);
             if !retain {
                 p.destroy();
             } else {
-                (*p.cell()).force_set_state(DEFINETELY_WHITE);
+                alive += 1;
+                (*p.cell()).force_set_state(white);
                 sweeped += p.cell_size;
             }
             retain
         });
 
-        sweeped
+        (alive, sweeped)
     }
     #[allow(clippy::collapsible_if)]
     pub fn contains(&self, p: Address) -> bool {

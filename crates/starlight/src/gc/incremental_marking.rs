@@ -60,9 +60,9 @@ impl IncrementalMarking {
                 self.queue = take(&mut visitor.queue);
                 self.state = IncrementalMarkingState::Marking;
                 // if during the cycle 45% more objects are allocated we're likely to go to full STW
-                self.budget = (heap.allocated as f64 * 1.45) as usize;
+                self.budget = (heap.n_allocated as f64 * 1.45) as isize;
                 // heap.progression is 0.118 by default.
-                self.steps = (heap.allocated as f64 * heap.progression) as usize;
+                self.steps = (heap.n_allocated as f64 * heap.progression) as usize;
                 return IncrementalMarkingResult::Continue;
             }
             IncrementalMarkingState::Marking => {

@@ -1,6 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+use starlight::gc::cell::other_white_part;
 use starlight::gc::default_heap;
 use starlight::prelude::*;
 use std::path::Path;
@@ -14,6 +15,11 @@ use const_random::const_random;
 const BIN_ID: u64 = const_random!(u64);
 const SNAPSHOT_FILENAME: &str = ".startup-snapshot";
 fn main() {
+    println!(
+        "{} {}",
+        DEFINETELY_WHITE,
+        other_white_part(DEFINETELY_WHITE) == DEFINETELY_WHITE2
+    );
     Platform::initialize();
     let options = Options::from_args();
 
