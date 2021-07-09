@@ -168,7 +168,7 @@ enum Cli {
         markdown: bool,
 
         #[structopt(short, long)]
-        detail: bool
+        detail: bool,
     },
 }
 
@@ -402,8 +402,8 @@ fn main() {
             base,
             new,
             markdown,
-            detail
-        } => compare_results(base.as_path(), new.as_path(), markdown,detail),
+            detail,
+        } => compare_results(base.as_path(), new.as_path(), markdown, detail),
     }
 }
 
@@ -415,7 +415,7 @@ fn show_result(results: &SuiteResult) {
     println!("Ignored tests: {}", results.ignored.to_string().yellow());
     println!(
         "Failed tests: {} (panics: {})",
-        (results.total - results.passed - results.ignored)
+        (results.total - results.passed - results.ignored - results.panic)
             .to_string()
             .red(),
         results.panic.to_string().red()
@@ -455,10 +455,9 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
         let suite = TestSuite {
             name: test.name.clone(),
             suites: Vec::new(),
-            tests: vec![test]
+            tests: vec![test],
         };
         suite.run_main(&harness, verbose, &mut rt)
-
     } else {
         let suite =
             read_suite(&test262_path.join(suite)).expect("could not get the list of tests to run");

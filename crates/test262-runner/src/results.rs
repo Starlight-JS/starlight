@@ -147,6 +147,17 @@ pub(crate) fn get_all_tests_from_suite(suite: SuiteResult) -> Vec<TestResult> {
     return tests;
 }
 
+pub(crate) fn get_key_of_test(test: &TestResult) -> String {
+    let key = (if test.strict {
+        "[strict] "
+    } else {
+        "[non-strict] "
+    })
+    .to_string()
+        + &test.name.to_string()[2..];
+    return key;
+}
+
 /// Compares the results of two test suite runs.
 pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: bool) {
     let base_results: ResultInfo = serde_json::from_reader(BufReader::new(
@@ -171,13 +182,13 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     let new_ignored = new_results.results.ignored as isize;
     let ignored_diff = new_ignored - base_ignored;
 
-    let base_failed = base_total - base_passed - base_ignored;
-    let new_failed = new_total - new_passed - new_ignored;
-    let failed_diff = new_failed - base_failed;
-
     let base_panics = base_results.results.panic as isize;
     let new_panics = new_results.results.panic as isize;
     let panic_diff = new_panics - base_panics;
+
+    let base_failed = base_total - base_passed - base_ignored - base_panics;
+    let new_failed = new_total - new_passed - new_ignored - new_panics;
+    let failed_diff = new_failed - base_failed;
 
     let base_conformance = (base_passed as f64 / base_total as f64) * 100_f64;
     let new_conformance = (new_passed as f64 / new_total as f64) * 100_f64;
@@ -283,23 +294,37 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
     }
     let base_tests = get_all_tests_from_suite(base_results.results);
     let new_tests = get_all_tests_from_suite(new_results.results);
+
+    let base_tests: Vec<TestResult> = base_tests
+        .into_iter()
+        .filter(|t| !matches!(t.result, TestOutcomeResult::Ignored))
+        .collect();
+    let new_tests: Vec<TestResult> = new_tests
+        .into_iter()
+        .filter(|t| !matches!(t.result, TestOutcomeResult::Ignored))
+        .collect();
+
     let mut base_tests_map = HashMap::new();
     let mut new_test_map = HashMap::new();
 
     for test in base_tests {
-        base_tests_map.insert(test.name.clone(), test);
+        let key = get_key_of_test(&test);
+        base_tests_map.insert(key, test);
     }
     for test in new_tests {
-        new_test_map.insert(test.name.clone(), test);
+        let key = get_key_of_test(&test);
+        new_test_map.insert(key, test);
     }
 
     let mut failed_tests: Vec<String> = Vec::new();
     for test in base_tests_map.values() {
-        if matches!(test.result, TestOutcomeResult::Failed) {
-            if let Some(new_test) = new_test_map.get(&test.name) {
+        if !matches!(test.result, TestOutcomeResult::Passed) {
+            if let Some(new_test) = new_test_map.get(&get_key_of_test(test)) {
                 if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
-                    failed_tests.push(test.name.to_string());
+                    failed_tests.push(get_key_of_test(test));
                 }
+            } else {
+                println!("Warn {}", test.name);
             }
         }
     }
@@ -309,11 +334,13 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
 
     let mut failed_tests: Vec<String> = Vec::new();
     for test in new_test_map.values() {
-        if matches!(test.result, TestOutcomeResult::Failed) {
-            if let Some(base_test) = base_tests_map.get(&test.name) {
+        if !matches!(test.result, TestOutcomeResult::Passed) {
+            if let Some(base_test) = base_tests_map.get(&get_key_of_test(test)) {
                 if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
-                    failed_tests.push(test.name.to_string());
+                    failed_tests.push(get_key_of_test(test));
                 }
+            } else {
+                println!("Warn {}", test.name);
             }
         }
     }
@@ -325,7 +352,12 @@ pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
         println!(
             "<details><summary>{}</summary>\n\n```\n{}\n```\n</details>",
             title,
-            failed_tests.join("\n")
+            failed_tests
+                .iter()
+                .enumerate()
+                .map(|(i, s)| (i + 1).to_string() + ". " + &s)
+                .collect::<Vec<String>>()
+                .join("\n")
         );
     } else {
         println!("<details><summary>{}</summary></details>", title);
