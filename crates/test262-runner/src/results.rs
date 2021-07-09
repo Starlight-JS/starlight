@@ -198,7 +198,7 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         }
 
         println!("### Test262 conformance changes:");
-        println!("| Test result | master count | PR count | difference |");
+        println!("| Test result | Dev count | PR count | Difference |");
         println!("| :---------: | :----------: | :------: | :--------: |");
         println!(
             "| Total | {} | {} | {} |",
@@ -252,7 +252,7 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         );
     } else {
         println!("Test262 conformance changes:");
-        println!("| Test result | master |    PR   | difference |");
+        println!("| Test result | Dev count | PR count | Difference |");
         println!(
             "|    Passed   | {:^6} | {:^5} | {:^10} |",
             base_passed,
@@ -304,12 +304,7 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         }
     }
 
-    println!(
-        "<details><summary>{}</summary>{}</details>",
-        "Base Failed But New Passed",
-        failed_tests.join("\n")
-    );
-
+    show_detail_faled_tests("Base Failed But New Passed", failed_tests);
     println!();
 
     let mut failed_tests: Vec<String> = Vec::new();
@@ -322,9 +317,17 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
             }
         }
     }
-    println!(
-        "<details><summary>{}</summary>{}</details>",
-        "New Failed But Base Passed",
-        failed_tests.join("\n")
-    );
+    show_detail_faled_tests("New Failed But Base Passed", failed_tests);
+}
+
+pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
+    if failed_tests.len() != 0 {
+        println!(
+            "<details><summary>{}</summary>\n\n```\n{}\n```\n</details>",
+            title,
+            failed_tests.join("\n")
+        );
+    } else {
+        println!("<details><summary>{}</summary></details>", title);
+    }
 }
