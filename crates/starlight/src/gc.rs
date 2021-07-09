@@ -14,6 +14,7 @@
 //! `letroot!` is not required to use anymore.
 //!
 #![allow(dead_code, unused_variables)]
+use self::allocation::Space;
 use crate::options::Options;
 use crate::vm::Runtime;
 use crate::{
@@ -24,7 +25,9 @@ use crate::{
         serializer::{Serializable, SnapshotSerializer},
     },
 };
+use std::collections::LinkedList;
 use std::intrinsics::{copy_nonoverlapping, unlikely};
+use std::mem::swap;
 use std::ops::Deref;
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
@@ -32,6 +35,7 @@ use std::{
     ptr::{null_mut, NonNull},
 };
 use std::{u8, usize};
+use yastl::Pool;
 
 /// Like C's offsetof but you can use it with GC-able objects to get offset from GC header to field.
 ///
@@ -69,12 +73,20 @@ macro_rules! offsetof {
 pub mod cell;
 pub mod snapshot;
 pub const K: usize = 1024;
+pub mod incremental_marking;
 pub mod mem;
 pub mod os;
 pub mod pmarking;
 pub mod safepoint;
 #[macro_use]
 pub mod shadowstack;
+pub mod allocation;
+pub mod block;
+pub mod block_allocator;
+pub mod constants;
+pub mod large_object_space;
+pub mod space_bitmap;
+
 pub trait MarkingConstraint {
     fn name(&self) -> &str {
         "<anonymous name>"
@@ -437,18 +449,6 @@ mod tests {
     }
 }
 
-pub mod allocation;
-pub mod block;
-pub mod block_allocator;
-pub mod collector;
-pub mod constants;
-pub mod large_object_space;
-pub mod space_bitmap;
-use std::collections::LinkedList;
-use std::mem::swap;
-use yastl::Pool;
-
-use self::allocation::Space;
 /// Visits garbage collected objects
 pub struct SlotVisitor {
     pub(super) queue: Vec<*mut GcPointerBase>,
@@ -469,12 +469,13 @@ impl Tracer for SlotVisitor {
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
         let base = *cell;
         unsafe {
-            if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
+            if !(*base).is_white() {
                 return GcPointer {
                     base: NonNull::new_unchecked(base as *mut _),
                     marker: Default::default(),
                 };
             }
+            (*base).force_set_state(POSSIBLY_GREY);
             self.heap.mark(*cell);
             self.queue.push(base as *mut _);
             GcPointer {
@@ -487,9 +488,10 @@ impl Tracer for SlotVisitor {
     fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell> {
         unsafe {
             let base = cell.base.as_ptr();
-            if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
+            if !(*base).is_white() {
                 return *cell;
             }
+            (*base).force_set_state(POSSIBLY_GREY);
             self.heap.mark(cell.base.as_ptr());
             self.queue.push(base);
             *cell
@@ -534,7 +536,7 @@ impl Tracer for SlotVisitor {
 }
 pub struct Heap {
     weak_slots: LinkedList<WeakSlot>,
-    constraints: Vec<Box<dyn MarkingConstraint>>,
+    pub(super) constraints: Vec<Box<dyn MarkingConstraint>>,
     sp: usize,
     defers: usize,
     allocated: usize,
@@ -543,17 +545,24 @@ pub struct Heap {
     max_heap_size: usize,
     space: Space,
     verbose: bool,
+    pub(super) progression: f64,
     allocation_color: u8,
+    pub(super) current_white_part: u8,
 }
 
 impl Heap {
+    pub(super) fn flip_white_part(&mut self) {
+        self.current_white_part = other_white_part(self.current_white_part);
+    }
     pub fn new(opts: &Options) -> Self {
         Self {
             allocation_color: DEFINETELY_WHITE,
             weak_slots: LinkedList::new(),
             constraints: vec![],
             sp: 0,
+            current_white_part: DEFINETELY_WHITE,
             defers: 0,
+            progression: opts.incremental_gc_progression,
             verbose: opts.verbose_gc,
             allocated: 0,
             max_heap_size: 256 * 1024,

@@ -95,11 +95,26 @@ pub struct GcPointerBase {
     pub type_id: TypeId,
 }
 
-pub const POSSIBLY_BLACK: u8 = 0;
-pub const POSSIBLY_GREY: u8 = 2;
+pub const POSSIBLY_GREY: u8 = 0;
+pub const POSSIBLY_BLACK: u8 = 1 << 2;
 pub const DEFINETELY_WHITE: u8 = 1;
+pub const DEFINETELY_WHITE2: u8 = 1 << 1;
+pub const WHITES: u8 = DEFINETELY_WHITE | DEFINETELY_WHITE2;
 
+pub(crate) fn other_white_part(x: u8) -> u8 {
+    x ^ WHITES
+}
 impl GcPointerBase {
+    pub fn is_white(&self) -> bool {
+        (self.state() & WHITES) != 0
+    }
+    pub fn is_black(&self) -> bool {
+        self.state() == POSSIBLY_BLACK
+    }
+
+    pub fn is_grey(&self) -> bool {
+        self.state() == POSSIBLY_GREY
+    }
     pub fn vtable_offsetof() -> usize {
         offsetof!(GcPointerBase.vtable)
     }

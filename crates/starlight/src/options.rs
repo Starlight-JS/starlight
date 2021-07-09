@@ -44,6 +44,12 @@ pub struct Options {
     pub codegen_plugins: bool,
     #[structopt(long = "verboseGC", help = "Verbose GC cycle")]
     pub verbose_gc: bool,
+    #[structopt(
+        long = "incrementalMarkingProgression",
+        help = "Incremental marking progression",
+        default_value = "0.118"
+    )]
+    pub incremental_gc_progression: f64,
 }
 
 impl Default for Options {
@@ -61,6 +67,7 @@ impl Default for Options {
             gc_threads: 4,
             verbose_gc: false,
             codegen_plugins: false,
+            incremental_gc_progression: 0.118,
         }
     }
 }
