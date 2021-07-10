@@ -669,7 +669,7 @@ impl Heap {
         // FPU registers too because JS values is NaN boxed and exist in FPU registers.
 
         // Get stack pointer for scanning thread stack.
-        self.sp = approximate_stack_pointer() as _;
+
         if self.defers > 0 {
             return;
         }
@@ -679,7 +679,10 @@ impl Heap {
             self.allocated as f64 / 1024.,
             self.max_heap_size as f64 / 1024.
         );
-        let sp = self.sp;
+        let mut sp = 0;
+        sp = &sp as *const usize as usize;
+        self.sp = sp as _;
+
         let mut visitor = SlotVisitor {
             bytes_visited: 0,
             queue: Vec::with_capacity(256),
