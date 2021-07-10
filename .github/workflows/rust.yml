@@ -19,8 +19,7 @@ jobs:
         include:
           - os: ubuntu-latest
             sccache-path: /home/runner/.cache/sccache
-          - os: macos-latest
-            sccache-path: /Users/runner/Library/Caches/Mozilla.sccache
+
           - os: windows-latest
             sccache-path: C:\Users\runner\AppData\Local\Mozilla\sccache
     env:
