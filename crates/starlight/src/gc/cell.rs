@@ -71,7 +71,7 @@ pub unsafe trait Trace {
 /// All cells that is not part of `src/vm` treatened as dummy objects and property accesses
 /// is no-op on them.
 ///
-pub trait GcCell: mopa::Any + Trace + Serializable {
+pub trait GcCell: mopa::Any + Trace + Serializable + Unpin {
     /// Used when object has dynamic size i.e arrays
     fn compute_size(&self) -> usize {
         std::mem::size_of_val(self)
@@ -224,28 +224,50 @@ pub enum WeakState {
     Mark,
 }
 pub struct WeakSlot {
-    pub state: WeakState,
-    pub value: *mut GcPointerBase,
+    pub(crate) value: Option<GcPointer<dyn GcCell>>,
 }
 
+unsafe impl Trace for WeakSlot {}
+impl GcCell for WeakSlot {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
+    }
+}
+impl Serializable for WeakSlot {
+    fn serialize(&self, serializer: &mut SnapshotSerializer) {
+        self.value.serialize(serializer);
+    }
+}
+
+impl Deserializable for WeakSlot {
+    unsafe fn deserialize(at: *mut u8, deser: &mut crate::prelude::Deserializer) {
+        at.cast::<Self>().write(Self {
+            value: deser.read_opt_gc(),
+        });
+    }
+    unsafe fn deserialize_inplace(_deser: &mut crate::prelude::Deserializer) -> Self {
+        unreachable!()
+    }
+    unsafe fn allocate(
+        rt: &mut crate::vm::Runtime,
+        deser: &mut crate::prelude::Deserializer,
+    ) -> *mut GcPointerBase {
+        rt.gc.allocate_raw(
+            vtable_of_type::<Self>() as _,
+            size_of::<Self>(),
+            TypeId::of::<Self>(),
+        )
+    }
+}
+#[repr(transparent)]
 pub struct WeakRef<T: GcCell> {
-    pub(crate) inner: NonNull<WeakSlot>,
+    pub(crate) slot: GcPointer<WeakSlot>,
     pub(crate) marker: PhantomData<T>,
 }
 
 impl<T: GcCell> WeakRef<T> {
     pub fn upgrade(&self) -> Option<GcPointer<T>> {
-        unsafe {
-            let inner = &*self.inner.as_ptr();
-            if inner.value.is_null() {
-                return None;
-            }
-
-            Some(GcPointer {
-                base: NonNull::new_unchecked(inner.value),
-                marker: PhantomData::<T>,
-            })
-        }
+        self.slot.value.map(|x| unsafe { x.downcast_unchecked() })
     }
 }
 
@@ -321,7 +343,7 @@ impl<T: GcCell> GcCell for WeakRef<T> {
 }
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
-        visitor.visit_weak(self.inner.as_ptr());
+        self.slot.trace(visitor);
     }
 }
 

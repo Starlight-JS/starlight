@@ -450,6 +450,7 @@ use wtf_rs::approximate_stack_pointer;
 use yastl::Pool;
 
 use self::allocation::Space;
+use self::space_bitmap::SpaceBitmap;
 /// Visits garbage collected objects
 pub struct SlotVisitor {
     pub(super) queue: Vec<*mut GcPointerBase>,
@@ -460,11 +461,8 @@ unsafe impl Send for SlotVisitor {}
 unsafe impl Send for Space {}
 unsafe impl Sync for Space {}
 impl Tracer for SlotVisitor {
-    fn visit_weak(&mut self, slot: *const WeakSlot) {
-        unsafe {
-            let inner = &mut *(slot as *mut WeakSlot);
-            inner.state = WeakState::Mark;
-        }
+    fn visit_weak(&mut self, _slot: *const WeakSlot) {
+        /* no-op */
     }
 
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
@@ -545,6 +543,7 @@ pub struct Heap {
     space: Space,
     verbose: bool,
     allocation_color: u8,
+    pub(super) weak_refs: Vec<GcPointer<WeakSlot>>,
 }
 
 impl Heap {
@@ -557,6 +556,7 @@ impl Heap {
             defers: 0,
             verbose: opts.verbose_gc,
             allocated: 0,
+            weak_refs: vec![],
             max_heap_size: 256 * 1024,
             threadpool: if opts.parallel_marking {
                 Some(Pool::new(opts.gc_threads as _))
@@ -588,7 +588,7 @@ impl Heap {
     /// ```
     ///
     fn update_weak_references(&mut self) {
-        for slot in self.weak_slots.iter_mut() {
+        /*for slot in self.weak_slots.iter_mut() {
             match slot.state {
                 WeakState::Free => { /* no-op */ }
                 WeakState::Unmarked => {
@@ -609,20 +609,25 @@ impl Heap {
                     }
                 }
             }
+        }*/
+
+        for weak in self.weak_refs.iter_mut() {
+            match weak.value {
+                Some(val) if self.space.mark_bitmap.test(val.base.as_ptr() as _) => {
+                    continue;
+                }
+                _ => {
+                    weak.value = None;
+                }
+            }
         }
     }
     /// Walk all weak slots and reset them. If slot is free then it is unlinked from slots linked list
     /// otherwise it is just unmarked.
     fn reset_weak_references(&mut self) {
-        let mut cursor = self.weak_slots.cursor_front_mut();
-        while let Some(item) = cursor.current() {
-            if item.state == WeakState::Free {
-                cursor.remove_current();
-            } else {
-                item.state = WeakState::Unmarked;
-                cursor.move_next();
-            }
-        }
+        let bitmap = unsafe { &*(&self.space.mark_bitmap as *const SpaceBitmap<16>) };
+        self.weak_refs
+            .retain(|weak| bitmap.test(weak.base.as_ptr() as _));
     }
 
     /// This function marks all potential roots. This simply means it executes
@@ -662,7 +667,7 @@ impl Heap {
         // FPU registers too because JS values is NaN boxed and exist in FPU registers.
 
         // Get stack pointer for scanning thread stack.
-        let sp = approximate_stack_pointer();
+        self.sp = approximate_stack_pointer() as _;
         if self.defers > 0 {
             return;
         }
@@ -719,13 +724,6 @@ impl Heap {
                 "[GC] New threshold: {:.4}KB",
                 self.max_heap_size as f64 / 1024.
             );
-        } else if self.allocated <= (self.max_heap_size as f64 * 0.4) as usize {
-            self.max_heap_size = (self.allocated as f64 * 1.3f64) as usize;
-            logln_if!(
-                unlikely(self.verbose),
-                "[GC] New threshold: {:.4}KB",
-                self.max_heap_size as f64 / 1024.
-            );
         }
         logln_if!(unlikely(self.verbose), "[GC] End");
     }
@@ -775,24 +773,14 @@ impl Heap {
             .checked_sub(1)
             .expect("Trying to undefer non deferred GC");
     }
-    pub fn weak_slots(&mut self, cb: &mut dyn FnMut(*mut WeakSlot)) {
-        for slot in self.weak_slots.iter() {
-            cb(slot as *const _ as *mut _);
+    pub fn weak_slots(&mut self, cb: &mut dyn FnMut(GcPointer<WeakSlot>)) {
+        for slot in self.weak_refs.iter() {
+            cb(*slot);
         }
     }
 
     pub fn add_constraint(&mut self, constraint: impl MarkingConstraint + 'static) {
         self.constraints.push(Box::new(constraint));
-    }
-    pub fn make_weak_slot(&mut self, p: *mut GcPointerBase) -> *mut WeakSlot {
-        let slot = WeakSlot {
-            value: p,
-            state: WeakState::Unmarked,
-        };
-        self.weak_slots.push_back(slot);
-        {
-            self.weak_slots.back_mut().unwrap() as *mut _
-        }
     }
 
     pub fn walk(&mut self, callback: &mut dyn FnMut(*mut GcPointerBase, usize) -> bool) {
@@ -843,22 +831,22 @@ impl Heap {
     }
 
     pub fn make_null_weak<T: GcCell>(&mut self) -> WeakRef<T> {
-        let slot = self.make_weak_slot(null_mut());
-        unsafe {
-            WeakRef {
-                inner: NonNull::new_unchecked(slot),
-                marker: Default::default(),
-            }
+        let weak = self.allocate(WeakSlot { value: None });
+        self.weak_refs.push(weak);
+        WeakRef {
+            slot: weak,
+            marker: PhantomData,
         }
     }
 
-    pub fn make_weak<T: GcCell>(&mut self, p: GcPointer<T>) -> WeakRef<T> {
-        let slot = self.make_weak_slot(p.base.as_ptr());
-        unsafe {
-            WeakRef {
-                inner: NonNull::new_unchecked(slot),
-                marker: Default::default(),
-            }
+    pub fn make_weak<T: GcCell>(&mut self, target: GcPointer<T>) -> WeakRef<T> {
+        let weak = self.allocate(WeakSlot {
+            value: Some(target.as_dyn()),
+        });
+        self.weak_refs.push(weak);
+        WeakRef {
+            slot: weak,
+            marker: PhantomData,
         }
     }
 }

@@ -158,7 +158,7 @@ pub struct Space {
     block_allocator: *mut BlockAllocator,
     allocators: *mut LocalAllocator,
     live_bitmap: SpaceBitmap<16>,
-    mark_bitmap: SpaceBitmap<16>,
+    pub(super) mark_bitmap: SpaceBitmap<16>,
 }
 
 impl Drop for Space {

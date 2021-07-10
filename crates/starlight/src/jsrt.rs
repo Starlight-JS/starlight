@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
-    gc::cell::{GcPointer, WeakRef},
+    gc::cell::{GcPointer, WeakRef, WeakSlot},
     vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
         array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, data_view::JsDataView,
@@ -1318,6 +1318,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         weak_ref::JsWeakRef::get_class() as *const _ as _,
         weak_ref::weak_ref_constructor as _,
         weak_ref::weak_ref_prototype_deref as _,
+        WeakSlot::deserialize as _,
+        WeakSlot::allocate as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

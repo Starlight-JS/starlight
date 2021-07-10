@@ -324,8 +324,9 @@ pub const fn round_up(x: usize, y: usize) -> usize {
     ((x) + (y - 1)) & !(y - 1)
 }
 
+#[inline(never)]
 pub fn approximate_stack_pointer() -> *const u8 {
-    let mut sp = null();
-    sp = &sp as *const *const u8 as *const u8;
-    sp
+    let mut sp = 0;
+    sp = &sp as *const usize as usize;
+    sp as _
 }

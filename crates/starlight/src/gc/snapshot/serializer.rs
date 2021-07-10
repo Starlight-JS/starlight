@@ -123,14 +123,6 @@ impl SnapshotSerializer {
             self.reference_map.push(object as _);
             true
         });
-
-        gc.weak_slots(&mut |weak_slot| {
-            //for weak_slot in gc.weak_slots.iter() {
-            let addr = weak_slot as *const _ as usize;
-            let _ix = self.reference_map.len() as u32;
-            self.reference_map.push(addr);
-            //self.reference_map.insert(addr, ix);
-        });
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
@@ -180,16 +172,7 @@ impl SnapshotSerializer {
         let patch_at = self.output.len();
         self.write_u32(0);
         gc.weak_slots(&mut |weak_slot| unsafe {
-            //for weak_slot in gc.weak_slots.iter() {
-            if (*weak_slot).value.is_null() {
-                self.write_u8(0x0);
-            } else {
-                self.write_u8(0x1);
-                self.write_reference((*weak_slot).value);
-            }
-
-            self.write_reference(weak_slot);
-
+            weak_slot.serialize(self);
             count += 1;
         });
         let buf = count.to_le_bytes();
@@ -232,7 +215,7 @@ impl SnapshotSerializer {
         }
     }
     pub fn write_weakref<T: GcCell + Sized>(&mut self, weak_ref: WeakRef<T>) {
-        let key = weak_ref.inner.as_ptr() as usize;
+        /*let key = weak_ref.inner.as_ptr() as usize;
         let ix = self
             .reference_map
             .iter()
@@ -240,7 +223,8 @@ impl SnapshotSerializer {
             .find(|x| x.1 == &(key as usize))
             .unwrap()
             .0 as u32;
-        self.write_u32(ix);
+        self.write_u32(ix);*/
+        weak_ref.slot.serialize(self);
     }
     pub fn write_gcpointer<T: GcCell + ?Sized>(&mut self, at: GcPointer<T>) {
         let reference = self.get_gcpointer(at);
@@ -478,7 +462,7 @@ impl Serializable for TypeFeedBack {
                 mode,
             } => {
                 serializer.write_u8(0x01);
-                serializer.write_weakref(*structure);
+                serializer.write_gcpointer(*structure);
                 serializer.write_u32(*offset);
                 match mode {
                     &crate::bytecode::GetByIdMode::ArrayLength => serializer.write_u8(0),
@@ -491,8 +475,7 @@ impl Serializable for TypeFeedBack {
             }
             &TypeFeedBack::StructureCache { structure } => {
                 serializer.write_u8(0x02);
-                structure.serialize(serializer);
-                //serializer.write_gcpointer(structure);
+                serializer.write_gcpointer(structure);
             }
             &TypeFeedBack::PutByIdFeedBack {
                 new_structure,
