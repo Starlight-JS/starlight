@@ -236,7 +236,7 @@ unsafe fn eval_internal(
 }
 
 pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
-    rt.heap().collect_if_necessary();
+    rt.gc.collect_if_necessary();
     let mut ip = (*frame).ip;
 
     let mut frame: &'static mut CallFrame = &mut *frame;
@@ -339,7 +339,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_JMP => {
-                rt.heap().collect_if_necessary();
+                rt.gc.collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
                 ip = ip.offset(offset as isize);
@@ -818,7 +818,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_CALL | Opcode::OP_TAILCALL => {
-                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
 
@@ -879,7 +878,6 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
             }
             Opcode::OP_NEW | Opcode::OP_TAILNEW => {
-                rt.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
 

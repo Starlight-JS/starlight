@@ -31,6 +31,7 @@ pub mod promise;
 pub mod regexp;
 pub mod string;
 pub mod symbol;
+pub mod weak_ref;
 use array::*;
 use error::*;
 use function::*;
@@ -303,6 +304,65 @@ impl Runtime {
         ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
 
         Ok(())
+    }
+    pub(crate) fn init_weak_ref_in_realm(&mut self) {
+        let mut init = || -> Result<(), JsValue> {
+            let mut proto = self.global_data().weak_ref_prototype.unwrap();
+            let ctor = proto.get(self, "constructor".intern())?;
+            self.global_object()
+                .put(self, "WeakRef".intern(), JsValue::new(ctor), false)?;
+            Ok(())
+        };
+        match init() {
+            Ok(()) => {}
+            Err(e) => {
+                panic!(
+                    "Failed to initialize WeakRef: {}",
+                    e.to_string(self).unwrap_or_else(|_| unreachable!())
+                )
+            }
+        }
+    }
+    pub(crate) fn init_weak_ref_in_global_data(&mut self) {
+        let mut init = || -> Result<(), JsValue> {
+            let obj_proto = self.global_data().object_prototype.unwrap();
+            self.global_data.weak_ref_structure = Some(Structure::new_indexed(self, None, false));
+            let proto_map = self
+                .global_data
+                .weak_ref_structure
+                .unwrap()
+                .change_prototype_transition(self, Some(obj_proto));
+            let mut proto =
+                JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+            self.global_data
+                .weak_ref_structure
+                .unwrap()
+                .change_prototype_with_no_transition(proto);
+            let mut ctor =
+                JsNativeFunction::new(self, "WeakRef".intern(), weak_ref::weak_ref_constructor, 1);
+            proto.put(self, "constructor".intern(), JsValue::new(ctor), false)?;
+            ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
+            let deref = JsNativeFunction::new(
+                self,
+                "deref".intern(),
+                weak_ref::weak_ref_prototype_deref,
+                0,
+            );
+            proto.put(self, "deref".intern(), JsValue::new(deref), false)?;
+
+            self.global_data.weak_ref_prototype = Some(proto);
+            Ok(())
+        };
+
+        match init() {
+            Ok(()) => {}
+            Err(e) => {
+                panic!(
+                    "Failed to initialize WeakRef: {}",
+                    e.to_string(self).unwrap_or_else(|_| unreachable!())
+                )
+            }
+        }
     }
 
     pub(crate) fn init_array_in_realm(&mut self) {
@@ -1255,6 +1315,9 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         data_view::data_view_prototype_set::<i32> as _,
         data_view::data_view_prototype_set::<f32> as _,
         data_view::data_view_prototype_set::<f64> as _,
+        weak_ref::JsWeakRef::get_class() as *const _ as _,
+        weak_ref::weak_ref_constructor as _,
+        weak_ref::weak_ref_prototype_deref as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

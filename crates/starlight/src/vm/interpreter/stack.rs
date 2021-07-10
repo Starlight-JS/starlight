@@ -117,6 +117,7 @@ unsafe impl Trace for Stack {
                     (&mut *scan).trace(visitor);
                     scan = scan.add(1);
                 }
+                //visitor.add_conservative(scan as _, end as _);
 
                 let mut frame = self.current;
                 while !frame.is_null() {

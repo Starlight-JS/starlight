@@ -62,7 +62,7 @@ pub fn unwrap_unchecked<T: Sized>(value: Option<T>) -> T {
     }
 }
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ptr::null};
 
 /// Trait that provides `retain_mut` method.
 pub trait RetainMut<T> {
@@ -322,4 +322,10 @@ macro_rules! offset_of_tuple {
 
 pub const fn round_up(x: usize, y: usize) -> usize {
     ((x) + (y - 1)) & !(y - 1)
+}
+
+pub fn approximate_stack_pointer() -> *const u8 {
+    let mut sp = null();
+    sp = &sp as *const *const u8 as *const u8;
+    sp
 }

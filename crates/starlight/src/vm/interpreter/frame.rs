@@ -12,6 +12,7 @@ use wtf_rs::round_up;
 pub struct CallFrame {
     pub prev: *mut CallFrame,
     pub sp: *mut JsValue,
+    pub restore_sp: *mut JsValue,
     pub limit: *mut JsValue,
     pub callee: JsValue,
     pub ip: *mut u8,

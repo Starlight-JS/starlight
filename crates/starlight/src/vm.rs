@@ -205,7 +205,7 @@ impl Runtime {
         self.init_promise_in_realm().ok().expect("init prom failed");
         self.init_array_buffer_in_realm()?;
         self.init_data_view_in_realm()?;
-
+        self.init_weak_ref_in_realm();
         self.init_self_hosted();
         self.init_module_loader();
         self.init_internal_modules();
@@ -667,6 +667,7 @@ impl Runtime {
         self.init_generator_in_global_data(proto);
         self.init_array_buffer_in_global_data();
         self.init_data_view_in_global_data();
+        self.init_weak_ref_in_global_data();
     }
 
     pub fn init_module_loader(&mut self) {
@@ -699,7 +700,7 @@ impl Runtime {
                 rt.realm.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);
+                //rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
             },
@@ -734,7 +735,7 @@ impl Runtime {
                 }
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);
+                //rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
                 let pr = &mut *rt.persistent_roots.borrow_mut();
@@ -888,6 +889,8 @@ pub struct GlobalData {
     pub(crate) data_view_structure: Option<GcPointer<Structure>>,
     pub(crate) data_view_prototype: Option<GcPointer<JsObject>>,
     pub(crate) spread_builtin: Option<GcPointer<JsObject>>,
+    pub(crate) weak_ref_structure: Option<GcPointer<Structure>>,
+    pub(crate) weak_ref_prototype: Option<GcPointer<JsObject>>,
 }
 
 impl GlobalData {

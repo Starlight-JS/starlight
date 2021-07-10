@@ -18,7 +18,7 @@ thread_local! {
 
 impl Thread {
     #[cfg(target_arch = "x86_64")]
-    pub fn capture_registers() -> [usize; 32] {
+    pub fn capture_registers() -> [usize; 16] {
         let mut buf = std::mem::MaybeUninit::uninit();
         let buf_ptr = buf.as_mut_ptr();
         unsafe {
@@ -40,22 +40,7 @@ impl Thread {
                 mov [$0+104], r13
                 mov [$0+112], r14
                 mov [$0+120], r15
-                movd [$0+128], xmm0
-                movd [$0+136], xmm1
-                movd [$0+144], xmm2
-                movd [$0+152], xmm3
-                movd [$0+160], xmm4
-                movd [$0+168], xmm5
-                movd [$0+176], xmm6
-                movd [$0+184], xmm7
-                movd [$0+192], xmm8
-                movd [$0+200], xmm9
-                movd [$0+208], xmm10
-                movd [$0+216], xmm11
-                movd [$0+224], xmm12
-                movd [$0+232], xmm13
-                movd [$0+240], xmm14
-                movd [$0+248], xmm15
+                
 
                 " :: "r"(buf_ptr) :: "intel"
             );

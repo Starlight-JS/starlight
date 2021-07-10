@@ -446,6 +446,7 @@ pub mod large_object_space;
 pub mod space_bitmap;
 use std::collections::LinkedList;
 use std::mem::swap;
+use wtf_rs::approximate_stack_pointer;
 use yastl::Pool;
 
 use self::allocation::Space;
@@ -661,9 +662,7 @@ impl Heap {
         // FPU registers too because JS values is NaN boxed and exist in FPU registers.
 
         // Get stack pointer for scanning thread stack.
-        let sp: usize = 0;
-        let sp = &sp as *const usize;
-        self.sp = sp as usize;
+        let sp = approximate_stack_pointer();
         if self.defers > 0 {
             return;
         }
@@ -686,7 +685,9 @@ impl Heap {
         visitor.add_conservative(
             regs.as_ptr() as usize,
             regs.last().unwrap() as *const _ as usize,
-        );*/
+        );
+
+        drop(regs);*/
         self.process_roots(&mut visitor);
 
         if let Some(ref mut pool) = self.threadpool {
@@ -735,6 +736,7 @@ impl Heap {
         type_id: std::any::TypeId,
     ) -> Option<NonNull<GcPointerBase>> {
         let mut th = self.allocated;
+
         let ptr = self
             .space
             .allocate(size + 16, &mut th)

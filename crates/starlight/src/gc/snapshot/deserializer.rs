@@ -263,6 +263,8 @@ impl<'a> Deserializer<'a> {
             data_view_structure: self.read_opt_gc(),
             data_view_prototype: self.read_opt_gc(),
             spread_builtin: self.read_opt_gc(),
+            weak_ref_structure: self.read_opt_gc(),
+            weak_ref_prototype: self.read_opt_gc(),
         }
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
