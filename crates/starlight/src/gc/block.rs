@@ -11,10 +11,15 @@ impl FreeList {
         Self { next: null_mut() }
     }
 
-    pub fn get(&mut self) -> *mut u8 {
+    pub fn get(&mut self, size: usize) -> *mut u8 {
         unsafe {
             if self.next.is_null() {
                 return null_mut();
+            }
+            let _ = size;
+            #[cfg(feature = "valgrind")]
+            unsafe {
+                crate::gc::vgrs::memcheck::malloclike_block(self.next as _, size, 0, false);
             }
             let prev = self.next;
             self.next = (*prev).next;
@@ -93,7 +98,7 @@ impl Block {
     }
 
     pub fn allocate(&mut self) -> *mut u8 {
-        self.freelist.get()
+        self.freelist.get(self.cell_size.get() as usize)
     }
 
     pub fn deallocate(&mut self, ptr: *const u8) {
@@ -148,7 +153,6 @@ impl Block {
         self.cell(index)
     }
     pub fn cell_index(&self, ptr: *const u8) -> usize {
-        
         (ptr as usize - self.begin()) / self.cell_size.get() as usize
     }
     pub fn cell(&self, idx: usize) -> *mut u8 {

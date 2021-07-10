@@ -243,9 +243,11 @@ impl Space {
     pub fn allocate(&mut self, size: usize, threshold: &mut usize) -> *mut u8 {
         if size <= LARGE_CUTOFF {
             let p = self.allocate_small(size, threshold);
+
             debug_assert!(!self.live_bitmap.test(p as _));
             self.live_bitmap.set(p as _);
             debug_assert!(self.live_bitmap.test(p as _));
+
             p
         } else {
             self.precise_allocations.alloc(size, threshold).to_mut_ptr()
@@ -345,14 +347,24 @@ impl LocalAllocator {
                         debug_assert!(!mark_bitmap.test(cell as _));
                         live_bitmap.clear(cell as _);
                         has_free = true;
+
                         drop_in_place((*cell).get_dyn());
                         freelist.add(cell.cast());
+                        #[cfg(feature = "valgrind")]
+                        {
+                            crate::gc::vgrs::memcheck::freelike_block(cell as _, 0);
+                        }
                     }
                 } else {
                     debug_assert!(!mark_bitmap.test(cell as _));
                     has_free = true;
                     debug_assert!(!live_bitmap.test(cell as _));
                     freelist.add(cell.cast());
+
+                    #[cfg(feature = "valgrind")]
+                    {
+                        crate::gc::vgrs::memcheck::freelike_block(cell as _, 0);
+                    }
                 }
             });
             (*cursor).freelist = freelist;
@@ -391,6 +403,10 @@ impl LocalAllocator {
                         has_free = true;
                         drop_in_place((*cell).get_dyn());
                         freelist.add(cell.cast());
+                        #[cfg(feature = "valgrind")]
+                        {
+                            crate::gc::vgrs::memcheck::freelike_block(cell as _, 0);
+                        }
                     }
                 } else {
                     debug_assert!(!mark_bitmap.test(cell as _));

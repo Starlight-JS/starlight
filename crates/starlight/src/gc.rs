@@ -73,6 +73,8 @@ pub mod mem;
 pub mod os;
 pub mod pmarking;
 pub mod safepoint;
+#[cfg(feature = "valgrind")]
+pub mod vgrs;
 #[macro_use]
 pub mod shadowstack;
 pub trait MarkingConstraint {

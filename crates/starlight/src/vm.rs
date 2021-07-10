@@ -700,7 +700,7 @@ impl Runtime {
                 rt.realm.trace(visitor);
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);
+                //rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
                 let pr = &mut *rt.persistent_roots.borrow_mut();
@@ -739,7 +739,7 @@ impl Runtime {
                 }
                 rt.global_data.trace(visitor);
                 rt.stack.trace(visitor);
-                rt.shadowstack.trace(visitor);
+                //rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
                 let pr = &mut *rt.persistent_roots.borrow_mut();

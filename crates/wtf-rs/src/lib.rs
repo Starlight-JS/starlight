@@ -62,7 +62,7 @@ pub fn unwrap_unchecked<T: Sized>(value: Option<T>) -> T {
     }
 }
 
-use std::{collections::VecDeque, ptr::null};
+use std::collections::VecDeque;
 
 /// Trait that provides `retain_mut` method.
 pub trait RetainMut<T> {
