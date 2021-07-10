@@ -703,6 +703,10 @@ impl Runtime {
                 rt.shadowstack.trace(visitor);
                 rt.module_loader.trace(visitor);
                 rt.modules.trace(visitor);
+                let pr = &mut *rt.persistent_roots.borrow_mut();
+                pr.iter_mut().for_each(|entry| {
+                    entry.1.trace(visitor);
+                });
             },
         ));
 
