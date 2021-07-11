@@ -1223,12 +1223,12 @@ impl GcPointer<JsObject> {
         absent: bool,
     ) {
         if index < self.indexed.vector.size() {
-            /*if !absent {
+            if !absent {
                 self.indexed.non_gc &= !val.is_object();
                 *self.indexed.vector.at_mut(index) = val;
             } else {
                 *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
-            }*/
+            }
         } else {
             if !self.structure.is_indexed() {
                 let s = self.structure.change_indexed_transition(vm);
