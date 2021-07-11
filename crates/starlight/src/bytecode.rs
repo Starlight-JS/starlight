@@ -2,10 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
-    gc::{
-        cell::{GcPointer, Trace, Tracer},
-        compressed_pointer::CompressedPtr,
-    },
+    gc::cell::{GcPointer, Trace, Tracer},
     vm::{object::JsObject, structure::Structure, structure_chain::StructureChain},
 };
 
@@ -14,23 +11,23 @@ pub mod profile;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GetByIdMode {
     Default,
-    ProtoLoad(CompressedPtr<JsObject> /*cached slot */),
+    ProtoLoad(GcPointer<JsObject> /*cached slot */),
     ArrayLength,
 }
 pub enum TypeFeedBack {
     StructureCache {
-        structure: CompressedPtr<Structure>,
+        structure: GcPointer<Structure>,
     },
     PropertyCache {
-        structure: CompressedPtr<Structure>,
+        structure: GcPointer<Structure>,
         offset: u32,
         mode: GetByIdMode,
     },
     PutByIdFeedBack {
-        new_structure: Option<CompressedPtr<Structure>>,
-        old_structure: Option<CompressedPtr<Structure>>,
+        new_structure: Option<GcPointer<Structure>>,
+        old_structure: Option<GcPointer<Structure>>,
         offset: u32,
-        structure_chain: Option<CompressedPtr<StructureChain>>,
+        structure_chain: Option<GcPointer<StructureChain>>,
     },
     None,
 }

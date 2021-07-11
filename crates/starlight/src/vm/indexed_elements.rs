@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
-    compressed_pointer::CompressedPtr,
     snapshot::deserializer::Deserializable,
 };
 
@@ -24,7 +23,7 @@ pub type DenseArrayMap = ArrayStorage;
 
 pub struct IndexedElements {
     pub(crate) map: Option<GcPointer<SparseArrayMap>>,
-    pub(crate) vector: CompressedPtr<DenseArrayMap>,
+    pub(crate) vector: GcPointer<DenseArrayMap>,
     pub(crate) length: u32,
     pub(crate) flags: u32,
     pub(crate) non_gc: bool,
@@ -36,15 +35,17 @@ impl IndexedElements {
         self.flags &= !(FLAG_DENSE as u32);
         let mut sparse = self.ensure_map(vm);
         let mut index = 0;
-        let mut vector = self.vector.get(vm);
-        for i in 0..vector.size() {
-            if !vector.at(i).is_empty() {
-                sparse.insert(index, StoredSlot::new_raw(*vector.at(i), object_data()));
+        for i in 0..self.vector.size() {
+            if !self.vector.at(i).is_empty() {
+                sparse.insert(
+                    index,
+                    StoredSlot::new_raw(*self.vector.at(i), object_data()),
+                );
             }
             index += 1;
         }
-        for i in 0..vector.size() {
-            *vector.at_mut(i) = JsValue::encode_empty_value();
+        for i in 0..self.vector.size() {
+            *self.vector.at_mut(i) = JsValue::encode_empty_value();
         }
     }
 
@@ -89,11 +90,10 @@ impl IndexedElements {
     }
 
     pub fn new(_vm: &mut Runtime) -> Self {
-        let storage = ArrayStorage::new(_vm.heap(), 0);
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,
-            vector: CompressedPtr::new(_vm, storage),
+            vector: ArrayStorage::new(_vm.heap(), 0),
             map: None,
             non_gc: true,
         }

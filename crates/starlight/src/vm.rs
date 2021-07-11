@@ -5,16 +5,13 @@ use crate::{
     bytecompiler::ByteCompiler,
     gc::default_heap,
     gc::safepoint::GlobalSafepoint,
+    gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
-    },
-    gc::{
-        compressed_pointer::HeapPage, large_object_space::PreciseAllocation,
-        shadowstack::ShadowStack,
     },
     jsrt::{self},
     options::Options,
@@ -25,10 +22,7 @@ use error::JsSyntaxError;
 use function::JsVMFunction;
 use std::{
     collections::HashMap,
-    intrinsics::unlikely,
-    marker::PhantomData,
     ops::{Deref, DerefMut},
-    ptr::NonNull,
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
@@ -182,40 +176,6 @@ pub struct Runtime {
     // execute realm
     pub(crate) realm: Option<Realm>,
     pub(crate) safepoint: GlobalSafepoint,
-    pub(crate) heap_base: usize,
-    pub(crate) heap_end: usize,
-}
-
-impl HeapPage for Runtime {
-    fn compress(&self, ptr: GcPointer<dyn GcCell>) -> u32 {
-        if unlikely(
-            (ptr.base.as_ptr() as usize) < self.heap_base
-                || ptr.base.as_ptr() as usize > self.heap_end,
-        ) {
-            debug_assert!(PreciseAllocation::is_precise(ptr.base.as_ptr() as _));
-            return unsafe { self.gc.space.compress_pointer(ptr) };
-        }
-        let mut ptr = ptr.base.as_ptr() as usize;
-        ptr -= self.heap_base;
-
-        //ptr >>= 3;
-        ptr as u32
-    }
-
-    fn decompress<T: ?Sized + GcCell>(&self, compressed: u32) -> GcPointer<T> {
-        if (compressed & 1) != 0 {
-            return unsafe { self.gc.space.decompress_pointer::<T>(compressed) };
-        }
-        let mut ptr = compressed as usize;
-        // ptr <<= 3;
-        ptr += self.heap_base;
-        unsafe {
-            GcPointer {
-                base: NonNull::new_unchecked(ptr as _),
-                marker: PhantomData,
-            }
-        }
-    }
 }
 
 unsafe impl Trace for Realm {
@@ -342,8 +302,6 @@ impl Runtime {
         external_references: Option<&'static [usize]>,
     ) -> Self {
         Self {
-            heap_end: gc.space.heap_end(),
-            heap_base: gc.space.heap_base(),
             gc,
             options,
             safepoint: GlobalSafepoint::new(),

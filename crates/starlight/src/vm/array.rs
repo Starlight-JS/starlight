@@ -364,11 +364,10 @@ impl GcPointer<JsObject> {
                 }
             } else {
                 self.indexed.make_dense();
-                if self.indexed.vector.get(ctx).size() > len {
+                if self.indexed.vector.size() > len {
                     let stack = ctx.shadowstack();
                     letroot!(vector = stack, self.indexed.vector);
-                    vector.get(ctx).resize(ctx.heap(), len as _);
-                    self.indexed.vector = *vector;
+                    vector.mut_handle().resize(ctx.heap(), len as _);
                 }
             }
             self.indexed.set_length(len);

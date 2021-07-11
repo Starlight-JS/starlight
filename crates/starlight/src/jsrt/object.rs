@@ -25,7 +25,7 @@ pub fn object_get_prototype_of(vm: &mut Runtime, args: &Arguments) -> Result<JsV
     }
 
     let object = this.to_object(vm)?;
-    Ok(match object.prototype(vm) {
+    Ok(match object.prototype() {
         Some(proto) => JsValue::new(*proto),
         None => JsValue::encode_null_value(),
     })

@@ -11,19 +11,19 @@ pub fn normalize_prototype_chain(rt: &mut Runtime, base: &GcPointer<JsObject>) -
 
     loop {
         let mut structure = current.structure;
-        saw_poly_proto |= structure.get(rt).has_poly_proto();
-        let prototype = structure.get(rt).stored_prototype(rt, &current);
+        saw_poly_proto |= structure.has_poly_proto();
+        let prototype = structure.stored_prototype(rt, &current);
         if prototype.is_null() {
             return (count, saw_poly_proto);
         }
 
         *current = prototype.get_jsobject();
         structure = current.structure;
-        if structure.get(rt).is_unique() {
-            if structure.get(rt).has_been_flattened_before {
+        if structure.is_unique() {
+            if structure.has_been_flattened_before {
                 return (usize::MAX, saw_poly_proto);
             }
-            structure.get(rt).flatten_dictionary_structure(rt, &current);
+            structure.flatten_dictionary_structure(rt, &current);
         }
         count += 1;
     }

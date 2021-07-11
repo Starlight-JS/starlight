@@ -1,9 +1,7 @@
 use std::{
     fmt::Debug,
-    intrinsics::unlikely,
-    marker::PhantomData,
     mem::size_of,
-    ptr::{drop_in_place, null_mut, NonNull},
+    ptr::{drop_in_place, null_mut},
 };
 
 use wtf_rs::round_up;
@@ -19,8 +17,6 @@ use crate::{
 use super::{
     block::FreeList,
     block_allocator::BlockAllocator,
-    cell::{GcCell, GcPointer},
-    compressed_pointer::HeapPage,
     large_object_space::{LargeObjectSpace, PreciseAllocation},
     space_bitmap::SpaceBitmap,
 };
@@ -174,12 +170,6 @@ impl Drop for Space {
 }
 
 impl Space {
-    pub fn heap_base(&self) -> usize {
-        unsafe { (*self.block_allocator).mmap.start() as _ }
-    }
-    pub fn heap_end(&self) -> usize {
-        unsafe { (*self.block_allocator).mmap.end() as _ }
-    }
     unsafe fn allocator_for_slow<'a>(&'a mut self, size: usize) -> Option<*mut LocalAllocator> {
         let index = size_class_to_index(size);
         let size_class = self.size_class_for_size_step[index];
@@ -315,45 +305,6 @@ impl Space {
             unsafe {
                 let prec = PreciseAllocation::from_cell(ptr as _);
                 (*prec).test_and_set_marked()
-            }
-        }
-    }
-
-    pub unsafe fn compress_pointer(&self, cell: GcPointer<dyn GcCell>) -> u32 {
-        let mut ptr = cell.base.as_ptr() as usize;
-        let compressed = if PreciseAllocation::is_precise(ptr as _) {
-            let mut ix = (*PreciseAllocation::from_cell(ptr as _)).index_in_space;
-            ix |= 1 << 0;
-            ix
-        } else {
-            debug_assert!(self.is_heap_pointer(cell.base.as_ptr() as _));
-            ptr -= (*self.block_allocator).mmap.start() as usize;
-            //ptr >>= 3;
-            ptr as u32
-        };
-        compressed
-    }
-    pub unsafe fn decompress_pointer<T: ?Sized + GcCell>(&self, cell: u32) -> GcPointer<T> {
-        if unlikely((cell & 1) != 0) {
-            let index = cell >> 1;
-            assert!(index < self.precise_allocations.allocations.len() as u32);
-            let precise_allocation = self.precise_allocations.allocations[index as usize];
-            unsafe {
-                GcPointer {
-                    base: NonNull::new_unchecked((*precise_allocation).cell()),
-                    marker: PhantomData,
-                }
-            }
-        } else {
-            let mut decompressed = cell as usize;
-            //decompressed <<= 3;
-            decompressed += (*self.block_allocator).mmap.start() as usize;
-            debug_assert!(self.is_heap_pointer(decompressed as _));
-            unsafe {
-                GcPointer {
-                    base: NonNull::new_unchecked(decompressed as _),
-                    marker: PhantomData,
-                }
             }
         }
     }
@@ -532,14 +483,5 @@ impl Debug for GCOOM {
             "GC Heap Out of memory satisfying allocation of size: {}.\n Help: Try to increase GC heap size",
             self.0
         )
-    }
-}
-
-impl HeapPage for Space {
-    fn decompress<T: ?Sized + GcCell>(&self, compressed: u32) -> GcPointer<T> {
-        unsafe { self.decompress_pointer::<T>(compressed) }
-    }
-    fn compress(&self, ptr: GcPointer<dyn GcCell>) -> u32 {
-        unsafe { self.compress_pointer(ptr) }
     }
 }

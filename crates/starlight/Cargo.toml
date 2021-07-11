@@ -42,7 +42,6 @@ val-as-u64 = []
 enable-gc-tracking = []
 no-inline-caching = []
 valgrind = []
-compressed-pointers = []
 # enable performance counter for interpreter/gc/codegen
 perf = []
 ffi = ["libloading", "libffi"]

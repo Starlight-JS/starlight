@@ -459,17 +459,15 @@ impl GcPointer<Structure> {
         while i < cached_prototype_chain.vector.len() && !prototype.is_null() {
             cached_structure = Some(cached_prototype_chain.vector[i]);
             i += 1;
-            if !&prototype
-                .get_jsobject()
-                .structure()
-                .ptr_eq(&cached_structure.unwrap())
-            {
+            if !GcPointer::ptr_eq(
+                &prototype.get_jsobject().structure(),
+                &cached_structure.unwrap(),
+            ) {
                 return false;
             }
             prototype = prototype
                 .get_jsobject()
                 .structure()
-                .get(rt)
                 .stored_prototype(rt, &prototype.get_jsobject());
         }
         prototype.is_null() && i >= cached_prototype_chain.vector.len()
@@ -498,7 +496,7 @@ impl GcPointer<Structure> {
         object: &GcPointer<JsObject>,
     ) -> GcPointer<Structure> {
         assert!(self.is_unique());
-        assert!(object.structure.get(_rt).ptr_eq(self));
+        assert!(GcPointer::ptr_eq(&object.structure, self));
         self.has_been_flattened_before = true;
         self.flatten();
         *self
@@ -511,7 +509,7 @@ impl GcPointer<Structure> {
         if entry.is_not_found() {
             return JsValue::encode_null_value();
         }
-        *object.direct(rt, entry.offset as usize)
+        *object.direct(entry.offset as usize)
     }
     pub fn delete(&mut self, vm: &mut Runtime, name: Symbol) {
         let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();

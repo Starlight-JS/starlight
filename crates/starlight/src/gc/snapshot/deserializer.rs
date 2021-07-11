@@ -10,11 +10,8 @@ macro_rules! unique {
 }
 use crate::{
     bytecode::{GetByIdMode, TypeFeedBack},
+    gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
     gc::{cell::WeakSlot, Heap},
-    gc::{
-        cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
-        compressed_pointer::CompressedPtr,
-    },
     jsrt::VM_NATIVE_REFERENCES,
     prelude::{Class, Options},
     vm::{
@@ -28,7 +25,7 @@ use crate::{
         global::JsGlobal,
         indexed_elements::{IndexedElements, SparseArrayMap},
         interpreter::SpreadValue,
-        object::{object_size_with_tag, FixedStorage, JsObject, ObjectTag},
+        object::{object_size_with_tag, JsObject, ObjectTag},
         property_descriptor::{Accessor, StoredSlot},
         string::{JsString, JsStringObject},
         structure::{
@@ -720,15 +717,15 @@ impl Deserializable for JsObject {
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
         let tag = transmute::<_, ObjectTag>(deser.get_u32() as u8);
         let class = deser.get_reference();
-        let slots = FixedStorage::deserialize_inplace(deser);
-        let structure = CompressedPtr::<Structure>::deserialize_inplace(deser);
+        let slots = deser.get_reference();
+        let structure = deser.get_reference();
         let indexed = IndexedElements::deserialize_inplace(deser);
         let flags = deser.get_u32();
         let object = at.cast::<JsObject>();
         object.write(Self {
             tag,
             class: transmute(class),
-            slots: slots,
+            slots: transmute(slots),
             structure: transmute(structure),
             indexed: transmute(indexed),
             flags,
@@ -847,7 +844,7 @@ impl Deserializable for IndexedElements {
     }
 
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
-        let vector = CompressedPtr::<ArrayStorage>::deserialize_inplace(deser);
+        let vector = deser.get_reference();
         let map = Option::<GcPointer<SparseArrayMap>>::deserialize_inplace(deser);
         let length = deser.get_u32();
         let flags = deser.get_u32();
@@ -1466,34 +1463,36 @@ impl Deserializable for TypeFeedBack {
         let ty = deser.get_u8();
         match ty {
             0x01 => {
-                let structure = CompressedPtr::<Structure>::deserialize_inplace(deser);
+                let structure = deser.get_reference();
                 let offset = deser.get_u32();
                 let mode = deser.get_u8();
                 let mode = match mode {
                     0 => GetByIdMode::ArrayLength,
                     1 => GetByIdMode::Default,
                     2 => {
-                        let gc = CompressedPtr::<JsObject>::deserialize_inplace(deser);
+                        let gc = GcPointer::<JsObject>::deserialize_inplace(deser);
                         GetByIdMode::ProtoLoad(gc)
                     }
                     _ => unreachable!(),
                 };
                 Self::PropertyCache {
-                    structure,
+                    structure: transmute(structure),
                     offset,
                     mode,
                 }
             }
             0x02 => {
-                let structure = CompressedPtr::<Structure>::deserialize_inplace(deser);
-                Self::StructureCache { structure }
+                let structure = deser.get_reference();
+                Self::StructureCache {
+                    structure: transmute(structure),
+                }
             }
             0x03 => {
-                let new_structure = Option::<CompressedPtr<Structure>>::deserialize_inplace(deser);
-                let old_structure = Option::<CompressedPtr<Structure>>::deserialize_inplace(deser);
+                let new_structure = Option::<GcPointer<Structure>>::deserialize_inplace(deser);
+                let old_structure = Option::<GcPointer<Structure>>::deserialize_inplace(deser);
                 let offset = u32::deserialize_inplace(deser);
                 let structure_chain =
-                    Option::<CompressedPtr<StructureChain>>::deserialize_inplace(deser);
+                    Option::<GcPointer<StructureChain>>::deserialize_inplace(deser);
                 TypeFeedBack::PutByIdFeedBack {
                     new_structure,
                     old_structure,

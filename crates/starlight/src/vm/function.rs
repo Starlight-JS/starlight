@@ -64,12 +64,12 @@ impl JsFunction {
         }
 
         let proto = got.get_jsobject();
-        let mut obj = val.get_jsobject().prototype(rt).copied();
+        let mut obj = val.get_jsobject().prototype().copied();
         while let Some(obj_) = obj {
             if GcPointer::ptr_eq(&obj_, &proto) {
                 return Ok(true);
             } else {
-                obj = obj_.prototype(rt).copied();
+                obj = obj_.prototype().copied();
             }
         }
         Ok(false)
