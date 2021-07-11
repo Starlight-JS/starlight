@@ -103,6 +103,9 @@ impl GcPointerBase {
     pub fn vtable_offsetof() -> usize {
         offsetof!(GcPointerBase.vtable)
     }
+    pub fn typeid_offsetof() -> usize {
+        offsetof!(GcPointerBase.type_id)
+    }
     pub fn allocation_size(&self) -> usize {
         self.get_dyn().compute_size() + size_of::<Self>()
     }

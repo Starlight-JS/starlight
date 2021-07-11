@@ -1,0 +1,11 @@
+[package]
+name = "fullcodegen"
+version = "0.1.0"
+edition = "2018"
+
+
+[dependencies]
+cranelift = "0.75"
+cranelift-module = "0.75.0"
+cranelift-jit = "0.75.0"
+starlight = {path = "../starlight" }
