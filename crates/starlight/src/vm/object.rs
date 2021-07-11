@@ -1236,10 +1236,9 @@ impl GcPointer<JsObject> {
                 self.structure = s;
             }
 
-            
-            let mut vector = self.indexed.vector);
+            let mut vector = self.indexed.vector;
             vector.resize(vm.heap(), index + 1);
-            self.indexed.vector = *vector;
+            self.indexed.vector = vector;
         }
         if !absent {
             self.indexed.non_gc &= !val.is_object();
