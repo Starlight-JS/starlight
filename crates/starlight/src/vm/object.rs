@@ -20,7 +20,7 @@ use super::{
     Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
-use crate::vm::promise::JsPromise;
+use crate::{gc::compressed_pointer::CompressedPtr, vm::promise::JsPromise};
 use crate::{
     gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
@@ -51,7 +51,7 @@ pub enum JsHint {
 pub const OBJ_FLAG_TUPLE: u32 = 0x4;
 pub const OBJ_FLAG_CALLABLE: u32 = 0x2;
 pub const OBJ_FLAG_EXTENSIBLE: u32 = 0x1;
-pub type FixedStorage = GcPointer<ArrayStorage>;
+pub type FixedStorage = CompressedPtr<ArrayStorage>;
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ObjectTag {
@@ -98,7 +98,7 @@ pub enum ObjectTag {
 pub struct JsObject {
     pub(crate) tag: ObjectTag,
     pub(crate) class: &'static Class,
-    pub(crate) structure: GcPointer<Structure>,
+    pub(crate) structure: CompressedPtr<Structure>,
     pub(crate) indexed: IndexedElements,
     pub(crate) slots: FixedStorage,
     pub(crate) flags: u32,
@@ -106,12 +106,12 @@ pub struct JsObject {
     pub(crate) object_data_start: u8,
 }
 impl JsObject {
-    pub fn direct(&self, n: usize) -> &JsValue {
-        self.slots.at(n as _)
+    pub fn direct<'a>(&self, vm: &Runtime, n: usize) -> &'a JsValue {
+        unsafe { std::mem::transmute(self.slots.get(vm).at(n as _)) }
     }
 
-    pub fn direct_mut(&mut self, n: usize) -> &mut JsValue {
-        self.slots.at_mut(n as _)
+    pub fn direct_mut<'a>(&mut self, vm: &Runtime, n: usize) -> &'a mut JsValue {
+        unsafe { std::mem::transmute(self.slots.get(vm).at_mut(n as _)) }
     }
     pub fn class(&self) -> &'static Class {
         self.class
@@ -254,11 +254,14 @@ fn is_absent_descriptor(desc: &PropertyDescriptor) -> bool {
 
 #[allow(non_snake_case)]
 impl JsObject {
-    pub fn prototype(&self) -> Option<&GcPointer<JsObject>> {
-        self.structure.prototype()
+    pub fn prototype<'a>(&self, vm: &Runtime) -> Option<&'a GcPointer<JsObject>> {
+        unsafe { transmute(self.structure.get(vm).prototype()) }
     }
-    pub unsafe fn prototype_mut(&mut self) -> Option<&mut GcPointer<JsObject>> {
-        self.structure.prototype_mut()
+    pub unsafe fn prototype_mut<'a>(
+        &mut self,
+        vm: &Runtime,
+    ) -> Option<&'a mut GcPointer<JsObject>> {
+        unsafe { transmute(self.structure.get(vm).prototype_mut()) }
     }
 
     pub fn GetNonIndexedPropertySlotMethod(
@@ -273,7 +276,7 @@ impl JsObject {
             if obj.get_own_non_indexed_property_slot(vm, name, slot) {
                 break true;
             }
-            match obj.prototype() {
+            match obj.prototype(vm) {
                 Some(proto) => *obj = *proto,
                 _ => break false,
             }
@@ -286,11 +289,11 @@ impl JsObject {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        let entry = obj.structure.get(vm, name);
+        let entry = obj.structure.get(vm).get(vm, name);
 
         if !entry.is_not_found() {
             slot.set_woffset(
-                *obj.direct(entry.offset as _),
+                *obj.direct(vm, entry.offset as _),
                 entry.attrs as _,
                 Some(obj.as_dyn()),
                 entry.offset,
@@ -373,8 +376,9 @@ impl JsObject {
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        if obj.indexed.dense() && index < obj.indexed.vector.size() as u32 {
-            let value = obj.indexed.vector.at(index);
+        let mut vector = obj.indexed.vector.get(_vm);
+        if obj.indexed.dense() && index < vector.size() as u32 {
+            let value = vector.at(index);
             if value.is_empty() {
                 return false;
             }
@@ -407,8 +411,8 @@ impl JsObject {
             && obj.indexed.dense()
             && obj.class.method_table.GetOwnIndexedPropertySlot as usize
                 == Self::GetOwnIndexedPropertySlotMethod as usize
-            && (obj.prototype().is_none()
-                || obj.prototype().as_ref().unwrap().has_indexed_property())
+            && (obj.prototype(vm).is_none()
+                || obj.prototype(vm).as_ref().unwrap().has_indexed_property(vm))
         {
             slot.mark_put_result(PutResultType::IndexedOptimized, index);
             obj.define_own_indexe_value_dense_internal(vm, index, val, false);
@@ -485,7 +489,7 @@ impl JsObject {
                 return true;
             }
 
-            match obj.prototype() {
+            match obj.prototype(vm) {
                 Some(proto) => *obj = *proto,
                 None => break false,
             }
@@ -531,33 +535,31 @@ impl JsObject {
                             let old = slot.attributes();
                             slot.merge(vm, desc);
                             if old != slot.attributes() {
-                                let new_struct = obj.structure.change_attributes_transition(
-                                    vm,
-                                    name,
-                                    slot.attributes(),
-                                );
-                                obj.structure = new_struct;
+                                let new_struct = obj
+                                    .structure
+                                    .get(vm)
+                                    .change_attributes_transition(vm, name, slot.attributes());
+                                obj.structure = CompressedPtr::new(vm, new_struct);
                             }
-                            *obj.direct_mut(slot.offset() as _) = slot.value();
+                            *obj.direct_mut(vm, slot.offset() as _) = slot.value();
 
                             slot.mark_put_result(PutResultType::Replace, slot.offset());
                         } else {
                             let mut offset = 0;
                             slot.merge(vm, desc);
-                            let new_struct = obj.structure.add_property_transition(
+                            let new_struct = obj.structure.get(vm).add_property_transition(
                                 vm,
                                 name,
                                 slot.attributes(),
                                 &mut offset,
                             );
-                            obj.structure = new_struct;
-                            let s = &obj.structure;
+                            obj.structure = CompressedPtr::new(vm, new_struct);
+                            let s = obj.structure.get(vm);
                             let sz = s.get_slots_size();
-                            letroot!(slots = stack, obj.slots);
-
-                            slots.mut_handle().resize(vm.heap(), sz as _);
-                            obj.slots = *slots;
-                            *obj.direct_mut(offset as _) = slot.value();
+                            let mut slots = obj.slots.get(vm);
+                            slots.resize(vm.heap(), sz as _);
+                            obj.slots = CompressedPtr::new(vm, slots);
+                            *obj.direct_mut(vm, offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
                         }
                     }
@@ -579,18 +581,21 @@ impl JsObject {
 
         let mut offset = 0;
         let stored = StoredSlot::new(vm, desc);
-        let s = obj
-            .structure
-            .add_property_transition(vm, name, stored.attributes(), &mut offset);
-        obj.structure = s;
+        let s = obj.structure.get(vm).add_property_transition(
+            vm,
+            name,
+            stored.attributes(),
+            &mut offset,
+        );
+        obj.structure = CompressedPtr::new(vm, s);
 
-        let s = &obj.structure;
+        let s = obj.structure.get(vm);
         let sz = s.get_slots_size();
-        letroot!(slots = stack, obj.slots);
-        slots.mut_handle().resize(vm.heap(), sz as _);
-        obj.slots = *slots;
+        let mut slots = obj.slots.get(vm);
+        slots.resize(vm.heap(), sz as _);
+        obj.slots = CompressedPtr::new(vm, slots);
 
-        *obj.direct_mut(offset as _) = stored.value();
+        *obj.direct_mut(vm, offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
         slot.base = Some(obj.as_dyn());
 
@@ -678,16 +683,16 @@ impl JsObject {
         let offset = if slot.has_offset() {
             slot.offset()
         } else {
-            let entry = obj.structure.get(vm, name);
+            let entry = obj.structure.get(vm).get(vm, name);
             if entry.is_not_found() {
                 return Ok(true);
             }
             entry.offset
         };
 
-        let s = obj.structure.delete_property_transition(vm, name);
-        obj.structure = s;
-        *obj.direct_mut(offset as _) = JsValue::encode_empty_value();
+        let s = obj.structure.get(vm).delete_property_transition(vm, name);
+        obj.structure = CompressedPtr::new(vm, s);
+        *obj.direct_mut(vm, offset as _) = JsValue::encode_empty_value();
         Ok(true)
     }
 
@@ -703,8 +708,8 @@ impl JsObject {
         }
 
         if self.indexed.dense() {
-            if index < self.indexed.vector.size() as u32 {
-                *self.indexed.vector.at_mut(index) = JsValue::encode_empty_value();
+            if index < self.indexed.vector.get(_vm).size() as u32 {
+                *self.indexed.vector.get(_vm).at_mut(index) = JsValue::encode_empty_value();
                 return Ok(true);
             }
 
@@ -774,10 +779,10 @@ impl JsObject {
         mode: EnumerationMode,
     ) {
         obj.get_own_property_names(vm, collector, mode);
-        let mut obj = unsafe { obj.prototype_mut() };
+        let mut obj = unsafe { obj.prototype_mut(vm) };
         while let Some(proto) = obj {
             proto.get_own_property_names(vm, collector, mode);
-            obj = unsafe { proto.prototype_mut() };
+            obj = unsafe { proto.prototype_mut(vm) };
         }
     }
     #[allow(unused_variables)]
@@ -788,8 +793,9 @@ impl JsObject {
         mode: EnumerationMode,
     ) {
         if obj.indexed.dense() {
-            for index in 0..obj.indexed.vector.size() {
-                let it = obj.indexed.vector.at(index);
+            let vector = obj.indexed.vector.get(vm);
+            for index in 0..vector.size() {
+                let it = vector.at(index);
                 if !it.is_empty() {
                     collector(Symbol::Index(index as _), u32::MAX);
                 }
@@ -806,7 +812,7 @@ impl JsObject {
             }
         }
 
-        obj.structure.get_own_property_names(
+        obj.structure.get(vm).get_own_property_names(
             vm,
             mode == EnumerationMode::IncludeNotEnumerable,
             collector,
@@ -886,19 +892,16 @@ impl JsObject {
         let stack = vm.shadowstack();
         let init = IndexedElements::new(vm);
         //root!(indexed = stack, vm.heap().allocate(init));
-        letroot!(
-            storage = stack,
-            ArrayStorage::with_size(
-                vm,
-                structure.get_slots_size() as _,
-                structure.get_slots_size() as _,
-            )
+        let storage = ArrayStorage::with_size(
+            vm,
+            structure.get_slots_size() as _,
+            structure.get_slots_size() as _,
         );
         let this = Self {
-            structure: *structure,
+            structure: CompressedPtr::new(vm, *structure),
             class,
 
-            slots: *storage,
+            slots: CompressedPtr::new(vm, storage),
             object_data_start: 0,
             indexed: init,
             flags: OBJ_FLAG_EXTENSIBLE,
@@ -1001,13 +1004,13 @@ impl GcPointer<JsObject> {
         (self.class.method_table.DeleteIndexed)(self, rt, index, throwable)
     }
 
-    pub fn has_indexed_property(&self) -> bool {
+    pub fn has_indexed_property(&self, vm: &Runtime) -> bool {
         let mut obj = *self;
         loop {
-            if obj.structure.is_indexed() {
+            if obj.structure.get(vm).is_indexed() {
                 return true;
             }
-            match obj.prototype() {
+            match obj.prototype(vm) {
                 Some(proto) => obj = *proto,
                 None => break false,
             }
@@ -1081,7 +1084,7 @@ impl GcPointer<JsObject> {
             self.put_non_indexed_slot(vm, name, val, slot, throwable)
         }
     }
-    pub fn structure(&self) -> GcPointer<Structure> {
+    pub fn structure(&self) -> CompressedPtr<Structure> {
         self.structure
     }
     pub fn get_property_slot(&mut self, vm: &mut Runtime, name: Symbol, slot: &mut Slot) -> bool {
@@ -1222,6 +1225,7 @@ impl GcPointer<JsObject> {
         val: JsValue,
         absent: bool,
     ) {
+
         if index < self.indexed.vector.size() {
             if !absent {
                 self.indexed.non_gc &= !val.is_object();
@@ -1230,21 +1234,21 @@ impl GcPointer<JsObject> {
                 *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
             }
         } else {
-            if !self.structure.is_indexed() {
-                let s = self.structure.change_indexed_transition(vm);
+            if !self.structure.get(vm).is_indexed() {
+                let s = self.structure.get(vm).change_indexed_transition(vm);
 
-                self.structure = s;
+                self.structure = CompressedPtr::new(vm, s);
             }
-            let stack = vm.shadowstack();
-            letroot!(vector = stack, self.indexed.vector);
-            vector.mut_handle().resize(vm.heap(), index + 1);
-            self.indexed.vector = *vector;
+
+            let mut vector = self.indexed.vector.get(vm);
+            vector.resize(vm.heap(), index + 1);
+            self.indexed.vector = CompressedPtr::new(vm, vector);
         }
         if !absent {
             self.indexed.non_gc &= !val.is_object();
-            *self.indexed.vector.at_mut(index) = val;
+            *self.indexed.vector.get(vm).at_mut(index) = val;
         } else {
-            *self.indexed.vector.at_mut(index) = JsValue::encode_undefined_value();
+            *self.indexed.vector.get(vm).at_mut(index) = JsValue::encode_undefined_value();
         }
         if index >= self.indexed.length() {
             self.indexed.set_length(index + 1);
@@ -1283,12 +1287,12 @@ impl GcPointer<JsObject> {
                 }
             } else {
                 if is_absent_descriptor(desc)
-                    && index < self.indexed.vector.size()
-                    && !self.indexed.vector.at(index).is_empty()
+                    && index < self.indexed.vector.get(vm).size()
+                    && !self.indexed.vector.get(vm).at(index).is_empty()
                 {
                     if !desc.is_value_absent() {
                         self.indexed.non_gc &= !desc.value().is_object();
-                        *self.indexed.vector.at_mut(index) = desc.value();
+                        *self.indexed.vector.get(vm).at_mut(index) = desc.value();
                     }
                     return Ok(true);
                 }
@@ -1319,9 +1323,9 @@ impl GcPointer<JsObject> {
                 Ok(false)
             }
             None => {
-                if !self.structure.is_indexed() {
-                    let s = self.structure.change_indexed_transition(vm);
-                    self.structure = s;
+                if !self.structure.get(vm).is_indexed() {
+                    let s = self.structure.get(vm).change_indexed_transition(vm);
+                    self.structure = CompressedPtr::new(vm, s);
                 }
                 if index >= self.indexed.length() {
                     self.indexed.set_length(index + 1);
@@ -1388,8 +1392,8 @@ impl GcPointer<JsObject> {
         } else {
             self.flags &= !OBJ_FLAG_EXTENSIBLE;
         }
-
-        self.structure = self.structure.change_extensible_transition(vm);
+        let s = self.structure.get(vm).change_extensible_transition(vm);
+        self.structure = CompressedPtr::new(vm, s);
         self.indexed.make_sparse(vm);
     }
     pub fn freeze(&mut self, vm: &mut Runtime) -> Result<bool, JsValue> {

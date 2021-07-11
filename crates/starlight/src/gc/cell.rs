@@ -17,6 +17,8 @@ use std::{
 };
 use wtf_rs::tagged_ptr::TaggedPointer;
 
+use super::compressed_pointer::CompressedPtr;
+
 pub trait Tracer {
     fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell>;
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell>;
@@ -24,6 +26,7 @@ pub trait Tracer {
     /// times if you supplied same range multiple times.
     fn add_conservative(&mut self, from: usize, to: usize);
     fn visit_weak(&mut self, at: *const WeakSlot);
+    fn visit_compressed(&mut self, cell: CompressedPtr<dyn GcCell>);
 }
 
 /// Indicates that a type can be traced by a garbage collector.
@@ -171,8 +174,8 @@ pub struct GcPointer<T: ?Sized> {
 }
 
 impl<T: GcCell + ?Sized> GcPointer<T> {
-    pub fn ptr_eq<U: GcCell + ?Sized>(this: &Self, other: &GcPointer<U>) -> bool {
-        this.base == other.base
+    pub fn ptr_eq<U: GcCell + ?Sized>(&self, other: &GcPointer<U>) -> bool {
+        self.base == other.base
     }
     #[inline]
     pub fn as_dyn(self) -> GcPointer<dyn GcCell> {

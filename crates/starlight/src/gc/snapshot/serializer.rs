@@ -23,7 +23,7 @@ use crate::{
         },
         symbol_table::{symbol_table, JsSymbol, Symbol, SymbolID},
         value::*,
-        GlobalData,
+        GlobalData, RuntimeRef,
     },
 };
 use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
@@ -34,16 +34,21 @@ pub struct SnapshotSerializer {
     pub(super) output: Vec<u8>,
     symbol_map: HashMap<Symbol, u32>,
     log: bool,
+    rt: RuntimeRef,
 }
 
 impl SnapshotSerializer {
-    pub(super) fn new(log: bool) -> Self {
+    pub(super) fn new(rt: RuntimeRef, log: bool) -> Self {
         Self {
             log,
+            rt,
             reference_map: Vec::new(),
             output: vec![],
             symbol_map: HashMap::new(),
         }
+    }
+    pub fn rt(&self) -> RuntimeRef {
+        self.rt
     }
     pub(crate) fn build_reference_map(&mut self, rt: &mut Runtime) {
         let mut indexx = 0;
@@ -363,8 +368,10 @@ impl Serializable for JsObject {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         serializer.write_u32(self.tag as _);
         serializer.write_reference(self.class);
-        serializer.write_gcpointer(self.slots);
-        serializer.write_gcpointer(self.structure);
+        self.slots.serialize(serializer);
+        //serializer.write_gcpointer(self.slots);
+        self.structure.serialize(serializer);
+        //serializer.write_gcpointer(self.structure);
         self.indexed.serialize(serializer);
         //serializer.write_gcpointer(self.indexed);
         serializer.write_u32(self.flags);
@@ -462,7 +469,7 @@ impl Serializable for TypeFeedBack {
                 mode,
             } => {
                 serializer.write_u8(0x01);
-                serializer.write_gcpointer(*structure);
+                structure.serialize(serializer);
                 serializer.write_u32(*offset);
                 match mode {
                     &crate::bytecode::GetByIdMode::ArrayLength => serializer.write_u8(0),
@@ -475,7 +482,8 @@ impl Serializable for TypeFeedBack {
             }
             &TypeFeedBack::StructureCache { structure } => {
                 serializer.write_u8(0x02);
-                serializer.write_gcpointer(structure);
+                structure.serialize(serializer);
+                //serializer.write_gcpointer(structure);
             }
             &TypeFeedBack::PutByIdFeedBack {
                 new_structure,
