@@ -4,6 +4,7 @@ members = [
     "crates/wtf-rs",
     "crates/starlight-derive",
     "crates/test262-runner",
+    "crates/fullcodegen"
 ]
 default-members = ["crates/starlight", "crates/test262-runner"]
 
