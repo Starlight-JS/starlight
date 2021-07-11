@@ -1238,7 +1238,9 @@ impl GcPointer<JsObject> {
                 self.structure = CompressedPtr::new(vm, s);
             }
 
-            self.indexed.vector.get(vm).resize(vm.heap(), index + 1);
+            let mut vector = self.indexed.vector.get(vm);
+            vector.resize(vm.heap(), index + 1);
+            self.indexed.vector = CompressedPtr::new(vm, vector);
         }
         if !absent {
             self.indexed.non_gc &= !val.is_object();
