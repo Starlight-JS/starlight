@@ -2,15 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::structure::Structure;
-use crate::gc::cell::GcPointer;
+use crate::gc::{cell::GcPointer, compressed_pointer::CompressedPtr};
 use crate::prelude::*;
 use std::{any::TypeId, mem::size_of};
 pub struct StructureChain {
-    pub(crate) vector: Box<[GcPointer<Structure>]>,
+    pub(crate) vector: Box<[CompressedPtr<Structure>]>,
 }
 
 impl StructureChain {
-    pub fn head(&self) -> GcPointer<Structure> {
+    pub fn head(&self) -> CompressedPtr<Structure> {
         self.vector[0]
     }
 
@@ -19,7 +19,7 @@ impl StructureChain {
         let mut current = head;
         while let Some(object) = current {
             size += 1;
-            let next = object.structure().stored_prototype(rt, &object);
+            let next = object.structure().get(rt).stored_prototype(rt, &object);
             current = if next.is_jsobject() {
                 Some(next.get_jsobject())
             } else {
@@ -32,7 +32,7 @@ impl StructureChain {
         while let Some(object) = current {
             let structure = object.structure();
             buffer.push(structure);
-            let next = object.structure().stored_prototype(rt, &object);
+            let next = object.structure().get(rt).stored_prototype(rt, &object);
             current = if next.is_jsobject() {
                 Some(next.get_jsobject())
             } else {
@@ -60,7 +60,7 @@ impl Deserializable for StructureChain {
         let len = u32::deserialize_inplace(deser);
         let mut vec = Vec::with_capacity(len as _);
         for _ in 0..len {
-            let val = GcPointer::<Structure>::deserialize_inplace(deser);
+            let val = CompressedPtr::<Structure>::deserialize_inplace(deser);
             vec.push(val);
         }
 

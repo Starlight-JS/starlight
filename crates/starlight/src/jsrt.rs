@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
-    gc::cell::{GcPointer, WeakRef, WeakSlot},
+    gc::{
+        cell::{GcPointer, WeakRef, WeakSlot},
+        compressed_pointer::CompressedPtr,
+    },
     vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
         array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, data_view::JsDataView,
@@ -227,8 +230,9 @@ impl Runtime {
         self.global_data.func_prototype = Some(func_proto);
         let s = func_proto
             .structure()
+            .get(self)
             .change_prototype_transition(self, Some(obj_proto));
-        (*func_proto).structure = s;
+        (*func_proto).structure = CompressedPtr::new(self, s);
 
         let mut func_ctor = JsNativeFunction::new(self, name, function_prototype, 1);
 

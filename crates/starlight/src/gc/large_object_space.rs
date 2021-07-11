@@ -210,6 +210,13 @@ impl LargeObjectSpace {
             retain
         });
 
+        for (index, alloc) in self.allocations.iter().enumerate() {
+            unsafe {
+                let alloc = &mut **alloc;
+                alloc.index_in_space = index as _;
+            }
+        }
+
         sweeped
     }
     #[allow(clippy::collapsible_if)]

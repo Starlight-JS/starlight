@@ -14,6 +14,8 @@
 //! `letroot!` is not required to use anymore.
 //!
 #![allow(dead_code, unused_variables)]
+use self::allocation::Space;
+use self::space_bitmap::SpaceBitmap;
 use crate::options::Options;
 use crate::vm::Runtime;
 use crate::{
@@ -24,7 +26,9 @@ use crate::{
         serializer::{Serializable, SnapshotSerializer},
     },
 };
+use std::collections::LinkedList;
 use std::intrinsics::{copy_nonoverlapping, unlikely};
+use std::mem::swap;
 use std::ops::Deref;
 use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
 use std::{
@@ -32,6 +36,8 @@ use std::{
     ptr::{null_mut, NonNull},
 };
 use std::{u8, usize};
+use wtf_rs::approximate_stack_pointer;
+use yastl::Pool;
 
 /// Like C's offsetof but you can use it with GC-able objects to get offset from GC header to field.
 ///
@@ -69,6 +75,7 @@ macro_rules! offsetof {
 pub mod cell;
 pub mod snapshot;
 pub const K: usize = 1024;
+pub mod compressed_pointer;
 pub mod mem;
 pub mod os;
 pub mod pmarking;
@@ -77,6 +84,14 @@ pub mod safepoint;
 pub mod vgrs;
 #[macro_use]
 pub mod shadowstack;
+pub mod allocation;
+pub mod block;
+pub mod block_allocator;
+pub mod collector;
+pub mod constants;
+pub mod large_object_space;
+pub mod space_bitmap;
+
 pub trait MarkingConstraint {
     fn name(&self) -> &str {
         "<anonymous name>"
@@ -439,20 +454,6 @@ mod tests {
     }
 }
 
-pub mod allocation;
-pub mod block;
-pub mod block_allocator;
-pub mod collector;
-pub mod constants;
-pub mod large_object_space;
-pub mod space_bitmap;
-use std::collections::LinkedList;
-use std::mem::swap;
-use wtf_rs::approximate_stack_pointer;
-use yastl::Pool;
-
-use self::allocation::Space;
-use self::space_bitmap::SpaceBitmap;
 /// Visits garbage collected objects
 pub struct SlotVisitor {
     pub(super) queue: Vec<*mut GcPointerBase>,
@@ -463,6 +464,12 @@ unsafe impl Send for SlotVisitor {}
 unsafe impl Send for Space {}
 unsafe impl Sync for Space {}
 impl Tracer for SlotVisitor {
+    fn visit_compressed(&mut self, cell: compressed_pointer::CompressedPtr<dyn GcCell>) {
+        unsafe {
+            let mut cell = cell.get(self.heap);
+            cell.trace(self);
+        }
+    }
     fn visit_weak(&mut self, _slot: *const WeakSlot) {
         /* no-op */
     }
@@ -542,7 +549,7 @@ pub struct Heap {
     threadpool: Option<Pool>,
     n_workers: u32,
     max_heap_size: usize,
-    space: Space,
+    pub(crate) space: Space,
     verbose: bool,
     allocation_color: u8,
     pub(super) weak_refs: Vec<GcPointer<WeakSlot>>,
