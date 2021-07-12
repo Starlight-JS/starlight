@@ -5,7 +5,7 @@ use crate::vm::{code_block::FileLocation, *};
 use crate::{
     bytecode::{opcodes::Opcode, TypeFeedBack},
     prelude::*,
-    vm::{code_block::CodeBlock, Context},
+    vm::{code_block::CodeBlock, context::Context},
 };
 use std::convert::TryInto;
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};

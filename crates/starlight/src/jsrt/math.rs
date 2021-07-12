@@ -1,4 +1,4 @@
-use crate::{prelude::*, vm::Context};
+use crate::{prelude::*, vm::context::Context};
 pub fn math_abs(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         if args.at(0).is_int32() {

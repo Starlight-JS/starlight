@@ -1,4 +1,4 @@
-use super::Context;
+use super::context::Context;
 use super::arguments::*;
 use super::method_table::*;
 use super::object::*;
@@ -480,7 +480,7 @@ pub mod tests {
 
     use crate::options::Options;
     use crate::Platform;
-    use crate::vm::Context;
+    use crate::vm::context::Context;
     use std::cell::RefCell;
     use std::rc::Rc;
 

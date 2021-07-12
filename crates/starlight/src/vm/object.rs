@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{Context, Runtime, arguments::*, array_storage::ArrayStorage, attributes::*, class::{Class, JsClass}, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, property_descriptor::StoredSlot, property_descriptor::{DataDescriptor, PropertyDescriptor}, slot::*, string::*, structure::Structure, symbol_table::{Internable, Symbol}, value::JsValue};
+use super::{Context, Runtime, arguments::*, array_storage::ArrayStorage, attributes::*, class::{Class, JsClass}, context, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, property_descriptor::StoredSlot, property_descriptor::{DataDescriptor, PropertyDescriptor}, slot::*, string::*, structure::Structure, symbol_table::{Internable, Symbol}, value::JsValue};
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::vm::promise::JsPromise;
 use crate::{
@@ -1572,7 +1572,7 @@ pub struct TypedJsObject<T: JsClass> {
 }
 impl<T: JsClass> JsTryFrom<GcPointer<JsObject>> for TypedJsObject<T> {
     #[inline]
-    fn try_from(ctx: &mut Context, value: GcPointer<JsObject>) -> Result<Self, JsValue> {
+    fn try_from(ctx: &mut context::Context, value: GcPointer<JsObject>) -> Result<Self, JsValue> {
         if likely(value.is_class(T::class())) {
             return Ok(Self {
                 object: value,

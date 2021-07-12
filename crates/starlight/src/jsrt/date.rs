@@ -1,7 +1,7 @@
 use chrono::{prelude::*, Duration, LocalResult};
 use std::fmt::Display;
 
-use crate::{define_jsclass_with_symbol, prelude::*, vm::Context};
+use crate::{define_jsclass_with_symbol, prelude::*, vm::context::Context};
 
 /// The number of nanoseconds in a millisecond.
 const NANOS_PER_MS: i64 = 1_000_000;

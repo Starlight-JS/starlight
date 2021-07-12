@@ -95,7 +95,7 @@ pub extern "C" fn platform_initialize() {
 }
 use gc::snapshot::deserializer::Deserializable;
 
-use crate::{options::Options, vm::Context};
+use crate::{options::Options, vm::context::Context};
 #[no_mangle]
 #[doc(hidden)]
 pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {

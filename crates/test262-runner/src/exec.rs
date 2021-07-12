@@ -4,7 +4,7 @@ use super::{
 };
 
 use colored::Colorize;
-use starlight::vm::{Context, ContextRef, Runtime, parse};
+use starlight::vm::{context::Context, context::ContextRef, Runtime, parse};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 

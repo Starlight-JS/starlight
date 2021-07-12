@@ -1,4 +1,4 @@
-use crate::{prelude::*, vm::Context};
+use crate::{prelude::*, vm::context::Context};
 use std::intrinsics::unlikely;
 
 macro_rules! builtin_symbols {

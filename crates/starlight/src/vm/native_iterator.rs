@@ -6,7 +6,7 @@ use crate::{
     prelude::*,
 };
 
-use super::Context;
+use super::context::Context;
 pub struct NativeIterator {
     names: Vec<Symbol>,
     at: u32,

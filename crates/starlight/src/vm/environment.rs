@@ -8,7 +8,7 @@ use std::{
     mem::size_of,
 };
 
-use super::Context;
+use super::context::Context;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(C)]

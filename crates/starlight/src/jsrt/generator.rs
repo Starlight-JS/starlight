@@ -1,7 +1,7 @@
 use std::intrinsics::unlikely;
 
 use crate::prelude::*;
-use crate::vm::{Context, function::*};
+use crate::vm::{context::Context, function::*};
 
 impl Context {
     pub(crate) fn init_generator_in_global_data(&mut self, _obj_proto: GcPointer<JsObject>) {

@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::prelude::*;
 
-use super::Context;
+use super::context::Context;
 
 pub fn normalize_prototype_chain(ctx: &mut Context, base: &GcPointer<JsObject>) -> (usize, bool) {
     let mut saw_poly_proto = false;

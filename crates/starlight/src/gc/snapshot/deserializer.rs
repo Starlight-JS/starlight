@@ -8,37 +8,12 @@ use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
     () => {};
 }
-use crate::{
-    bytecode::{GetByIdMode, TypeFeedBack},
-    gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
-    gc::{cell::WeakSlot, Heap},
-    jsrt::VM_NATIVE_REFERENCES,
-    prelude::{Class, Options},
-    vm::{
-        self,
-        arguments::JsArguments,
-        array_storage::ArrayStorage,
-        code_block::{CodeBlock, FileLocation},
-        function::{
+use crate::{bytecode::{GetByIdMode, TypeFeedBack}, gc::Heap, gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef}, jsrt::VM_NATIVE_REFERENCES, prelude::{Class, Options}, vm::{*, self, Runtime, arguments::JsArguments, array_storage::ArrayStorage, code_block::{CodeBlock, FileLocation}, context::{Context, ContextRef}, function::{
             FuncType, JsBoundFunction, JsGeneratorFunction, JsNativeFunction, JsVMFunction,
-        },
-        global::JsGlobal,
-        indexed_elements::{IndexedElements, SparseArrayMap},
-        interpreter::SpreadValue,
-        object::{object_size_with_tag, JsObject, ObjectTag},
-        property_descriptor::{Accessor, StoredSlot},
-        string::{JsString, JsStringObject},
-        structure::{
+        }, global::JsGlobal, indexed_elements::{IndexedElements, SparseArrayMap}, interpreter::SpreadValue, object::{object_size_with_tag, JsObject, ObjectTag}, property_descriptor::{Accessor, StoredSlot}, string::{JsString, JsStringObject}, structure::{
             DeletedEntry, DeletedEntryHolder, MapEntry, Structure, TargetTable, Transition,
             TransitionKey, TransitionsTable,
-        },
-        structure_chain::StructureChain,
-        symbol_table::*,
-        symbol_table::{JsSymbol, Symbol, SymbolID},
-        value::*,
-        Runtime, *,
-    },
-};
+        }, structure_chain::StructureChain, symbol_table::*, symbol_table::{JsSymbol, Symbol, SymbolID}, value::*}};
 use std::{
     any::TypeId,
     collections::HashMap,

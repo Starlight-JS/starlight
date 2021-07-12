@@ -3,7 +3,7 @@ use crate::vm::arguments::Arguments;
 use crate::vm::promise::{JsPromise, TrackingMode};
 use crate::vm::string::JsString;
 use crate::vm::value::JsValue;
-use crate::vm::{Context};
+use crate::vm::{context::Context};
 
 pub fn promise_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let func = args.at(0);

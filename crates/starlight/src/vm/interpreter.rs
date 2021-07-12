@@ -9,7 +9,7 @@ use super::{
     symbol_table::*, value::*,
 };
 use crate::letroot;
-use crate::vm::Context;
+use crate::vm::context::Context;
 use crate::{
     bytecode::opcodes::Opcode,
     gc::{

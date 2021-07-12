@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use starlight::gc::default_heap;
 use starlight::prelude::*;
-use starlight::vm::Context;
+use starlight::vm::context::Context;
 use std::path::Path;
 use structopt::*;
 

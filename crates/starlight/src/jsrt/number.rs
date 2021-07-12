@@ -1,6 +1,6 @@
 use num::traits::float::FloatCore;
 
-use crate::{prelude::*, vm::{Context, number::NumberObject}};
+use crate::{prelude::*, vm::{context::Context, number::NumberObject}};
 pub fn number_value_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {

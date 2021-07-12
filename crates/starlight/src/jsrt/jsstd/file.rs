@@ -1,6 +1,6 @@
 use crate::define_jsclass_with_symbol;
 use crate::prelude::*;
-use crate::vm::Context;
+use crate::vm::context::Context;
 use crate::{
     gc::cell::GcPointer,
     vm::{object::JsObject},

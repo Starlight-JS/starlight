@@ -1,6 +1,6 @@
 //! Small standard library for JS featuring IO and other useful stuff.
 use crate::prelude::*;
-use crate::vm::Context;
+use crate::vm::context::Context;
 use crate::vm::{object::JsObject};
 pub mod file;
 

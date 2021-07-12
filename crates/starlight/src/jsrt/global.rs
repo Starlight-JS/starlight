@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{prelude::JsString, vm::{Context, arguments::Arguments, value::*}};
+use crate::{prelude::JsString, vm::{context::Context, arguments::Arguments, value::*}};
 use num::traits::*;
 use std::io::Write;
 pub fn parse_float(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {

@@ -1,4 +1,4 @@
-use crate::{define_jsclass_with_symbol, prelude::*, vm::Context};
+use crate::{define_jsclass_with_symbol, prelude::*, vm::context::Context};
 use regress::Regex;
 use std::{
     intrinsics::unlikely,

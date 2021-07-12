@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::mem::size_of;
 
-use super::Context;
+use super::context::Context;
 use super::{value::JsValue};
 use crate::gc::Heap;
 use crate::gc::{

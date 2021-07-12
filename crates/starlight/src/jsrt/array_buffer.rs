@@ -1,4 +1,4 @@
-use crate::{prelude::*, vm::{Context, array_buffer::JsArrayBuffer}};
+use crate::{prelude::*, vm::{context::Context, array_buffer::JsArrayBuffer}};
 pub fn array_buffer_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Err(JsValue::new(ctx.new_type_error(

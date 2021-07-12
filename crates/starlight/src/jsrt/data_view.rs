@@ -2,7 +2,7 @@ use std::{any::TypeId, mem::size_of};
 
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
-use crate::{JsTryFrom, prelude::*, vm::{Context, array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject}};
+use crate::{JsTryFrom, prelude::*, vm::{context::Context, array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject}};
 pub fn data_view_prototype_buffer(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {

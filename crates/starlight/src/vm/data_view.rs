@@ -1,7 +1,7 @@
 use wtf_rs::endian::{byte_swap, Endianess};
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
-use super::Context;
+use super::context::Context;
 use super::class::JsClass;
 use super::method_table::MethodTable;
 use super::object::TypedJsObject;

@@ -1,6 +1,6 @@
 use std::intrinsics::unlikely;
 
-use crate::{vm::{Context, arguments::Arguments, array::*, attributes::*, error::JsTypeError, object::{JsObject, ObjectTag, *}, property_descriptor::DataDescriptor, string::JsString, structure::Structure, symbol_table::*, value::{JsValue, Undefined}}};
+use crate::{vm::{context::Context, arguments::Arguments, array::*, attributes::*, error::JsTypeError, object::{JsObject, ObjectTag, *}, property_descriptor::DataDescriptor, string::JsString, structure::Structure, symbol_table::*, value::{JsValue, Undefined}}};
 
 pub fn object_get_prototype_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.at(0);

@@ -4,7 +4,7 @@
 use std::intrinsics::unlikely;
 
 use super::{object::object_to_string};
-use crate::{jsrt::get_length, vm::{Context, arguments::*, array::*, attributes::*, error::*, object::*, property_descriptor::DataDescriptor, string::*, symbol_table::*, value::*}};
+use crate::{jsrt::get_length, vm::{context::Context, arguments::*, array::*, attributes::*, error::*, object::*, property_descriptor::DataDescriptor, string::*, symbol_table::*, value::*}};
 pub fn array_ctor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let size = args.size();
     if size == 0 {
