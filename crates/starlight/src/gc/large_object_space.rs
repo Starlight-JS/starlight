@@ -221,7 +221,7 @@ impl LargeObjectSpace {
             let alloc = PreciseAllocation::from_cell(p.to_mut_ptr());
             if mi_is_in_heap_region(alloc.cast()) {
                 if mi_heap_contains_block(self.heap, alloc.cast()) {
-                    return true;
+                    return self.allocations.contains(&alloc);
                 }
             }
         }

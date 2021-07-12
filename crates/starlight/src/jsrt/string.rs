@@ -556,7 +556,7 @@ impl Context {
         let _ = ctor.define_own_property(
             self,
             "prototype".intern(),
-            &*DataDescriptor::new(JsValue::from(proto), NONE),
+            &*DataDescriptor::new(JsValue::new(proto), NONE),
             false,
         );
 
@@ -564,7 +564,7 @@ impl Context {
             .define_own_property(
                 self,
                 "constructor".intern(),
-                &*DataDescriptor::new(JsValue::encode_object_value(ctor), W | C),
+                &*DataDescriptor::new(JsValue::new(ctor), W | C),
                 false,
             )
             .unwrap_or_else(|_| panic!());

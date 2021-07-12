@@ -5,7 +5,7 @@
         "request": "launch",
         "name": "Launch",
         "program": "${workspaceFolder}/target/debug/test262-runner",
-        "args": ["run","-vvv","-s","test/built-ins/Object/prototype/toString/Object.prototype.toString.call-function.js"],
+        "args": ["run","-vvv","-s","test/built-ins/Array/prototype/sort/stability-513-elements.js"],
         "cwd": "${workspaceFolder}"
     }
     ]
