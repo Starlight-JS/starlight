@@ -95,19 +95,20 @@ impl Context {
     }
 
     pub fn init_global_object(&mut self){
-        self.init_object_in_realm();
-        self.init_func_in_realm();
-        self.init_number_in_realm();
-        self.init_array_in_realm();
-        self.init_math_in_realm();
-        self.init_error_in_realm();
-        self.init_string_in_realm();
-        self.init_builtin_in_realm();
-        self.init_symbol_in_realm();
-        self.init_regexp_in_realm().unwrap();
-        self.init_promise_in_realm().ok().expect("init prom failed");
-        self.init_array_buffer_in_realm().unwrap();
-        self.init_data_view_in_realm().unwrap();
+        self.init_object_in_global_object();
+        self.init_func_in_global_object();
+        self.init_number_in_global_object();
+        self.init_array_in_global_object();
+        self.init_math_in_global_object();
+        self.init_error_in_global_object();
+        self.init_string_in_global_object();
+        self.init_builtin_in_global_object();
+        self.init_symbol_in_global_object();
+        self.init_regexp_in_global_object().unwrap();
+        self.init_promise_in_global_object().ok().expect("init prom failed");
+        self.init_array_buffer_in_global_object().unwrap();
+        self.init_data_view_in_global_object().unwrap();
+        self.init_weak_ref_in_global_object();
 
         self.init_self_hosted();
         self.init_module_loader();
@@ -149,6 +150,7 @@ impl Context {
         self.init_array_buffer_in_global_data();
         self.init_data_view_in_global_data();
         self.init_string_in_global_data(proto);
+        self.init_weak_ref_in_global_data();
     }
 
 }

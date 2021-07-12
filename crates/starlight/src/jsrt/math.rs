@@ -117,7 +117,7 @@ pub fn math_sqrt(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
     Ok(JsValue::new(args.at(0).to_number(ctx)?.sqrt()))
 }
 impl Context {
-    pub(crate) fn init_math_in_realm(&mut self) {
+    pub(crate) fn init_math_in_global_object(&mut self) {
         let mut init = || -> Result<(), JsValue> {
             let mut math = JsObject::new_empty(self);
             /* let f = JsNativeFunction::new(self, "trunc".intern(), math_trunc, 1);

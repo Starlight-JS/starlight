@@ -33,7 +33,7 @@ macro_rules! def_symbols {
 }
 
 impl Context {
-    pub(crate) fn init_symbol_in_realm(&mut self) {
+    pub(crate) fn init_symbol_in_global_object(&mut self) {
         let mut init = || -> Result<(), JsValue> {
             let name = "constructor".intern();
             let constructor = self.global_data.symbol_prototype.unwrap().get_own_property(self, name).unwrap().value();

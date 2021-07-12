@@ -168,7 +168,7 @@ pub fn data_view_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsVa
 }
 
 impl Context {
-    pub(crate) fn init_data_view_in_realm(&mut self) -> Result<(), JsValue> {
+    pub(crate) fn init_data_view_in_global_object(&mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.data_view_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())

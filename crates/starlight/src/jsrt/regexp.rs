@@ -120,7 +120,7 @@ impl RegExp {
 }
 
 impl Context {
-    pub(crate) fn init_regexp_in_realm(&mut self) -> Result<(), JsValue> {
+    pub(crate) fn init_regexp_in_global_object(&mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.regexp_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())

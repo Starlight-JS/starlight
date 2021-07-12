@@ -72,7 +72,7 @@ pub fn array_buffer_slice(ctx: &mut Context, args: &Arguments) -> Result<JsValue
 }
 
 impl Context {
-    pub(crate) fn init_array_buffer_in_realm(&mut self) -> Result<(), JsValue> {
+    pub(crate) fn init_array_buffer_in_global_object(&mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.array_buffer_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())

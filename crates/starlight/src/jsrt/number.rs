@@ -512,7 +512,7 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
 }
 
 impl Context {
-    pub(crate) fn init_number_in_realm(&mut self) {
+    pub(crate) fn init_number_in_global_object(&mut self) {
         let mut proto = self.global_data.number_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())

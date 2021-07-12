@@ -529,7 +529,7 @@ pub fn string_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue
 
 impl Context {
 
-    pub fn init_string_in_realm(&mut self){
+    pub fn init_string_in_global_object(&mut self){
         let name = "constructor".intern();
         let constructor = self.global_data.string_prototype.unwrap().get_own_property(self, name).unwrap().value();
         self.global_object()

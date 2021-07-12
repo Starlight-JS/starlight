@@ -39,7 +39,7 @@ pub fn print(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
 }
 
 impl Context {
-    pub(crate) fn init_builtin_in_realm(&mut self) {
+    pub(crate) fn init_builtin_in_global_object(&mut self) {
         let _ = self.global_object().put(
             self,
             "Infinity".intern(),
@@ -190,7 +190,7 @@ impl Context {
             include_str!("builtins/StringIterator.js"),
         );
     }
-    pub(crate) fn init_func_in_realm(&mut self) {
+    pub(crate) fn init_func_in_global_object(&mut self) {
         let mut proto = self.global_data.func_prototype.unwrap();
         let name = "Function".intern();
         let constrcutor = proto
@@ -263,7 +263,7 @@ impl Context {
             false,
         );
     }
-    pub(crate) fn init_promise_in_realm(&mut self) -> Result<(), JsValue> {
+    pub(crate) fn init_promise_in_global_object(&mut self) -> Result<(), JsValue> {
         // copied from file
         let mut ctor = JsNativeFunction::new(self, "Promise".intern(), promise_constructor, 1);
 
@@ -291,7 +291,7 @@ impl Context {
 
         Ok(())
     }
-    pub(crate) fn init_weak_ref_in_realm(&mut self) {
+    pub(crate) fn init_weak_ref_in_global_object(&mut self) {
         let mut init = || -> Result<(), JsValue> {
             let mut proto = self.global_data().weak_ref_prototype.unwrap();
             let ctor = proto.get(self, "constructor".intern())?;
@@ -351,7 +351,7 @@ impl Context {
         }
     }
 
-    pub(crate) fn init_array_in_realm(&mut self) {
+    pub(crate) fn init_array_in_global_object(&mut self) {
         let mut proto = self.global_data.array_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
@@ -489,7 +489,7 @@ impl Context {
         self.global_data.array_prototype = Some(proto);
     }
 
-    pub(crate) fn init_error_in_realm(&mut self) {
+    pub(crate) fn init_error_in_global_object(&mut self) {
         self.init_base_error_in_realm();
         self.init_eval_error_in_realm();
         self.init_type_error_in_realm();
@@ -905,7 +905,7 @@ impl Context {
 use object::*;
 
 impl Context {
-    pub(crate) fn init_object_in_realm(&mut self) {
+    pub(crate) fn init_object_in_global_object(&mut self) {
         let name = "Object".intern();
         let mut proto = self.global_data.object_prototype.unwrap();
         let constructor = proto

@@ -64,6 +64,7 @@ impl MarkedBlockHandle {
     }
 }
 
+#[allow(dead_code)]
 pub struct MarkedBlockFooter {
     handle: &'static mut MarkedBlockHandle,
     vm: RuntimeRef,
