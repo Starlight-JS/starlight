@@ -1,3 +1,4 @@
+use super::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
@@ -45,36 +46,36 @@ impl JsMap {
         self.storage.remove(&HashValueZero(key))
     }
 
-    pub fn initialize(vm: &mut Runtime, input: JsValue, it: JsValue) -> Result<JsValue, JsValue> {
+    pub fn initialize(ctx: &mut Context, input: JsValue, it: JsValue) -> Result<JsValue, JsValue> {
         if unlikely(!input.is_jsobject()) {
             return Err(JsValue::new(
-                vm.new_type_error("MapInitialize to non-object"),
+                ctx.new_type_error("MapInitialize to non-object"),
             ));
         }
 
-        let stack = vm.shadowstack();
+        let stack = ctx.shadowstack();
         letroot!(obj = stack, input.get_jsobject());
         if unlikely(!obj.is_extensible()) {
             return Err(JsValue::new(
-                vm.new_type_error("MapInitialize to un-extensible object"),
+                ctx.new_type_error("MapInitialize to un-extensible object"),
             ));
         }
         let mut iterable = None;
         let mut adder = None;
         if !it.is_undefined() {
-            iterable = Some(it.to_object(vm)?);
-            let val = obj.get(vm, "set".intern())?;
+            iterable = Some(it.to_object(ctx)?);
+            let val = obj.get(ctx, "set".intern())?;
             if unlikely(!val.is_callable()) {
                 return Err(JsValue::new(
-                    vm.new_type_error("MapInitialize adder, `obj.set` is not callable"),
+                    ctx.new_type_error("MapInitialize adder, `obj.set` is not callable"),
                 ));
             }
             adder = Some(val.get_jsobject());
         }
 
-        let mut data = vm.heap().allocate(MapInternal::new());
+        let mut data = ctx.heap().allocate(MapInternal::new());
         obj.define_own_property(
-            vm,
+            ctx,
             "[[MapData]]".intern().private(),
             &*DataDescriptor::new(JsValue::new(data), W | C | E),
             false,
@@ -83,7 +84,7 @@ impl JsMap {
         if let Some(mut iterable) = iterable {
             let mut names = vec![];
             iterable.get_own_property_names(
-                vm,
+                ctx,
                 &mut |name, _| {
                     names.push(name);
                 },
@@ -91,17 +92,17 @@ impl JsMap {
             );
 
             for name in names {
-                let v = iterable.get(vm, name)?;
-                letroot!(item = stack, v.to_object(vm)?);
-                let key = item.get(vm, Symbol::Index(0))?;
-                let value = item.get(vm, Symbol::Index(1))?;
+                let v = iterable.get(ctx, name)?;
+                letroot!(item = stack, v.to_object(ctx)?);
+                let key = item.get(ctx, Symbol::Index(0))?;
+                let value = item.get(ctx, Symbol::Index(1))?;
                 let mut slice = [key, value];
                 letroot!(
                     arg_list = stack,
                     Arguments::new(JsValue::encode_undefined_value(), &mut slice)
                 );
                 adder.unwrap().as_function_mut().call(
-                    vm,
+                    ctx,
                     &mut arg_list,
                     JsValue::encode_undefined_value(),
                 )?;

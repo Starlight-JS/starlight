@@ -1,10 +1,10 @@
+use super::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::structure::Structure;
 use super::symbol_table::Symbol;
 use super::value::*;
-use super::Runtime;
 use super::{arguments::*, code_block::CodeBlock};
 use super::{array_storage::ArrayStorage, property_descriptor::*};
 use super::{attributes::*, symbol_table::Internable};
@@ -48,18 +48,18 @@ impl JsFunction {
     pub fn has_instance(
         &self,
         this: &mut GcPointer<JsObject>,
-        rt: &mut Runtime,
+        ctx: &mut Context,
         val: JsValue,
     ) -> Result<bool, JsValue> {
         if !val.is_jsobject() {
             return Ok(false);
         }
 
-        let got = this.get(rt, "prototype".intern())?;
+        let got = this.get(ctx, "prototype".intern())?;
         if !got.is_jsobject() {
-            let msg = JsString::new(rt, "'prototype' is not object");
+            let msg = JsString::new(ctx, "'prototype' is not object");
             return Err(JsValue::encode_object_value(JsTypeError::new(
-                rt, msg, None,
+                ctx, msg, None,
             )));
         }
 
@@ -139,7 +139,7 @@ impl JsFunction {
 
     pub fn construct(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
 
         args: &mut Arguments,
         structure: Option<GcPointer<Structure>>,
@@ -147,34 +147,34 @@ impl JsFunction {
     ) -> Result<JsValue, JsValue> {
         if unlikely(self.is_generator()) {
             return Err(JsValue::new(
-                vm.new_type_error("function not a constructor"),
+                ctx.new_type_error("function not a constructor"),
             ));
         }
-        let stack = vm.shadowstack();
+        let stack = ctx.shadowstack();
         letroot!(
             structure = stack,
-            structure.unwrap_or_else(|| Structure::new_unique_indexed(vm, None, false))
+            structure.unwrap_or_else(|| Structure::new_unique_indexed(ctx, None, false))
         );
-        let obj = JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let obj = JsObject::new(ctx, &structure, JsObject::get_class(), ObjectTag::Ordinary);
         args.ctor_call = true;
         args.this = JsValue::encode_object_value(obj);
-        self.call(vm, args, this_fn)
+        self.call(ctx, args, this_fn)
     }
 
     pub fn call(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {
         match self.ty {
-            FuncType::Native(ref x) => (x.func)(vm, args),
-            FuncType::Closure(ref x) => (x.func)(vm, args),
+            FuncType::Native(ref x) => (x.func)(ctx, args),
+            FuncType::Closure(ref x) => (x.func)(ctx, args),
             FuncType::User(ref x) => {
-                vm.perform_vm_call(x, JsValue::encode_object_value(x.scope), args, this)
+                ctx.perform_vm_call(x, JsValue::encode_object_value(x.scope), args, this)
             }
             FuncType::Bound(ref mut x) => {
-                let stack = vm.shadowstack();
+                let stack = ctx.shadowstack();
                 letroot!(
                     args = stack,
                     Arguments {
@@ -184,27 +184,27 @@ impl JsFunction {
                     }
                 );
                 let mut target = x.target;
-                target.as_function_mut().call(vm, &mut args, this)
+                target.as_function_mut().call(ctx, &mut args, this)
             }
-            FuncType::Generator(ref mut x) => x.call(vm, args, this),
+            FuncType::Generator(ref mut x) => x.call(ctx, args, this),
         }
     } /*
       pub fn call_with_env<'a>(
           &mut self,
-          vm: &mut Runtime,
+          ctx: &mut Context,
           args: &mut Arguments,
           env: GcPointer<JsObject>,
       ) -> Result<JsValue, JsValue> {
           match self.ty {
-              FuncType::Native(ref x) => (x.func)(vm, args),
+              FuncType::Native(ref x) => (x.func)(ctx, args),
               FuncType::User(ref x) => {
-                  let structure = Structure::new_indexed(vm, Some(env), false);
+                  let structure = Structure::new_indexed(ctx, Some(env), false);
                   let scope =
-                      JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
-                  vm.perform_vm_call(x, JsValue::encode_object_value(x.scope.clone()), args)
+                      JsObject::new(ctx, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+                  ctx.perform_ctx_call(x, JsValue::encode_object_value(x.scope.clone()), args)
               }
               FuncType::Bound(ref mut x) => {
-                  let stack = vm.shadowstack();
+                  let stack = ctx.shadowstack();
                   root!(
                       args = stack,
                       Arguments {
@@ -214,14 +214,14 @@ impl JsFunction {
                       }
                   );
                   let mut target = x.target.clone();
-                  target.as_function_mut().call(vm, &mut args)
+                  target.as_function_mut().call(ctx, &mut args)
               }
           }
       }*/
-    pub fn new(vm: &mut Runtime, ty: FuncType, _strict: bool) -> GcPointer<JsObject> {
+    pub fn new(ctx: &mut Context, ty: FuncType, _strict: bool) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
-            vm,
-            &vm.global_data().get_function_struct(),
+            ctx,
+            &ctx.global_data().get_function_struct(),
             JsFunction::get_class(),
             ObjectTag::Function,
         );
@@ -236,12 +236,12 @@ impl JsFunction {
         obj
     }
     pub fn new_with_struct(
-        vm: &mut Runtime,
+        ctx: &mut Context,
         structure: &GcPointer<Structure>,
         ty: FuncType,
         _strict: bool,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(vm, structure, JsFunction::get_class(), ObjectTag::Function);
+        let mut obj = JsObject::new(ctx, structure, JsFunction::get_class(), ObjectTag::Function);
 
         obj.set_callable(true);
 
@@ -255,91 +255,91 @@ impl JsFunction {
     define_jsclass!(JsFunction, Function);
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
-        JsObject::GetPropertyNamesMethod(obj, vm, collector, mode)
+        JsObject::GetPropertyNamesMethod(obj, ctx, collector, mode)
     }
     pub fn DefaultValueMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        JsObject::DefaultValueMethod(obj, vm, hint)
+        JsObject::DefaultValueMethod(obj, ctx, hint)
     }
     pub fn DefineOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        JsObject::DefineOwnIndexedPropertySlotMethod(obj, vm, index, desc, slot, throwable)
+        JsObject::DefineOwnIndexedPropertySlotMethod(obj, ctx, index, desc, slot, throwable)
     }
     pub fn GetOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetOwnIndexedPropertySlotMethod(obj, vm, index, slot)
+        JsObject::GetOwnIndexedPropertySlotMethod(obj, ctx, index, slot)
     }
     pub fn PutIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        JsObject::PutIndexedSlotMethod(obj, vm, index, val, slot, throwable)
+        JsObject::PutIndexedSlotMethod(obj, ctx, index, val, slot, throwable)
     }
     pub fn PutNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        JsObject::PutNonIndexedSlotMethod(obj, vm, name, val, slot, throwable)
+        JsObject::PutNonIndexedSlotMethod(obj, ctx, name, val, slot, throwable)
     }
     pub fn GetOwnPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
-        JsObject::GetOwnPropertyNamesMethod(obj, vm, collector, mode)
+        JsObject::GetOwnPropertyNamesMethod(obj, ctx, collector, mode)
     }
 
     pub fn DeleteNonIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        JsObject::DeleteNonIndexedMethod(obj, vm, name, throwable)
+        JsObject::DeleteNonIndexedMethod(obj, ctx, name, throwable)
     }
 
     pub fn DeleteIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        JsObject::DeleteIndexedMethod(obj, vm, index, throwable)
+        JsObject::DeleteIndexedMethod(obj, ctx, index, throwable)
     }
 
     pub fn GetNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        let result = JsObject::GetNonIndexedSlotMethod(obj, vm, name, slot)?;
+        let result = JsObject::GetNonIndexedSlotMethod(obj, ctx, name, slot)?;
         if name == "caller".intern() {
             slot.make_uncacheable();
             if result.is_callable()
@@ -350,9 +350,9 @@ impl JsFunction {
                     .as_function()
                     .is_strict()
             {
-                let msg = JsString::new(vm, "'caller' property is not accessible in strict mode");
+                let msg = JsString::new(ctx, "'caller' property is not accessible in strict mode");
                 return Err(JsValue::encode_object_value(JsTypeError::new(
-                    vm, msg, None,
+                    ctx, msg, None,
                 )));
             }
         }
@@ -361,42 +361,42 @@ impl JsFunction {
 
     pub fn GetIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        JsObject::GetIndexedSlotMethod(obj, vm, index, slot)
+        JsObject::GetIndexedSlotMethod(obj, ctx, index, slot)
     }
     pub fn GetNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetNonIndexedPropertySlotMethod(obj, vm, name, slot)
+        JsObject::GetNonIndexedPropertySlotMethod(obj, ctx, name, slot)
     }
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetOwnNonIndexedPropertySlotMethod(obj, vm, name, slot)
+        JsObject::GetOwnNonIndexedPropertySlotMethod(obj, ctx, name, slot)
     }
 
     pub fn GetNonIndexedPropertySlot(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetNonIndexedPropertySlotMethod(obj, vm, name, slot)
+        JsObject::GetNonIndexedPropertySlotMethod(obj, ctx, name, slot)
     }
 
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         mut obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -408,19 +408,19 @@ impl JsFunction {
             function.construct_struct = None;
             slot.make_uncacheable();
         }
-        JsObject::DefineOwnNonIndexedPropertySlotMethod(obj, vm, name, desc, slot, throwable)
+        JsObject::DefineOwnNonIndexedPropertySlotMethod(obj, ctx, name, desc, slot, throwable)
     }
 
     pub fn GetIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetIndexedPropertySlotMethod(obj, vm, index, slot)
+        JsObject::GetIndexedPropertySlotMethod(obj, ctx, index, slot)
     }
 }
-pub type JsAPI = fn(vm: &mut Runtime, arguments: &Arguments) -> Result<JsValue, JsValue>;
+pub type JsAPI = fn(ctx: &mut Context, arguments: &Arguments) -> Result<JsValue, JsValue>;
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct JsNativeFunction {
@@ -428,38 +428,38 @@ pub struct JsNativeFunction {
 }
 
 impl JsNativeFunction {
-    pub fn new(vm: &mut Runtime, name: Symbol, f: JsAPI, n: u32) -> GcPointer<JsObject> {
-        let vm = vm;
-        let mut func = JsFunction::new(vm, FuncType::Native(JsNativeFunction { func: f }), false);
+    pub fn new(ctx: &mut Context, name: Symbol, f: JsAPI, n: u32) -> GcPointer<JsObject> {
+        let ctx = ctx;
+        let mut func = JsFunction::new(ctx, FuncType::Native(JsNativeFunction { func: f }), false);
         let l = "length".intern();
 
         let _ = func.define_own_property(
-            vm,
+            ctx,
             l,
             &*DataDescriptor::new(JsValue::new(n as i32), NONE),
             false,
         );
         let n = "name".intern();
-        let k = vm.description(name);
-        let name = JsValue::encode_object_value(JsString::new(vm, &k));
-        let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
+        let k = ctx.description(name);
+        let name = JsValue::encode_object_value(JsString::new(ctx, &k));
+        let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
 
         func
     }
     #[allow(clippy::many_single_char_names)]
     pub fn new_with_struct(
-        vm: &mut Runtime,
+        ctx: &mut Context,
         s: &GcPointer<Structure>,
         name: Symbol,
         f: JsAPI,
         n: u32,
     ) -> GcPointer<JsObject> {
-        let vm = vm;
-        let stack = vm.shadowstack();
+        let ctx = ctx;
+        let stack = ctx.shadowstack();
         letroot!(
             func = stack,
             JsFunction::new_with_struct(
-                vm,
+                ctx,
                 s,
                 FuncType::Native(JsNativeFunction { func: f }),
                 false,
@@ -468,15 +468,15 @@ impl JsNativeFunction {
         let l = "length".intern();
 
         let _ = func.define_own_property(
-            vm,
+            ctx,
             l,
             &*DataDescriptor::new(JsValue::new(n as f64), NONE),
             false,
         );
         let n = "name".intern();
-        let k = vm.description(name);
-        let name = JsValue::encode_object_value(JsString::new(vm, &k));
-        let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
+        let k = ctx.description(name);
+        let name = JsValue::encode_object_value(JsString::new(ctx, &k));
+        let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
 
         *func
     }
@@ -488,8 +488,8 @@ impl JsNativeFunction {
 /// # Example
 /// ```
 /// // get the global object
-/// use starlight::vm::symbol_table::Internable;
-/// use starlight::vm::value::JsValue;
+/// use starlight::ctx::symbol_table::Internable;
+/// use starlight::ctx::value::JsValue;
 /// use starlight::Platform;
 /// use starlight::options::Options;
 ///
@@ -505,10 +505,10 @@ impl JsNativeFunction {
 ///
 /// // create a Function based on a closure
 /// let arg_count = 0;
-/// let func = starlight::vm::function::JsClosureFunction::new(
+/// let func = starlight::ctx::function::JsClosureFunction::new(
 ///     &mut starlight_runtime,
 ///     name_symbol,
-///     move |vm, args| {
+///     move |ctx, args| {
 ///         return Ok(JsValue::encode_int32(x));
 ///     },
 ///     arg_count,
@@ -522,33 +522,33 @@ impl JsNativeFunction {
 /// assert_eq!(outcome.get_int32(), 1234);
 /// ```
 pub struct JsClosureFunction {
-    pub(crate) func: Box<dyn Fn(&mut Runtime, &Arguments) -> Result<JsValue, JsValue>>,
+    pub(crate) func: Box<dyn Fn(&mut Context, &Arguments) -> Result<JsValue, JsValue>>,
 }
 
 impl JsClosureFunction {
     /// create a new JsClosureFunction
-    pub fn new<F>(vm: &mut Runtime, name: Symbol, f: F, arg_count: u32) -> GcPointer<JsObject>
+    pub fn new<F>(ctx: &mut Context, name: Symbol, f: F, arg_count: u32) -> GcPointer<JsObject>
     where
-        F: Fn(&mut Runtime, &Arguments) -> Result<JsValue, JsValue> + 'static,
+        F: Fn(&mut Context, &Arguments) -> Result<JsValue, JsValue> + 'static,
     {
-        let vm = vm;
+        let ctx = ctx;
         let mut func = JsFunction::new(
-            vm,
+            ctx,
             FuncType::Closure(JsClosureFunction { func: Box::new(f) }),
             false,
         );
         let l = "length".intern();
 
         let _ = func.define_own_property(
-            vm,
+            ctx,
             l,
             &*DataDescriptor::new(JsValue::new(arg_count as i32), NONE),
             false,
         );
         let n = "name".intern();
-        let k = vm.description(name);
-        let name = JsValue::encode_object_value(JsString::new(vm, &k));
-        let _ = func.define_own_property(vm, n, &*DataDescriptor::new(name, NONE), false);
+        let k = ctx.description(name);
+        let name = JsValue::encode_object_value(JsString::new(ctx, &k));
+        let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
 
         func
     }
@@ -589,35 +589,35 @@ pub struct JsVMFunction {
 }
 impl JsVMFunction {
     pub fn new(
-        vm: &mut Runtime,
+        ctx: &mut Context,
         code: GcPointer<CodeBlock>,
         env: GcPointer<Environment>,
     ) -> GcPointer<JsObject> {
-        // let vm = vm.space().new_local_context();
-        let stack = vm.shadowstack();
-        //root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
-        //root!(scope = stack, Environment::new(vm, 0));
+        // let ctx = ctx.space().new_local_context();
+        let stack = ctx.shadowstack();
+        //root!(envs = stack, Structure::new_indexed(ctx, Some(env), false));
+        //root!(scope = stack, Environment::new(ctx, 0));
         let f = JsVMFunction { code, scope: env };
-        vm.heap().defer();
-        letroot!(this = stack, JsFunction::new(vm, FuncType::User(f), false));
-        letroot!(proto = stack, JsObject::new_empty(vm));
-        vm.heap().undefer();
+        ctx.heap().defer();
+        letroot!(this = stack, JsFunction::new(ctx, FuncType::User(f), false));
+        letroot!(proto = stack, JsObject::new_empty(ctx));
+        let desc = ctx.description(code.name);
+        letroot!(s = stack, JsString::new(ctx, desc));
+        ctx.heap().undefer();
         let _ = proto.define_own_property(
-            vm,
+            ctx,
             "constructor".intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
             false,
         );
-        let desc = vm.description(code.name);
-        letroot!(s = stack, JsString::new(vm, desc));
         let _ = this.define_own_property(
-            vm,
+            ctx,
             "prototype".intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*proto), W),
             false,
         );
         let _ = this.define_own_property(
-            vm,
+            ctx,
             "name".intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*s), W | C),
             false,
@@ -628,28 +628,28 @@ impl JsVMFunction {
 impl GcPointer<JsObject> {
     pub fn func_construct_map(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
     ) -> Result<GcPointer<Structure>, JsValue> {
-        let stack = vm.shadowstack();
+        let stack = ctx.shadowstack();
         letroot!(obj = stack, *self);
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
 
-        let vm = vm;
+        let ctx = ctx;
         if let Some(s) = func.construct_struct {
             return Ok(s);
         }
 
         let mut slot = Slot::new();
         let proto = "prototype".intern();
-        let res = JsObject::GetNonIndexedSlotMethod(&mut obj, vm, proto, &mut slot)?;
+        let res = JsObject::GetNonIndexedSlotMethod(&mut obj, ctx, proto, &mut slot)?;
         let structure = unsafe {
             Structure::new_indexed(
-                vm,
+                ctx,
                 if res.is_object() && res.get_object().is::<JsObject>() {
                     Some(res.get_object().downcast_unchecked())
                 } else {
-                    Some(vm.global_data().get_object_prototype())
+                    Some(ctx.global_data().get_object_prototype())
                 },
                 false,
             )
@@ -747,7 +747,7 @@ extern "C" fn drop_generator(obj: &mut JsObject) {
     }
 }
 
-extern "C" fn generator_deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn generator_deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Context) {
     unreachable!("cannot deserialize generator");
 }
 extern "C" fn generator_ser(_: &JsObject, _: &mut SnapshotSerializer) {
@@ -762,36 +762,36 @@ extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<GeneratorData>().func_state.trace(tracer);
 }
 impl JsGeneratorFunction {
-    pub fn new(vm: &mut Runtime, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
-        // let vm = vm.space().new_local_context();
-        let stack = vm.shadowstack();
-        //root!(envs = stack, Structure::new_indexed(vm, Some(env), false));
-        //root!(scope = stack, Environment::new(vm, 0));
+    pub fn new(ctx: &mut Context, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
+        // let ctx = ctx.space().new_local_context();
+        let stack = ctx.shadowstack();
+        //root!(envs = stack, Structure::new_indexed(ctx, Some(env), false));
+        //root!(scope = stack, Environment::new(ctx, 0));
         let code = func.as_function().as_vm().code;
         let f = JsGeneratorFunction { function: func };
-        vm.heap().defer();
+        ctx.heap().defer();
         letroot!(
             this = stack,
-            JsFunction::new(vm, FuncType::Generator(f), false)
+            JsFunction::new(ctx, FuncType::Generator(f), false)
         );
-        letroot!(proto = stack, JsObject::new_empty(vm));
-        vm.heap().undefer();
+        letroot!(proto = stack, JsObject::new_empty(ctx));
+        ctx.heap().undefer();
         let _ = proto.define_own_property(
-            vm,
+            ctx,
             "constructor".intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
             false,
         );
-        let desc = vm.description(code.name);
-        letroot!(s = stack, JsString::new(vm, desc));
+        let desc = ctx.description(code.name);
+        letroot!(s = stack, JsString::new(ctx, desc));
         let _ = this.define_own_property(
-            vm,
+            ctx,
             "prototype".intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*proto), W),
             false,
         );
         let _ = this.define_own_property(
-            vm,
+            ctx,
             "name".intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*s), W | C),
             false,
@@ -819,17 +819,17 @@ impl JsGeneratorFunction {
     /// - Return generator object.
     fn call(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {
         // execute up to OP_INITIAL_YIELD. It does return `undefined` value.
-        let ret = self.function.as_function_mut().call(vm, args, this)?;
+        let ret = self.function.as_function_mut().call(ctx, args, this)?;
         debug_assert!(ret.is_undefined());
-        let mut state = vm.stack.pop_frame().expect("Empty call stack");
+        let mut state = ctx.stack.pop_frame().expect("Empty call stack");
         let state = unsafe { HeapCallFrame::save(&mut state) };
-        let proto = vm.global_data().generator_structure.unwrap();
-        let mut generator = JsObject::new(vm, &proto, Self::get_class(), ObjectTag::Ordinary);
+        let proto = ctx.global_data().generator_structure.unwrap();
+        let mut generator = JsObject::new(ctx, &proto, Self::get_class(), ObjectTag::Ordinary);
         *generator.data::<GeneratorData>() = ManuallyDrop::new(GeneratorData {
             state: GeneratorState::Suspended,
             func_state: AsyncFunctionState {
@@ -847,30 +847,30 @@ pub enum GeneratorMagic {
     Return,
     Throw,
 }
-fn async_func_resume(vm: &mut Runtime, state: &mut AsyncFunctionState) -> Result<JsValue, JsValue> {
-    let mut frame = vm
+fn async_func_resume(ctx: &mut Context, state: &mut AsyncFunctionState) -> Result<JsValue, JsValue> {
+    let mut frame = ctx
         .stack
         .new_frame(0, JsValue::encode_undefined_value(), state.frame.env)
         .ok_or_else(|| {
-            let msg = JsString::new(vm, "stack overflow");
-            JsValue::new(JsRangeError::new(vm, msg, None))
+            let msg = JsString::new(ctx, "stack overflow");
+            JsValue::new(JsRangeError::new(ctx, msg, None))
         })?;
     unsafe {
         state.frame.restore(&mut *frame);
         (*frame).exit_on_return = true;
-        crate::vm::interpreter::eval(vm, frame)
+        crate::vm::interpreter::eval(ctx, frame)
     }
 }
 pub(crate) fn js_generator_next(
-    vm: &mut Runtime,
+    ctx: &mut Context,
     this: JsValue,
     args: &Arguments,
     magic: GeneratorMagic,
     pdone: &mut u32,
 ) -> Result<JsValue, JsValue> {
-    let object = this.to_object(vm)?;
+    let object = this.to_object(ctx)?;
     if unlikely(!object.is_class(JsGeneratorFunction::get_class())) {
-        return Err(JsValue::new(vm.new_type_error("not a generator")));
+        return Err(JsValue::new(ctx.new_type_error("not a generator")));
     }
     *pdone = 1;
     let mut ret;
@@ -881,7 +881,7 @@ pub(crate) fn js_generator_next(
                 if magic == GeneratorMagic::Next {
                     s.func_state.throw = false;
                     s.state = GeneratorState::Executing;
-                    let func_ret = async_func_resume(vm, &mut s.func_state);
+                    let func_ret = async_func_resume(ctx, &mut s.func_state);
 
                     if let Err(e) = func_ret {
                         s.state = GeneratorState::Complete;
@@ -890,7 +890,7 @@ pub(crate) fn js_generator_next(
                     let func_ret = func_ret?;
                     s.state = GeneratorState::Yield;
                     if func_ret.is_native_value() {
-                        let frame = vm.stack.pop_frame();
+                        let frame = ctx.stack.pop_frame();
                         let mut frame = frame.unwrap();
                         ret = frame.top();
 
@@ -922,14 +922,14 @@ pub(crate) fn js_generator_next(
                     *s.func_state.frame.stack.last_mut().unwrap() = ret;
                 }
                 s.state = GeneratorState::Executing;
-                let func_ret = async_func_resume(vm, &mut s.func_state).map_err(|e| {
+                let func_ret = async_func_resume(ctx, &mut s.func_state).map_err(|e| {
                     s.state = GeneratorState::Complete;
                     e
                 })?;
                 s.state = GeneratorState::Yield;
 
                 if func_ret.is_native_value() {
-                    let frame = vm.stack.pop_frame();
+                    let frame = ctx.stack.pop_frame();
                     let mut frame = frame.unwrap();
 
                     ret = frame.top();
@@ -951,7 +951,7 @@ pub(crate) fn js_generator_next(
             }
             GeneratorState::Executing => {
                 return Err(JsValue::new(
-                    vm.new_type_error("cannot invoke a running generator"),
+                    ctx.new_type_error("cannot invoke a running generator"),
                 ));
             }
             GeneratorState::Complete => break,

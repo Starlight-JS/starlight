@@ -5,7 +5,7 @@
         "request": "launch",
         "name": "Launch",
         "program": "${workspaceFolder}/target/debug/test262-runner",
-        "args": ["run","-vvv"],
+        "args": ["run","-vvv","-s","test/built-ins/Object/prototype/toString/Object.prototype.toString.call-function.js"],
         "cwd": "${workspaceFolder}"
     }
     ]

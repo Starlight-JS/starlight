@@ -1,29 +1,17 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    bytecompiler::ByteCompiler,
-    gc::default_heap,
-    gc::safepoint::GlobalSafepoint,
-    gc::shadowstack::ShadowStack,
-    gc::Heap,
-    gc::{
+use crate::{bytecompiler::{ByteCompiler, CompileError}, gc::Heap, gc::default_heap, gc::safepoint::GlobalSafepoint, gc::shadowstack::ShadowStack, gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
-    },
-    jsrt::{self},
-    options::Options,
-};
+    }, jsrt::{self}, options::Options};
+use self::{attributes::*, function::JsVMFunction};
 use arguments::Arguments;
 use environment::Environment;
 use error::JsSyntaxError;
-use function::JsVMFunction;
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-};
+use std::{collections::HashMap, ops::{Deref, DerefMut}};
 use std::{fmt::Display, io::Write, sync::RwLock};
 use string::JsString;
 use swc_common::{
@@ -79,7 +67,7 @@ pub mod promise;
 #[derive(Copy, Clone)]
 pub enum ModuleKind {
     Initialized(GcPointer<JsObject>),
-    NativeUninit(fn(&mut Runtime, GcPointer<JsObject>) -> Result<(), JsValue>),
+    NativeUninit(fn(&mut Context, GcPointer<JsObject>) -> Result<(), JsValue>),
 }
 impl GcCell for ModuleKind {
     fn deser_pair(&self) -> (usize, usize) {
@@ -110,7 +98,7 @@ impl Serializable for ModuleKind {
 }
 
 impl Deserializable for ModuleKind {
-    unsafe fn allocate(_rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(_ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 
@@ -130,229 +118,181 @@ impl Deserializable for ModuleKind {
     }
 }
 
-pub struct Realm {
-    // save global object
-    pub(crate) global_object: Option<GcPointer<JsObject>>,
-    // save all intrinsics value
-    #[allow(dead_code)]
-    pub(crate) intrinsics: HashMap<String, JsValue>,
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct ContextRef(pub(crate) *mut Context);
+
+impl Deref for ContextRef {
+    type Target = Context;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
 }
 
-impl Realm {
-    pub fn global_object(&self) -> GcPointer<JsObject> {
+impl DerefMut for ContextRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.0 }
+    }
+}
+
+// evalute context
+pub struct Context {
+    pub(crate) global_data: GlobalData,
+    pub(crate) global_object: Option<GcPointer<JsObject>>,
+    pub(crate) stack: Stack,
+    pub(crate) vm: RuntimeRef,
+    pub(crate) stacktrace: String,
+    pub(crate) module_loader: Option<GcPointer<JsObject>>,
+    pub(crate) modules: HashMap<String, ModuleKind>,
+    pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
+}
+
+impl Context {
+    pub fn global_object(&mut self) -> GcPointer<JsObject> {
         self.global_object.unwrap()
     }
 
-    pub fn new() -> Self {
-        Realm {
-            global_object: None,
-            intrinsics: HashMap::new(),
-        }
+    pub fn modules(&mut self) -> &mut HashMap<String, ModuleKind> {
+        &mut self.modules
     }
-}
 
-/// JavaScript runtime instance.
-pub struct Runtime {
-    pub(crate) gc: Heap,
-    pub(crate) stack: Stack,
-    pub(crate) global_data: GlobalData,
-    pub(crate) external_references: Option<&'static [usize]>,
-    pub(crate) options: Options,
-    pub(crate) shadowstack: ShadowStack,
-    pub(crate) stacktrace: String,
-    pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
-    pub(crate) module_loader: Option<GcPointer<JsObject>>,
-    pub(crate) modules: HashMap<String, ModuleKind>,
-    pub(crate) codegen_plugins:
-        HashMap<String, Box<dyn Fn(&mut ByteCompiler, &Vec<ExprOrSpread>) -> Result<(), JsValue>>>,
-    #[cfg(feature = "perf")]
-    pub(crate) perf: perf::Perf,
-    #[allow(dead_code)]
-    /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
-    pub(crate) eval_history: String,
-    persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
-    sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>>,
-
-    // execute realm
-    pub(crate) realm: Option<Realm>,
-    pub(crate) safepoint: GlobalSafepoint,
-}
-
-unsafe impl Trace for Realm {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
-        self.global_object.trace(visitor);
+    pub fn global_data(&self) -> &GlobalData {
+        &self.global_data
     }
-}
 
-impl Runtime {
-    pub fn create_realm(&mut self) -> Result<(), JsValue> {
-        self.init_global_data();
+    // proxy heap
+    pub fn heap(&mut self) -> &mut Heap {
+        self.vm.heap()
+    }
 
-        let mut realm = Realm {
-            global_object: Some(JsGlobal::new(self)),
-            intrinsics: HashMap::new(),
+    // proxy shadowstack
+    pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
+        self.vm.shadowstack()
+    }
+
+    pub fn module_loader(&mut self) -> Option<GcPointer<JsObject>>{
+        self.module_loader
+    }
+
+    pub fn new_empty(vm: &mut Runtime) -> ContextRef {
+        let mut context = Self {
+            global_data: GlobalData::default(),
+            global_object:None,
+            vm: RuntimeRef(&mut *vm),
+            stack: Stack::new(),
+            stacktrace:String::new(),
+            module_loader:None,
+            modules:HashMap::new(),
+            symbol_table: HashMap::new()
         };
-        self.realm = Some(realm);
+        vm.contexts.push(context);
+        ContextRef(&mut *vm.contexts.first_mut().unwrap())
+    }
+
+    pub fn new(vm: &mut Runtime) -> ContextRef {
+        let mut context = Context::new_empty(vm);
+        context.global_object = Some(JsGlobal::new(&mut context));
+        vm.gc.defer();
+        context.init();
+        vm.gc.undefer();
+        vm.gc.collect_if_necessary();
+        context
+    }
+
+    pub fn init(&mut self){
+        self.init_global_data();
+        self.init_global_object();
+    }
+
+    pub fn init_global_object(&mut self){
         self.init_object_in_realm();
         self.init_func_in_realm();
         self.init_number_in_realm();
         self.init_array_in_realm();
         self.init_math_in_realm();
         self.init_error_in_realm();
+        self.init_string_in_realm();
         self.init_builtin_in_realm();
         self.init_symbol_in_realm();
-        self.init_regexp_in_realm()?;
+        self.init_regexp_in_realm().unwrap();
         self.init_promise_in_realm().ok().expect("init prom failed");
-        self.init_array_buffer_in_realm()?;
-        self.init_data_view_in_realm()?;
+        self.init_array_buffer_in_realm().unwrap();
+        self.init_data_view_in_realm().unwrap();
         self.init_weak_ref_in_realm();
         self.init_self_hosted();
         self.init_module_loader();
         self.init_internal_modules();
-
-        Ok(())
     }
 
-    pub fn realm(&self) -> &Realm {
-        unwrap_unchecked(self.realm.as_ref())
+    pub fn init_global_data(&mut self) {
+        self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
+        let s = Structure::new_unique_indexed(self, None, false);
+        let mut proto = JsObject::new(self, &s, JsObject::get_class(), ObjectTag::Ordinary);
+
+        self.global_data.object_prototype = Some(proto);
+        self.global_data.function_struct = Some(Structure::new_indexed(self, None, false));
+        self.global_data.normal_arguments_structure =
+            Some(Structure::new_indexed(self, None, false));
+        self.global_data
+            .empty_object_struct
+            .as_mut()
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        self.global_data
+            .empty_object_struct
+            .as_mut()
+            .unwrap()
+            .change_prototype_with_no_transition(proto);
+
+        self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
+
+        // Init global data structure
+        self.init_func_global_data(proto);
+        self.init_error_in_global_data(proto);
+        self.init_array_in_global_data(proto);
+        self.init_number_in_global_data(proto);
+        self.init_symbol_in_global_data(proto);
+        self.init_object_in_global_data(proto);
+        self.init_regexp_in_global_data(proto);
+        self.init_generator_in_global_data(proto);
+        self.init_array_buffer_in_global_data();
+        self.init_data_view_in_global_data();
+        self.init_string_in_global_data(proto);
     }
 
-    /// initialize a Runtime with an async scheduler
-    /// the async scheduler is used to asynchronously run jobs with the Runtime
-    /// this can be used for things like Promises, setImmediate, async functions
-    /// # Example
-    /// ```rust
-    /// use starlight::Platform;
-    /// use starlight::options::Options;
-    /// Platform::initialize();
-    /// let options = Options::default();
-    /// let mut starlight_runtime = Platform::new_runtime(options, None).with_async_scheduler(Box::new(move |job| {
-    ///     // here you would add the job to your EventLoop
-    ///     // e.g.:
-    ///     // EventLoop.add_local_void(move || {
-    ///     //     RtThreadLocal.with(|rc| {
-    ///     //         let sl_rt = &mut *rc.borrow_mut();
-    ///     //         job(rt);
-    ///     //     });
-    ///     // });
-    ///     println!("sched async job...");
-    /// }));
-    /// ```
-    pub fn with_async_scheduler(
-        mut self,
-        scheduler: Box<dyn Fn(Box<dyn FnOnce(&mut Runtime)>)>,
-    ) -> Self {
-        self.sched_async_func = Some(scheduler);
-        self
-    }
-    pub fn add_persistent_root(&mut self, obj: JsValue) -> PersistentRooted {
-        // for PoC only, todo use something like AutoIdMap for persistent_roots
+}
 
-        let pr = &mut *self.persistent_roots.borrow_mut();
+impl Context {
+    /// Construct new type error from provided string.
+    pub fn new_type_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsTypeError::new(self, msg, None)
+    }
+    /// Construct new reference error from provided string.
+    pub fn new_reference_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsReferenceError::new(self, msg, None)
+    }
+    /// Construct new syntax error from provided string.
+    pub fn new_syntax_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsSyntaxError::new(self, msg, None)
+    }
+    /// Construct new range error from provided string.
+    pub fn new_range_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+        let msg = JsString::new(self, msg);
+        JsRangeError::new(self, msg, None)
+    }
+}
 
-        let mut id = 0;
-        while pr.contains_key(&id) {
-            id += 1;
-        }
-        pr.insert(id, obj);
-        PersistentRooted {
-            id,
-            map: self.persistent_roots.clone(),
-        }
-    }
-
-    pub(crate) fn schedule_async<F>(&mut self, job: F) -> Result<(), JsValue>
-    where
-        F: FnOnce(&mut Runtime) + 'static,
-    {
-        if let Some(scheduler) = &self.sched_async_func {
-            scheduler(Box::new(job));
-            Ok(())
-        } else {
-            Err(JsValue::encode_object_value(JsString::new(self, "In order to use async you have to init the RuntimeOptions with with_async_scheduler()")))
-        }
-    }
-    pub fn options(&self) -> &Options {
-        &self.options
-    }
-    /// Find call frame that has try catch block in it. (Does not clean the stack!)
-    pub(crate) unsafe fn unwind(&mut self) -> Option<*mut CallFrame> {
-        let mut frame = self.stack.current;
-        while !frame.is_null() {
-            if !(*frame).try_stack.is_empty() {
-                return Some(frame);
-            }
-            let p = self.stack.pop_frame().unwrap();
-            // if `exit_on_return` is true then this frame was created from native code.
-            if p.exit_on_return {
-                break;
-            }
-            frame = self.stack.current;
-        }
-        None
-    }
-
-    pub fn global_object(&self) -> GcPointer<JsObject> {
-        self.realm().global_object()
-    }
-
-    pub fn new_raw(
-        gc: Heap,
-        options: Options,
-        external_references: Option<&'static [usize]>,
-    ) -> Self {
-        Self {
-            gc,
-            options,
-            safepoint: GlobalSafepoint::new(),
-            stack: Stack::new(),
-            modules: HashMap::new(),
-            stacktrace: String::new(),
-            global_data: GlobalData::default(),
-            external_references,
-            shadowstack: ShadowStack::new(),
-            #[cfg(feature = "perf")]
-            perf: perf::Perf::new(),
-            module_loader: None,
-            symbol_table: HashMap::new(),
-            eval_history: String::new(),
-            persistent_roots: Default::default(),
-            sched_async_func: None,
-            codegen_plugins: HashMap::new(),
-            realm: None,
-        }
-    }
-
-    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Self> {
-        Self::with_heap(default_heap(&options), options, external_references)
-    }
-
-    /// Collect stacktrace.
-    pub fn stacktrace(&mut self) -> String {
-        let mut result = String::new();
-        let mut frame = self.stack.current;
-        unsafe {
-            while !frame.is_null() {
-                if let Some(cb) = (*frame).code_block {
-                    let name = self.description(cb.name);
-                    result.push_str(&format!("  at '{}':'{}'\n", cb.file_name, name));
-                } else {
-                    result.push_str(" at '<native code>\n");
-                }
-                frame = (*frame).prev;
-            }
-        }
-        result
-    }
+impl Context {
     pub fn compile_function(
         &mut self,
         name: &str,
         code: &str,
         params: &[String],
-    ) -> Result<JsValue, JsValue> {
-        let mut vmref = RuntimeRef(self);
-
-        let mut code = ByteCompiler::compile_code(&mut *vmref, params, "", code.to_owned(), false)?;
+    ) -> Result<JsValue, CompileError> {
+        let mut code = ByteCompiler::compile_code(self, params, "", code.to_owned(), false)?;
         code.get_jsobject().as_function_mut().as_vm_mut().code.name = name.intern();
 
         Ok(code)
@@ -365,7 +305,7 @@ impl Runtime {
         name: &str,
         script: &str,
         builtins: bool,
-    ) -> Result<JsValue, JsValue> {
+    ) -> Result<JsValue, CompileError> {
         let cm: Lrc<SourceMap> = Default::default();
         let _e = BufferedError::default();
 
@@ -385,17 +325,13 @@ impl Runtime {
 
         let script = match parser.parse_script() {
             Ok(script) => script,
-            Err(e) => {
-                let msg = JsString::new(self, e.kind().msg());
-                return Err(JsValue::encode_object_value(JsSyntaxError::new(
-                    self, msg, None,
-                )));
+            Err(_e) => {
+                // let msg = JsString::new(self, e.kind().msg());
+                return Err(CompileError::NotYetImpl(format!("parser error",)));
             }
         };
-        let mut vmref = RuntimeRef(self);
-
         let mut code = ByteCompiler::compile_script(
-            &mut *vmref,
+            self,
             &script,
             &std::path::Path::new(&path)
                 .canonicalize()
@@ -441,10 +377,9 @@ impl Runtime {
                 )));
             }
         };
-        let mut vmref = RuntimeRef(self);
 
         let mut code = ByteCompiler::compile_module(
-            &mut *vmref,
+            self,            
             path,
             &std::path::Path::new(&path)
                 .canonicalize()
@@ -454,7 +389,7 @@ impl Runtime {
                 .unwrap_or_else(|| "".to_string()),
             name,
             &module,
-        )?;
+        ).map_err(|e| self.new_syntax_error(format!("Compile Error {:?}",e)))?;
         code.name = name.intern();
 
         let env = Environment::new(self, 0);
@@ -501,9 +436,8 @@ impl Runtime {
                     )));
                 }
             };
-            let mut vmref = RuntimeRef(self);
             let mut code = ByteCompiler::compile_eval(
-                &mut *vmref,
+                self,
                 &script,
                 &path
                     .map(|path| match std::path::Path::new(&path).canonicalize() {
@@ -516,7 +450,7 @@ impl Runtime {
                     .unwrap_or_else(|| "".to_string()),
                 path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 builtins,
-            )?;
+            ).map_err(|e| self.new_syntax_error(format!("Compile Error {:?}",&e)))?;
             code.strict = code.strict || force_strict;
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
@@ -565,9 +499,8 @@ impl Runtime {
                     )));
                 }
             };
-            let mut vmref = RuntimeRef(self);
             let mut code = ByteCompiler::compile_module(
-                &mut *vmref,
+                self,
                 &path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 &path
                     .map(|path| {
@@ -581,7 +514,7 @@ impl Runtime {
                     .unwrap_or_else(|| "".to_string()),
                 &path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 &script,
-            )?;
+            ).map_err(|e| self.new_syntax_error(format!("Compile Error {:?}",&e)))?;
             code.strict = code.strict || force_strict;
 
             let stack = self.shadowstack();
@@ -598,7 +531,7 @@ impl Runtime {
             letroot!(
                 args = stack,
                 Arguments::new(
-                    JsValue::encode_object_value(self.realm().global_object()),
+                    JsValue::encode_object_value(self.global_object()),
                     &mut args
                 )
             );
@@ -608,66 +541,23 @@ impl Runtime {
         };
         res
     }
-    /// Get global variable, on error returns `None`
-    pub fn get_global(&mut self, name: impl AsRef<str>) -> Option<JsValue> {
-        match self
-            .realm()
-            .global_object()
-            .get(self, name.as_ref().intern())
-        {
-            Ok(var) => Some(var),
-            Err(_) => None,
-        }
-    }
-    /// Return [Symbol](crate::vm::symbol_table::Symbol) description.
-    pub fn description(&self, sym: Symbol) -> String {
-        match sym {
-            Symbol::Key(key) | Symbol::Private(key) => {
-                symbol_table::symbol_table().description(key).to_owned()
+
+     /// Collect stacktrace.
+     pub fn stacktrace(&mut self) -> String {
+        let mut result = String::new();
+        let mut frame = self.stack.current;
+        unsafe {
+            while !frame.is_null() {
+                if let Some(cb) = (*frame).code_block {
+                    let name = self.description(cb.name);
+                    result.push_str(&format!("  at '{}':'{}'\n", cb.file_name, name));
+                } else {
+                    result.push_str(" at '<native code>\n");
+                }
+                frame = (*frame).prev;
             }
-            Symbol::Index(x) => x.to_string(),
         }
-    }
-
-    /// Get mutable heap reference.
-    pub fn heap(&mut self) -> &mut Heap {
-        &mut self.gc
-    }
-
-    pub fn init_global_data(&mut self) {
-        self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
-        let s = Structure::new_unique_indexed(self, None, false);
-        let mut proto = JsObject::new(self, &s, JsObject::get_class(), ObjectTag::Ordinary);
-
-        self.global_data.object_prototype = Some(proto);
-        self.global_data.function_struct = Some(Structure::new_indexed(self, None, false));
-        self.global_data.normal_arguments_structure =
-            Some(Structure::new_indexed(self, None, false));
-        self.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
-
-        self.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
-
-        self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
-        // Init global data structure
-        self.init_func_global_data(proto);
-        self.init_error_in_global_data(proto);
-        self.init_array_in_global_data(proto);
-        self.init_number_in_global_data(proto);
-        self.init_symbol_in_global_data(proto);
-        self.init_object_in_global_data(proto);
-        self.init_regexp_in_global_data(proto);
-        self.init_generator_in_global_data(proto);
-        self.init_array_buffer_in_global_data();
-        self.init_data_view_in_global_data();
-        self.init_weak_ref_in_global_data();
+        result
     }
 
     pub fn init_module_loader(&mut self) {
@@ -684,74 +574,6 @@ impl Runtime {
         assert!(self.modules.contains_key("std"));
     }
 
-    /// Construct runtime instance with specific GC heap.
-    pub fn with_heap(
-        gc: Heap,
-        options: Options,
-        external_references: Option<&'static [usize]>,
-    ) -> Box<Self> {
-        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
-        let vm = &mut *this as *mut Runtime;
-        this.gc.defer();
-        this.gc.add_constraint(SimpleMarkingConstraint::new(
-            "Mark VM roots",
-            move |visitor| {
-                let rt = unsafe { &mut *vm };
-                rt.realm.trace(visitor);
-                rt.global_data.trace(visitor);
-                rt.stack.trace(visitor);
-                //rt.shadowstack.trace(visitor);
-                rt.module_loader.trace(visitor);
-                rt.modules.trace(visitor);
-                let pr = &mut *rt.persistent_roots.borrow_mut();
-                pr.iter_mut().for_each(|entry| {
-                    entry.1.trace(visitor);
-                });
-            },
-        ));
-
-        this.create_realm().unwrap_or_else(|_| unreachable!());
-
-        this.gc.undefer();
-        this.gc.collect_if_necessary();
-        this
-    }
-    /// Get stacktrace. If there was no error then returned string is empty.
-    pub fn take_stacktrace(&mut self) -> String {
-        std::mem::take(&mut self.stacktrace)
-    }
-    pub(crate) fn new_empty(
-        gc: Heap,
-        options: Options,
-        external_references: Option<&'static [usize]>,
-    ) -> Box<Self> {
-        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
-        let vm = &mut *this as *mut Runtime;
-        this.gc.add_constraint(SimpleMarkingConstraint::new(
-            "Mark VM roots",
-            move |visitor| {
-                let rt = unsafe { &mut *vm };
-                match &rt.realm {
-                    Some(realm) => {
-                        realm.global_object().trace(visitor);
-                    }
-                    None => {}
-                }
-                rt.global_data.trace(visitor);
-                rt.stack.trace(visitor);
-                //rt.shadowstack.trace(visitor);
-                rt.module_loader.trace(visitor);
-                rt.modules.trace(visitor);
-                let pr = &mut *rt.persistent_roots.borrow_mut();
-                pr.iter_mut().for_each(|entry| {
-                    entry.1.trace(visitor);
-                });
-            },
-        ));
-
-        this
-    }
-
     pub fn add_module(
         &mut self,
         name: &str,
@@ -765,11 +587,211 @@ impl Runtime {
 
         Ok(self.modules.insert(name.to_string(), module_object))
     }
-    pub fn global_data(&self) -> &GlobalData {
-        &self.global_data
+
+    /// Find call frame that has try catch block in it. (Does not clean the stack!)
+    pub(crate) unsafe fn unwind(&mut self) -> Option<*mut CallFrame> {
+        let mut frame = self.stack.current;
+        while !frame.is_null() {
+            if !(*frame).try_stack.is_empty() {
+                return Some(frame);
+            }
+            let p = self.stack.pop_frame().unwrap();
+            // if `exit_on_return` is true then this frame was created from native code.
+            if p.exit_on_return {
+                break;
+            }
+            frame = self.stack.current;
+        }
+        None
     }
-    /// Return "global" shadow stack instance. Note that returned instance is bound to
-    /// scope where this function was invoked.
+
+    /// Return [Symbol](crate::vm::symbol_table::Symbol) description.
+    pub fn description(&self, sym: Symbol) -> String {
+        match sym {
+            Symbol::Key(key) | Symbol::Private(key) => {
+                symbol_table::symbol_table().description(key).to_owned()
+            }
+            Symbol::Index(x) => x.to_string(),
+        }
+    }
+
+    pub(crate) fn schedule_async<F>(&mut self, job: F) -> Result<(), JsValue>
+    where
+        F: FnOnce(&mut Context) + 'static,
+    {
+        if let Some(scheduler) = &self.vm.sched_async_func {
+            scheduler(Box::new(job));
+            Ok(())
+        } else {
+            Err(JsValue::encode_object_value(JsString::new(self, "In order to use async you have to init the RuntimeOptions with with_async_scheduler()")))
+        }
+    }
+
+    /// Get stacktrace. If there was no error then returned string is empty.
+    pub fn take_stacktrace(&mut self) -> String {
+        std::mem::take(&mut self.stacktrace)
+    }
+}
+
+unsafe impl Trace for Context {
+    fn trace(&mut self, visitor: &mut dyn Tracer) {
+        self.global_object().trace(visitor);
+        self.global_data.trace(visitor);
+        self.stack.trace(visitor);
+        self.module_loader.trace(visitor);
+        self.modules.trace(visitor);
+        // self.symbol_table.trace(visitor);
+    }
+}
+
+
+
+/// JavaScript runtime instance.
+pub struct Runtime {
+    pub(crate) gc: Heap,
+    pub(crate) external_references: Option<&'static [usize]>,
+    pub(crate) options: Options,
+    pub(crate) shadowstack: ShadowStack,
+    pub(crate) codegen_plugins:
+        HashMap<String, Box<dyn Fn(&mut ByteCompiler, &mut Context,&Vec<ExprOrSpread>) -> Result<(), CompileError>>>,
+    #[cfg(feature = "perf")]
+    pub(crate) perf: perf::Perf,
+    #[allow(dead_code)]
+    /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
+    pub(crate) eval_history: String,
+    persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
+    sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>>,
+    pub(crate) safepoint: GlobalSafepoint,
+
+    pub(crate) contexts: Vec<Context>
+}
+
+impl Runtime {
+
+    /// initialize a Runtime with an async scheduler
+    /// the async scheduler is used to asynchronously run jobs with the Runtime
+    /// this can be used for things like Promises, setImmediate, async functions
+    /// # Example
+    /// ```rust
+    /// use starlight::Platform;
+    /// use starlight::options::Options;
+    /// Platform::initialize();
+    /// let options = Options::default();
+    /// let mut starlight_runtime = Platform::new_runtime(options, None).with_async_scheduler(Box::new(move |job| {
+    ///     // here you would add the job to your EventLoop
+    ///     // e.g.:
+    ///     // EventLoop.add_local_void(move || {
+    ///     //     RtThreadLocal.with(|rc| {
+    ///     //         let sl_rt = &mut *rc.borrow_mut();
+    ///     //         job(rt);
+    ///     //     });
+    ///     // });
+    ///     println!("sched async job...");
+    /// }));
+    /// ```
+    pub fn with_async_scheduler(
+        mut self,
+        scheduler: Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>,
+    ) -> Self {
+        self.sched_async_func = Some(scheduler);
+        self
+    }
+    pub fn add_persistent_root(&mut self, obj: JsValue) -> PersistentRooted {
+        // for PoC only, todo use something like AutoIdMap for persistent_roots
+
+        let pr = &mut *self.persistent_roots.borrow_mut();
+
+        let mut id = 0;
+        while pr.contains_key(&id) {
+            id += 1;
+        }
+        pr.insert(id, obj);
+        PersistentRooted {
+            id,
+            map: self.persistent_roots.clone(),
+        }
+    }
+
+    pub fn options(&self) -> &Options {
+        &self.options
+    }
+
+    pub fn new_raw(
+        gc: Heap,
+        options: Options,
+        external_references: Option<&'static [usize]>,
+    ) -> Self {
+        Self {
+            gc,
+            options,
+            safepoint: GlobalSafepoint::new(),
+            external_references,
+            shadowstack: ShadowStack::new(),
+            #[cfg(feature = "perf")]
+            perf: perf::Perf::new(),
+            eval_history: String::new(),
+            persistent_roots: Default::default(),
+            sched_async_func: None,
+            codegen_plugins: HashMap::new(),
+            contexts: vec![]
+        }
+    }
+
+    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Self> {
+        Self::with_heap(default_heap(&options), options, external_references)
+    }
+
+    /// Get mutable heap reference.
+    pub fn heap(&mut self) -> &mut Heap {
+        &mut self.gc
+    }
+
+    /// Construct runtime instance with specific GC heap.
+    pub fn with_heap(
+        gc: Heap,
+        options: Options,
+        external_references: Option<&'static [usize]>,
+    ) -> Box<Self> {
+        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
+        let vm = &mut *this as *mut Runtime;
+        this.gc.add_constraint(SimpleMarkingConstraint::new(
+            "Mark VM roots",
+            move |visitor| {
+                let rt = unsafe { &mut *vm };
+                // rt.shadowstack.trace(visitor);
+                rt.contexts.iter_mut().for_each(|ctx| ctx.trace(visitor));
+                let pr = &mut *rt.persistent_roots.borrow_mut();
+                pr.iter_mut().for_each(|entry| {
+                    entry.1.trace(visitor);
+                });
+            },
+        ));
+        this
+    }
+    
+    pub(crate) fn new_empty(
+        gc: Heap,
+        options: Options,
+        external_references: Option<&'static [usize]>,
+    ) -> Box<Self> {
+        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
+        let vm = &mut *this as *mut Runtime;
+        this.gc.add_constraint(SimpleMarkingConstraint::new(
+            "Mark VM roots",
+            move |visitor| {
+                let rt = unsafe { &mut *vm };
+                // rt.shadowstack.trace(visitor);
+                rt.contexts.iter_mut().for_each(|ctx| ctx.trace(visitor));
+                let pr = &mut *rt.persistent_roots.borrow_mut();
+                pr.iter_mut().for_each(|entry| {
+                    entry.1.trace(visitor);
+                });
+            },
+        ));
+
+        this
+    }
+
     pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
         unsafe { std::mem::transmute(&self.shadowstack) }
     }
@@ -782,31 +804,10 @@ impl Runtime {
         crate::jsrt::ffi::initialize_ffi(self);
     }
 
-    /// Construct new type error from provided string.
-    pub fn new_type_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
-        let msg = JsString::new(self, msg);
-        JsTypeError::new(self, msg, None)
-    }
-    /// Construct new reference error from provided string.
-    pub fn new_reference_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
-        let msg = JsString::new(self, msg);
-        JsReferenceError::new(self, msg, None)
-    }
-    /// Construct new syntax error from provided string.
-    pub fn new_syntax_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
-        let msg = JsString::new(self, msg);
-        JsSyntaxError::new(self, msg, None)
-    }
-    /// Construct new range error from provided string.
-    pub fn new_range_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
-        let msg = JsString::new(self, msg);
-        JsRangeError::new(self, msg, None)
-    }
-
     pub fn register_codegen_plugin(
         &mut self,
         plugin_name: &str,
-        codegen_func: Box<dyn Fn(&mut ByteCompiler, &Vec<ExprOrSpread>) -> Result<(), JsValue>>,
+        codegen_func: Box<dyn Fn(&mut ByteCompiler,&mut Context , &Vec<ExprOrSpread>) -> Result<(), CompileError>>,
     ) -> Result<(), &str> {
         if !self.options.codegen_plugins {
             return Err("Need enable codegen_plugins option to register codegen plugin!");
@@ -814,6 +815,12 @@ impl Runtime {
         self.codegen_plugins
             .insert(String::from(plugin_name), codegen_func);
         Ok(())
+    }
+
+    pub fn remove_context(&mut self,ctx:ContextRef){
+        let mut contexts = &mut self.contexts;
+        let index = contexts.iter_mut().position(|x| ContextRef(&mut *x) == ctx).expect("context not found");
+        self.contexts.remove(index);
     }
 }
 
@@ -838,15 +845,7 @@ impl Drop for PersistentRooted {
 use starlight_derive::GcTrace;
 use wtf_rs::unwrap_unchecked;
 
-use self::{
-    error::{JsRangeError, JsReferenceError, JsTypeError},
-    function::JsNativeFunction,
-    global::JsGlobal,
-    interpreter::{frame::CallFrame, stack::Stack},
-    object::JsObject,
-    structure::Structure,
-    symbol_table::{Internable, JsSymbol, Symbol},
-};
+use self::{error::{JsRangeError, JsReferenceError, JsTypeError}, function::JsNativeFunction, global::JsGlobal, interpreter::{frame::CallFrame, stack::Stack}, object::JsObject,structure::Structure, symbol_table::{Internable, JsSymbol, Symbol}};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -1011,7 +1010,7 @@ pub mod tests {
     use crate::options::Options;
     use crate::vm::symbol_table::Internable;
     use crate::vm::value::JsValue;
-    use crate::vm::{arguments, Runtime};
+    use crate::vm::{Context, Runtime, arguments};
     use crate::Platform;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -1021,7 +1020,7 @@ pub mod tests {
         // start a runtime
         Platform::initialize();
 
-        type JobType = dyn FnOnce(&mut Runtime);
+        type JobType = dyn FnOnce(&mut Context);
         // the todo Rc is where we will store our async job, in real life this would be an EventLoop to which we could add multiple jobs
         let todo: Rc<RefCell<Option<Box<JobType>>>> = Rc::new(RefCell::new(None));
         let todo_clone = todo.clone();
@@ -1035,8 +1034,9 @@ pub mod tests {
                 let opt = &mut *todo_clone.borrow_mut();
                 opt.replace(Box::new(job));
             }));
+        let mut ctx = Context::new(&mut starlight_runtime);
 
-        let mut global = starlight_runtime.realm().global_object();
+        let mut global = ctx.global_object();
 
         // create a symbol for the functions name
         let name_symbol = "setImmediate".intern();
@@ -1048,7 +1048,7 @@ pub mod tests {
         // it should serve pretty good as a simple as it gets first example of doing things async
         let arg_count = 0;
         let func = crate::vm::function::JsNativeFunction::new(
-            &mut starlight_runtime,
+            &mut ctx,
             name_symbol,
             move |vm, args| {
                 if args.size() == 1 {
@@ -1097,7 +1097,7 @@ pub mod tests {
         // add the function to the global object
         global
             .put(
-                &mut starlight_runtime,
+                &mut ctx,
                 name_symbol,
                 JsValue::new(func),
                 true,
@@ -1107,18 +1107,18 @@ pub mod tests {
 
         // run the function
         let _outcome =
-            match starlight_runtime.eval("setImmediate(() => {print('later')}); print('first');") {
+            match ctx.eval("setImmediate(() => {print('later')}); print('first');") {
                 Ok(e) => e,
                 Err(err) => panic!(
                     "func failed: {}",
-                    err.to_string(&mut starlight_runtime)
+                    err.to_string(&mut ctx)
                         .ok()
                         .expect("conversion failed")
                 ),
             };
 
         if let Some(job) = todo.take() {
-            job(&mut starlight_runtime);
+            job(&mut ctx);
         } else {
             panic!("did not get job")
         }
@@ -1134,20 +1134,21 @@ pub mod tests {
         let options: Options = Options::default().with_codegen_plugins(true);
         let heap = default_heap(&options);
         let mut rt = Runtime::with_heap(heap, options, None);
+        let mut ctx = Context::new(&mut rt);
 
         let result = rt.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
-                |compiler: &mut ByteCompiler, call_args: &Vec<ExprOrSpread>| {
-                    compiler.expr(&call_args[0].expr, true, false)?;
-                    compiler.expr(&call_args[1].expr, true, false)?;
+                |compiler: &mut ByteCompiler,ctx: &mut Context ,call_args: &Vec<ExprOrSpread>| {
+                    compiler.expr(ctx,&call_args[0].expr, true, false)?;
+                    compiler.expr(ctx,&call_args[1].expr, true, false)?;
                     compiler.emit(Opcode::OP_ADD, &[0], false);
                     Ok(())
                 },
             ),
         );
         assert!(result.is_ok(), "Should register success!");
-        let result = rt.eval("MyOwnAddFn(2,3)");
+        let result = ctx.eval("MyOwnAddFn(2,3)");
         assert!(result.is_ok(), "Should get result");
         if let Ok(value) = result {
             assert_eq!(5, value.get_int32());
@@ -1161,16 +1162,16 @@ pub mod tests {
         let result = rt.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
-                |compiler: &mut ByteCompiler, call_args: &Vec<ExprOrSpread>| {
-                    compiler.expr(&call_args[0].expr, true, false)?;
-                    compiler.expr(&call_args[1].expr, true, false)?;
+                |compiler: &mut ByteCompiler, ctx:&mut Context , call_args: &Vec<ExprOrSpread>| {
+                    compiler.expr(ctx,&call_args[0].expr, true, false)?;
+                    compiler.expr(ctx,&call_args[1].expr, true, false)?;
                     compiler.emit(Opcode::OP_ADD, &[0], false);
                     Ok(())
                 },
             ),
         );
         assert!(result.is_err(), "Should can't register codegen plugin!");
-        let result = rt.eval("MyOwnAddFn(2,3)");
+        let result = ctx.eval("MyOwnAddFn(2,3)");
         assert!(result.is_err(), "Should return JsValue error");
         //
     }

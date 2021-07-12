@@ -3,13 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::{collections::HashMap, mem::ManuallyDrop};
 
-use super::{
-    attributes::*,
-    object::{EnumerationMode, JsHint},
-    property_descriptor::*,
-    slot::*,
-    value::JsValue,
-};
+use super::{Context, attributes::*, object::{EnumerationMode, JsHint}, property_descriptor::*, slot::*, value::JsValue};
 use super::{method_table::*, symbol_table::Internable};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
 use wtf_rs::segmented_vec::SegmentedVec;
@@ -19,13 +13,12 @@ use super::{
     property_descriptor::StoredSlot,
     structure::Structure,
     symbol_table::Symbol,
-    Runtime,
 };
 
 pub struct JsGlobal {
     pub(crate) sym_map: HashMap<Symbol, u32>,
     pub(crate) variables: SegmentedVec<StoredSlot>,
-    pub(crate) vm: *mut Runtime,
+    pub(crate) ctx: *mut Context,
 }
 
 unsafe impl Trace for JsGlobal {
@@ -36,25 +29,25 @@ unsafe impl Trace for JsGlobal {
 
 #[allow(non_snake_case)]
 impl JsGlobal {
-    pub fn new(vm: &mut Runtime) -> GcPointer<JsObject> {
-        let stack = vm.shadowstack();
+    pub fn new(ctx: &mut Context) -> GcPointer<JsObject> {
+        let stack = ctx.shadowstack();
         letroot!(
             shape = stack,
-            Structure::new_unique_with_proto(vm, None, false)
+            Structure::new_unique_with_proto(ctx, None, false)
         );
-        let js_object = JsObject::new(vm, &shape, Self::get_class(), ObjectTag::Global);
+        let js_object = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Global);
         {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),
                 variables: SegmentedVec::with_chunk_size(8),
-                vm: vm as *mut _,
+                ctx: ctx as *mut _,
             });
         }
         js_object
     }
     define_jsclass!(JsGlobal, global);
     pub fn lookup_constant(&self, name: Symbol) -> Option<JsValue> {
-        let _vm = self.vm;
+        let _ctx = self.ctx;
         if name == "Infinity".intern() {
             Some(JsValue::new(std::f64::INFINITY))
         } else if name == "NaN".intern() {
@@ -91,72 +84,72 @@ impl JsGlobal {
 
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
-        JsObject::GetPropertyNamesMethod(obj, vm, collector, mode)
+        JsObject::GetPropertyNamesMethod(obj, ctx, collector, mode)
     }
     pub fn DefaultValueMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        JsObject::DefaultValueMethod(obj, vm, hint)
+        JsObject::DefaultValueMethod(obj, ctx, hint)
     }
     pub fn DefineOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        JsObject::DefineOwnIndexedPropertySlotMethod(obj, vm, index, desc, slot, throwable)
+        JsObject::DefineOwnIndexedPropertySlotMethod(obj, ctx, index, desc, slot, throwable)
     }
     pub fn GetOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetOwnIndexedPropertySlotMethod(obj, vm, index, slot)
+        JsObject::GetOwnIndexedPropertySlotMethod(obj, ctx, index, slot)
     }
     pub fn PutIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        JsObject::PutIndexedSlotMethod(obj, vm, index, val, slot, throwable)
+        JsObject::PutIndexedSlotMethod(obj, ctx, index, val, slot, throwable)
     }
     pub fn PutNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        JsObject::PutNonIndexedSlotMethod(obj, vm, name, val, slot, throwable)
+        JsObject::PutNonIndexedSlotMethod(obj, ctx, name, val, slot, throwable)
     }
     pub fn GetOwnPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
         for it in obj.as_global().sym_map.iter() {
             collector(*it.0, *it.1);
         }
-        JsObject::GetOwnPropertyNamesMethod(obj, vm, collector, mode)
+        JsObject::GetOwnPropertyNamesMethod(obj, ctx, collector, mode)
     }
 
     pub fn DeleteNonIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -165,47 +158,47 @@ impl JsGlobal {
             // all variables are configurable: false
             return Ok(false);
         }
-        JsObject::DeleteNonIndexedMethod(obj, vm, name, throwable)
+        JsObject::DeleteNonIndexedMethod(obj, ctx, name, throwable)
     }
 
     pub fn DeleteIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
-        JsObject::DeleteIndexedMethod(obj, vm, index, throwable)
+        JsObject::DeleteIndexedMethod(obj, ctx, index, throwable)
     }
 
     pub fn GetNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        JsObject::GetNonIndexedSlotMethod(obj, vm, name, slot)
+        JsObject::GetNonIndexedSlotMethod(obj, ctx, name, slot)
     }
 
     pub fn GetIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        JsObject::GetIndexedSlotMethod(obj, vm, index, slot)
+        JsObject::GetIndexedSlotMethod(obj, ctx, index, slot)
     }
     pub fn GetNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetNonIndexedPropertySlotMethod(obj, vm, name, slot)
+        JsObject::GetNonIndexedPropertySlotMethod(obj, ctx, name, slot)
     }
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -221,7 +214,7 @@ impl JsGlobal {
             return true;
         }
 
-        let res = JsObject::GetOwnNonIndexedPropertySlotMethod(obj, vm, name, slot);
+        let res = JsObject::GetOwnNonIndexedPropertySlotMethod(obj, ctx, name, slot);
         if !res {
             slot.make_uncacheable();
         }
@@ -230,16 +223,16 @@ impl JsGlobal {
 
     pub fn GetNonIndexedPropertySlot(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetNonIndexedPropertySlotMethod(obj, vm, name, slot)
+        JsObject::GetNonIndexedPropertySlotMethod(obj, ctx, name, slot)
     }
 
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         mut obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -250,21 +243,21 @@ impl JsGlobal {
         if let Some(entry) = entry {
             let mut stored = global.variables[entry as usize];
             let mut returned = false;
-            if stored.is_defined_property_accepted(vm, desc, throwable, &mut returned)? {
-                stored.merge(vm, desc);
+            if stored.is_defined_property_accepted(ctx, desc, throwable, &mut returned)? {
+                stored.merge(ctx, desc);
                 global.variables[entry as usize] = stored;
             }
             return Ok(returned);
         }
-        JsObject::DefineOwnNonIndexedPropertySlotMethod(obj, vm, name, desc, slot, throwable)
+        JsObject::DefineOwnNonIndexedPropertySlotMethod(obj, ctx, name, desc, slot, throwable)
     }
 
     pub fn GetIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        JsObject::GetIndexedPropertySlotMethod(obj, vm, index, slot)
+        JsObject::GetIndexedPropertySlotMethod(obj, ctx, index, slot)
     }
 }

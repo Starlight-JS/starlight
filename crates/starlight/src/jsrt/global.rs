@@ -1,15 +1,12 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    prelude::JsString,
-    vm::{arguments::Arguments, value::*, Runtime},
-};
+use crate::{prelude::JsString, vm::{Context, arguments::Arguments, value::*}};
 use num::traits::*;
 use std::io::Write;
-pub fn parse_float(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn parse_float(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.size() != 0 {
-        let str = args.at(0).to_string(rt)?;
+        let str = args.at(0).to_string(ctx)?;
 
         Ok(JsValue::encode_untrusted_f64_value(
             str.parse::<f64>().unwrap_or(std::f64::NAN),
@@ -40,9 +37,9 @@ pub(crate) fn is_trimmable_whitespace(c: char) -> bool {
     )
 }
 
-pub fn parse_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn parse_int(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() >= 1 {
-        let str = args.at(0).to_string(rt)?;
+        let str = args.at(0).to_string(ctx)?;
         let mut var_s = str.trim_start_matches(is_trimmable_whitespace);
 
         let sign = if !var_s.is_empty() && var_s.starts_with('\u{002D}') {
@@ -56,7 +53,7 @@ pub fn parse_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
                 .strip_prefix(&['\u{002B}', '\u{002D}'][..])
                 .unwrap_or(var_s);
         }
-        let mut var_r = args.at(1).to_int32(rt)?;
+        let mut var_r = args.at(1).to_int32(ctx)?;
         // 7. Let stripPrefix be true.
         let mut strip_prefix = true;
 
@@ -133,54 +130,54 @@ pub fn parse_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     }
 }
 
-pub fn is_nan(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn is_nan(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let val = args.at(0);
-        let number = val.to_number(rt)?;
+        let number = val.to_number(ctx)?;
         return Ok(JsValue::encode_bool_value(number.is_nan()));
     }
     Ok(JsValue::encode_bool_value(true))
 }
 
-pub fn is_finite(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn is_finite(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let val = args.at(0);
-        let number = val.to_number(rt)?;
+        let number = val.to_number(ctx)?;
         return Ok(JsValue::encode_bool_value(number.is_finite()));
     }
     Ok(JsValue::encode_bool_value(false))
 }
 
-pub fn gc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    rt.heap().gc();
+pub fn gc(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    ctx.heap().gc();
     let _ = args;
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn ___trunc(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let n = args.at(0).to_number(rt)?.trunc();
+pub fn ___trunc(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let n = args.at(0).to_number(ctx)?.trunc();
     Ok(JsValue::new(n))
 }
 
-pub fn ___is_callable(_: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ___is_callable(_: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).is_callable()))
 }
 
-pub fn to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     args.at(0)
-        .to_string(rt)
-        .map(|x| JsValue::new(JsString::new(rt, x)))
+        .to_string(ctx)
+        .map(|x| JsValue::new(JsString::new(ctx, x)))
 }
 
 // TODO: Breakpoints
-pub fn __breakpoint(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn __breakpoint(_ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
     todo!()
 }
-pub fn __breakpoint_noop(_rt: &mut Runtime, _args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn __breakpoint_noop(_ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn ___is_constructor(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ___is_constructor(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let arg = args.at(0);
     if arg.is_callable() {
         let fun = arg.get_jsobject();
@@ -193,9 +190,9 @@ pub fn ___is_constructor(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     Ok(JsValue::new(false))
 }
 
-pub fn read_line(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn read_line(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let prompt = if args.size() > 0 {
-        Some(args.at(0).to_string(rt)?)
+        Some(args.at(0).to_string(ctx)?)
     } else {
         None
     };
@@ -208,5 +205,5 @@ pub fn read_line(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue>
     let mut buf = String::new();
     std::io::stdin().read_line(&mut buf).unwrap();
 
-    Ok(JsValue::new(JsString::new(rt, buf)))
+    Ok(JsValue::new(JsString::new(ctx, buf)))
 }

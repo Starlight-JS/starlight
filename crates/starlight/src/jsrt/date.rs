@@ -1,7 +1,7 @@
 use chrono::{prelude::*, Duration, LocalResult};
 use std::fmt::Display;
 
-use crate::{define_jsclass_with_symbol, prelude::*};
+use crate::{define_jsclass_with_symbol, prelude::*, vm::Context};
 
 /// The number of nanoseconds in a millisecond.
 const NANOS_PER_MS: i64 = 1_000_000;
@@ -58,7 +58,7 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
     todo!()
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Context) {
     todo!()
 }
 

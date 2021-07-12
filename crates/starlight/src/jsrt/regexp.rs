@@ -1,4 +1,4 @@
-use crate::{define_jsclass_with_symbol, prelude::*};
+use crate::{define_jsclass_with_symbol, prelude::*, vm::Context};
 use regress::Regex;
 use std::{
     intrinsics::unlikely,
@@ -42,7 +42,7 @@ extern "C" fn drop_regexp_fn(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<RegExp>()) }
 }
 
-extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _rt: &mut Runtime) {
+extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _ctx: &mut Context) {
     unsafe {
         let use_last_index = bool::deserialize_inplace(deser);
         let flags = String::deserialize_inplace(deser);
@@ -55,26 +55,26 @@ extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _rt: &mut Runt
         let original_source = String::deserialize_inplace(deser);
         let original_flags = String::deserialize_inplace(deser);
 
-        let mut sorted_flags = String::new();
+        let mut soctxed_flags = String::new();
         if original_flags.contains('g') {
-            sorted_flags.push('g');
+            soctxed_flags.push('g');
         }
         if original_flags.contains('i') {
-            sorted_flags.push('i');
+            soctxed_flags.push('i');
         }
         if original_flags.contains('m') {
-            sorted_flags.push('m');
+            soctxed_flags.push('m');
         }
         if original_flags.contains('s') {
-            sorted_flags.push('s');
+            soctxed_flags.push('s');
         }
         if original_flags.contains('u') {
-            sorted_flags.push('u');
+            soctxed_flags.push('u');
         }
         if original_flags.contains('y') {
-            sorted_flags.push('y');
+            soctxed_flags.push('y');
         }
-        let matcher = Regex::with_flags(&original_source, sorted_flags.as_str()).unwrap();
+        let matcher = Regex::with_flags(&original_source, soctxed_flags.as_str()).unwrap();
         *obj.data::<RegExp>() = ManuallyDrop::new(RegExp {
             use_last_index,
             flags: flags.into_boxed_str(),
@@ -119,21 +119,20 @@ impl RegExp {
     );
 }
 
-impl Runtime {
+impl Context {
     pub(crate) fn init_regexp_in_realm(&mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.regexp_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        self.realm().global_object().put(
+        self.global_object().put(
             self,
             "RegExp".intern(),
             JsValue::new(constructor),
             false,
         )?;
         let mut sym = self
-            .realm()
             .global_object()
             .get(self, "Symbol".intern())?
             .get_jsobject();
@@ -181,27 +180,27 @@ impl Runtime {
     }
 }
 
-pub fn regexp_split_fast(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_split_fast(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.at(0).is_jsobject()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "Regex.@@splitFast requires regexp object as first argument",
         )));
     }
     let re = args.at(0).get_jsobject();
     let regexp = re.data::<RegExp>();
     if unlikely(!re.is_class(RegExp::get_class())) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "Regex.@@splitFast requires regexp object as first argument",
         )));
     }
-    let input = args.at(1).to_string(rt)?;
+    let input = args.at(1).to_string(ctx)?;
     let limit = if args.at(2).is_undefined() {
         u32::MAX - 1
     } else {
-        args.at(2).to_uint32(rt)?
+        args.at(2).to_uint32(ctx)?
     };
 
-    let mut result = JsArray::new(rt, 0);
+    let mut result = JsArray::new(ctx, 0);
     //let mut result_length = 0;
     // let input_size = input.len();
 
@@ -213,8 +212,8 @@ pub fn regexp_split_fast(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
     if input.is_empty() {
         let match_result = regexp.matcher.find(&input);
         if match_result.is_none() {
-            let str = JsString::new(rt, input);
-            result.put(rt, Symbol::Index(0), JsValue::new(str), false)?;
+            let str = JsString::new(ctx, input);
+            result.put(ctx, Symbol::Index(0), JsValue::new(str), false)?;
         }
         return Ok(JsValue::new(result));
     }
@@ -223,20 +222,20 @@ pub fn regexp_split_fast(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
     //let regexp_is_unicode = regexp.unicode;
     let iter = input.splitn(limit as _, RegexPattern(&regexp.matcher));
     for (i, r) in iter.enumerate() {
-        let str = JsString::new(rt, r);
-        result.put(rt, Symbol::Index(i as _), JsValue::new(str), false)?;
+        let str = JsString::new(ctx, r);
+        result.put(ctx, Symbol::Index(i as _), JsValue::new(str), false)?;
     }
     Ok(JsValue::new(result))
 }
-pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let proto = rt.global_data().regexp_prototype.unwrap();
-    let structure = Structure::new_indexed(rt, Some(proto), false);
+pub fn regexp_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let proto = ctx.global_data.regexp_prototype.unwrap();
+    let structure = Structure::new_indexed(ctx, Some(proto), false);
 
     let arg = args.at(0);
 
     let (regex_body, mut regex_flags) = match arg {
         arg if arg.is_jsstring() => (
-            arg.to_string(rt)?.into_boxed_str(),
+            arg.to_string(ctx)?.into_boxed_str(),
             String::new().into_boxed_str(),
         ),
         arg if arg.is_jsobject() => {
@@ -265,7 +264,7 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
             .into_boxed_str();
     }
 
-    let mut sorted_flags = String::new();
+    let mut soctxed_flags = String::new();
     let mut dot_all = false;
     let mut global = false;
     let mut ignore_case = false;
@@ -274,36 +273,36 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let mut unicode = false;
     if regex_flags.contains('g') {
         global = true;
-        sorted_flags.push('g');
+        soctxed_flags.push('g');
     }
     if regex_flags.contains('i') {
         ignore_case = true;
-        sorted_flags.push('i');
+        soctxed_flags.push('i');
     }
     if regex_flags.contains('m') {
         multiline = true;
-        sorted_flags.push('m');
+        soctxed_flags.push('m');
     }
     if regex_flags.contains('s') {
         dot_all = true;
-        sorted_flags.push('s');
+        soctxed_flags.push('s');
     }
     if regex_flags.contains('u') {
         unicode = true;
-        sorted_flags.push('u');
+        soctxed_flags.push('u');
     }
     if regex_flags.contains('y') {
         sticky = true;
-        sorted_flags.push('y');
+        soctxed_flags.push('y');
     }
 
-    let matcher = match Regex::with_flags(&regex_body, sorted_flags.as_str()) {
+    let matcher = match Regex::with_flags(&regex_body, soctxed_flags.as_str()) {
         Err(error) => {
             let msg = JsString::new(
-                rt,
+                ctx,
                 format!("failed to create matcher: {} in {}", error.text, regex_body),
             );
-            return Err(JsValue::new(JsSyntaxError::new(rt, msg, None)));
+            return Err(JsValue::new(JsSyntaxError::new(ctx, msg, None)));
         }
         Ok(val) => val,
     };
@@ -311,7 +310,7 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let regexp = RegExp {
         matcher,
         use_last_index: global || sticky,
-        flags: sorted_flags.clone().into_boxed_str(),
+        flags: soctxed_flags.clone().into_boxed_str(),
         dot_all,
         global,
         ignore_case,
@@ -321,26 +320,26 @@ pub fn regexp_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         original_source: regex_body,
         original_flags: regex_flags,
     };
-    let mut this = JsObject::new(rt, &structure, RegExp::get_class(), ObjectTag::Regex);
+    let mut this = JsObject::new(ctx, &structure, RegExp::get_class(), ObjectTag::Regex);
     *this.data::<RegExp>() = ManuallyDrop::new(regexp);
-    let f = JsString::new(rt, sorted_flags);
-    this.put(rt, "flags".intern(), JsValue::new(f), false)?;
-    this.put(rt, "global".intern(), JsValue::new(global), false)?;
-    this.put(rt, "unicode".intern(), JsValue::new(unicode), false)?;
-    this.put(rt, "lastIndex".intern(), JsValue::new(0), false)?;
+    let f = JsString::new(ctx, soctxed_flags);
+    this.put(ctx, "flags".intern(), JsValue::new(f), false)?;
+    this.put(ctx, "global".intern(), JsValue::new(global), false)?;
+    this.put(ctx, "unicode".intern(), JsValue::new(unicode), false)?;
+    this.put(ctx, "lastIndex".intern(), JsValue::new(0), false)?;
     Ok(JsValue::new(this))
 }
 
-pub fn regexp_test(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_test(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.this.is_jsobject()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
         )));
     }
     let mut this = args.this.get_jsobject();
-    let mut last_index = this.get(rt, "lastIndex".intern())?.to_int32(rt)? as usize;
+    let mut last_index = this.get(ctx, "lastIndex".intern())?.to_int32(ctx)? as usize;
 
-    let arg_str = args.at(0).to_string(rt)?;
+    let arg_str = args.at(0).to_string(ctx)?;
     if this.is_class(RegExp::get_class()) {
         let result = if let Some(m) = this
             .data::<RegExp>()
@@ -359,35 +358,35 @@ pub fn regexp_test(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
             false
         };
         this.put(
-            rt,
+            ctx,
             "lastIndex".intern(),
             JsValue::new(last_index as u32),
             false,
         )?;
         return Ok(JsValue::new(result));
     } else {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.test method called on incompatible value",
         )));
     }
 }
 
-pub fn regexp_exec(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_exec(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.this.is_jsobject()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
         )));
     }
     let mut this = args.this.get_jsobject();
-    let mut last_index = this.get(rt, "lastIndex".intern())?.to_int32(rt)? as usize;
+    let mut last_index = this.get(ctx, "lastIndex".intern())?.to_int32(ctx)? as usize;
     let mut obj = this;
     if unlikely(!this.is_class(RegExp::get_class())) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
         )));
     }
     let regex = obj.data::<RegExp>();
-    let arg_str = args.at(0).to_string(rt)?;
+    let arg_str = args.at(0).to_string(ctx)?;
     let result = if let Some(m) = regex.matcher.find_from(arg_str.as_str(), last_index).next() {
         if regex.use_last_index {
             last_index = m.end();
@@ -397,7 +396,7 @@ pub fn regexp_exec(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
         for i in 0..groups {
             if let Some(range) = m.group(i) {
                 result.push(JsValue::new(JsString::new(
-                    rt,
+                    ctx,
                     arg_str.get(range).expect("Could not get slice"),
                 )));
             } else {
@@ -405,18 +404,18 @@ pub fn regexp_exec(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
             }
         }
         let v = result;
-        let mut result = JsArray::new(rt, v.len() as _);
+        let mut result = JsArray::new(ctx, v.len() as _);
         for i in 0..v.len() {
-            result.put(rt, Symbol::Index(i as _), v[i], false)?;
+            result.put(ctx, Symbol::Index(i as _), v[i], false)?;
         }
         result.define_own_property(
-            rt,
+            ctx,
             "index".intern(),
             &*DataDescriptor::new(JsValue::new(m.start() as u32), W | C | E),
             false,
         )?;
-        let input = JsValue::new(JsString::new(rt, arg_str));
-        result.put(rt, "input".intern(), input, false)?;
+        let input = JsValue::new(JsString::new(ctx, arg_str));
+        result.put(ctx, "input".intern(), input, false)?;
 
         JsValue::new(result)
     } else {
@@ -426,7 +425,7 @@ pub fn regexp_exec(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValu
         JsValue::encode_null_value()
     };
     this.put(
-        rt,
+        ctx,
         "lastIndex".intern(),
         JsValue::new(last_index as u32),
         false,
@@ -442,25 +441,25 @@ fn to_regexp(val: JsValue) -> Option<GcPointer<JsObject>> {
     None
 }
 
-pub fn regexp_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     match to_regexp(args.this) {
         Some(object) => {
             let regex = object.data::<RegExp>();
 
             Ok(JsValue::new(JsString::new(
-                rt,
+                ctx,
                 format!("/{}/{}", regex.original_source, regex.flags),
             )))
         }
         None => Err(JsValue::new(
-            rt.new_type_error("RegExp.prototype.toString is not generic"),
+            ctx.new_type_error("RegExp.prototype.toString is not generic"),
         )),
     }
 }
 
 /// @@match
-pub fn regexp_match(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let arg_str = args.at(0).to_string(rt)?;
+pub fn regexp_match(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let arg_str = args.at(0).to_string(ctx)?;
     let matches = if let Some(object) = to_regexp(args.this) {
         let regex = object.data::<RegExp>();
         let mut matches = vec![];
@@ -468,20 +467,20 @@ pub fn regexp_match(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
             let match_vec: Vec<JsValue> = mat
                 .groups()
                 .map(|group| match group {
-                    Some(range) => JsValue::new(JsString::new(rt, &arg_str[range])),
+                    Some(range) => JsValue::new(JsString::new(ctx, &arg_str[range])),
                     None => JsValue::encode_undefined_value(),
                 })
                 .collect();
 
-            let mut match_val = JsArray::from_slice(rt, &match_vec);
+            let mut match_val = JsArray::from_slice(ctx, &match_vec);
             match_val.put(
-                rt,
+                ctx,
                 "index".intern(),
                 JsValue::new(mat.start() as u32),
                 false,
             )?;
-            let input = JsString::new(rt, arg_str.clone());
-            match_val.put(rt, "input".intern(), JsValue::new(input), false)?;
+            let input = JsString::new(ctx, arg_str.clone());
+            match_val.put(ctx, "input".intern(), JsValue::new(input), false)?;
             matches.push(JsValue::new(match_val));
             if !regex.flags.contains('g') {
                 break;
@@ -491,11 +490,11 @@ pub fn regexp_match(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsVal
         matches
     } else {
         return Err(JsValue::new(
-            rt.new_type_error("RegExp.prototype.@@match is not generic"),
+            ctx.new_type_error("RegExp.prototype.@@match is not generic"),
         ));
     };
 
-    let result = JsArray::from_slice(rt, &matches);
+    let result = JsArray::from_slice(ctx, &matches);
     Ok(JsValue::new(result))
 }
 

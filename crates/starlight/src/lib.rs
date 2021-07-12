@@ -95,7 +95,7 @@ pub extern "C" fn platform_initialize() {
 }
 use gc::snapshot::deserializer::Deserializable;
 
-use crate::options::Options;
+use crate::{options::Options, vm::Context};
 #[no_mangle]
 #[doc(hidden)]
 pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
@@ -113,20 +113,21 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
             function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));
         },
     );
+    let mut ctx = Context::new(&mut rt);
     let stack = rt.shadowstack();
 
     letroot!(function = stack, function.expect("No function"));
     letroot!(funcc = stack, *function);
     assert!(function.is_callable(), "Not a callable function");
 
-    let global = rt.realm().global_object();
+    let global = ctx.global_object();
     letroot!(
         args = stack,
         Arguments::new(JsValue::encode_object_value(global), &mut [])
     );
     match function
         .as_function_mut()
-        .call(&mut rt, &mut args, JsValue::new(*funcc))
+        .call(&mut ctx, &mut args, JsValue::new(*funcc))
     {
         Ok(x) => {
             if x.is_number() {
@@ -135,7 +136,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
             }
         }
         Err(e) => {
-            let str = e.to_string(&mut rt);
+            let str = e.to_string(&mut ctx);
             match str {
                 Err(_) => panic!("Failed to get error"),
                 Ok(str) => {
@@ -174,5 +175,5 @@ pub mod prelude {
 }
 
 pub trait JsTryFrom<T>: Sized {
-    fn try_from(vm: &mut Runtime, value: T) -> Result<Self, JsValue>;
+    fn try_from(ctx: &mut Context, value: T) -> Result<Self, JsValue>;
 }

@@ -5,6 +5,8 @@ use crate::{
     gc::{cell::GcCell, snapshot::serializer::Serializable},
     prelude::*,
 };
+
+use super::Context;
 pub struct NativeIterator {
     names: Vec<Symbol>,
     at: u32,
@@ -21,11 +23,11 @@ impl NativeIterator {
         None
     }
 
-    pub fn new(rt: &mut Runtime, obj: GcPointer<dyn GcCell>) -> GcPointer<Self> {
+    pub fn new(ctx: &mut Context, obj: GcPointer<dyn GcCell>) -> GcPointer<Self> {
         let mut names = vec![];
         if let Some(mut obj) = obj.downcast::<JsObject>() {
             obj.get_property_names(
-                rt,
+                ctx,
                 &mut |name, _| names.push(name),
                 EnumerationMode::Default,
             );
@@ -36,7 +38,7 @@ impl NativeIterator {
         } else {
             todo!()
         }
-        rt.heap().allocate(Self { names, at: 0 })
+        ctx.heap().allocate(Self { names, at: 0 })
     }
 }
 

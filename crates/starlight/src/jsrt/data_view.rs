@@ -2,39 +2,35 @@ use std::{any::TypeId, mem::size_of};
 
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
-use crate::{
-    prelude::*,
-    vm::{array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject},
-    JsTryFrom,
-};
-pub fn data_view_prototype_buffer(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let this = args.this.to_object(rt)?;
+use crate::{JsTryFrom, prelude::*, vm::{Context, array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject}};
+pub fn data_view_prototype_buffer(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.buffer called on a non DataView object",
         )));
     }
     Ok(JsValue::new(this.data::<JsDataView>().get_buffer()))
 }
 pub fn data_view_prototype_byte_offset(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
-    let this = args.this.to_object(rt)?;
+    let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.byteOffset called on a non DataView object",
         )));
     }
     Ok(JsValue::new(this.data::<JsDataView>().byte_offset() as u32))
 }
 pub fn data_view_prototype_byte_length(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
-    let this = args.this.to_object(rt)?;
+    let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.byteLength called on a non DataView object",
         )));
     }
@@ -42,28 +38,28 @@ pub fn data_view_prototype_byte_length(
 }
 
 pub fn data_view_prototype_get<T: SwapByteOrder + Into<JsValue> + Copy>(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
-    let this = args.this.to_object(rt)?;
+    let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.get<T> called on a non DataView object",
         )));
     }
 
-    let res = super::to_index(rt, args.at(0))?;
+    let res = super::to_index(ctx, args.at(0))?;
     let byte_offset = res as usize;
     let little_endian = args.at(1).to_boolean();
 
     if !this.data::<JsDataView>().attached() {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.get<T> called on a detached ArrayBuffer",
         )));
     }
 
     if byte_offset + size_of::<T>() > this.data::<JsDataView>().byte_length() {
-        return Err(JsValue::new(rt.new_range_error(format!(
+        return Err(JsValue::new(ctx.new_range_error(format!(
             "DataView.prototype.get<T>(): Cannot read that many bytes {}",
             byte_offset + size_of::<T>()
         ))));
@@ -76,29 +72,29 @@ pub fn data_view_prototype_get<T: SwapByteOrder + Into<JsValue> + Copy>(
 }
 
 pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static>(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
-    let this = TypedJsObject::<JsDataView>::try_from(rt, args.this)?;
+    let this = TypedJsObject::<JsDataView>::try_from(ctx, args.this)?;
 
-    let res = super::to_index(rt, args.at(0))?;
+    let res = super::to_index(ctx, args.at(0))?;
     let byte_offset = res as usize;
     let little_endian = args.at(2).to_boolean();
 
     if !this.attached() {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.set<T> called on a detached ArrayBuffer",
         )));
     }
 
     if byte_offset + size_of::<T>() > this.byte_length() {
-        return Err(JsValue::new(rt.new_range_error(format!(
+        return Err(JsValue::new(ctx.new_range_error(format!(
             "DataView.prototype.set<T>(): Cannot write that many bytes {}",
             byte_offset + size_of::<T>()
         ))));
     }
 
-    let num = args.at(1).to_number(rt)?;
+    let num = args.at(1).to_number(ctx)?;
     unsafe {
         if TypeId::of::<u8>() == TypeId::of::<T>() {
             let dest = num.clamp(u8::MIN as _, u8::MAX as _);
@@ -128,14 +124,14 @@ pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn data_view_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn data_view_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "DataView() called in a function context instead of constructor",
         )));
     }
 
-    let buffer = args.at(0).to_object(rt).ok().and_then(|object| {
+    let buffer = args.at(0).to_object(ctx).ok().and_then(|object| {
         if object.is_class(JsArrayBuffer::get_class()) {
             Some(object)
         } else {
@@ -143,42 +139,42 @@ pub fn data_view_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsVal
         }
     });
     let buffer = TypedJsObject::<JsArrayBuffer>::new(if buffer.is_none() {
-        return Err(JsValue::new(rt.new_type_error(
+        return Err(JsValue::new(ctx.new_type_error(
             "new DataView(buffer, [byteOffset], [byteLength]): buffer must be an ArrayBuffer",
         )));
     } else {
         buffer.unwrap()
     });
     let byte_length = args.at(2);
-    let res = super::to_index(rt, args.at(1))?;
+    let res = super::to_index(ctx, args.at(1))?;
     let offset = res as usize;
     let buffer_length = buffer.size();
     if offset > buffer_length {
-        return Err(JsValue::new(rt.new_range_error("new DataView(buffer, [byteOffset], byteLength]): byteOffset must be <= the buffer's byte length")));
+        return Err(JsValue::new(ctx.new_range_error("new DataView(buffer, [byteOffset], byteLength]): byteOffset must be <= the buffer's byte length")));
     }
     let view_byte_length;
     if byte_length.is_undefined() {
         view_byte_length = buffer_length - offset;
     } else {
-        let res = super::to_index(rt, byte_length)?;
+        let res = super::to_index(ctx, byte_length)?;
         view_byte_length = res as _;
         if offset + view_byte_length > buffer_length {
-            return Err(JsValue::new(rt.new_range_error("new DataView(buffer, [byteOffset], byteLength]): byteOffset + byteLength must be <= the buffer's byte length")));
+            return Err(JsValue::new(ctx.new_range_error("new DataView(buffer, [byteOffset], byteLength]): byteOffset + byteLength must be <= the buffer's byte length")));
         }
     }
 
-    let this = JsDataView::new(rt, buffer, offset, view_byte_length);
+    let this = JsDataView::new(ctx, buffer, offset, view_byte_length);
     Ok(JsValue::new(this))
 }
 
-impl Runtime {
+impl Context {
     pub(crate) fn init_data_view_in_realm(&mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.data_view_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        self.realm().global_object().put(
+        self.global_object().put(
             self,
             "DataView".intern(),
             JsValue::new(constructor),
@@ -189,7 +185,7 @@ impl Runtime {
 
     pub(crate) fn init_data_view_in_global_data(&mut self) {
         let mut init = || -> Result<(), JsValue> {
-            let obj_proto = self.global_data().object_prototype.unwrap();
+            let obj_proto = self.global_data.object_prototype.unwrap();
             self.global_data.data_view_structure = Some(Structure::new_indexed(self, None, false));
             let proto_map = self
                 .global_data
@@ -277,7 +273,7 @@ impl Runtime {
             Err(e) => {
                 panic!(
                     "Failed to initialize DataView: {}",
-                    e.to_string(self).ok().expect("failed to convert to string")
+                    e.to_string(self).ok().expect("failed to convectx to string")
                 )
             }
         }

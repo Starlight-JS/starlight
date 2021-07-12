@@ -20,17 +20,7 @@ use std::{
     intrinsics::{likely, size_of, unlikely},
 };
 
-use super::{
-    attributes::*,
-    class::JsClass,
-    error::*,
-    number::*,
-    object::{JsHint, JsObject, TypedJsObject},
-    slot::*,
-    string::*,
-    symbol_table::*,
-    Runtime,
-};
+use super::{Context, Runtime, attributes::*, class::JsClass, error::*, number::*, object::{JsHint, JsObject, TypedJsObject}, slot::*, string::*, symbol_table::*};
 pub const CMP_FALSE: i32 = 0;
 pub const CMP_TRUE: i32 = 1;
 pub const CMP_UNDEF: i32 = -1;
@@ -382,21 +372,21 @@ impl JsValue {
     pub fn same_value_zero(lhs: Self, rhs: Self) -> bool {
         Self::same_value_impl(lhs, rhs, true)
     }
-    pub fn to_object(self, rt: &mut Runtime) -> Result<GcPointer<JsObject>, JsValue> {
+    pub fn to_object(self, ctx: &mut Context) -> Result<GcPointer<JsObject>, JsValue> {
         if self.is_undefined() || self.is_null() {
-            let msg = JsString::new(rt, "ToObject to null or undefined");
+            let msg = JsString::new(ctx, "ToObject to null or undefined");
             return Err(JsValue::encode_object_value(JsTypeError::new(
-                rt, msg, None,
+                ctx, msg, None,
             )));
         }
         if self.is_object() && self.get_object().is::<JsObject>() {
             return Ok(unsafe { self.get_object().downcast_unchecked() });
         }
         if self.is_number() {
-            return Ok(NumberObject::new(rt, self.get_number()));
+            return Ok(NumberObject::new(ctx, self.get_number()));
         }
         if self.is_jsstring() {
-            return Ok(JsStringObject::new(rt, self.get_jsstring()));
+            return Ok(JsStringObject::new(ctx, self.get_jsstring()));
         }
         todo!()
     }
@@ -406,10 +396,10 @@ impl JsValue {
     pub fn is_symbol(self) -> bool {
         self.is_object() && self.get_object().is::<JsSymbol>()
     }
-    pub fn to_primitive(self, rt: &mut Runtime, hint: JsHint) -> Result<JsValue, JsValue> {
+    pub fn to_primitive(self, ctx: &mut Context, hint: JsHint) -> Result<JsValue, JsValue> {
         if self.is_object() && self.get_object().is::<JsObject>() {
             let mut object = unsafe { self.get_object().downcast_unchecked::<JsObject>() };
-            object.to_primitive(rt, hint)
+            object.to_primitive(ctx, hint)
         } else {
             Ok(self)
         }
@@ -438,7 +428,7 @@ impl JsValue {
         self.is_jsstring()
     }
 
-    pub fn abstract_equal(self, other: JsValue, rt: &mut Runtime) -> Result<bool, JsValue> {
+    pub fn abstract_equal(self, other: JsValue, ctx: &mut Context) -> Result<bool, JsValue> {
         let mut lhs = self;
         let mut rhs = other;
 
@@ -465,31 +455,31 @@ impl JsValue {
                 return Ok(lhs.get_raw() == rhs.get_raw());
             }
             if lhs.is_number() && rhs.is_jsstring() {
-                rhs = JsValue::new(rhs.to_number(rt)?);
+                rhs = JsValue::new(rhs.to_number(ctx)?);
                 continue;
             }
             if lhs.is_jsstring() && rhs.is_number() {
-                lhs = JsValue::new(lhs.to_number(rt)?);
+                lhs = JsValue::new(lhs.to_number(ctx)?);
                 continue;
             }
 
             if lhs.is_bool() {
-                lhs = JsValue::new(lhs.to_number(rt)?);
+                lhs = JsValue::new(lhs.to_number(ctx)?);
                 continue;
             }
 
             if rhs.is_bool() {
-                rhs = JsValue::new(rhs.to_number(rt)?);
+                rhs = JsValue::new(rhs.to_number(ctx)?);
                 continue;
             }
 
             if (lhs.is_jsstring() || lhs.is_number()) && rhs.is_object() {
-                rhs = rhs.to_primitive(rt, JsHint::None)?;
+                rhs = rhs.to_primitive(ctx, JsHint::None)?;
                 continue;
             }
 
             if lhs.is_object() && (rhs.is_jsstring() || rhs.is_number()) {
-                lhs = lhs.to_primitive(rt, JsHint::None)?;
+                lhs = lhs.to_primitive(ctx, JsHint::None)?;
                 continue;
             }
             break Ok(false);
@@ -511,7 +501,7 @@ impl JsValue {
         self.get_raw() == other.get_raw()
     }
     #[inline]
-    pub fn compare(self, rhs: Self, left_first: bool, rt: &mut Runtime) -> Result<i32, JsValue> {
+    pub fn compare(self, rhs: Self, left_first: bool, ctx: &mut Context) -> Result<i32, JsValue> {
         let lhs = self;
         if likely(lhs.is_number() && rhs.is_number()) {
             return Ok(Self::number_compare(self.get_number(), rhs.get_number()));
@@ -520,11 +510,11 @@ impl JsValue {
         let px;
         let py;
         if left_first {
-            px = lhs.to_primitive(rt, JsHint::Number)?;
-            py = rhs.to_primitive(rt, JsHint::Number)?;
+            px = lhs.to_primitive(ctx, JsHint::Number)?;
+            py = rhs.to_primitive(ctx, JsHint::Number)?;
         } else {
-            py = rhs.to_primitive(rt, JsHint::Number)?;
-            px = lhs.to_primitive(rt, JsHint::Number)?;
+            py = rhs.to_primitive(ctx, JsHint::Number)?;
+            px = lhs.to_primitive(ctx, JsHint::Number)?;
         }
         if likely(px.is_number() && py.is_number()) {
             return Ok(Self::number_compare(px.get_number(), py.get_number()));
@@ -550,37 +540,37 @@ impl JsValue {
             let (x, y) = (x.as_str(), y.as_str());
             return slow_string_cmp(x, y);
         } else {
-            let nx = px.to_number(rt)?;
-            let ny = py.to_number(rt)?;
+            let nx = px.to_number(ctx)?;
+            let ny = py.to_number(ctx)?;
             Ok(Self::number_compare(nx, ny))
         }
     }
-    pub fn compare_left(self, rhs: Self, rt: &mut Runtime) -> Result<i32, JsValue> {
-        Self::compare(self, rhs, true, rt)
+    pub fn compare_left(self, rhs: Self, ctx: &mut Context) -> Result<i32, JsValue> {
+        Self::compare(self, rhs, true, ctx)
     }
-    pub fn to_int32(self, rt: &mut Runtime) -> Result<i32, JsValue> {
+    pub fn to_int32(self, ctx: &mut Context) -> Result<i32, JsValue> {
         if self.is_int32() {
             return Ok(self.get_int32());
         }
-        let number = self.to_number(rt)?;
+        let number = self.to_number(ctx)?;
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
         }
         Ok(number.floor() as i32)
     }
 
-    pub fn to_uint32(self, rt: &mut Runtime) -> Result<u32, JsValue> {
+    pub fn to_uint32(self, ctx: &mut Context) -> Result<u32, JsValue> {
         if self.is_int32() {
             return Ok(self.get_int32() as _);
         }
-        let number = self.to_number(rt)?;
+        let number = self.to_number(ctx)?;
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
         }
         Ok(number.floor() as u32)
     }
 
-    pub fn to_number(self, rt: &mut Runtime) -> Result<f64, JsValue> {
+    pub fn to_number(self, ctx: &mut Context) -> Result<f64, JsValue> {
         if likely(self.is_double()) {
             Ok(self.get_double())
         } else if likely(self.is_int32()) {
@@ -600,18 +590,18 @@ impl JsValue {
         } else if self.is_undefined() {
             Ok(f64::from_bits(0x7ff8000000000000))
         } else if self.is_object() && self.get_object().is::<JsObject>() {
-            let stack = rt.shadowstack();
+            let stack = ctx.shadowstack();
             letroot!(obj = stack, unsafe {
                 self.get_object().downcast_unchecked::<JsObject>()
             });
 
-            match (obj.class().method_table.DefaultValue)(&mut obj, rt, JsHint::Number) {
-                Ok(val) => val.to_number(rt),
+            match (obj.class().method_table.DefaultValue)(&mut obj, ctx, JsHint::Number) {
+                Ok(val) => val.to_number(ctx),
                 Err(e) => Err(e),
             }
         } else if unlikely(self.is_symbol()) {
             return Err(JsValue::new(
-                rt.new_type_error("Cannot convert Symbol to number"),
+                ctx.new_type_error("Cannot convectx Symbol to number"),
             ));
         } else {
             unsafe { unreachable_unchecked() }
@@ -634,7 +624,7 @@ impl JsValue {
             || (self.is_object() && self.get_object().is::<JsSymbol>())
     }
 
-    pub fn to_string(&self, rt: &mut Runtime) -> Result<String, JsValue> {
+    pub fn to_string(&self, ctx: &mut Context) -> Result<String, JsValue> {
         if self.is_number() {
             Ok(self.get_number().to_string())
         } else if self.is_null() {
@@ -648,10 +638,10 @@ impl JsValue {
             if let Some(jsstr) = object.downcast::<JsString>() {
                 return Ok(jsstr.as_str().to_owned());
             } else if let Some(object) = object.downcast::<JsObject>() {
-                let stack = rt.shadowstack();
+                let stack = ctx.shadowstack();
                 letroot!(object = stack, object);
-                return match object.to_primitive(rt, JsHint::String) {
-                    Ok(val) => val.to_string(rt),
+                return match object.to_primitive(ctx, JsHint::String) {
+                    Ok(val) => val.to_string(ctx),
                     Err(e) => Err(e),
                 };
             }
@@ -659,7 +649,7 @@ impl JsValue {
                 return Ok("spread".to_string());
             }
             if object.is::<JsSymbol>() {
-                let desc = rt.description(object.downcast::<JsSymbol>().unwrap().symbol());
+                let desc = ctx.description(object.downcast::<JsSymbol>().unwrap().symbol());
                 return Ok(desc);
             }
             println!("{:?}", (object.get_dyn()).type_name());
@@ -668,7 +658,7 @@ impl JsValue {
             unreachable!("{:?}", self.type_of())
         }
     }
-    pub fn to_symbol(self, rt: &mut Runtime) -> Result<Symbol, JsValue> {
+    pub fn to_symbol(self, ctx: &mut Context) -> Result<Symbol, JsValue> {
         if self.is_object() && self.get_object().is::<JsSymbol>() {
             return Ok(self.get_object().downcast::<JsSymbol>().unwrap().symbol());
         }
@@ -701,21 +691,21 @@ impl JsValue {
             return Ok("undefined".intern());
         }
         let mut obj = self.get_object().downcast::<JsObject>().unwrap();
-        let prim = obj.to_primitive(rt, JsHint::String)?;
-        prim.to_symbol(rt)
+        let prim = obj.to_primitive(ctx, JsHint::String)?;
+        prim.to_symbol(ctx)
     }
 
-    pub fn get_primitive_proto(self, vm: &mut Runtime) -> GcPointer<JsObject> {
+    pub fn get_primitive_proto(self, ctx: &mut Context) -> GcPointer<JsObject> {
         assert!(!self.is_empty());
         assert!(self.is_primitive());
         if self.is_jsstring() {
-            return vm.global_data().string_prototype.unwrap();
+            return ctx.global_data().string_prototype.unwrap();
         } else if self.is_number() {
-            return vm.global_data().number_prototype.unwrap();
+            return ctx.global_data().number_prototype.unwrap();
         } else if self.is_bool() {
-            return vm.global_data().boolean_prototype.unwrap();
+            return ctx.global_data().boolean_prototype.unwrap();
         } else {
-            return vm.global_data().symbol_prototype.unwrap();
+            return ctx.global_data().symbol_prototype.unwrap();
         }
     }
 
@@ -749,25 +739,25 @@ impl JsValue {
     }
     pub fn get_slot(
         self,
-        rt: &mut Runtime,
+        ctx: &mut Context,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        let stack = rt.shadowstack();
+        let stack = ctx.shadowstack();
         if !self.is_jsobject() {
             if self.is_null() {
-                let msg = JsString::new(rt, "null does not have properties");
+                let msg = JsString::new(ctx, "null does not have propectxies");
                 return Err(JsValue::encode_object_value(JsTypeError::new(
-                    rt, msg, None,
+                    ctx, msg, None,
                 )));
             }
 
             if self.is_undefined() {
-                let d = rt.description(name);
+                let d = ctx.description(name);
                 let msg =
-                    JsString::new(rt, &format!("undefined does not have properties ('{}')", d));
+                    JsString::new(ctx, &format!("undefined does not have propectxies ('{}')", d));
                 return Err(JsValue::encode_object_value(JsTypeError::new(
-                    rt, msg, None,
+                    ctx, msg, None,
                 )));
             }
 
@@ -790,21 +780,21 @@ impl JsValue {
                             .as_str()
                             .chars()
                             .nth(index as usize)
-                            .map(|x| JsValue::encode_object_value(JsString::new(rt, x.to_string())))
+                            .map(|x| JsValue::encode_object_value(JsString::new(ctx, x.to_string())))
                             .unwrap_or_else(JsValue::encode_undefined_value);
                         slot.set_1(char, string_indexed(), Some(str.as_dyn()));
                         return Ok(slot.value());
                     }
                 }
             }
-            letroot!(proto = stack, self.get_primitive_proto(rt));
-            if proto.get_property_slot(rt, name, slot) {
-                return slot.get(rt, self);
+            letroot!(proto = stack, self.get_primitive_proto(ctx));
+            if proto.get_property_slot(ctx, name, slot) {
+                return slot.get(ctx, self);
             }
             return Ok(JsValue::encode_undefined_value());
         }
         letroot!(obj = stack, self.get_jsobject());
-        obj.get_slot(rt, name, slot)
+        obj.get_slot(ctx, name, slot)
     }
 
     pub fn to_boolean(self) -> bool {
@@ -821,11 +811,11 @@ impl JsValue {
             true
         }
     }
-    pub fn check_object_coercible(self, rt: &mut Runtime) -> Result<(), Self> {
+    pub fn check_object_coercible(self, ctx: &mut Context) -> Result<(), Self> {
         if self.is_null() || self.is_undefined() {
-            let msg = JsString::new(rt, "null or undefined has no properties");
+            let msg = JsString::new(ctx, "null or undefined has no propectxies");
             return Err(JsValue::encode_object_value(JsTypeError::new(
-                rt, msg, None,
+                ctx, msg, None,
             )));
         }
         Ok(())
@@ -940,7 +930,7 @@ impl TryFrom<JsValue> for i32 {
                 .parse()
                 .map_err(|_| "failed to parse JS string")
         } else {
-            Err("Can not convert JS value to i32")
+            Err("Can not convectx JS value to i32")
         }
     }
 }
@@ -963,7 +953,7 @@ impl TryFrom<JsValue> for f64 {
                 .parse()
                 .map_err(|_| "failed to parse JS string")
         } else {
-            Err("Can not convert JS value to i32")
+            Err("Can not convectx JS value to i32")
         }
     }
 }
@@ -1047,8 +1037,8 @@ impl Deserializable for HashValueZero {
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
         at.cast::<Self>().write(Self::deserialize_inplace(deser));
     }
-    unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
-        rt.heap().allocate_raw(
+    unsafe fn allocate(ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+        ctx.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
             size_of::<Self>(),
             TypeId::of::<Self>(),
@@ -1064,9 +1054,11 @@ impl Serializable for HashValueZero {
 
 pub mod new_value {
     //! TODO: This JS values results in nearly ~0.3% reduction in currently passing tests, we need to figure out why
+    use std::fmt::Debug;
+
     use super::*;
     use wtf_rs::pure_nan::{pure_nan, purify_nan};
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Debug)]
     pub struct JsValue(EncodedValueDescriptor);
     #[derive(Clone, Copy)]
     union EncodedValueDescriptor {
@@ -1078,6 +1070,12 @@ pub mod new_value {
         #[cfg(target_pointer_width = "32")]
         as_bits: AsBits,
     }
+    impl Debug for EncodedValueDescriptor {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_fmt(format_args!("EncodedValueDescriptor {}","to do"))
+        } 
+    }
+
     impl PartialEq for JsValue {
         fn eq(&self, other: &Self) -> bool {
             unsafe { self.0.as_int64 == other.0.as_int64 }
@@ -1091,7 +1089,7 @@ pub mod new_value {
         payload: i32,
         tag: i32,
     }
-    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[derive(Clone, Copy, PactxialEq, Eq)]
     #[cfg(target_endian = "big")]
     #[repr(C)]
     struct AsBits {
@@ -1181,7 +1179,7 @@ pub mod new_value {
         }
         #[inline]
         pub fn get_bool(self) -> bool {
-            assert!(self.is_bool());
+            assectx!(self.is_bool());
             self.payload() == 1
         }
         #[inline]
@@ -1240,8 +1238,8 @@ pub mod new_value {
          *     Undefined: 0x0a
          *     Null:      0x02
          *
-         * These values have the following properties:
-         * - Bit 1 (OtherTag) is set for all four values, allowing real pointers to be
+         * These values have the following propectxies:
+         * - Bit 1 (Othectxag) is set for all four values, allowing real pointers to be
          *   quickly distinguished from all immediate values, including these invalid pointers.
          * - With bit 3 masked out (UndefinedTag), Undefined and Null share the
          *   same value, allowing null & undefined to be quickly detected.

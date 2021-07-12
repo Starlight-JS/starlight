@@ -1,10 +1,7 @@
 use num::traits::float::FloatCore;
 
-use crate::{
-    prelude::*,
-    vm::{number::NumberObject},
-};
-pub fn number_value_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+use crate::{prelude::*, vm::{Context, number::NumberObject}};
+pub fn number_value_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
@@ -12,7 +9,7 @@ pub fn number_value_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
                 NumberObject::to_ref(&obj.get_jsobject()).get(),
             ));
         } else {
-            return Err(JsValue::new(rt.new_type_error(
+            return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.valueOf is not generic function",
             )));
         }
@@ -20,13 +17,13 @@ pub fn number_value_of(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
         Ok(obj)
     }
 }
-pub fn number_clz(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_clz(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let x = if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
             NumberObject::to_ref(&obj.get_jsobject()).get() as u32
         } else {
-            return Err(JsValue::new(rt.new_type_error(
+            return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.valueOf is not generic function",
             )));
         }
@@ -36,20 +33,20 @@ pub fn number_clz(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue
     Ok(JsValue::new(x.leading_zeros()))
 }
 
-pub fn number_constructor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.ctor_call {
         let mut res = 0.0;
         if args.size() != 0 {
-            res = args.at(0).to_number(rt)?;
+            res = args.at(0).to_number(ctx)?;
         }
-        Ok(JsValue::new(NumberObject::new(rt, res)))
+        Ok(JsValue::new(NumberObject::new(ctx, res)))
     } else if args.size() == 0 {
         return Ok(JsValue::new(0i32));
     } else {
-        return args.at(0).to_number(rt).map(JsValue::new);
+        return args.at(0).to_number(ctx).map(JsValue::new);
     }
 }
-pub fn number_is_nan(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_is_nan(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     if !num.is_number() {
         return Ok(JsValue::new(false));
@@ -57,7 +54,7 @@ pub fn number_is_nan(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsV
     Ok(JsValue::new(num.get_number().is_nan()))
 }
 
-pub fn number_is_finite(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_is_finite(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     if !num.is_number() {
         return Ok(JsValue::new(false));
@@ -65,13 +62,13 @@ pub fn number_is_finite(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, 
     Ok(JsValue::new(num.get_number().is_finite()))
 }
 
-fn this_number_val(rt: &mut Runtime, obj: JsValue) -> Result<f64, JsValue> {
+fn this_number_val(ctx: &mut Context, obj: JsValue) -> Result<f64, JsValue> {
     let num;
     if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
             num = NumberObject::to_ref(&obj.get_jsobject()).get();
         } else {
-            return Err(JsValue::new(rt.new_type_error(
+            return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.toString is not generic function",
             )));
         }
@@ -82,7 +79,7 @@ fn this_number_val(rt: &mut Runtime, obj: JsValue) -> Result<f64, JsValue> {
     Ok(num)
 }
 
-pub fn number_is_integer(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_is_integer(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     if !num.is_number() {
         return Ok(JsValue::new(false));
@@ -92,25 +89,25 @@ pub fn number_is_integer(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     ))
 }
 
-pub fn number_to_int(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_int(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
-    num.to_int32(rt).map(JsValue::new)
+    num.to_int32(ctx).map(JsValue::new)
 }
-pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_precisiion(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let precision_var = args.at(0);
-    let mut this_num = this_number_val(rt, args.this)?;
+    let mut this_num = this_number_val(ctx, args.this)?;
     if precision_var.is_undefined() || !this_num.is_finite() {
-        return number_to_string(rt, &Arguments::new(args.this, &mut []));
+        return number_to_string(ctx, &Arguments::new(args.this, &mut []));
     }
 
-    let precision = match precision_var.to_int32(rt)? {
+    let precision = match precision_var.to_int32(ctx)? {
         x if (1..=100).contains(&x) => x as usize,
         _ => {
             let msg = JsString::new(
-                rt,
+                ctx,
                 "precision must be an integer in range between 1 and 100",
             );
-            return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+            return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
         }
     };
 
@@ -133,7 +130,7 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
         exponent = 0;
     // 10
     } else {
-        // Due to f64 limitations, this part differs a bit from the spec,
+        // Due to f64 limitations, this pactx differs a bit from the spec,
         // but has the same effect. It manipulates the string constructed
         // by ryu-js: digits with an optional dot between two of them.
 
@@ -167,12 +164,12 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
             // iv, v
             suffix.push_str(&exponent.to_string());
 
-            return Ok(JsValue::new(JsString::new(rt, prefix + &suffix)));
+            return Ok(JsValue::new(JsString::new(ctx, prefix + &suffix)));
         }
     } // 11
     let e_inc = exponent + 1;
     if e_inc == precision_i32 {
-        return Ok(JsValue::from(JsString::new(rt, prefix + &suffix)));
+        return Ok(JsValue::from(JsString::new(ctx, prefix + &suffix)));
     }
 
     // 12
@@ -186,21 +183,21 @@ pub fn number_to_precisiion(rt: &mut Runtime, args: &Arguments) -> Result<JsValu
     }
 
     // 14
-    Ok(JsValue::new(JsString::new(rt, prefix + &suffix)))
+    Ok(JsValue::new(JsString::new(ctx, prefix + &suffix)))
 }
 
-pub fn number_to_fixed(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_fixed(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let fixed_var = args.at(0);
-    let mut this_num = this_number_val(rt, args.this)?;
+    let mut this_num = this_number_val(ctx, args.this)?;
 
     let mut fixed = 0;
     if !fixed_var.is_undefined() {
-        fixed = fixed_var.to_int32(rt)?;
+        fixed = fixed_var.to_int32(ctx)?;
     }
 
     if !(0..=20).contains(&fixed) {
-        let msg = JsString::new(rt, "toFixed() digits argument must be between 0 and 20");
-        return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+        let msg = JsString::new(ctx, "toFixed() digits argument must be between 0 and 20");
+        return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
     }
 
     let fixed = fixed as usize;
@@ -209,17 +206,17 @@ pub fn number_to_fixed(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, Js
     let mut string = buffer.format(this_num).to_string();
     // after .
     string = round_to_fixed(&mut string, fixed);
-    Ok(JsValue::new(JsString::new(rt, string)))
+    Ok(JsValue::new(JsString::new(ctx, string)))
 }
 
-pub fn number_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let num;
     if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
             num = NumberObject::to_ref(&obj.get_jsobject()).get();
         } else {
-            return Err(JsValue::new(rt.new_type_error(
+            return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.toString is not generic function",
             )));
         }
@@ -233,33 +230,33 @@ pub fn number_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, J
         if first.is_undefined() {
             radix = 10;
         } else {
-            radix = first.to_int32(rt)?;
+            radix = first.to_int32(ctx)?;
         }
         if radix == 10 {
-            return Ok(JsValue::new(JsString::new(rt, num.to_string())));
+            return Ok(JsValue::new(JsString::new(ctx, num.to_string())));
         }
         if (2..=36).contains(&radix) {
             if radix != 10 {
                 if num.is_nan() {
-                    return Ok(JsValue::new(JsString::new(rt, "NaN")));
+                    return Ok(JsValue::new(JsString::new(ctx, "NaN")));
                 } else if num.is_infinite() {
                     if num.is_sign_positive() {
-                        return Ok(JsValue::new(JsString::new(rt, "Infinity")));
+                        return Ok(JsValue::new(JsString::new(ctx, "Infinity")));
                     } else {
-                        return Ok(JsValue::new(JsString::new(rt, "-Infinity")));
+                        return Ok(JsValue::new(JsString::new(ctx, "-Infinity")));
                     }
                 }
             }
             Ok(JsValue::new(JsString::new(
-                rt,
+                ctx,
                 to_native_string_radix(num, radix as _),
             )))
         } else {
-            let msg = JsString::new(rt, "Illegal radix");
-            return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+            let msg = JsString::new(ctx, "Illegal radix");
+            return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
         }
     } else {
-        return Ok(JsValue::new(JsString::new(rt, num.to_string())));
+        return Ok(JsValue::new(JsString::new(ctx, num.to_string())));
     }
 }
 
@@ -269,12 +266,12 @@ pub(crate) fn to_native_string_radix(mut value: f64, radix: u8) -> String {
     assert!(radix >= 2);
     assert!(radix <= 36);
     assert!(value.is_finite());
-    // assert_ne!(0.0, value);
+    // assectx_ne!(0.0, value);
 
     // Character array used for conversion.
     // Temporary buffer for the result. We start with the decimal point in the
-    // middle and write to the left for the integer part and to the right for the
-    // fractional part. 1024 characters for the exponent and 52 for the mantissa
+    // middle and write to the left for the integer pactx and to the right for the
+    // fractional pactx. 1024 characters for the exponent and 52 for the mantissa
     // either way, with additional space for sign, decimal point and string
     // termination should be sufficient.
     let mut buffer: [u8; BUF_SIZE] = [0; BUF_SIZE];
@@ -284,7 +281,7 @@ pub(crate) fn to_native_string_radix(mut value: f64, radix: u8) -> String {
     if negative {
         value = -value
     }
-    // Split the value into an integer part and a fractional part.
+    // Split the value into an integer pactx and a fractional pactx.
     // let mut integer = value.trunc();
     // let mut fraction = value.fract();
     let mut integer = value.floor();
@@ -295,7 +292,7 @@ pub(crate) fn to_native_string_radix(mut value: f64, radix: u8) -> String {
     delta = next_after(0.0, f64::MAX).max(delta);
     assert!(delta > 0.0);
     if fraction >= delta {
-        // Insert decimal point.
+        // Insectx decimal point.
         frac_buf[fraction_cursor] = b'.';
         fraction_cursor += 1;
         loop {
@@ -317,7 +314,7 @@ pub(crate) fn to_native_string_radix(mut value: f64, radix: u8) -> String {
                     fraction_cursor -= 1;
                     if fraction_cursor == 0 {
                         //              CHECK_EQ('.', buffer[fraction_cursor]);
-                        // Carry over to the integer part.
+                        // Carry over to the integer pactx.
                         integer += 1.;
                         break;
                     } else {
@@ -514,14 +511,14 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-impl Runtime {
+impl Context {
     pub(crate) fn init_number_in_realm(&mut self) {
         let mut proto = self.global_data.number_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             "Number".intern(),
             &*DataDescriptor::new(JsValue::new(constructor), W | C),
@@ -533,7 +530,7 @@ impl Runtime {
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let mut proto = NumberObject::new_plain(self, structure, 0.0);
 
-        self.global_data()
+        self.global_data
             .number_structure
             .unwrap()
             .change_prototype_with_no_transition(proto);

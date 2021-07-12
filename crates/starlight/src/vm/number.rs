@@ -3,11 +3,13 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::prelude::*;
 use std::mem::{size_of, ManuallyDrop};
+
+use super::Context;
 pub struct NumberObject {
     value: f64,
 }
 
-extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _: &mut Context) {
     *obj.data::<NumberObject>() = ManuallyDrop::new(NumberObject {
         value: f64::from_bits(deser.get_u64()),
     });
@@ -35,10 +37,10 @@ impl NumberObject {
         Some(sz)
     );
 
-    pub fn new(rt: &mut Runtime, value: f64) -> GcPointer<JsObject> {
+    pub fn new(ctx: &mut Context, value: f64) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
-            rt,
-            &rt.global_data().number_structure.unwrap(),
+            ctx,
+            &ctx.global_data().number_structure.unwrap(),
             Self::get_class(),
             ObjectTag::Number,
         );
@@ -46,11 +48,11 @@ impl NumberObject {
         obj
     }
     pub fn new_plain(
-        rt: &mut Runtime,
+        ctx: &mut Context,
         structure: GcPointer<Structure>,
         value: f64,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(rt, &structure, Self::get_class(), ObjectTag::Number);
+        let mut obj = JsObject::new(ctx, &structure, Self::get_class(), ObjectTag::Number);
         *obj.data::<Self>() = ManuallyDrop::new(Self { value });
         obj
     }

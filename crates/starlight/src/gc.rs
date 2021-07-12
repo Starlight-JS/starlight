@@ -15,7 +15,7 @@
 //!
 #![allow(dead_code, unused_variables)]
 use crate::options::Options;
-use crate::vm::Runtime;
+use crate::vm::{Runtime};
 use crate::{
     gc::cell::*,
     gc::snapshot::{
@@ -190,7 +190,7 @@ impl Deserializable for FreeObject {
         unreachable!()
     }
 
-    unsafe fn allocate(_rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -504,7 +504,7 @@ impl Tracer for SlotVisitor {
             swap(&mut scan, &mut end);
         }
         unsafe {
-            while scan < end {
+            while scan < end - size_of::<usize>() {
                 let ptr = (scan as *mut *mut u8).read();
 
                 if (*self.heap).is_heap_pointer(ptr) {

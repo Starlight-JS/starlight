@@ -271,9 +271,9 @@ impl StoredSlot {
         )
     }
     #[allow(unused_variables)]
-    pub fn get(&self, context: &mut Runtime, this_binding: JsValue) -> Result<JsValue, JsValue> {
+    pub fn get(&self, ctx: &mut Context, this_binding: JsValue) -> Result<JsValue, JsValue> {
         if self.attributes.is_accessor() {
-            return self.accessor().invoke_getter(context, this_binding);
+            return self.accessor().invoke_getter(ctx, this_binding);
         }
         return Ok(self.value);
     }
@@ -290,7 +290,7 @@ impl StoredSlot {
     /// current is currently set PropertyDescriptor, and desc is which we try to set.
     pub fn is_defined_property_accepted(
         &self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         desc: &PropertyDescriptor,
         throwable: bool,
         returned: &mut bool,
@@ -300,9 +300,9 @@ impl StoredSlot {
             ($str: expr) => {{
                 *returned = false;
                 if throwable {
-                    let msg = JsString::new(vm, $str);
+                    let msg = JsString::new(ctx, $str);
                     return Err(JsValue::encode_object_value(JsTypeError::new(
-                        vm, msg, None,
+                        ctx, msg, None,
                     )));
                 }
                 return Ok(false);
@@ -393,7 +393,7 @@ impl StoredSlot {
         }
     }
 
-    pub fn merge(&mut self, context: &mut Runtime, desc: &PropertyDescriptor) {
+    pub fn merge(&mut self, context: &mut Context, desc: &PropertyDescriptor) {
         let mut attr = AttrExternal::new(Some(self.attributes().raw()));
         if !desc.is_configurable_absent() {
             attr.set_configurable(desc.is_configurable());
@@ -441,7 +441,7 @@ impl StoredSlot {
         self.attributes = AttrSafe::un_safe(attr);
     }
 
-    pub fn new(context: &mut Runtime, desc: &PropertyDescriptor) -> Self {
+    pub fn new(context: &mut Context, desc: &PropertyDescriptor) -> Self {
         let mut this = Self {
             value: JsValue::encode_undefined_value(),
             attributes: AttrSafe::not_found(),
@@ -489,18 +489,18 @@ impl Accessor {
     pub fn setter(&self) -> JsValue {
         self.setter
     }
-    pub fn new(vm: &mut Runtime, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
+    pub fn new(ctx: &mut Context, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
         let this = Self { getter, setter };
-        vm.heap().allocate(this)
+        ctx.heap().allocate(this)
     }
 
     pub fn invoke_getter(
         &self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         this_binding: JsValue,
     ) -> Result<JsValue, JsValue> {
         if self.getter().is_callable() {
-            let stack = vm.shadowstack();
+            let stack = ctx.shadowstack();
             crate::letroot!(args = stack, Arguments::new(this_binding, &mut []));
 
             self.getter()
@@ -508,7 +508,7 @@ impl Accessor {
                 .downcast::<JsObject>()
                 .unwrap()
                 .as_function_mut()
-                .call(vm, &mut args, self.getter())
+                .call(ctx, &mut args, self.getter())
         } else {
             Ok(JsValue::encode_undefined_value())
         }

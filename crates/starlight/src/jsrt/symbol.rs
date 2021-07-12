@@ -1,9 +1,9 @@
-use crate::{prelude::*};
+use crate::{prelude::*, vm::Context};
 use std::intrinsics::unlikely;
 
 macro_rules! builtin_symbols {
-    ($rt: expr,$ctor: expr,$m: ident) => {
-        $m! { $rt,$ctor,
+    ($ctx: expr,$ctor: expr,$m: ident) => {
+        $m! { $ctx,$ctor,
             "asyncIterator",
             "hasInstance",
             "isConcatSpreadable",
@@ -22,27 +22,23 @@ macro_rules! builtin_symbols {
 }
 
 macro_rules! def_symbols {
-    ($rt: expr,$ctor: expr,$($name : literal),*) => {
+    ($ctx: expr,$ctor: expr,$($name : literal),*) => {
         $(
             let name = format!("Symbol.{}",$name);
-            let sym = JsSymbol::new($rt,name.intern().private());
+            let sym = JsSymbol::new($ctx,name.intern().private());
 
-            $ctor.define_own_property($rt,$name.intern(),&*DataDescriptor::new(JsValue::new(sym),NONE),false)?;
+            $ctor.define_own_property($ctx,$name.intern(),&*DataDescriptor::new(JsValue::new(sym),NONE),false)?;
         )*
     }
 }
 
-impl Runtime {
+impl Context {
     pub(crate) fn init_symbol_in_realm(&mut self) {
         let mut init = || -> Result<(), JsValue> {
-            let mut ctor = JsNativeFunction::new(self, "Symbol".intern(), symbol_ctor, 1);
-
-            def_native_method!(self, ctor, for, symbol_for, 1)?;
-            def_native_method!(self, ctor, keyFor, symbol_key_for, 1)?;
-            builtin_symbols!(self, ctor, def_symbols);
-            self.realm()
-                .global_object()
-                .put(self, "Symbol".intern(), JsValue::new(ctor), false)?;
+            let name = "constructor".intern();
+            let constructor = self.global_data.symbol_prototype.unwrap().get_own_property(self, name).unwrap().value();
+            self.global_object()
+                .put(self, "Symbol".intern(), JsValue::new(constructor), false)?;
             Ok(())
         };
         match init() {
@@ -59,6 +55,19 @@ impl Runtime {
             self.global_data.symbol_prototype = Some(sym_proto);
             def_native_method!(self, sym_proto, toString, symbol_to_string, 0)?;
             def_native_method!(self, sym_proto, valueOf, symbol_value_of, 0)?;
+
+            let mut ctor = JsNativeFunction::new(self, "Symbol".intern(), symbol_ctor, 1);
+
+            def_native_method!(self, ctor, for, symbol_for, 1)?;
+            def_native_method!(self, ctor, keyFor, symbol_key_for, 1)?;
+            builtin_symbols!(self, ctor, def_symbols);
+            
+            let name = "prototype".intern();
+            ctor.define_own_property(self, name, &*DataDescriptor::new(JsValue::from(sym_proto), NONE) , false)?;
+            
+            let name = "constructor".intern();
+            sym_proto.define_own_property(self, name, &*DataDescriptor::new(JsValue::from(ctor), W | C), false)?;
+
             Ok(())
         };
 
@@ -69,40 +78,40 @@ impl Runtime {
     }
 }
 
-pub fn symbol_ctor(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_ctor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(args.ctor_call) {
         return Err(JsValue::new(
-            rt.new_type_error("Symbol is not an constructor"),
+            ctx.new_type_error("Symbol is not an constructor"),
         ));
     }
 
-    let arg = args.at(0).to_string(rt)?.intern();
-    Ok(JsValue::new(JsSymbol::new(rt, arg)))
+    let arg = args.at(0).to_string(ctx)?.intern();
+    Ok(JsValue::new(JsSymbol::new(ctx, arg)))
 }
-pub fn symbol_for(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let arg = args.at(0).to_string(rt)?.intern();
+pub fn symbol_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let arg = args.at(0).to_string(ctx)?.intern();
 
-    if let Some(sym) = rt.symbol_table.get(&arg) {
+    if let Some(sym) = ctx.symbol_table.get(&arg) {
         Ok(JsValue::new(*sym))
     } else {
-        let sym = JsSymbol::new(rt, arg);
-        rt.symbol_table.insert(arg, sym);
+        let sym = JsSymbol::new(ctx, arg);
+        ctx.symbol_table.insert(arg, sym);
         Ok(JsValue::new(sym))
     }
 }
 
-pub fn symbol_key_for(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let sym = args.at(0).to_symbol(rt)?;
-    let desc = rt.description(sym);
-    Ok(JsValue::new(JsString::new(rt, desc)))
+pub fn symbol_key_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let sym = args.at(0).to_symbol(ctx)?;
+    let desc = ctx.description(sym);
+    Ok(JsValue::new(JsString::new(ctx, desc)))
 }
 
-pub fn symbol_to_string(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let sym = args.this.to_symbol(rt)?;
-    let desc = rt.description(sym);
-    Ok(JsValue::new(JsString::new(rt, format!("Symbol({})", desc))))
+pub fn symbol_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let sym = args.this.to_symbol(ctx)?;
+    let desc = ctx.description(sym);
+    Ok(JsValue::new(JsString::new(ctx, format!("Symbol({})", desc))))
 }
 
-pub fn symbol_value_of(_rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_value_of(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
 }

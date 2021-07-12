@@ -791,10 +791,12 @@ impl Serializable for GlobalData {
 
 impl Serializable for Runtime {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
-        self.global_data.serialize(serializer);
-        self.realm().global_object.serialize(serializer);
-        self.symbol_table.serialize(serializer);
-        self.module_loader.serialize(serializer);
-        self.modules.serialize(serializer);
+        self.contexts.iter().for_each(|ctx| {
+            ctx.global_data.serialize(serializer);
+            ctx.global_object.serialize(serializer);
+            ctx.symbol_table.serialize(serializer);
+            ctx.module_loader.serialize(serializer);
+            ctx.modules.serialize(serializer);
+        });
     }
 }

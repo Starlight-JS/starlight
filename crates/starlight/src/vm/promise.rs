@@ -1,10 +1,10 @@
+use super::Context;
 use super::arguments::*;
 use super::method_table::*;
 use super::object::*;
 use super::string::*;
 use super::symbol_table::Internable;
 use super::value::*;
-use super::Runtime;
 use crate::gc::cell::GcPointer;
 use crate::gc::cell::{Trace, Tracer};
 use crate::gc::snapshot::deserializer::Deserializer;
@@ -35,15 +35,15 @@ pub struct JsPromise {
 
 #[allow(non_snake_case)]
 impl JsPromise {
-    pub fn new(vm: &mut Runtime, function_value: JsValue) -> Result<JsValue, JsValue> {
-        let promise = Self::new_unresolving(vm)?;
+    pub fn new(ctx: &mut Context, function_value: JsValue) -> Result<JsValue, JsValue> {
+        let promise = Self::new_unresolving(ctx)?;
 
         // call the function passed to the promise constructor with a resolve and a reject arg
 
         let resolve_func = JsValue::encode_object_value(JsClosureFunction::new(
-            vm,
+            ctx,
             "resolve".intern(),
-            move |vm, arguments| {
+            move |ctx, arguments| {
                 // todo check one arg
                 let resolution = arguments.at(0);
                 let mut promise = promise;
@@ -51,16 +51,16 @@ impl JsPromise {
                 promise
                     .get_jsobject()
                     .as_promise_mut()
-                    .resolve(vm, promise, resolution)?;
+                    .resolve(ctx, promise, resolution)?;
 
                 Ok(JsValue::encode_undefined_value())
             },
             1,
         ));
         let reject_func = JsValue::encode_object_value(JsClosureFunction::new(
-            vm,
+            ctx,
             "reject".intern(),
-            move |vm, arguments| {
+            move |ctx, arguments| {
                 let mut promise = promise;
                 // reject promise here
 
@@ -69,7 +69,7 @@ impl JsPromise {
                 promise
                     .get_jsobject()
                     .as_promise_mut()
-                    .reject(vm, promise, rejection)?;
+                    .reject(ctx, promise, rejection)?;
                 Ok(JsValue::encode_undefined_value())
             },
             1,
@@ -80,24 +80,23 @@ impl JsPromise {
             Arguments::new(JsValue::encode_undefined_value(), args_vec.as_mut_slice());
 
         let res = function_value.get_jsobject().as_function_mut().call(
-            vm,
+            ctx,
             &mut arguments,
             JsValue::encode_undefined_value(),
         );
 
         res.map(|_| promise)
     }
-    pub fn new_unresolving(vm: &mut Runtime) -> Result<JsValue, JsValue> {
-        let proto = vm
-            .realm()
+    pub fn new_unresolving(ctx: &mut Context) -> Result<JsValue, JsValue> {
+        let proto = ctx
             .global_object()
-            .get(vm, "Promise".intern())?
-            .to_object(vm)?
-            .get(vm, "prototype".intern())?
-            .to_object(vm)?;
+            .get(ctx, "Promise".intern())?
+            .to_object(ctx)?
+            .get(ctx, "prototype".intern())?
+            .to_object(ctx)?;
 
-        let structure = Structure::new_indexed(vm, Some(proto), false);
-        let mut obj = JsObject::new(vm, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
+        let structure = Structure::new_indexed(ctx, Some(proto), false);
+        let mut obj = JsObject::new(ctx, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
 
         *obj.data::<JsPromise>() = ManuallyDrop::new(JsPromise {
             subs: vec![],
@@ -108,43 +107,42 @@ impl JsPromise {
         Ok(JsValue::new(obj))
     }
     pub fn new_tracking(
-        vm: &mut Runtime,
+        ctx: &mut Context,
         mode: TrackingMode,
         promises_array: JsValue,
     ) -> Result<JsValue, JsValue> {
-        let proto = vm
-            .realm()
+        let proto = ctx
             .global_object()
-            .get(vm, "Promise".intern())?
-            .to_object(vm)?
-            .get(vm, "prototype".intern())?
-            .to_object(vm)?;
+            .get(ctx, "Promise".intern())?
+            .to_object(ctx)?
+            .get(ctx, "prototype".intern())?
+            .to_object(ctx)?;
 
         if !promises_array.is_jsobject() {
             return Err(JsValue::encode_object_value(JsString::new(
-                vm,
+                ctx,
                 "argument was not an Array",
             )));
         }
         let mut promises_array_object = promises_array.get_jsobject();
         if promises_array_object.tag() != ObjectTag::Array {
             return Err(JsValue::encode_object_value(JsString::new(
-                vm,
+                ctx,
                 "argument was not an Array",
             )));
         }
 
         //promises_array_object.
 
-        let length = array_util_get_length(vm, &mut promises_array_object)?;
+        let length = array_util_get_length(ctx, &mut promises_array_object)?;
 
         let mut results = vec![None; length as usize];
         // let prom_array: JsArray = promises_array.get_jsobject().as_array();
         // todo for array.length add None to results vec
         // todo add handler to every promise with index, resolve that index in vec, check followup action based on mode
 
-        let structure = Structure::new_indexed(vm, Some(proto), false);
-        let mut obj = JsObject::new(vm, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
+        let structure = Structure::new_indexed(ctx, Some(proto), false);
+        let mut obj = JsObject::new(ctx, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
 
         *obj.data::<JsPromise>() = ManuallyDrop::new(JsPromise {
             subs: vec![],
@@ -157,17 +155,17 @@ impl JsPromise {
         // for every prom add finally to set value in promise_value
         // todo do we have something like a for_each util somewhere?
         for x in 0..length {
-            let sub_prom = array_util_get_value_at(vm, &mut promises_array_object, x)?;
+            let sub_prom = array_util_get_value_at(ctx, &mut promises_array_object, x)?;
             let mut sub_prom_obj = sub_prom.get_jsobject();
             let sub_prom_jsprom: &mut JsPromise = sub_prom_obj.as_promise_mut();
 
-            let outer_root = vm.add_persistent_root(promise_value);
-            let sub_prom_root = vm.add_persistent_root(sub_prom);
+            let outer_root = ctx.vm.add_persistent_root(promise_value);
+            let sub_prom_root = ctx.vm.add_persistent_root(sub_prom);
 
             let sub_finally = JsValue::encode_object_value(JsClosureFunction::new(
-                vm,
+                ctx,
                 "finally_track".intern(),
-                move |vm, _args| {
+                move |ctx, _args| {
                     // todo add single val to outer promise_value
                     let outer_prom = outer_root.get_value();
                     let sub_prom = sub_prom_root.get_value();
@@ -176,7 +174,7 @@ impl JsPromise {
                         .get_jsobject()
                         .as_promise_mut()
                         .resolve_single_tracked_resolution(
-                            vm,
+                            ctx,
                             outer_prom,
                             x,
                             sub_resolution.unwrap(),
@@ -186,14 +184,14 @@ impl JsPromise {
                 1,
             ));
 
-            sub_prom_jsprom.then(vm, None, None, Some(sub_finally))?;
+            sub_prom_jsprom.then(ctx, None, None, Some(sub_finally))?;
         }
 
         Ok(promise_value)
     }
     fn resolve_single_tracked_resolution(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         prom_this: JsValue,
         index: u32,
         resolution: Result<JsValue, JsValue>,
@@ -214,7 +212,7 @@ impl JsPromise {
                                 // all have settled
                                 // create array of results
                                 let arr_value = JsValue::encode_object_value(JsArray::new(
-                                    vm,
+                                    ctx,
                                     tracking_results.len() as u32,
                                 ));
                                 let mut arr_obj = arr_value.get_jsobject();
@@ -223,22 +221,22 @@ impl JsPromise {
                                     // results should all be Some and Ok
                                     let res =
                                         tracking_results.get(x).unwrap().unwrap().ok().unwrap();
-                                    array_util_set_value_at(vm, &mut arr_obj, x as u32, res)?;
+                                    array_util_set_value_at(ctx, &mut arr_obj, x as u32, res)?;
                                 }
-                                self.resolve(vm, prom_this, arr_value)?;
+                                self.resolve(ctx, prom_this, arr_value)?;
                             }
                             Ok(JsValue::encode_null_value())
                         }
                         Err(err_res) => {
-                            self.reject(vm, prom_this, err_res)?;
+                            self.reject(ctx, prom_this, err_res)?;
                             Ok(JsValue::encode_null_value())
                         }
                     }
                 }
                 TrackingMode::Race => {
                     match resolution {
-                        Ok(ok_res) => self.resolve(vm, prom_this, ok_res)?,
-                        Err(err_res) => self.reject(vm, prom_this, err_res)?,
+                        Ok(ok_res) => self.resolve(ctx, prom_this, ok_res)?,
+                        Err(err_res) => self.reject(ctx, prom_this, err_res)?,
                     }
                     Ok(JsValue::encode_null_value())
                 }
@@ -251,24 +249,24 @@ impl JsPromise {
     }
     pub fn resolve(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         prom_this: JsValue,
         resolution: JsValue,
     ) -> Result<(), JsValue> {
-        self.do_resolve(vm, prom_this, Ok(resolution))
+        self.do_resolve(ctx, prom_this, Ok(resolution))
     }
     pub fn reject(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         prom_this: JsValue,
         rejection: JsValue,
     ) -> Result<(), JsValue> {
-        self.do_resolve(vm, prom_this, Err(rejection))
+        self.do_resolve(ctx, prom_this, Err(rejection))
     }
 
     fn do_resolve(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         prom_this: JsValue,
         resolution: Result<JsValue, JsValue>,
     ) -> Result<(), JsValue> {
@@ -276,7 +274,7 @@ impl JsPromise {
 
         if self.resolution.is_some() {
             Err(JsValue::encode_object_value(JsString::new(
-                vm,
+                ctx,
                 "Promise was already resolved",
             )))
         } else {
@@ -294,9 +292,9 @@ impl JsPromise {
                     let resolution_prom: &mut JsPromise = resolution_object.as_promise_mut();
                     // add self as sub to resolution prom
                     let pass_val_func = JsValue::encode_object_value(JsClosureFunction::new(
-                        vm,
+                        ctx,
                         "pass_val".intern(),
-                        |_vm, args| Ok(args.at(0)),
+                        |_ctx, args| Ok(args.at(0)),
                         1,
                     ));
                     resolution_prom.subs.push((
@@ -314,9 +312,9 @@ impl JsPromise {
 
             // todo everything below needs to be in async job.. need to root persistent again... later
             // root prom_this
-            let prom_root = vm.add_persistent_root(prom_this);
+            let prom_root = ctx.vm.add_persistent_root(prom_this);
 
-            vm.schedule_async(move |vm| {
+            ctx.schedule_async(move |ctx| {
                 let prom_val = prom_root.get_value();
                 let mut prom_js_object = prom_val.get_jsobject();
                 let prom_self: &mut JsPromise = prom_js_object.as_promise_mut();
@@ -331,12 +329,12 @@ impl JsPromise {
                             let sub_res = jsFunc
                                 .get_jsobject()
                                 .as_function_mut()
-                                .call(vm, &mut args, this);
+                                .call(ctx, &mut args, this);
                             let sub_res = sub
                                 .3
                                 .get_jsobject()
                                 .as_promise_mut()
-                                .do_resolve(vm, sub.3, sub_res);
+                                .do_resolve(ctx, sub.3, sub_res);
                             if sub_res.is_err() {
                                 println!("could not resolve sub");
                             }
@@ -353,12 +351,12 @@ impl JsPromise {
                             let sub_res = jsFunc
                                 .get_jsobject()
                                 .as_function_mut()
-                                .call(vm, &mut args, this);
+                                .call(ctx, &mut args, this);
                             let sub_res = sub
                                 .3
                                 .get_jsobject()
                                 .as_promise_mut()
-                                .do_resolve(vm, sub.3, sub_res);
+                                .do_resolve(ctx, sub.3, sub_res);
                             if sub_res.is_err() {
                                 println!("could not resolve sub");
                             }
@@ -374,12 +372,12 @@ impl JsPromise {
                         let sub_res = jsFunc
                             .get_jsobject()
                             .as_function_mut()
-                            .call(vm, &mut args, this);
+                            .call(ctx, &mut args, this);
                         let sub_res = sub
                             .3
                             .get_jsobject()
                             .as_promise_mut()
-                            .do_resolve(vm, sub.3, sub_res);
+                            .do_resolve(ctx, sub.3, sub_res);
                         if sub_res.is_err() {
                             println!("could not resolve sub");
                         }
@@ -391,14 +389,14 @@ impl JsPromise {
     }
     pub fn then(
         &mut self,
-        vm: &mut Runtime,
+        ctx: &mut Context,
         on_resolved: Option<JsValue>,
         on_rejected: Option<JsValue>,
         on_finally: Option<JsValue>,
     ) -> Result<JsValue, JsValue> {
         // add functions to vec with tuples (jsFunc, Prom)
 
-        let sub_prom = Self::new_unresolving(vm)?;
+        let sub_prom = Self::new_unresolving(ctx)?;
 
         self.subs
             .push((on_resolved, on_rejected, on_finally, sub_prom));
@@ -419,27 +417,27 @@ impl JsPromise {
 }
 
 fn array_util_get_length(
-    vm: &mut Runtime,
+    ctx: &mut Context,
     arr_object: &mut GcPointer<JsObject>,
 ) -> Result<u32, JsValue> {
-    get_length(vm, arr_object)
+    get_length(ctx, arr_object)
 }
 
 fn array_util_get_value_at(
-    vm: &mut Runtime,
+    ctx: &mut Context,
     arr_object: &mut GcPointer<JsObject>,
     index: u32,
 ) -> Result<JsValue, JsValue> {
-    arr_object.get(vm, Symbol::Index(index))
+    arr_object.get(ctx, Symbol::Index(index))
 }
 
 fn array_util_set_value_at(
-    vm: &mut Runtime,
+    ctx: &mut Context,
     arr_object: &mut GcPointer<JsObject>,
     index: u32,
     value: JsValue,
 ) -> Result<(), JsValue> {
-    arr_object.put(vm, Symbol::Index(index), value, false)
+    arr_object.put(ctx, Symbol::Index(index), value, false)
 }
 
 extern "C" fn drop_promise_fn(obj: &mut JsObject) {
@@ -451,7 +449,7 @@ extern "C" fn prom_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<JsPromise>().trace(tracer);
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Context) {
     unreachable!("Cannot deserialize a Promise");
 }
 
@@ -482,6 +480,7 @@ pub mod tests {
 
     use crate::options::Options;
     use crate::Platform;
+    use crate::vm::Context;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -497,8 +496,9 @@ pub mod tests {
                 println!("sched job");
                 todos2.borrow_mut().push(job);
             }));
+        let mut ctx = Context::new(&mut starlight_runtime);
 
-        match starlight_runtime
+        match ctx
             .eval("let p = new Promise((res, rej) => {print('running promise'); res(123);}); p.then((res) => {print('p resolved to ' + res);});")
         {
             Ok(_) => {
@@ -508,14 +508,14 @@ pub mod tests {
             Err(e) => {
                 println!(
                     "prom init failed: {}",
-                    e.to_string(&mut starlight_runtime)
+                    e.to_string(&mut ctx)
                         .ok()
                         .expect("conversion failed")
                 );
             }
         }
 
-        match starlight_runtime
+        match ctx
             .eval("let p = new Promise((resa, rejb) => {print('running promise'); resa(new Promise((resb, rejb) => {resb(321);}));}); p.then((res) => {print('p resolved to ' + res);});")
         {
             Ok(_) => {
@@ -525,14 +525,14 @@ pub mod tests {
             Err(e) => {
                 println!(
                     "prom init failed: {}",
-                    e.to_string(&mut starlight_runtime)
+                    e.to_string(&mut ctx)
                         .ok()
                         .expect("conversion failed")
                 );
             }
         }
 
-        match starlight_runtime
+        match ctx
             .eval("let p = Promise.all([new Promise((resA, rejA) => {resA(123);}), new Promise((resB, rejB) => {resB(456);})]); p.then((res) => {print('pAll resolved to ' + res.join(','));}); p.catch((res) => {print('pAll rejected to ' + res);});")
         {
             Ok(_) => {
@@ -542,7 +542,7 @@ pub mod tests {
             Err(e) => {
                 println!(
                     "prom init failed: {}",
-                    e.to_string(&mut starlight_runtime)
+                    e.to_string(&mut ctx)
                         .ok()
                         .expect("conversion failed")
                 );
@@ -561,7 +561,7 @@ pub mod tests {
 
             println!("running todo");
 
-            job(&mut starlight_runtime);
+            job(&mut ctx);
         }
         println!("done running todos");
     }

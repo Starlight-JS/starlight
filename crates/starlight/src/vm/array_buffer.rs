@@ -6,7 +6,7 @@ use std::{
     ptr::null_mut,
 };
 
-use super::class::JsClass;
+use super::{Context, class::JsClass};
 pub struct JsArrayBuffer {
     pub(crate) data: *mut u8,
     pub(crate) size: usize,
@@ -36,7 +36,7 @@ extern "C" fn array_buffer_serialize(x: &JsObject, serializer: &mut SnapshotSeri
 extern "C" fn array_buffer_deserialize(
     x: &mut JsObject,
     deser: &mut Deserializer,
-    _rt: &mut Runtime,
+    _ctx: &mut Context,
 ) {
     unsafe {
         let attached = bool::deserialize_inplace(deser);
@@ -73,9 +73,9 @@ impl JsArrayBuffer {
         self.data
     }
 
-    pub fn new(rt: &mut Runtime) -> GcPointer<JsObject> {
-        let structure = rt.global_data().array_buffer_structure.unwrap();
-        let mut this = JsObject::new(rt, &structure, Self::get_class(), ObjectTag::ArrayBuffer);
+    pub fn new(ctx: &mut Context) -> GcPointer<JsObject> {
+        let structure = ctx.global_data().array_buffer_structure.unwrap();
+        let mut this = JsObject::new(ctx, &structure, Self::get_class(), ObjectTag::ArrayBuffer);
         *this.data::<Self>() = ManuallyDrop::new(Self {
             data: null_mut(),
             attached: false,
@@ -114,7 +114,7 @@ impl JsArrayBuffer {
 
     pub fn create_data_block(
         &mut self,
-        rt: &mut Runtime,
+        ctx: &mut Context,
         size: usize,
         zero: bool,
     ) -> Result<(), JsValue> {
@@ -125,8 +125,8 @@ impl JsArrayBuffer {
         }
 
         if unlikely(size > u32::MAX as usize) {
-            let msg = JsString::new(rt, "Cannot allocate a data block for the ArrayBuffer");
-            return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+            let msg = JsString::new(ctx, "Cannot allocate a data block for the ArrayBuffer");
+            return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
         }
         unsafe {
             self.data = if zero {
@@ -136,8 +136,8 @@ impl JsArrayBuffer {
             };
 
             if unlikely(self.data.is_null()) {
-                let msg = JsString::new(rt, "Cannot allocate a data block for the ArrayBuffer");
-                return Err(JsValue::new(JsRangeError::new(rt, msg, None)));
+                let msg = JsString::new(ctx, "Cannot allocate a data block for the ArrayBuffer");
+                return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
             }
             self.attached = true;
             self.size = size;

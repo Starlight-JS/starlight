@@ -5,10 +5,11 @@ use self::{frame::CallFrame, stack::Stack};
 use super::function::*;
 use super::{
     arguments::*, array::*, code_block::CodeBlock, environment::*, error::JsTypeError, error::*,
-    function::JsVMFunction, native_iterator::*, object::*, slot::*, string::JsString,
-    symbol_table::*, value::*, Runtime,
+    native_iterator::*, object::*, slot::*, string::JsString,
+    symbol_table::*, value::*,
 };
 use crate::letroot;
+use crate::vm::Context;
 use crate::{
     bytecode::opcodes::Opcode,
     gc::{
@@ -23,7 +24,7 @@ use wtf_rs::unwrap_unchecked;
 pub mod frame;
 pub mod stack;
 
-impl Runtime {
+impl Context {
     pub(crate) fn perform_vm_call(
         &mut self,
         func: &JsVMFunction,
@@ -88,7 +89,7 @@ impl Runtime {
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
         } else if args_.this.is_undefined() {
-            JsValue::encode_object_value(self.realm().global_object())
+            JsValue::encode_object_value(self.global_object())
         } else {
             args_.this
         };
@@ -179,7 +180,7 @@ impl Runtime {
         let _this = if func.code.strict && !args_.this.is_object() {
             JsValue::encode_undefined_value()
         } else if args_.this.is_undefined() {
-            JsValue::encode_object_value(self.realm().global_object())
+            JsValue::encode_object_value(self.global_object())
         } else {
             args_.this
         };
@@ -190,7 +191,7 @@ impl Runtime {
 
 #[inline(never)]
 unsafe fn eval_internal(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     code: GcPointer<CodeBlock>,
     ip: *mut u8,
     this: JsValue,
@@ -198,11 +199,11 @@ unsafe fn eval_internal(
     scope: GcPointer<Environment>,
     callee: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let frame = rt.stack.new_frame(0, callee, scope);
+    let frame = ctx.stack.new_frame(0, callee, scope);
     if frame.is_none() {
-        let msg = JsString::new(rt, "stack overflow");
+        let msg = JsString::new(ctx, "stack overflow");
         return Err(JsValue::encode_object_value(JsRangeError::new(
-            rt, msg, None,
+            ctx, msg, None,
         )));
     }
     let mut frame = unwrap_unchecked(frame);
@@ -214,13 +215,13 @@ unsafe fn eval_internal(
     (*frame).ip = ip;
 
     loop {
-        let result = eval(rt, frame);
+        let result = eval(ctx, frame);
         match result {
             Ok(value) => return Ok(value),
             Err(e) => {
-                rt.stacktrace = rt.stacktrace();
+                ctx.stacktrace = ctx.stacktrace();
 
-                if let Some(unwind_frame) = rt.unwind() {
+                if let Some(unwind_frame) = ctx.unwind() {
                     let (env, ip, sp) = (*unwind_frame).try_stack.pop().unwrap();
                     frame = unwind_frame;
                     (*frame).env = env.unwrap();
@@ -235,20 +236,20 @@ unsafe fn eval_internal(
     }
 }
 
-pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
-    rt.gc.collect_if_necessary();
+pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
+    ctx.heap().collect_if_necessary();
     let mut ip = (*frame).ip;
 
     let mut frame: &'static mut CallFrame = &mut *frame;
-    let stack = &mut rt.stack as *mut Stack;
+    let stack = &mut ctx.stack as *mut Stack;
     let stack = &mut *stack;
-    let gcstack = rt.shadowstack();
+    let gcstack = ctx.shadowstack();
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);
         #[cfg(feature = "perf")]
         {
-            rt.perf.get_perf(opcode as u8);
+            ctx.perf.get_perf(opcode as u8);
         }
         /*println!(
             "exec block({:p}): {}: {:?} (sp {})",
@@ -263,7 +264,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             print!(
                 " ({}) ",
                 scan.read()
-                    .to_string(rt)
+                    .to_string(ctx)
                     .unwrap_or_else(|_| "<unknown>".to_string())
             );
             scan = scan.add(1);
@@ -292,7 +293,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 if unlikely(!env.as_slice_mut()[index as usize].mutable) {
                     return Err(JsValue::new(
-                        rt.new_type_error("Cannot assign to immutable variable".to_string()),
+                        ctx.new_type_error("Cannot assign to immutable variable".to_string()),
                     ));
                 }
 
@@ -319,7 +320,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 if unlikely(!env.as_slice_mut()[index as usize].mutable) {
                     return Err(JsValue::new(
-                        rt.new_type_error("Cannot assign to immutable variable".to_string()),
+                        ctx.new_type_error("Cannot assign to immutable variable".to_string()),
                     ));
                 }
 
@@ -339,7 +340,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_JMP => {
-                rt.gc.collect_if_necessary();
+                ctx.heap().collect_if_necessary();
                 let offset = ip.cast::<i32>().read();
                 ip = ip.add(4);
                 ip = ip.offset(offset as isize);
@@ -374,7 +375,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let ix = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let constant = unwrap_unchecked(frame.code_block).literals[ix as usize];
-                //assert!(constant.is_jsstring());
+                //assectx!(constant.is_jsstring());
                 frame.push(constant);
             }
             Opcode::OP_PUSH_THIS => {
@@ -402,7 +403,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if frame.ctor && !value.is_jsobject() {
                     value = frame.this;
                 }
-                let prev = rt.stack.pop_frame().unwrap();
+                let prev = ctx.stack.pop_frame().unwrap();
                 if prev.exit_on_return || prev.prev.is_null() {
                     return Ok(value);
                 }
@@ -433,37 +434,37 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
                 #[cold]
                 unsafe fn add_slowpath(
-                    rt: &mut Runtime,
+                    ctx: &mut Context,
                     frame: &mut CallFrame,
                     lhs: JsValue,
                     rhs: JsValue,
                 ) -> Result<(), JsValue> {
-                    let lhs = lhs.to_primitive(rt, JsHint::None)?;
-                    let rhs = rhs.to_primitive(rt, JsHint::None)?;
+                    let lhs = lhs.to_primitive(ctx, JsHint::None)?;
+                    let rhs = rhs.to_primitive(ctx, JsHint::None)?;
 
                     if lhs.is_jsstring() || rhs.is_jsstring() {
                         #[inline(never)]
                         fn concat(
-                            rt: &mut Runtime,
+                            ctx: &mut Context,
                             lhs: JsValue,
                             rhs: JsValue,
                         ) -> Result<JsValue, JsValue> {
-                            let lhs = lhs.to_string(rt)?;
-                            let rhs = rhs.to_string(rt)?;
+                            let lhs = lhs.to_string(ctx)?;
+                            let rhs = rhs.to_string(ctx)?;
                             let string = format!("{}{}", lhs, rhs);
-                            Ok(JsValue::encode_object_value(JsString::new(rt, string)))
+                            Ok(JsValue::encode_object_value(JsString::new(ctx, string)))
                         }
 
-                        let result = concat(rt, lhs, rhs)?;
+                        let result = concat(ctx, lhs, rhs)?;
                         frame.push(result);
                     } else {
-                        let lhs = lhs.to_number(rt)?;
-                        let rhs = rhs.to_number(rt)?;
+                        let lhs = lhs.to_number(ctx)?;
+                        let rhs = rhs.to_number(ctx)?;
                         frame.push(JsValue::new(lhs + rhs));
                     }
                     Ok(())
                 }
-                add_slowpath(rt, frame, lhs, rhs)?;
+                add_slowpath(ctx, frame, lhs, rhs)?;
             }
             Opcode::OP_SUB => {
                 let profile = &mut *ip.cast::<ArithProfile>();
@@ -490,8 +491,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
                 // profile.observe_lhs_and_rhs(lhs, rhs);
-                let lhs = lhs.to_number(rt)?;
-                let rhs = rhs.to_number(rt)?;
+                let lhs = lhs.to_number(ctx)?;
+                let rhs = rhs.to_number(ctx)?;
                 frame.push(JsValue::new(lhs - rhs));
             }
             Opcode::OP_DIV => {
@@ -506,8 +507,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
 
-                let lhs = lhs.to_number(rt)?;
-                let rhs = rhs.to_number(rt)?;
+                let lhs = lhs.to_number(ctx)?;
+                let rhs = rhs.to_number(ctx)?;
                 frame.push(JsValue::new(lhs / rhs));
             }
             Opcode::OP_MUL => {
@@ -529,8 +530,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(JsValue::new(lhs.get_number() * rhs.get_number()));
                     continue;
                 }
-                let lhs = lhs.to_number(rt)?;
-                let rhs = rhs.to_number(rt)?;
+                let lhs = lhs.to_number(ctx)?;
+                let rhs = rhs.to_number(ctx)?;
                 frame.push(JsValue::new(lhs * rhs));
             }
             Opcode::OP_REM => {
@@ -544,24 +545,24 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame.push(JsValue::new(lhs.get_number() % rhs.get_number()));
                     continue;
                 }
-                let lhs = lhs.to_number(rt)?;
-                let rhs = rhs.to_number(rt)?;
+                let lhs = lhs.to_number(ctx)?;
+                let rhs = rhs.to_number(ctx)?;
                 frame.push(JsValue::new(lhs % rhs));
             }
             Opcode::OP_SHL => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
 
-                let left = lhs.to_int32(rt)?;
-                let right = rhs.to_uint32(rt)?;
+                let left = lhs.to_int32(ctx)?;
+                let right = rhs.to_uint32(ctx)?;
                 frame.push(JsValue::new((left << (right & 0x1f)) as f64));
             }
             Opcode::OP_SHR => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
 
-                let left = lhs.to_int32(rt)?;
-                let right = rhs.to_uint32(rt)?;
+                let left = lhs.to_int32(ctx)?;
+                let right = rhs.to_uint32(ctx)?;
                 frame.push(JsValue::new((left >> (right & 0x1f)) as f64));
             }
 
@@ -569,8 +570,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = frame.pop();
                 let rhs = frame.pop();
 
-                let left = lhs.to_uint32(rt)?;
-                let right = rhs.to_uint32(rt)?;
+                let left = lhs.to_uint32(ctx)?;
+                let right = rhs.to_uint32(ctx)?;
                 frame.push(JsValue::new((left >> (right & 0x1f)) as f64));
             }
             Opcode::OP_LESS => {
@@ -581,7 +582,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
                 frame.push(JsValue::encode_bool_value(
-                    lhs.compare(rhs, true, rt)? == CMP_TRUE,
+                    lhs.compare(rhs, true, ctx)? == CMP_TRUE,
                 ));
             }
             Opcode::OP_LESSEQ => {
@@ -592,7 +593,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
                 frame.push(JsValue::encode_bool_value(
-                    rhs.compare(lhs, false, rt)? == CMP_FALSE,
+                    rhs.compare(lhs, false, ctx)? == CMP_FALSE,
                 ));
             }
 
@@ -604,7 +605,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
                 frame.push(JsValue::encode_bool_value(
-                    rhs.compare(lhs, false, rt)? == CMP_TRUE,
+                    rhs.compare(lhs, false, ctx)? == CMP_TRUE,
                 ));
             }
             Opcode::OP_GREATEREQ => {
@@ -615,7 +616,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     continue;
                 }
                 frame.push(JsValue::encode_bool_value(
-                    lhs.compare(rhs, true, rt)? == CMP_FALSE,
+                    lhs.compare(rhs, true, ctx)? == CMP_FALSE,
                 ));
             }
             Opcode::OP_GET_BY_ID | Opcode::OP_TRY_GET_BY_ID => {
@@ -665,7 +666,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     #[inline(never)]
                     #[cold]
                     unsafe fn slow_get_by_id(
-                        rt: &mut Runtime,
+                        ctx: &mut Context,
                         frame: &mut CallFrame,
                         obj: &mut GcPointer<JsObject>,
                         name: Symbol,
@@ -685,7 +686,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             frame.push(JsValue::new(obj.indexed.length()));
                             return Ok(());
                         }
-                        let found = obj.get_property_slot(rt, name, &mut slot);
+                        let found = obj.get_property_slot(ctx, name, &mut slot);
                         #[cfg(not(feature = "no-inline-caching"))]
                         if slot.is_load_cacheable() {
                             let (structure, mode) = match slot.base() {
@@ -728,11 +729,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             }
                         }
                         if found {
-                            frame.push(slot.get(rt, JsValue::new(*obj))?);
+                            frame.push(slot.get(ctx, JsValue::new(*obj))?);
                         } else {
                             if unlikely(is_try) {
-                                let desc = rt.description(name);
-                                return Err(JsValue::new(rt.new_reference_error(format!(
+                                let desc = ctx.description(name);
+                                return Err(JsValue::new(ctx.new_reference_error(format!(
                                     "Property '{}' not found",
                                     desc
                                 ))));
@@ -742,7 +743,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         Ok(())
                     }
                     slow_get_by_id(
-                        rt,
+                        ctx,
                         frame,
                         &mut obj,
                         name,
@@ -751,7 +752,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     )?;
                     continue;
                 }
-                frame.push(get_by_id_slow(rt, name, object)?)
+                frame.push(get_by_id_slow(ctx, name, object)?)
             }
             Opcode::OP_PUT_BY_ID => {
                 let name = ip.cast::<u32>().read_unaligned();
@@ -807,7 +808,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                             }
                         }
 
-                        put_by_id_slow(rt, frame, &mut obj, name, value, fdbk)?;
+                        put_by_id_slow(ctx, frame, &mut obj, name, value, fdbk)?;
                         break 'exit;
                     }
                     continue;
@@ -815,6 +816,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_CALL | Opcode::OP_TAILCALL => {
+                ctx.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
 
@@ -825,9 +827,9 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut this = frame.pop();
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
                 if unlikely(!func.is_callable()) {
-                    let msg = JsString::new(rt, "not a callable object".to_string());
+                    let msg = JsString::new(ctx, "not a callable object".to_string());
                     return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
+                        ctx, msg, None,
                     )));
                 }
                 letroot!(func_object = gcstack, func.get_jsobject());
@@ -841,21 +843,21 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
-                    let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
+                    let (this, scope) = ctx.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
                     if !frame.exit_on_return
                         && (opcode == Opcode::OP_TAILCALL
                             || (ip.cast::<Opcode>().read() == Opcode::OP_POP
                                 && ip.add(1).cast::<Opcode>().read() == Opcode::OP_RET))
                     {
-                        // rt.stack.pop_frame().unwrap();
-                        exit = rt.stack.pop_frame().unwrap().exit_on_return;
+                        // ctx.stack.pop_frame().unwrap();
+                        exit = ctx.stack.pop_frame().unwrap().exit_on_return;
                     }
-                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
+                    let cframe = ctx.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
-                        let msg = JsString::new(rt, "stack overflow");
+                        let msg = JsString::new(ctx, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
-                            rt, msg, None,
+                            ctx, msg, None,
                         )));
                     }
                     let cframe = unwrap_unchecked(cframe);
@@ -870,11 +872,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
 
                     ip = (*cframe).ip;
                 } else {
-                    let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
+                    let result = func.call(ctx, &mut args_, JsValue::new(*funcc))?;
                     frame.push(result);
                 }
             }
             Opcode::OP_NEW | Opcode::OP_TAILNEW => {
+                ctx.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
 
@@ -885,17 +888,17 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let mut args = std::slice::from_raw_parts_mut(args_start, argc as _);
 
                 if unlikely(!func.is_callable()) {
-                    let msg = JsString::new(rt, "not a callable constructor object ".to_string());
+                    let msg = JsString::new(ctx, "not a callable constructor object ".to_string());
                     return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
+                        ctx, msg, None,
                     )));
                 }
 
                 letroot!(func_object = gcstack, func.get_jsobject());
                 letroot!(funcc = gcstack, func.get_jsobject());
-                let map = func_object.func_construct_map(rt)?;
+                let map = func_object.func_construct_map(ctx)?;
                 let func = func_object.as_function_mut();
-                let object = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
+                let object = JsObject::new(ctx, &map, JsObject::get_class(), ObjectTag::Ordinary);
                 letroot!(
                     args_ = gcstack,
                     Arguments::new(JsValue::new(object), &mut args)
@@ -907,17 +910,17 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if func.is_vm() {
                     let vm_fn = func.as_vm_mut();
                     let scope = JsValue::new(vm_fn.scope);
-                    let (this, scope) = rt.setup_for_vm_call(vm_fn, scope, &args_)?;
+                    let (this, scope) = ctx.setup_for_vm_call(vm_fn, scope, &args_)?;
                     let mut exit = false;
                     if !frame.exit_on_return && (opcode == Opcode::OP_TAILNEW) {
                         // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
-                    let cframe = rt.stack.new_frame(0, JsValue::new(*funcc), scope);
+                    let cframe = ctx.stack.new_frame(0, JsValue::new(*funcc), scope);
                     if unlikely(cframe.is_none()) {
-                        let msg = JsString::new(rt, "stack overflow");
+                        let msg = JsString::new(ctx, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
-                            rt, msg, None,
+                            ctx, msg, None,
                         )));
                     }
 
@@ -930,7 +933,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     frame = &mut *cframe;
                     ip = (*cframe).ip;
                 } else {
-                    let result = func.call(rt, &mut args_, JsValue::new(*funcc))?;
+                    let result = func.call(ctx, &mut args_, JsValue::new(*funcc))?;
 
                     frame.push(result);
                 }
@@ -952,7 +955,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if v1.is_number() {
                     frame.push(JsValue::new(-v1.get_number()));
                 } else {
-                    let n = v1.to_number(rt)?;
+                    let n = v1.to_number(ctx)?;
                     frame.push(JsValue::new(-n));
                 }
             }
@@ -961,7 +964,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = frame.pop();
                 let rhs = frame.pop();
 
-                frame.push(JsValue::encode_bool_value(lhs.abstract_equal(rhs, rt)?));
+                frame.push(JsValue::encode_bool_value(lhs.abstract_equal(rhs, ctx)?));
             }
             Opcode::OP_STRICTEQ => {
                 let lhs = frame.pop();
@@ -971,7 +974,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             Opcode::OP_NEQ => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-                frame.push(JsValue::encode_bool_value(!lhs.abstract_equal(rhs, rt)?));
+                frame.push(JsValue::encode_bool_value(!lhs.abstract_equal(rhs, ctx)?));
             }
             Opcode::OP_NSTRICTEQ => {
                 let lhs = frame.pop();
@@ -999,26 +1002,26 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         continue;
                     }
                 }
-                let key = key.to_symbol(rt)?;
+                let key = key.to_symbol(ctx)?;
 
                 if likely(object.is_jsobject()) {
                     let mut obj = object.get_jsobject();
-                    obj.put(rt, key, value, unwrap_unchecked(frame.code_block).strict)?;
+                    obj.put(ctx, key, value, unwrap_unchecked(frame.code_block).strict)?;
                 } else {
                     #[inline(never)]
                     unsafe fn slow(
-                        rt: &mut Runtime,
+                        ctx: &mut Context,
                         object: JsValue,
                         key: Symbol,
                         value: JsValue,
                         strict: bool,
                     ) -> Result<JsValue, JsValue> {
-                        object.to_object(rt)?.put(rt, key, value, strict)?;
+                        object.to_object(ctx)?.put(ctx, key, value, strict)?;
                         Ok(JsValue::encode_undefined_value())
                     }
 
                     slow(
-                        rt,
+                        ctx,
                         object,
                         key,
                         value,
@@ -1052,11 +1055,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         continue;
                     }
                 }
-                let key = key.to_symbol(rt)?;
+                let key = key.to_symbol(ctx)?;
                 let mut slot = Slot::new();
-                let _ = object.get_slot(rt, key, &mut slot)?;
+                let _ = object.get_slot(ctx, key, &mut slot)?;
 
-                let value = slot.get(rt, JsValue::new(object))?;
+                let value = slot.get(ctx, JsValue::new(object))?;
 
                 if opcode == Opcode::OP_GET_BY_VAL_PUSH_OBJ {
                     frame.push(JsValue::new(object));
@@ -1067,37 +1070,37 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let lhs = frame.pop();
                 let rhs = frame.pop();
                 if unlikely(!rhs.is_jsobject()) {
-                    let msg = JsString::new(rt, "'instanceof' requires object");
+                    let msg = JsString::new(ctx, "'instanceof' requires object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
+                        ctx, msg, None,
                     )));
                 }
 
                 letroot!(robj = gcstack, rhs.get_jsobject());
                 letroot!(robj2 = gcstack, *robj);
                 if unlikely(!robj.is_callable()) {
-                    let msg = JsString::new(rt, "'instanceof' requires constructor");
+                    let msg = JsString::new(ctx, "'instanceof' requires constructor");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
+                        ctx, msg, None,
                     )));
                 }
 
                 frame.push(JsValue::encode_bool_value(
-                    robj.as_function().has_instance(&mut robj2, rt, lhs)?,
+                    robj.as_function().has_instance(&mut robj2, ctx, lhs)?,
                 ));
             }
             Opcode::OP_IN => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
                 if unlikely(!rhs.is_jsobject()) {
-                    let msg = JsString::new(rt, "'in' requires object");
+                    let msg = JsString::new(ctx, "'in' requires object");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
-                        rt, msg, None,
+                        ctx, msg, None,
                     )));
                 }
-                let sym = lhs.to_symbol(rt)?;
+                let sym = lhs.to_symbol(ctx)?;
                 frame.push(JsValue::encode_bool_value(
-                    rhs.get_jsobject().has_own_property(rt, sym),
+                    rhs.get_jsobject().has_own_property(ctx, sym),
                 ));
             }
 
@@ -1113,10 +1116,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 }
 
                 let it = if enumerable.is_jsstring() {
-                    NativeIterator::new(rt, enumerable.get_object())
+                    NativeIterator::new(ctx, enumerable.get_object())
                 } else {
-                    let obj = enumerable.to_object(rt)?;
-                    NativeIterator::new(rt, obj.as_dyn())
+                    let obj = enumerable.to_object(ctx)?;
+                    NativeIterator::new(ctx, obj.as_dyn())
                 };
                 frame.push(JsValue::new(it));
                 assert!(ip.cast::<Opcode>().read_unaligned() == Opcode::OP_FORIN_ENUMERATE);
@@ -1130,8 +1133,8 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     .downcast_unchecked::<NativeIterator>();
                 frame.push(JsValue::new(it));
                 if let Some(sym) = it.next() {
-                    let desc = rt.description(sym);
-                    frame.push(JsValue::new(JsString::new(rt, desc)));
+                    let desc = ctx.description(sym);
+                    frame.push(JsValue::new(JsString::new(ctx, desc)));
                 } else {
                     frame.push(JsValue::encode_empty_value());
                     ip = ip.offset(offset as _);
@@ -1147,12 +1150,12 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_GLOBALTHIS => {
-                let global = rt.realm().global_object();
+                let global = ctx.global_object();
                 frame.push(JsValue::encode_object_value(global));
             }
 
             Opcode::OP_NEWOBJECT => {
-                let obj = JsObject::new_empty(rt);
+                let obj = JsObject::new_empty(ctx);
                 frame.push(JsValue::encode_object_value(obj));
             }
 
@@ -1179,7 +1182,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                     let n = v1.get_number() as i32;
                     frame.push(JsValue::new((!n) as i32));
                 } else {
-                    let n = v1.to_number(rt)? as i32;
+                    let n = v1.to_number(ctx)? as i32;
                     frame.push(JsValue::new((!n) as i32));
                 }
             }
@@ -1188,7 +1191,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 if value.is_number() {
                     frame.push(value);
                 }
-                let x = value.to_number(rt)?;
+                let x = value.to_number(ctx)?;
                 frame.push(JsValue::new(x));
             }
 
@@ -1218,38 +1221,38 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let name = unwrap_unchecked(frame.code_block).names[name as usize];
                 let object = frame.pop();
-                object.check_object_coercible(rt)?;
-                letroot!(object = gcstack, object.to_object(rt)?);
+                object.check_object_coercible(ctx)?;
+                letroot!(object = gcstack, object.to_object(ctx)?);
                 frame.push(JsValue::new(object.delete(
-                    rt,
+                    ctx,
                     name,
                     unwrap_unchecked(frame.code_block).strict,
                 )?));
             }
             Opcode::OP_DELETE_BY_VAL => {
                 let object = frame.pop();
-                let name = frame.pop().to_symbol(rt)?;
-                object.check_object_coercible(rt)?;
-                letroot!(object = gcstack, object.to_object(rt)?);
+                let name = frame.pop().to_symbol(ctx)?;
+                object.check_object_coercible(ctx)?;
+                letroot!(object = gcstack, object.to_object(ctx)?);
                 frame.push(JsValue::new(object.delete(
-                    rt,
+                    ctx,
                     name,
                     unwrap_unchecked(frame.code_block).strict,
                 )?));
             }
             Opcode::OP_AND => {
-                let lhs = frame.pop().to_int32(rt)?;
-                let rhs = frame.pop().to_int32(rt)?;
+                let lhs = frame.pop().to_int32(ctx)?;
+                let rhs = frame.pop().to_int32(ctx)?;
                 frame.push(JsValue::new(lhs & rhs));
             }
             Opcode::OP_OR => {
-                let lhs = frame.pop().to_int32(rt)?;
-                let rhs = frame.pop().to_int32(rt)?;
+                let lhs = frame.pop().to_int32(ctx)?;
+                let rhs = frame.pop().to_int32(ctx)?;
                 frame.push(JsValue::new(lhs | rhs));
             }
             Opcode::OP_XOR => {
-                let lhs = frame.pop().to_int32(rt)?;
-                let rhs = frame.pop().to_int32(rt)?;
+                let lhs = frame.pop().to_int32(ctx)?;
+                let rhs = frame.pop().to_int32(ctx)?;
                 frame.push(JsValue::new(lhs ^ rhs));
             }
             Opcode::OP_GET_FUNCTION => {
@@ -1258,11 +1261,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 ip = ip.add(4);
                 let code = unwrap_unchecked(frame.code_block).codes[ix as usize];
                 let func = if likely(!(code.is_async || code.is_generator)) {
-                    JsVMFunction::new(rt, code, frame.env)
+                    JsVMFunction::new(ctx, code, frame.env)
                 } else {
-                    let func = JsVMFunction::new(rt, code, frame.env);
+                    let func = JsVMFunction::new(ctx, code, frame.env);
 
-                    JsGeneratorFunction::new(rt, func)
+                    JsGeneratorFunction::new(ctx, func)
                 };
 
                 frame.push(JsValue::encode_object_value(func));
@@ -1276,7 +1279,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let count = ip.cast::<u32>().read_unaligned();
 
                 ip = ip.add(4);
-                letroot!(arr = gcstack, JsArray::new(rt, count));
+                letroot!(arr = gcstack, JsArray::new(ctx, count));
                 let mut index = 0;
                 let mut did_put = 0;
                 while did_put < count {
@@ -1288,11 +1291,11 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                         );
                         for i in 0..spread.array.len() {
                             let real_arg = spread.array[i];
-                            arr.put(rt, Symbol::Index(index), real_arg, false)?;
+                            arr.put(ctx, Symbol::Index(index), real_arg, false)?;
                             index += 1;
                         }
                     } else {
-                        arr.put(rt, Symbol::Index(index), value, false)?;
+                        arr.put(ctx, Symbol::Index(index), value, false)?;
                         index += 1;
                     }
                     did_put += 1;
@@ -1301,7 +1304,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
             }
 
             Opcode::OP_CALL_BUILTIN => {
-                rt.heap().collect_if_necessary();
+                ctx.heap().collect_if_necessary();
                 let argc = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 let builtin_id = ip.cast::<u32>().read();
@@ -1309,7 +1312,7 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let effect = ip.cast::<u32>().read();
                 ip = ip.add(4);
                 super::builtins::BUILTINS[builtin_id as usize](
-                    rt,
+                    ctx,
                     frame,
                     &mut ip,
                     argc,
@@ -1320,19 +1323,19 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 /*
                     This opcode creates internal interpreter only value that is used to indicate that some argument is spread value
                     and if interpreter sees it then it tried to use `array` value from `SpreadValue`.
-                    User code can't get access to this value, if it does this should be reported.
+                    User code can't get access to this value, if it does this should be repoctxed.
                 */
                 let value = frame.pop();
-                let spread = SpreadValue::new(rt, value)?;
+                let spread = SpreadValue::new(ctx, value)?;
                 frame.push(JsValue::encode_object_value(spread));
             }
             Opcode::OP_TYPEOF => {
                 let val = frame.pop();
-                let str = JsString::new(rt, val.type_of());
+                let str = JsString::new(ctx, val.type_of());
                 frame.push(JsValue::new(str));
             }
             Opcode::OP_TO_INTEGER_OR_INFINITY | Opcode::OP_TO_LENGTH => {
-                let number = frame.pop().to_number(rt)?;
+                let number = frame.pop().to_number(ctx)?;
                 if number.is_nan() || number == 0.0 {
                     frame.push(JsValue::encode_int32(0));
                 } else {
@@ -1343,10 +1346,10 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let target = frame.pop();
                 let message = frame.pop();
                 if unlikely(target.is_null() || target.is_undefined()) {
-                    let msg = message.to_string(rt)?;
-                    return Err(JsValue::new(rt.new_type_error(msg)));
+                    let msg = message.to_string(ctx)?;
+                    return Err(JsValue::new(ctx.new_type_error(msg)));
                 }
-                frame.push(JsValue::new(target.to_object(rt)?));
+                frame.push(JsValue::new(target.to_object(ctx)?));
             }
             Opcode::OP_IS_CALLABLE | Opcode::OP_IS_CTOR => {
                 let val = frame.pop();
@@ -1369,9 +1372,20 @@ pub unsafe fn eval(rt: &mut Runtime, frame: *mut CallFrame) -> Result<JsValue, J
                 let val = frame.pop();
                 frame.push(JsValue::new(val.is_jsobject()));
             }
-            x => {
-                panic!("NYI: {:?}", x);
-            }
+            Opcode::OP_NOP => todo!(),
+            Opcode::OP_LOOPHINT => todo!(),
+            Opcode::OP_PUSH_ENV => todo!(),
+            Opcode::OP_POP_ENV => todo!(),
+            Opcode::OP_SET_ENV => todo!(),
+            Opcode::OP_SET_GLOBAL => todo!(),
+            Opcode::OP_GET_GLOBAL => todo!(),
+            Opcode::OP_DELETE_VAR => todo!(),
+            Opcode::OP_FOROF_SETUP => todo!(),
+            Opcode::OP_FOROF_ENUMERATE => todo!(),
+            Opcode::OP_FOROF_LEAVE => todo!(),
+            Opcode::OP_GE0DL => todo!(),
+            Opcode::OP_GE0DC => todo!(),
+            Opcode::OP_NEWGENERATOR => todo!(),
         }
     }
 }
@@ -1382,21 +1396,21 @@ pub struct SpreadValue {
 }
 
 impl SpreadValue {
-    pub fn new(rt: &mut Runtime, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
-        let mut builtin = rt.global_data.spread_builtin.unwrap();
+    pub fn new(ctx: &mut Context, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
+        let mut builtin = ctx.global_data.spread_builtin.unwrap();
         let mut slice = [value];
         let mut args = Arguments::new(JsValue::encode_undefined_value(), &mut slice);
         builtin
             .as_function_mut()
-            .call(rt, &mut args, JsValue::encode_undefined_value())
+            .call(ctx, &mut args, JsValue::encode_undefined_value())
             .and_then(|x| {
                 assert!(x.is_jsobject() && x.get_jsobject().is_class(JsArray::get_class()));
                 let mut array = TypedJsObject::<JsArray>::new(x);
                 let mut vec = vec![];
-                for i in 0..crate::jsrt::get_length(rt, &mut array.object())? {
-                    vec.push(array.get(rt, Symbol::Index(i))?);
+                for i in 0..crate::jsrt::get_length(ctx, &mut array.object())? {
+                    vec.push(array.get(ctx, Symbol::Index(i))?);
                 }
-                Ok(rt.gc.allocate(Self { array: vec }))
+                Ok(ctx.heap().allocate(Self { array: vec }))
             })
     }
 }
@@ -1412,13 +1426,13 @@ unsafe impl Trace for SpreadValue {
     }
 }
 
-pub fn get_by_id_slow(rt: &mut Runtime, name: Symbol, val: JsValue) -> Result<JsValue, JsValue> {
+pub fn get_by_id_slow(ctx: &mut Context, name: Symbol, val: JsValue) -> Result<JsValue, JsValue> {
     let mut slot = Slot::new();
-    val.get_slot(rt, name, &mut slot)
+    val.get_slot(ctx, name, &mut slot)
 }
 
 pub(crate) unsafe fn put_by_id_slow(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     frame: &mut CallFrame,
     obj: &mut GcPointer<JsObject>,
     name: Symbol,
@@ -1428,7 +1442,7 @@ pub(crate) unsafe fn put_by_id_slow(
     let mut slot = Slot::new();
     let _old_structure = obj.structure();
     obj.put_slot(
-        rt,
+        ctx,
         name,
         value,
         &mut slot,
@@ -1454,20 +1468,20 @@ pub(crate) unsafe fn put_by_id_slow(
                         .map(|x| new_structure.storage_capacity() == x.storage_capacity())
                         .unwrap_or(false)
                 {
-                    assert!(GcPointer::ptr_eq(
+                    assectx!(GcPointer::ptr_eq(
                         &new_structure.previous.unwrap(),
                         &old_structure
                     ));
 
                     {
                         let (result, saw_poly_proto) =
-                            crate::vm::operations::normalize_prototype_chain(rt, &base_cell);
+                            crate::vm::operations::normalize_prototype_chain(ctx, &base_cell);
 
                         if result != usize::MAX && !saw_poly_proto {
                             m_old_structure = Some(old_structure);
                             m_offset = slot.offset();
                             m_new_structure = Some(new_structure);
-                            m_new_chain = Some(new_structure.prototype_chain(rt, base_cell));
+                            m_new_chain = Some(new_structure.prototype_chain(ctx, base_cell));
                         }
                     }
                 }*/

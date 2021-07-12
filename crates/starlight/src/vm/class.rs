@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use super::{method_table::MethodTable, object::JsObject, Runtime};
+use super::{Context, method_table::MethodTable, object::JsObject};
 use crate::gc::{
     cell::Tracer,
     snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
@@ -83,7 +83,7 @@ pub struct Class {
     /// `trace` method that is used by GC to mark object.
     pub trace: Option<extern "C" fn(&mut dyn Tracer, &mut JsObject)>,
     pub drop: Option<extern "C" fn(&mut JsObject)>,
-    pub deserialize: Option<extern "C" fn(&mut JsObject, &mut Deserializer, &mut Runtime)>,
+    pub deserialize: Option<extern "C" fn(&mut JsObject, &mut Deserializer, &mut Context)>,
     pub serialize: Option<extern "C" fn(&JsObject, &mut SnapshotSerializer)>,
     pub additional_size: Option<extern "C" fn() -> usize>,
 }

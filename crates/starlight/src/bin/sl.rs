@@ -3,6 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use starlight::gc::default_heap;
 use starlight::prelude::*;
+use starlight::vm::Context;
 use std::path::Path;
 use structopt::*;
 
@@ -58,16 +59,18 @@ fn main() {
 
     let gcstack = rt.shadowstack();
 
+    let mut ctx = Context::new(&mut rt);
+
     let string = std::fs::read_to_string(&rt.options().file);
     match string {
         Ok(source) => {
             let name = rt.options().file.as_os_str().to_str().unwrap().to_string();
             letroot!(
                 function = gcstack,
-                match rt.compile_module(&name, "<script>", &source,) {
+                match ctx.compile_module(&name, "<script>", &source,) {
                     Ok(function) => function.get_jsobject(),
                     Err(e) => {
-                        let string = e.to_string(&mut rt);
+                        let string = e.to_string(&mut ctx);
                         match string {
                             Ok(val) => {
                                 eprintln!("Compilation failed: {}", val);
@@ -82,11 +85,11 @@ fn main() {
                 }
             );
             letroot!(funcc = gcstack, *function);
-            let global = rt.global_object();
-            letroot!(module_object = gcstack, JsObject::new_empty(&mut rt));
-            let exports = JsObject::new_empty(&mut rt);
+            let global = ctx.global_object();
+            letroot!(module_object = gcstack, JsObject::new_empty(&mut ctx));
+            let exports = JsObject::new_empty(&mut ctx);
             module_object
-                .put(&mut rt, "@exports".intern(), JsValue::new(exports), false)
+                .put(&mut ctx, "@exports".intern(), JsValue::new(exports), false)
                 .unwrap_or_else(|_| unreachable!());
             let mut args = [JsValue::new(*module_object)];
             letroot!(
@@ -97,19 +100,19 @@ fn main() {
             let start = std::time::Instant::now();
             match function
                 .as_function_mut()
-                .call(&mut rt, &mut args, JsValue::new(*funcc))
+                .call(&mut ctx, &mut args, JsValue::new(*funcc))
             {
                 Ok(_) => {
                     let elapsed = start.elapsed();
                     eprintln!("Executed in {}ms", elapsed.as_nanos() as f64 / 1000000f64);
                 }
                 Err(e) => {
-                    let str = match e.to_string(&mut rt) {
+                    let str = match e.to_string(&mut ctx) {
                         Ok(s) => s,
                         Err(_) => "<unknown error>".to_owned(),
                     };
                     eprintln!("Uncaught exception: {}", str);
-                    eprintln!("Stacktrace: \n{}", rt.take_stacktrace());
+                    eprintln!("Stacktrace: \n{}", ctx.take_stacktrace());
                 }
             }
         }
