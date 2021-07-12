@@ -9,7 +9,7 @@ pub struct NumberObject {
     value: f64,
 }
 
-extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _: &mut Context) {
+extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
     *obj.data::<NumberObject>() = ManuallyDrop::new(NumberObject {
         value: f64::from_bits(deser.get_u64()),
     });

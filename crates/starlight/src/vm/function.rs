@@ -747,7 +747,7 @@ extern "C" fn drop_generator(obj: &mut JsObject) {
     }
 }
 
-extern "C" fn generator_deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Context) {
+extern "C" fn generator_deser(_: &mut JsObject, _: &mut Deserializer) {
     unreachable!("cannot deserialize generator");
 }
 extern "C" fn generator_ser(_: &JsObject, _: &mut SnapshotSerializer) {

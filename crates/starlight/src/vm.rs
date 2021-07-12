@@ -7,8 +7,8 @@ use crate::{bytecompiler::{ByteCompiler, CompileError}, gc::Heap, gc::default_he
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
     }, options::Options};
-use self::{attributes::*, context::{Context, ContextRef}, object::JsObject, structure::Structure};
-use std::{collections::HashMap, ops::{Deref, DerefMut}};
+use self::{attributes::*, context::{Context}, object::JsObject, structure::Structure};
+use std::{collections::HashMap, ops::{Deref, DerefMut}, u32, usize};
 use std::{fmt::Display, io::Write, sync::RwLock};
 use swc_common::{errors::{DiagnosticBuilder, Emitter, Handler}, input::StringInput, sync::Lrc};
 use swc_common::{FileName, SourceMap};
@@ -126,7 +126,7 @@ pub struct Runtime {
     sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>>,
     pub(crate) safepoint: GlobalSafepoint,
 
-    pub(crate) contexts: Vec<Context>
+    pub(crate) contexts: Vec<GcPointer<Context>>
 }
 
 impl Runtime {
@@ -280,11 +280,17 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn remove_context(&mut self,ctx:ContextRef){
+    pub fn remove_context(&mut self,ctx: GcPointer<Context>){
         let mut contexts = &mut self.contexts;
-        let index = contexts.iter_mut().position(|x| ContextRef(&mut *x) == ctx).expect("context not found");
+        let index = contexts.iter_mut().position(|x| *x == ctx).expect("context not found");
         self.contexts.remove(index);
     }
+
+    pub fn context(&mut self,index: usize) -> GcPointer<Context> {
+        let ctx = self.contexts.get(index);
+        ctx.unwrap().clone()
+    }
+
 }
 
 pub struct PersistentRooted {

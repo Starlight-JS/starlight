@@ -49,6 +49,9 @@ fn main() {
     if rt.options().enable_ffi {
         rt.add_ffi();
     }
+
+    let mut ctx = if !deserialized { Context::new(&mut rt)} else {rt.context(0)};
+
     if !deserialized {
         let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
         let mut buf = Vec::<u8>::with_capacity(8 + snapshot.buffer.len());
@@ -58,8 +61,6 @@ fn main() {
     }
 
     let gcstack = rt.shadowstack();
-
-    let mut ctx = Context::new(&mut rt);
 
     let string = std::fs::read_to_string(&rt.options().file);
     match string {

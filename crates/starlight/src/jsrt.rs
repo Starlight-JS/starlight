@@ -1073,6 +1073,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         GcPointer::<u8>::allocate as _,
         WeakRef::<u8>::deserialize as _,
         WeakRef::<u8>::allocate as _,
+        Context::deserialize as _,
+        Context::allocate as _,
         JsObject::deserialize as _,
         JsObject::allocate as _,
         JsValue::deserialize as _,

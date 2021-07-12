@@ -4,8 +4,8 @@
         "type": "lldb",
         "request": "launch",
         "name": "Launch",
-        "program": "${workspaceFolder}/target/debug/test262-runner",
-        "args": ["run","-vvv","-s","test/built-ins/Array/prototype/sort/stability-513-elements.js"],
+        "program": "${workspaceFolder}/target/debug/sl",
+        "args": ["examples/hello-world.js"],
         "cwd": "${workspaceFolder}"
     }
     ]

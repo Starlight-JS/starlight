@@ -1,5 +1,5 @@
-use std::{collections::HashMap, ops::{Deref, DerefMut}};
-use crate::vm::Lrc;
+use std::{collections::HashMap, ptr::null};
+use crate::{gc::cell::GcCell, vm::Lrc};
 use swc_common::{FileName, SourceMap, errors::Handler, input::StringInput};
 use swc_ecmascript::parser::{Parser, Syntax};
 
@@ -7,23 +7,7 @@ use crate::{bytecompiler::{ByteCompiler, CompileError}, gc::{Heap, cell::{GcPoin
 
 use super::{GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef, error::{JsRangeError, JsReferenceError, JsTypeError}, function::JsNativeFunction, global::JsGlobal, interpreter::{frame::CallFrame, stack::Stack}, object::{JsObject, ObjectTag}, string::JsString, structure::Structure, symbol_table::{self, Internable, JsSymbol, Symbol}, value::JsValue};
 
-
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct ContextRef(pub(crate) *mut Context);
-
-impl Deref for ContextRef {
-    type Target = Context;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for ContextRef {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.0 }
-    }
-}
+use crate::gc::snapshot::{deserializer::Deserializable};
 
 // evalute context
 pub struct Context {
@@ -64,29 +48,45 @@ impl Context {
         self.module_loader
     }
 
-    pub fn new_empty(vm: &mut Runtime) -> ContextRef {
+    pub fn new_raw() -> Context {
+        
         let mut context = Self {
             global_data: GlobalData::default(),
             global_object:None,
-            vm: RuntimeRef(&mut *vm),
+            vm: RuntimeRef(null::<*mut Runtime>() as *mut Runtime),
             stack: Stack::new(),
             stacktrace:String::new(),
             module_loader:None,
             modules:HashMap::new(),
             symbol_table: HashMap::new()
         };
-        vm.contexts.push(context);
-        ContextRef(&mut *vm.contexts.first_mut().unwrap())
+        context
     }
 
-    pub fn new(vm: &mut Runtime) -> ContextRef {
-        let mut context = Context::new_empty(vm);
-        context.global_object = Some(JsGlobal::new(&mut context));
+    pub fn new_empty(vm:&mut Runtime) -> GcPointer<Context> {
+        let mut context = Self {
+            global_data: GlobalData::default(),
+            global_object:None,
+            vm: RuntimeRef(vm),
+            stack: Stack::new(),
+            stacktrace:String::new(),
+            module_loader:None,
+            modules:HashMap::new(),
+            symbol_table: HashMap::new()
+        };
+        let ctx = vm.heap().allocate(context);
+        ctx
+    }
+
+    pub fn new(vm: &mut Runtime) -> GcPointer<Context> {
+        let mut ctx = Context::new_empty(vm);
+        ctx.global_object = Some(JsGlobal::new(ctx));
+        vm.contexts.push(ctx);
         vm.gc.defer();
-        context.init();
+        ctx.init();
         vm.gc.undefer();
         vm.gc.collect_if_necessary();
-        context
+        ctx
     }
 
     pub fn init(&mut self){
@@ -521,6 +521,13 @@ impl Context {
     /// Get stacktrace. If there was no error then returned string is empty.
     pub fn take_stacktrace(&mut self) -> String {
         std::mem::take(&mut self.stacktrace)
+    }
+}
+
+
+impl GcCell for Context {
+    fn deser_pair(&self) -> (usize, usize) {
+        (Self::deserialize as _, Self::allocate as _)
     }
 }
 

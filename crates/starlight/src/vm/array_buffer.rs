@@ -36,7 +36,6 @@ extern "C" fn array_buffer_serialize(x: &JsObject, serializer: &mut SnapshotSeri
 extern "C" fn array_buffer_deserialize(
     x: &mut JsObject,
     deser: &mut Deserializer,
-    _ctx: &mut Context,
 ) {
     unsafe {
         let attached = bool::deserialize_inplace(deser);

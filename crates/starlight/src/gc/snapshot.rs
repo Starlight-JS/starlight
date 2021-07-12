@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::vm::Runtime;
+use crate::vm::{Runtime};
 
 use self::serializer::SnapshotSerializer;
 
@@ -10,6 +10,7 @@ pub mod serializer;
 
 pub struct Snapshot {
     pub buffer: Box<[u8]>,
+    pub serializer: SnapshotSerializer
 }
 
 impl Snapshot {
@@ -32,8 +33,12 @@ impl Snapshot {
         serializer.output[ids_patch + 2] = buf[2];
         serializer.output[ids_patch + 3] = buf[3];
 
+        let buffer = serializer.output.into_boxed_slice();
+        serializer.output = vec![];
+
         Snapshot {
-            buffer: serializer.output.into_boxed_slice(),
+            buffer,
+            serializer
         }
     }
 }

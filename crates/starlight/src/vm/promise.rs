@@ -449,7 +449,7 @@ extern "C" fn prom_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<JsPromise>().trace(tracer);
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Context) {
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
     unreachable!("Cannot deserialize a Promise");
 }
 

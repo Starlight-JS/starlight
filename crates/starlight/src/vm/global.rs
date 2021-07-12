@@ -18,7 +18,7 @@ use super::{
 pub struct JsGlobal {
     pub(crate) sym_map: HashMap<Symbol, u32>,
     pub(crate) variables: SegmentedVec<StoredSlot>,
-    pub(crate) ctx: *mut Context,
+    pub(crate) ctx: GcPointer<Context>,
 }
 
 unsafe impl Trace for JsGlobal {
@@ -29,22 +29,25 @@ unsafe impl Trace for JsGlobal {
 
 #[allow(non_snake_case)]
 impl JsGlobal {
-    pub fn new(ctx: &mut Context) -> GcPointer<JsObject> {
+    pub fn new(mut ctx: GcPointer<Context>) -> GcPointer<JsObject> {
         let stack = ctx.shadowstack();
         letroot!(
             shape = stack,
-            Structure::new_unique_with_proto(ctx, None, false)
+            Structure::new_unique_with_proto(&mut ctx, None, false)
         );
-        let js_object = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Global);
+        let js_object = JsObject::new(&mut ctx, &shape, Self::get_class(), ObjectTag::Global);
         {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),
                 variables: SegmentedVec::with_chunk_size(8),
-                ctx: ctx as *mut _,
+                ctx: ctx ,
             });
         }
         js_object
     }
+
+    
+
     define_jsclass!(JsGlobal, global);
     pub fn lookup_constant(&self, name: Symbol) -> Option<JsValue> {
         let _ctx = self.ctx;

@@ -4,7 +4,8 @@ use super::{
 };
 
 use colored::Colorize;
-use starlight::vm::{context::Context, context::ContextRef, Runtime, parse};
+use starlight::prelude::GcPointer;
+use starlight::vm::{context::Context, Runtime, parse};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
@@ -359,7 +360,7 @@ impl Test {
         &self,
         harness: &Harness,
         _strict: bool,
-        mut context: ContextRef,
+        mut context: GcPointer<Context>,
     ) -> Result<(), String> {
         // TODO: in parallel.
         /*let mut context = Runtime::new(

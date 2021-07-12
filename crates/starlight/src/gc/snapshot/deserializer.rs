@@ -2,18 +2,44 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 #![allow(unused_variables)]
-use std::{marker::PhantomData, rc::Rc};
+use std::{rc::Rc};
 use vm::function::JsFunction;
 use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
     () => {};
 }
-use crate::{bytecode::{GetByIdMode, TypeFeedBack}, gc::Heap, gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef}, jsrt::VM_NATIVE_REFERENCES, prelude::{Class, Options}, vm::{*, self, Runtime, arguments::JsArguments, array_storage::ArrayStorage, code_block::{CodeBlock, FileLocation}, context::{Context, ContextRef}, function::{
+use crate::{
+    bytecode::{GetByIdMode, TypeFeedBack},
+    gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
+    gc::Heap,
+    jsrt::VM_NATIVE_REFERENCES,
+    prelude::{Class, Options},
+    vm::{
+        self,
+        arguments::JsArguments,
+        array_storage::ArrayStorage,
+        code_block::{CodeBlock, FileLocation},
+        context::Context,
+        function::{
             FuncType, JsBoundFunction, JsGeneratorFunction, JsNativeFunction, JsVMFunction,
-        }, global::JsGlobal, indexed_elements::{IndexedElements, SparseArrayMap}, interpreter::SpreadValue, object::{object_size_with_tag, JsObject, ObjectTag}, property_descriptor::{Accessor, StoredSlot}, string::{JsString, JsStringObject}, structure::{
+        },
+        global::JsGlobal,
+        indexed_elements::{IndexedElements, SparseArrayMap},
+        interpreter::SpreadValue,
+        object::{object_size_with_tag, JsObject, ObjectTag},
+        property_descriptor::{Accessor, StoredSlot},
+        string::{JsString, JsStringObject},
+        structure::{
             DeletedEntry, DeletedEntryHolder, MapEntry, Structure, TargetTable, Transition,
             TransitionKey, TransitionsTable,
-        }, structure_chain::StructureChain, symbol_table::*, symbol_table::{JsSymbol, Symbol, SymbolID}, value::*}};
+        },
+        structure_chain::StructureChain,
+        symbol_table::*,
+        symbol_table::{JsSymbol, Symbol, SymbolID},
+        value::*,
+        Runtime, *,
+    },
+};
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -24,7 +50,6 @@ use std::{
 };
 
 pub struct Deserializer<'a> {
-    pub ctx: ContextRef,
     reader: &'a [u8],
     pub pc: usize,
     reference_map: Vec<usize>,
@@ -172,16 +197,13 @@ impl<'a> Deserializer<'a> {
         logln_if!(self.log_deser, "- Object deserialization completed -");
         self.pc = last_stop;
 
-        let mut ctx = self.ctx;
-        let ctx = &mut *ctx;
-        ctx.global_data = self.deserialize_global_data();
-
-        ctx.global_object = self.read_opt_gc();
-
-        ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
-        ctx.module_loader = self.read_opt_gc();
-        ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
-        
+        let mut ctx_num = self.get_u32() as i32;
+        while ctx_num > 0 {
+            let mut ctx = GcPointer::<Context>::deserialize_inplace(self);
+            ctx.vm = RuntimeRef(rt);
+            rt.contexts.push(ctx);
+            ctx_num -= 1;
+        }
     }
     pub unsafe fn read_opt_gc<T: GcCell + ?Sized>(&mut self) -> Option<GcPointer<T>> {
         Option::<GcPointer<T>>::deserialize_inplace(self)
@@ -259,16 +281,15 @@ impl<'a> Deserializer<'a> {
         callback: impl FnOnce(&mut Self, &mut Runtime),
     ) -> Box<Runtime> {
         let mut runtime = Runtime::new_empty(gc, options, external_refs);
-        let ctx = Context::new_empty(&mut runtime);
-        
+
         let mut this = Self {
             reader: snapshot,
             pc: 0,
             log_deser,
             symbol_map: Default::default(),
             reference_map: Default::default(),
-            ctx
         };
+
         runtime.heap().defer();
 
         unsafe {
@@ -282,6 +303,21 @@ impl<'a> Deserializer<'a> {
         }
         runtime.heap().undefer();
         runtime
+    }
+
+    pub fn deserialize_context(&mut self,rt: &mut Runtime, log_deser: bool, snapshot: &'a [u8]) -> GcPointer<Context> {
+        rt.heap().defer();
+        let mut ctx = Context::new_empty(rt);
+        unsafe  {
+            ctx.global_data = self.deserialize_global_data();
+            ctx.global_object = self.read_opt_gc();
+            ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
+            ctx.module_loader = self.read_opt_gc();
+            ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
+        }
+        rt.contexts.push(ctx);
+        rt.heap().undefer();
+        ctx
     }
 }
 
@@ -470,7 +506,7 @@ impl Deserializable for Symbol {
         }
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         deser.get_u8();
         deser.get_u32();
         rt.heap().allocate_raw(
@@ -505,7 +541,7 @@ impl<T: Deserializable + GcCell> Deserializable for Vec<T> {
         at.cast::<Vec<T>>().write(this);
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         /*      let len = deser.get_u64();
                 deser.get_u64();
                 for _ in 0..len {
@@ -549,7 +585,7 @@ impl<K: Deserializable + GcCell + Eq + Hash, V: Deserializable + GcCell> Deseria
         at.cast::<Self>().write(this);
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -583,7 +619,7 @@ impl Deserializable for String {
         at.cast::<Self>().write(this);
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -610,7 +646,7 @@ impl Deserializable for StoredSlot {
         at.cast::<Self>().write(this);
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -632,7 +668,7 @@ impl<T: Deserializable> Deserializable for SegmentedVec<T> {
         }
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!();
     }
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
@@ -648,7 +684,7 @@ impl Deserializable for u32 {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         deser.get_u32()
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //   deser.get_u32();
         rt.heap()
             .allocate_raw(vtable_of_type::<Self>() as _, 4, TypeId::of::<Self>())
@@ -678,13 +714,41 @@ impl<T: Deserializable + GcCell> Deserializable for Option<T> {
             T::dummy_read(deser);
         }
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
         at.cast::<Self>().write(Self::deserialize_inplace(deser));
     }
 }
+
+impl Deserializable for Context {
+    unsafe fn dummy_read(deser: &mut Deserializer) {}
+    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
+        let mut ctx = Context::new_raw();
+        ctx.global_data = deser.deserialize_global_data();
+
+        ctx.global_object = deser.read_opt_gc();
+
+        ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(deser);
+        ctx.module_loader = deser.read_opt_gc();
+        ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(deser);
+        ctx
+    }
+
+    unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
+        at.cast::<Self>().write(Self::deserialize_inplace(deser));
+    }
+
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+        rt.heap().allocate_raw(
+            vtable_of_type::<Self>() as _,
+            size_of::<Self>(),
+            TypeId::of::<Self>(),
+        )
+    }
+}
+
 
 impl Deserializable for JsObject {
     unsafe fn dummy_read(deser: &mut Deserializer) {}
@@ -772,13 +836,14 @@ impl Deserializable for JsObject {
                 )
             }
             ObjectTag::Global => {
+                let ctx = GcPointer::<Context>::deserialize_inplace(deser);
                 let sym_map = HashMap::<Symbol, u32>::deserialize_inplace(deser);
                 let variables = SegmentedVec::<StoredSlot>::deserialize_inplace(deser);
                 ((*object).data::<JsGlobal>() as *mut ManuallyDrop<_> as *mut JsGlobal).write(
                     JsGlobal {
                         sym_map,
                         variables,
-                        ctx: &mut *deser.ctx,
+                        ctx,
                     },
                 )
             }
@@ -792,12 +857,11 @@ impl Deserializable for JsObject {
             _ => (),
         }
         if let Some(deser_fn) = (*object).class.deserialize {
-            let mut ctx = deser.ctx;
-            deser_fn(&mut *object, deser, &mut *ctx);
+            deser_fn(&mut *object, deser);
         }
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         let tag = transmute(deser.get_u32() as u8);
         let class: &'static Class = transmute(deser.get_reference());
         deser.pc -= 8;
@@ -835,7 +899,7 @@ impl Deserializable for IndexedElements {
         }
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -860,7 +924,7 @@ impl Deserializable for Accessor {
         JsValue::dummy_read(deser);
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -884,7 +948,7 @@ impl Deserializable for SpreadValue {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u32();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -906,7 +970,7 @@ impl Deserializable for bool {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u8();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -927,7 +991,7 @@ impl Deserializable for u8 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u8();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -947,7 +1011,7 @@ impl Deserializable for u16 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u16();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -968,7 +1032,7 @@ impl Deserializable for u64 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u64();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -989,7 +1053,7 @@ impl Deserializable for i8 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u8();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1010,7 +1074,7 @@ impl Deserializable for i16 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u16();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1031,7 +1095,7 @@ impl Deserializable for i32 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u32();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1052,7 +1116,7 @@ impl Deserializable for i64 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u64();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1073,7 +1137,7 @@ impl Deserializable for f32 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u32();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1094,7 +1158,7 @@ impl Deserializable for f64 {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u64();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1120,7 +1184,7 @@ impl<T: GcCell> Deserializable for WeakRef<T> {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         deser.get_u32();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1146,7 +1210,7 @@ impl Deserializable for MapEntry {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         Self::deserialize_inplace(deser);
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -1165,7 +1229,7 @@ impl Deserializable for TransitionKey {
         Symbol::dummy_read(deser);
         u32::dummy_read(deser);
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -1189,7 +1253,7 @@ impl Deserializable for DeletedEntry {
         deser.get_u32();
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1214,7 +1278,7 @@ impl Deserializable for DeletedEntryHolder {
         Option::<GcPointer<DeletedEntry>>::dummy_read(deser);
         deser.get_u32();
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1259,7 +1323,7 @@ impl Deserializable for Transition {
             _ => unreachable!(),
         }
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -1288,7 +1352,7 @@ impl Deserializable for TransitionsTable {
         bool::dummy_read(deser);
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -1340,7 +1404,7 @@ impl Deserializable for Structure {
         at.cast::<Self>().write(Self::deserialize_inplace(deser));
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1420,7 +1484,7 @@ impl Deserializable for CodeBlock {
         at.cast::<Self>().write(Self::deserialize_inplace(deser));
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1489,7 +1553,7 @@ impl Deserializable for TypeFeedBack {
         unreachable!()
     }
 
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -1507,7 +1571,7 @@ impl Deserializable for JsSymbol {
     unsafe fn dummy_read(deser: &mut Deserializer) {
         Symbol::dummy_read(deser);
     }
-    unsafe fn allocate(rt:&mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
         //Self::dummy_read(deser);
         rt.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
@@ -1516,6 +1580,9 @@ impl Deserializable for JsSymbol {
         )
     }
 }
+
+
+
 
 impl<A: Deserializable, B: Deserializable> Deserializable for (A, B) {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {

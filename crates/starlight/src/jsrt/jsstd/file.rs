@@ -301,7 +301,7 @@ extern "C" fn drop_file_fn(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<FileObject>()) }
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Context) {
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
     unreachable!("Cannot deserialize file");
 }
 

@@ -42,7 +42,7 @@ extern "C" fn drop_regexp_fn(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<RegExp>()) }
 }
 
-extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer, _ctx: &mut Context) {
+extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
     unsafe {
         let use_last_index = bool::deserialize_inplace(deser);
         let flags = String::deserialize_inplace(deser);
