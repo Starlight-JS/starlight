@@ -2,19 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 #![allow(unused_variables)]
-use std::{rc::Rc};
+use std::{marker::PhantomData, rc::Rc};
 use vm::function::JsFunction;
 use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
     () => {};
 }
-use crate::{
-    bytecode::{GetByIdMode, TypeFeedBack},
-    gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
-    gc::Heap,
-    jsrt::VM_NATIVE_REFERENCES,
-    prelude::{Class, Options},
-    vm::{
+use crate::{bytecode::{GetByIdMode, TypeFeedBack}, gc::{Heap, cell::WeakSlot}, gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef}, jsrt::VM_NATIVE_REFERENCES, prelude::{Class, Options}, vm::{
         self,
         arguments::JsArguments,
         array_storage::ArrayStorage,
@@ -38,8 +32,7 @@ use crate::{
         symbol_table::{JsSymbol, Symbol, SymbolID},
         value::*,
         Runtime, *,
-    },
-};
+    }};
 use std::{
     any::TypeId,
     collections::HashMap,

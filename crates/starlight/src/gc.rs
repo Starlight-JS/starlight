@@ -448,7 +448,6 @@ pub mod large_object_space;
 pub mod space_bitmap;
 use std::collections::LinkedList;
 use std::mem::swap;
-use wtf_rs::approximate_stack_pointer;
 use yastl::Pool;
 
 use self::allocation::Space;
