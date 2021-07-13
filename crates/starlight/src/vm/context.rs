@@ -56,7 +56,9 @@ impl Context {
     pub fn global_data(&self) -> &GlobalData {
         &self.global_data
     }
-
+    pub fn vm(&self) -> RuntimeRef {
+        self.vm
+    }
     // proxy heap
     pub fn heap(&mut self) -> &mut Heap {
         self.vm.heap()
