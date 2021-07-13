@@ -20,7 +20,17 @@ use std::{
     intrinsics::{likely, size_of, unlikely},
 };
 
-use super::{Context, Runtime, attributes::*, class::JsClass, error::*, number::*, object::{JsHint, JsObject, TypedJsObject}, slot::*, string::*, symbol_table::*};
+use super::{
+    attributes::*,
+    class::JsClass,
+    error::*,
+    number::*,
+    object::{JsHint, JsObject, TypedJsObject},
+    slot::*,
+    string::*,
+    symbol_table::*,
+    Context, Runtime,
+};
 pub const CMP_FALSE: i32 = 0;
 pub const CMP_TRUE: i32 = 1;
 pub const CMP_UNDEF: i32 = -1;
@@ -281,7 +291,7 @@ pub mod old_value {
 unsafe impl Trace for JsValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
         if self.is_object() && !self.is_empty() && !self.is_int32() {
-            *self = JsValue::new(visitor.visit(self.get_object()));
+            visitor.visit(self.get_object());
         }
     }
 }
@@ -754,8 +764,10 @@ impl JsValue {
 
             if self.is_undefined() {
                 let d = ctx.description(name);
-                let msg =
-                    JsString::new(ctx, &format!("undefined does not have propectxies ('{}')", d));
+                let msg = JsString::new(
+                    ctx,
+                    &format!("undefined does not have propectxies ('{}')", d),
+                );
                 return Err(JsValue::encode_object_value(JsTypeError::new(
                     ctx, msg, None,
                 )));
@@ -780,7 +792,9 @@ impl JsValue {
                             .as_str()
                             .chars()
                             .nth(index as usize)
-                            .map(|x| JsValue::encode_object_value(JsString::new(ctx, x.to_string())))
+                            .map(|x| {
+                                JsValue::encode_object_value(JsString::new(ctx, x.to_string()))
+                            })
                             .unwrap_or_else(JsValue::encode_undefined_value);
                         slot.set_1(char, string_indexed(), Some(str.as_dyn()));
                         return Ok(slot.value());
@@ -1072,8 +1086,8 @@ pub mod new_value {
     }
     impl Debug for EncodedValueDescriptor {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_fmt(format_args!("EncodedValueDescriptor {}","to do"))
-        } 
+            f.write_fmt(format_args!("EncodedValueDescriptor {}", "to do"))
+        }
     }
 
     impl PartialEq for JsValue {
