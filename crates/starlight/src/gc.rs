@@ -15,7 +15,7 @@
 //!
 #![allow(dead_code, unused_variables)]
 use crate::options::Options;
-use crate::vm::{Runtime};
+use crate::vm::Runtime;
 use crate::{
     gc::cell::*,
     gc::snapshot::{
@@ -469,6 +469,11 @@ impl Tracer for SlotVisitor {
     fn visit_raw(&mut self, cell: &mut *mut GcPointerBase) -> GcPointer<dyn GcCell> {
         let base = *cell;
         unsafe {
+            if !self.heap.is_heap_pointer(base as *mut u8) {
+                println!("{:?}", backtrace::Backtrace::new());
+                let a = 0 as *mut u8;
+                println!("Stop {}", *a);
+            }
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
                 return GcPointer {
                     base: NonNull::new_unchecked(base as *mut _),
@@ -487,6 +492,11 @@ impl Tracer for SlotVisitor {
     fn visit(&mut self, cell: &mut GcPointer<dyn GcCell>) -> GcPointer<dyn GcCell> {
         unsafe {
             let base = cell.base.as_ptr();
+            if !self.heap.is_heap_pointer(base as *mut u8) {
+                println!("{:?}", backtrace::Backtrace::new());
+                let a = 0 as *mut u8;
+                println!("Stop {}", *a);
+            }
             if !(*base).set_state(DEFINETELY_WHITE, POSSIBLY_GREY) {
                 return *cell;
             }

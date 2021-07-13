@@ -5,7 +5,7 @@ use super::{
 
 use colored::Colorize;
 use starlight::prelude::GcPointer;
-use starlight::vm::{context::Context, Runtime, parse};
+use starlight::vm::{context::Context, parse, Runtime};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
@@ -184,7 +184,6 @@ impl Test {
         verbose: u8,
         rt: &mut Box<Runtime>,
     ) -> TestResult {
-        println!("{} {}",self.name,strict);
         if verbose >= 1 {
             eprintln!(
                 "Starting `{}` {}",
@@ -235,7 +234,9 @@ impl Test {
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => val.to_string(&mut ctx).unwrap_or_else(|_| String::new()),
+                                Ok(val) => {
+                                    val.to_string(&mut ctx).unwrap_or_else(|_| String::new())
+                                }
                                 Err(e) => format!(
                                     "Uncaught {}",
                                     e.to_string(&mut ctx).unwrap_or_else(|_| String::new())
@@ -280,10 +281,12 @@ impl Test {
                     } else {
                         match self.set_up_env(&harness, strict, ctx) {
                             Ok(_) => {
-                                match ctx.eval_internal(None, false, &self.content.as_ref(), false) {
-                                    Ok(res) => {
-                                        (false, res.to_string(&mut ctx).unwrap_or_else(|_| String::new()))
-                                    }
+                                match ctx.eval_internal(None, false, &self.content.as_ref(), false)
+                                {
+                                    Ok(res) => (
+                                        false,
+                                        res.to_string(&mut ctx).unwrap_or_else(|_| String::new()),
+                                    ),
                                     Err(e) => {
                                         let passed = e
                                             .to_string(&mut ctx)
@@ -294,7 +297,8 @@ impl Test {
                                             passed,
                                             format!(
                                                 "Uncaught {}",
-                                                e.to_string(&mut ctx).unwrap_or_else(|_| String::new())
+                                                e.to_string(&mut ctx)
+                                                    .unwrap_or_else(|_| String::new())
                                             ),
                                         )
                                     }
