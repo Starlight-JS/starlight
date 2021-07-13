@@ -1,5 +1,5 @@
-use super::context::Context;
 use super::arguments::*;
+use super::context::Context;
 use super::method_table::*;
 use super::object::*;
 use super::string::*;
@@ -52,7 +52,6 @@ impl JsPromise {
                     .get_jsobject()
                     .as_promise_mut()
                     .resolve(ctx, promise, resolution)?;
-
                 Ok(JsValue::encode_undefined_value())
             },
             1,
@@ -479,8 +478,8 @@ unsafe impl Trace for JsPromise {
 pub mod tests {
 
     use crate::options::Options;
-    use crate::Platform;
     use crate::vm::context::Context;
+    use crate::Platform;
     use std::cell::RefCell;
     use std::rc::Rc;
 

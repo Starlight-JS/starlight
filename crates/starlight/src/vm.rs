@@ -1,18 +1,37 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{bytecompiler::{ByteCompiler, CompileError}, gc::Heap, gc::default_heap, gc::safepoint::GlobalSafepoint, gc::shadowstack::ShadowStack, gc::{
+use self::{attributes::*, context::Context, object::JsObject, structure::Structure};
+use crate::{
+    bytecompiler::{ByteCompiler, CompileError},
+    gc::default_heap,
+    gc::safepoint::GlobalSafepoint,
+    gc::shadowstack::ShadowStack,
+    gc::Heap,
+    gc::{
         cell::GcPointer,
         cell::Trace,
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
-    }, options::Options};
-use self::{attributes::*, context::{Context}, object::JsObject, structure::Structure};
-use std::{collections::HashMap, ops::{Deref, DerefMut}, u32, usize};
+    },
+    options::Options,
+};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    u32, usize,
+};
 use std::{fmt::Display, io::Write, sync::RwLock};
-use swc_common::{errors::{DiagnosticBuilder, Emitter, Handler}, input::StringInput, sync::Lrc};
+use swc_common::{
+    errors::{DiagnosticBuilder, Emitter, Handler},
+    input::StringInput,
+    sync::Lrc,
+};
 use swc_common::{FileName, SourceMap};
-use swc_ecmascript::{ast::{ExprOrSpread, Program}, parser::{EsConfig, Parser, Syntax, error::Error}};
+use swc_ecmascript::{
+    ast::{ExprOrSpread, Program},
+    parser::{error::Error, EsConfig, Parser, Syntax},
+};
 #[macro_use]
 pub mod class;
 #[macro_use]
@@ -25,6 +44,7 @@ pub mod attributes;
 pub mod bigint;
 pub mod builtins;
 pub mod code_block;
+pub mod context;
 pub mod data_view;
 pub mod environment;
 pub mod error;
@@ -47,7 +67,6 @@ pub mod symbol_table;
 pub mod thread;
 pub mod typedarray;
 pub mod value;
-pub mod context;
 use crate::gc::snapshot::{deserializer::*, serializer::*};
 
 use value::*;
@@ -107,30 +126,31 @@ impl Deserializable for ModuleKind {
     }
 }
 
-
-
 /// JavaScript runtime instance.
 pub struct Runtime {
     pub(crate) gc: Heap,
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: Options,
     pub(crate) shadowstack: ShadowStack,
-    pub(crate) codegen_plugins:
-        HashMap<String, Box<dyn Fn(&mut ByteCompiler, &mut Context,&Vec<ExprOrSpread>) -> Result<(), CompileError>>>,
+    pub(crate) codegen_plugins: HashMap<
+        String,
+        Box<
+            dyn Fn(&mut ByteCompiler, &mut Context, &Vec<ExprOrSpread>) -> Result<(), CompileError>,
+        >,
+    >,
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
     #[allow(dead_code)]
     /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
     pub(crate) eval_history: String,
-    persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
-    sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>>,
+    pub(crate) persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
+    pub(crate) sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>>,
     pub(crate) safepoint: GlobalSafepoint,
 
-    pub(crate) contexts: Vec<GcPointer<Context>>
+    pub(crate) contexts: Vec<GcPointer<Context>>,
 }
 
 impl Runtime {
-
     /// initialize a Runtime with an async scheduler
     /// the async scheduler is used to asynchronously run jobs with the Runtime
     /// this can be used for things like Promises, setImmediate, async functions
@@ -153,9 +173,9 @@ impl Runtime {
     /// }));
     /// ```
     pub fn with_async_scheduler(
-        mut self,
+        mut self: Box<Self>,
         scheduler: Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>,
-    ) -> Self {
+    ) -> Box<Self> {
         self.sched_async_func = Some(scheduler);
         self
     }
@@ -196,7 +216,7 @@ impl Runtime {
             persistent_roots: Default::default(),
             sched_async_func: None,
             codegen_plugins: HashMap::new(),
-            contexts: vec![]
+            contexts: vec![],
         }
     }
 
@@ -222,7 +242,9 @@ impl Runtime {
             move |visitor| {
                 let rt = unsafe { &mut *vm };
                 // rt.shadowstack.trace(visitor);
-                rt.contexts.iter_mut().for_each(|ctx| ctx.trace(visitor));
+                rt.contexts.iter_mut().for_each(|ctx| {
+                    ctx.trace(visitor);
+                });
                 let pr = &mut *rt.persistent_roots.borrow_mut();
                 pr.iter_mut().for_each(|entry| {
                     entry.1.trace(visitor);
@@ -231,7 +253,7 @@ impl Runtime {
         ));
         this
     }
-    
+
     pub(crate) fn new_empty(
         gc: Heap,
         options: Options,
@@ -270,7 +292,9 @@ impl Runtime {
     pub fn register_codegen_plugin(
         &mut self,
         plugin_name: &str,
-        codegen_func: Box<dyn Fn(&mut ByteCompiler,&mut Context , &Vec<ExprOrSpread>) -> Result<(), CompileError>>,
+        codegen_func: Box<
+            dyn Fn(&mut ByteCompiler, &mut Context, &Vec<ExprOrSpread>) -> Result<(), CompileError>,
+        >,
     ) -> Result<(), &str> {
         if !self.options.codegen_plugins {
             return Err("Need enable codegen_plugins option to register codegen plugin!");
@@ -280,17 +304,19 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn remove_context(&mut self,ctx: GcPointer<Context>){
+    pub fn remove_context(&mut self, ctx: GcPointer<Context>) {
         let mut contexts = &mut self.contexts;
-        let index = contexts.iter_mut().position(|x| *x == ctx).expect("context not found");
+        let index = contexts
+            .iter_mut()
+            .position(|x| *x == ctx)
+            .expect("context not found");
         self.contexts.remove(index);
     }
 
-    pub fn context(&mut self,index: usize) -> GcPointer<Context> {
+    pub fn context(&mut self, index: usize) -> GcPointer<Context> {
         let ctx = self.contexts.get(index);
         ctx.unwrap().clone()
     }
-
 }
 
 pub struct PersistentRooted {
@@ -478,7 +504,7 @@ pub mod tests {
     use crate::options::Options;
     use crate::vm::symbol_table::Internable;
     use crate::vm::value::JsValue;
-    use crate::vm::{context::Context, Runtime, arguments};
+    use crate::vm::{arguments, context::Context, Runtime};
     use crate::Platform;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -564,26 +590,18 @@ pub mod tests {
 
         // add the function to the global object
         global
-            .put(
-                &mut ctx,
-                name_symbol,
-                JsValue::new(func),
-                true,
-            )
+            .put(&mut ctx, name_symbol, JsValue::new(func), true)
             .ok()
             .expect("could not add func to global");
 
         // run the function
-        let _outcome =
-            match ctx.eval("setImmediate(() => {print('later')}); print('first');") {
-                Ok(e) => e,
-                Err(err) => panic!(
-                    "func failed: {}",
-                    err.to_string(&mut ctx)
-                        .ok()
-                        .expect("conversion failed")
-                ),
-            };
+        let _outcome = match ctx.eval("setImmediate(() => {print('later')}); print('first');") {
+            Ok(e) => e,
+            Err(err) => panic!(
+                "func failed: {}",
+                err.to_string(&mut ctx).ok().expect("conversion failed")
+            ),
+        };
 
         if let Some(job) = todo.take() {
             job(&mut ctx);
@@ -607,9 +625,9 @@ pub mod tests {
         let result = rt.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
-                |compiler: &mut ByteCompiler,ctx: &mut Context ,call_args: &Vec<ExprOrSpread>| {
-                    compiler.expr(ctx,&call_args[0].expr, true, false)?;
-                    compiler.expr(ctx,&call_args[1].expr, true, false)?;
+                |compiler: &mut ByteCompiler, ctx: &mut Context, call_args: &Vec<ExprOrSpread>| {
+                    compiler.expr(ctx, &call_args[0].expr, true, false)?;
+                    compiler.expr(ctx, &call_args[1].expr, true, false)?;
                     compiler.emit(Opcode::OP_ADD, &[0], false);
                     Ok(())
                 },
@@ -626,13 +644,14 @@ pub mod tests {
         let options: Options = Options::default();
         let heap = default_heap(&options);
         let mut rt = Runtime::with_heap(heap, options, None);
+        let mut ctx = Context::new(&mut rt);
 
         let result = rt.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
-                |compiler: &mut ByteCompiler, ctx:&mut Context , call_args: &Vec<ExprOrSpread>| {
-                    compiler.expr(ctx,&call_args[0].expr, true, false)?;
-                    compiler.expr(ctx,&call_args[1].expr, true, false)?;
+                |compiler: &mut ByteCompiler, ctx: &mut Context, call_args: &Vec<ExprOrSpread>| {
+                    compiler.expr(ctx, &call_args[0].expr, true, false)?;
+                    compiler.expr(ctx, &call_args[1].expr, true, false)?;
                     compiler.emit(Opcode::OP_ADD, &[0], false);
                     Ok(())
                 },

@@ -1,13 +1,36 @@
-use std::{collections::HashMap, ptr::null};
 use crate::{gc::cell::GcCell, vm::Lrc};
-use swc_common::{FileName, SourceMap, errors::Handler, input::StringInput};
+use std::{collections::HashMap, ptr::null};
+use swc_common::{errors::Handler, input::StringInput, FileName, SourceMap};
 use swc_ecmascript::parser::{Parser, Syntax};
 
-use crate::{bytecompiler::{ByteCompiler, CompileError}, gc::{Heap, cell::{GcPointer, Trace, Tracer}, shadowstack::ShadowStack}, jsrt, vm::{BufferedError, arguments::Arguments, environment::Environment, error::JsSyntaxError, function::JsVMFunction, init_es_config}};
+use crate::{
+    bytecompiler::{ByteCompiler, CompileError},
+    gc::{
+        cell::{GcPointer, Trace, Tracer},
+        shadowstack::ShadowStack,
+        Heap,
+    },
+    jsrt,
+    vm::{
+        arguments::Arguments, environment::Environment, error::JsSyntaxError,
+        function::JsVMFunction, init_es_config, BufferedError,
+    },
+};
 
-use super::{GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef, error::{JsRangeError, JsReferenceError, JsTypeError}, function::JsNativeFunction, global::JsGlobal, interpreter::{frame::CallFrame, stack::Stack}, object::{JsObject, ObjectTag}, string::JsString, structure::Structure, symbol_table::{self, Internable, JsSymbol, Symbol}, value::JsValue};
+use super::{
+    error::{JsRangeError, JsReferenceError, JsTypeError},
+    function::JsNativeFunction,
+    global::JsGlobal,
+    interpreter::{frame::CallFrame, stack::Stack},
+    object::{JsObject, ObjectTag},
+    string::JsString,
+    structure::Structure,
+    symbol_table::{self, Internable, JsSymbol, Symbol},
+    value::JsValue,
+    GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef,
+};
 
-use crate::gc::snapshot::{deserializer::Deserializable};
+use crate::gc::snapshot::deserializer::Deserializable;
 
 // evalute context
 pub struct Context {
@@ -44,57 +67,56 @@ impl Context {
         self.vm.shadowstack()
     }
 
-    pub fn module_loader(&mut self) -> Option<GcPointer<JsObject>>{
+    pub fn module_loader(&mut self) -> Option<GcPointer<JsObject>> {
         self.module_loader
     }
 
     pub fn new_raw() -> Context {
-        
         let mut context = Self {
             global_data: GlobalData::default(),
-            global_object:None,
+            global_object: None,
             vm: RuntimeRef(null::<*mut Runtime>() as *mut Runtime),
             stack: Stack::new(),
-            stacktrace:String::new(),
-            module_loader:None,
-            modules:HashMap::new(),
-            symbol_table: HashMap::new()
+            stacktrace: String::new(),
+            module_loader: None,
+            modules: HashMap::new(),
+            symbol_table: HashMap::new(),
         };
         context
     }
 
-    pub fn new_empty(vm:&mut Runtime) -> GcPointer<Context> {
+    pub fn new_empty(vm: &mut Runtime) -> GcPointer<Context> {
         let mut context = Self {
             global_data: GlobalData::default(),
-            global_object:None,
+            global_object: None,
             vm: RuntimeRef(vm),
             stack: Stack::new(),
-            stacktrace:String::new(),
-            module_loader:None,
-            modules:HashMap::new(),
-            symbol_table: HashMap::new()
+            stacktrace: String::new(),
+            module_loader: None,
+            modules: HashMap::new(),
+            symbol_table: HashMap::new(),
         };
         let ctx = vm.heap().allocate(context);
         ctx
     }
 
     pub fn new(vm: &mut Runtime) -> GcPointer<Context> {
+        vm.gc.defer();
         let mut ctx = Context::new_empty(vm);
         ctx.global_object = Some(JsGlobal::new(ctx));
-        vm.contexts.push(ctx);
-        vm.gc.defer();
         ctx.init();
+        vm.contexts.push(ctx);
         vm.gc.undefer();
         vm.gc.collect_if_necessary();
         ctx
     }
 
-    pub fn init(&mut self){
+    pub fn init(&mut self) {
         self.init_global_data();
         self.init_global_object();
     }
 
-    pub fn init_global_object(&mut self){
+    pub fn init_global_object(&mut self) {
         self.init_object_in_global_object();
         self.init_func_in_global_object();
         self.init_number_in_global_object();
@@ -105,7 +127,9 @@ impl Context {
         self.init_builtin_in_global_object();
         self.init_symbol_in_global_object();
         self.init_regexp_in_global_object().unwrap();
-        self.init_promise_in_global_object().ok().expect("init prom failed");
+        self.init_promise_in_global_object()
+            .ok()
+            .expect("init prom failed");
         self.init_array_buffer_in_global_object().unwrap();
         self.init_data_view_in_global_object().unwrap();
         self.init_weak_ref_in_global_object();
@@ -152,7 +176,6 @@ impl Context {
         self.init_string_in_global_data(proto);
         self.init_weak_ref_in_global_data();
     }
-
 }
 
 impl Context {
@@ -272,7 +295,7 @@ impl Context {
         };
 
         let mut code = ByteCompiler::compile_module(
-            self,            
+            self,
             path,
             &std::path::Path::new(&path)
                 .canonicalize()
@@ -282,7 +305,8 @@ impl Context {
                 .unwrap_or_else(|| "".to_string()),
             name,
             &module,
-        ).map_err(|e| self.new_syntax_error(format!("Compile Error {:?}",e)))?;
+        )
+        .map_err(|e| self.new_syntax_error(format!("Compile Error {:?}", e)))?;
         code.name = name.intern();
 
         let env = Environment::new(self, 0);
@@ -343,7 +367,8 @@ impl Context {
                     .unwrap_or_else(|| "".to_string()),
                 path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 builtins,
-            ).map_err(|e| self.new_syntax_error(format!("Compile Error {:?}",&e)))?;
+            )
+            .map_err(|e| self.new_syntax_error(format!("Compile Error {:?}", &e)))?;
             code.strict = code.strict || force_strict;
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
@@ -407,7 +432,8 @@ impl Context {
                     .unwrap_or_else(|| "".to_string()),
                 &path.map(|x| x.to_owned()).unwrap_or_else(String::new),
                 &script,
-            ).map_err(|e| self.new_syntax_error(format!("Compile Error {:?}",&e)))?;
+            )
+            .map_err(|e| self.new_syntax_error(format!("Compile Error {:?}", &e)))?;
             code.strict = code.strict || force_strict;
 
             let stack = self.shadowstack();
@@ -435,8 +461,8 @@ impl Context {
         res
     }
 
-     /// Collect stacktrace.
-     pub fn stacktrace(&mut self) -> String {
+    /// Collect stacktrace.
+    pub fn stacktrace(&mut self) -> String {
         let mut result = String::new();
         let mut frame = self.stack.current;
         unsafe {
@@ -526,7 +552,6 @@ impl Context {
     }
 }
 
-
 impl GcCell for Context {
     fn deser_pair(&self) -> (usize, usize) {
         (Self::deserialize as _, Self::allocate as _)
@@ -543,4 +568,3 @@ unsafe impl Trace for Context {
         // self.symbol_table.trace(visitor);
     }
 }
-

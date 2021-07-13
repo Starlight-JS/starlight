@@ -488,16 +488,17 @@ impl JsNativeFunction {
 /// # Example
 /// ```
 /// // get the global object
-/// use starlight::ctx::symbol_table::Internable;
-/// use starlight::ctx::value::JsValue;
+/// use starlight::vm::symbol_table::Internable;
+/// use starlight::vm::value::JsValue;
+/// use starlight::vm::context::Context;
 /// use starlight::Platform;
 /// use starlight::options::Options;
 ///
 /// // start a runtime
 /// Platform::initialize();
 /// let mut starlight_runtime = Platform::new_runtime(Options::default(), None);
-///
-/// let mut global = starlight_runtime.global_object();
+/// let mut ctx = Context::new(&mut starlight_runtime);
+/// let mut global = ctx.global_object();
 ///
 /// // create a symbol for the functions name
 /// let name_symbol = "myFunction".intern();
@@ -505,8 +506,8 @@ impl JsNativeFunction {
 ///
 /// // create a Function based on a closure
 /// let arg_count = 0;
-/// let func = starlight::ctx::function::JsClosureFunction::new(
-///     &mut starlight_runtime,
+/// let func = starlight::vm::function::JsClosureFunction::new(
+///     &mut ctx,
 ///     name_symbol,
 ///     move |ctx, args| {
 ///         return Ok(JsValue::encode_int32(x));
@@ -515,10 +516,10 @@ impl JsNativeFunction {
 /// );
 ///
 /// // add the function to the global object
-/// global.put(&mut starlight_runtime, name_symbol, JsValue::new(func), true);
+/// global.put(&mut ctx, name_symbol, JsValue::new(func), true);
 ///
 /// // run the function
-/// let outcome = starlight_runtime.eval("return (myFunction());").ok().expect("function failed");
+/// let outcome = ctx.eval("return (myFunction());").ok().expect("function failed");
 /// assert_eq!(outcome.get_int32(), 1234);
 /// ```
 pub struct JsClosureFunction {
@@ -847,7 +848,10 @@ pub enum GeneratorMagic {
     Return,
     Throw,
 }
-fn async_func_resume(ctx: &mut Context, state: &mut AsyncFunctionState) -> Result<JsValue, JsValue> {
+fn async_func_resume(
+    ctx: &mut Context,
+    state: &mut AsyncFunctionState,
+) -> Result<JsValue, JsValue> {
     let mut frame = ctx
         .stack
         .new_frame(0, JsValue::encode_undefined_value(), state.frame.env)
