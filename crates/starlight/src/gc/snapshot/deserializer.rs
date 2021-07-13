@@ -8,7 +8,13 @@ use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
     () => {};
 }
-use crate::{bytecode::{GetByIdMode, TypeFeedBack}, gc::{Heap, cell::WeakSlot}, gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef}, jsrt::VM_NATIVE_REFERENCES, prelude::{Class, Options}, vm::{
+use crate::{
+    bytecode::{GetByIdMode, TypeFeedBack},
+    gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
+    gc::{cell::WeakSlot, Heap},
+    jsrt::VM_NATIVE_REFERENCES,
+    prelude::{Class, Options},
+    vm::{
         self,
         arguments::JsArguments,
         array_storage::ArrayStorage,
@@ -32,7 +38,8 @@ use crate::{bytecode::{GetByIdMode, TypeFeedBack}, gc::{Heap, cell::WeakSlot}, g
         symbol_table::{JsSymbol, Symbol, SymbolID},
         value::*,
         Runtime, *,
-    }};
+    },
+};
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -245,6 +252,8 @@ impl<'a> Deserializer<'a> {
             spread_builtin: self.read_opt_gc(),
             weak_ref_structure: self.read_opt_gc(),
             weak_ref_prototype: self.read_opt_gc(),
+            object_constructor: self.read_opt_gc(),
+            symbol_structure: self.read_opt_gc(),
         }
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
@@ -298,10 +307,15 @@ impl<'a> Deserializer<'a> {
         runtime
     }
 
-    pub fn deserialize_context(&mut self,rt: &mut Runtime, log_deser: bool, snapshot: &'a [u8]) -> GcPointer<Context> {
+    pub fn deserialize_context(
+        &mut self,
+        rt: &mut Runtime,
+        log_deser: bool,
+        snapshot: &'a [u8],
+    ) -> GcPointer<Context> {
         rt.heap().defer();
         let mut ctx = Context::new_empty(rt);
-        unsafe  {
+        unsafe {
             ctx.global_data = self.deserialize_global_data();
             ctx.global_object = self.read_opt_gc();
             ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
@@ -741,7 +755,6 @@ impl Deserializable for Context {
         )
     }
 }
-
 
 impl Deserializable for JsObject {
     unsafe fn dummy_read(deser: &mut Deserializer) {}
@@ -1573,9 +1586,6 @@ impl Deserializable for JsSymbol {
         )
     }
 }
-
-
-
 
 impl<A: Deserializable, B: Deserializable> Deserializable for (A, B) {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {

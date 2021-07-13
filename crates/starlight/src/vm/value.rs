@@ -398,7 +398,14 @@ impl JsValue {
         if self.is_jsstring() {
             return Ok(JsStringObject::new(ctx, self.get_jsstring()));
         }
-        todo!()
+        if self.is_symbol() {
+            return Ok(JsSymbolObject::new(ctx, unsafe {
+                self.get_object().downcast_unchecked()
+            }));
+        }
+        Err(JsValue::new(
+            ctx.new_type_error("NYI: JsValue::to_object cases"),
+        ))
     }
     pub fn is_jsobject(self) -> bool {
         self.is_object() && self.get_object().is::<JsObject>()

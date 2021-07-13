@@ -99,7 +99,7 @@ pub enum Val {
 
 #[derive(Debug)]
 pub enum CompileError {
-    NotYetImpl(String)
+    NotYetImpl(String),
 }
 
 pub struct ByteCompiler {
@@ -234,7 +234,12 @@ impl ByteCompiler {
         let s: &str = &id.sym;
         s.intern()
     }
-    pub fn var_decl(&mut self, ctx: &mut Context, var: &VarDecl, export: bool) -> Result<Vec<Symbol>, CompileError> {
+    pub fn var_decl(
+        &mut self,
+        ctx: &mut Context,
+        var: &VarDecl,
+        export: bool,
+    ) -> Result<Vec<Symbol>, CompileError> {
         let mut names = vec![];
         for decl in var.decls.iter() {
             match &decl.name {
@@ -290,7 +295,7 @@ impl ByteCompiler {
                 }
 
                 x => {
-                    return Err(CompileError::NotYetImpl(format!("NYI: {:?}",x)));
+                    return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));
                 }
             }
         }
@@ -341,9 +346,7 @@ impl ByteCompiler {
                     self.access_set(acc)?;
                 }
             }
-            x => {
-                return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)))
-            }
+            x => return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x))),
         }
         Ok(())
     }
@@ -372,19 +375,22 @@ impl ByteCompiler {
                     self.access_get(access)?;
                 }
             }
-            x => {
-                return Err(CompileError::NotYetImpl(format!("NYI: {:?}",x)))
-            }
+            x => return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x))),
         }
         Ok(())
     }
 
-    pub fn compile_access(&mut self, ctx:&mut Context, expr: &Expr, dup: bool) -> Result<Access, CompileError> {
+    pub fn compile_access(
+        &mut self,
+        ctx: &mut Context,
+        expr: &Expr,
+        dup: bool,
+    ) -> Result<Access, CompileError> {
         match expr {
             Expr::Ident(id) => Ok(self.access_var(Self::ident_to_sym(id))),
             Expr::Member(member) => {
                 match &member.obj {
-                    ExprOrSuper::Expr(e) => self.expr(ctx,e, true, false)?,
+                    ExprOrSuper::Expr(e) => self.expr(ctx, e, true, false)?,
                     _ => return Err(CompileError::NotYetImpl(format!("NYI: super access"))),
                 }
                 if dup {
@@ -398,7 +404,7 @@ impl ByteCompiler {
                     None
                 };
                 if name.is_none() {
-                    self.expr(ctx,&member.prop, true, false)?;
+                    self.expr(ctx, &member.prop, true, false)?;
                     self.emit(Opcode::OP_SWAP, &[], false);
                 }
 
@@ -409,7 +415,7 @@ impl ByteCompiler {
                 })
             }
             Expr::This(_) => Ok(Access::This),
-            x => {Err(CompileError::NotYetImpl(format!("NYI: Access {:?}", x)))}
+            x => Err(CompileError::NotYetImpl(format!("NYI: Access {:?}", x))),
         }
     }
     pub fn finish(&mut self, ctx: &mut Context) -> GcPointer<CodeBlock> {
@@ -422,7 +428,7 @@ impl ByteCompiler {
         self.code.literals_ptr = self.code.literals.as_ptr();
         self.code
     }
-    pub fn compile_fn(&mut self,ctx: &mut Context, fun: &Function) -> Result<(), CompileError> {
+    pub fn compile_fn(&mut self, ctx: &mut Context, fun: &Function) -> Result<(), CompileError> {
         /*#[cfg(feature = "perf")]
         {
             self.vm.perf.set_prev_inst(crate::vm::perf::Perf::CODEGEN);
@@ -441,7 +447,7 @@ impl ByteCompiler {
 
         match fun.body {
             Some(ref body) => {
-                self.compile(ctx,&body.stmts, false)?;
+                self.compile(ctx, &body.stmts, false)?;
             }
             None => {}
         }
@@ -507,7 +513,7 @@ impl ByteCompiler {
         let script = match parser.parse_script() {
             Ok(script) => script,
             Err(e) => {
-                return Err(CompileError::NotYetImpl(format!("{}",e.kind().msg())));
+                return Err(CompileError::NotYetImpl(format!("{}", e.kind().msg())));
             }
         };
 
@@ -519,7 +525,7 @@ impl ByteCompiler {
 
         compiler.code.strict = is_strict;
 
-        compiler.compile(ctx,&script.body, false)?;
+        compiler.compile(ctx, &script.body, false)?;
 
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
@@ -615,7 +621,7 @@ impl ByteCompiler {
         if code.is_generator {
             compiler.emit(Opcode::OP_INITIAL_YIELD, &[], false);
         }
-        compiler.compile_fn(ctx,function)?;
+        compiler.compile_fn(ctx, function)?;
         compiler.finish(ctx);
 
         let ix = if expr {
@@ -626,7 +632,12 @@ impl ByteCompiler {
         self.emit(Opcode::OP_GET_FUNCTION, &[ix], false);
         Ok(())
     }
-    pub fn fn_expr(&mut self, ctx:&mut Context, fun: &FnExpr, used: bool) -> Result<(), CompileError> {
+    pub fn fn_expr(
+        &mut self,
+        ctx: &mut Context,
+        fun: &FnExpr,
+        used: bool,
+    ) -> Result<(), CompileError> {
         self.push_scope();
         let name = if let Some(ref id) = fun.ident {
             Self::ident_to_sym(id)
@@ -731,7 +742,8 @@ impl ByteCompiler {
                 }
                 ModuleItem::ModuleDecl(module_decl) => match module_decl {
                     ModuleDecl::Import(import) => {
-                        let src = compiler.get_val(&mut ctx, Val::Str(import.src.value.to_string()));
+                        let src =
+                            compiler.get_val(&mut ctx, Val::Str(import.src.value.to_string()));
                         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                         compiler.emit(Opcode::OP_PUSH_LITERAL, &[loader_val], false);
                         compiler.emit(Opcode::OP_PUSH_LITERAL, &[src], false);
@@ -768,7 +780,7 @@ impl ByteCompiler {
                         compiler.emit(Opcode::OP_POP, &[], false);
                     }
                     ModuleDecl::ExportDecl(decl) => {
-                        compiler.decl(ctx,&decl.decl, true)?;
+                        compiler.decl(ctx, &decl.decl, true)?;
                     }
                     ModuleDecl::ExportDefaultDecl(decl) => {
                         match decl.decl {
@@ -794,7 +806,9 @@ impl ByteCompiler {
                     }
                     ModuleDecl::ExportNamed(named_export) => {
                         if named_export.src.is_some() {
-                            return Err(CompileError::NotYetImpl(format!("NYI: export * from mod")));
+                            return Err(CompileError::NotYetImpl(format!(
+                                "NYI: export * from mod"
+                            )));
                         }
 
                         for specifier in named_export.specifiers.iter() {
@@ -814,7 +828,10 @@ impl ByteCompiler {
                                     compiler.emit(Opcode::OP_PUT_BY_ID, &[sym], true);
                                 }
                                 _ => {
-                                    return Err(CompileError::NotYetImpl(format!("NYI: {:?}", specifier)));
+                                    return Err(CompileError::NotYetImpl(format!(
+                                        "NYI: {:?}",
+                                        specifier
+                                    )));
                                 }
                             }
                         }
@@ -864,7 +881,7 @@ impl ByteCompiler {
         code.top_level = true;
         code.strict = is_strict;
         compiler.push_scope();
-        compiler.compile(ctx,&p.body, false)?;
+        compiler.compile(ctx, &p.body, false)?;
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
@@ -908,7 +925,7 @@ impl ByteCompiler {
         code.top_level = true;
         code.strict = is_strict;
         compiler.push_scope();
-        compiler.compile(ctx,&p.body, true)?;
+        compiler.compile(ctx, &p.body, true)?;
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
@@ -916,7 +933,12 @@ impl ByteCompiler {
 
         Ok(result)
     }
-    pub fn compile(&mut self,ctx: &mut Context ,body: &[Stmt], _last_val_ret: bool) -> Result<(), CompileError> {
+    pub fn compile(
+        &mut self,
+        ctx: &mut Context,
+        body: &[Stmt],
+        _last_val_ret: bool,
+    ) -> Result<(), CompileError> {
         let scopea = Analyzer::analyze_stmts(body);
 
         for var in scopea.vars.iter() {
@@ -1018,7 +1040,12 @@ impl ByteCompiler {
             break_(self);
         }
     }
-    pub fn decl(&mut self, ctx: &mut Context, decl: &Decl, export: bool) -> Result<(), CompileError> {
+    pub fn decl(
+        &mut self,
+        ctx: &mut Context,
+        decl: &Decl,
+        export: bool,
+    ) -> Result<(), CompileError> {
         match decl {
             Decl::Var(var) => {
                 self.var_decl(ctx, var, export)?;
@@ -1191,7 +1218,7 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_GET_BY_ID, &[value], true);
                 let acc = self.access_var(name);
                 self.access_set(acc)?;
-                self.stmt(ctx,&for_of.body)?;
+                self.stmt(ctx, &for_of.body)?;
                 while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
                     c(self);
                 }
@@ -1209,7 +1236,7 @@ impl ByteCompiler {
                 match for_stmt.init {
                     Some(ref init) => match init {
                         VarDeclOrExpr::Expr(ref e) => {
-                            self.expr(ctx,e, false, false)?;
+                            self.expr(ctx, e, false, false)?;
                         }
                         VarDeclOrExpr::VarDecl(ref decl) => {
                             self.var_decl(ctx, decl, false)?;
@@ -1222,14 +1249,14 @@ impl ByteCompiler {
                 self.push_lci(head as _, _env);
                 match for_stmt.test {
                     Some(ref test) => {
-                        self.expr(ctx,&**test, true, false)?;
+                        self.expr(ctx, &**test, true, false)?;
                     }
                     None => {
                         self.emit(Opcode::OP_PUSH_TRUE, &[], false);
                     }
                 }
                 let jend = self.cjmp(false);
-                self.stmt(ctx,&for_stmt.body)?;
+                self.stmt(ctx, &for_stmt.body)?;
                 //let skip = self.jmp();
                 while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
                     c(self);
@@ -1238,7 +1265,7 @@ impl ByteCompiler {
                 //self.emit(Opcode::OP_POP_ENV, &[], false);
                 //skip(self);
                 if let Some(fin) = &for_stmt.update {
-                    self.expr(ctx,&**fin, false, false)?;
+                    self.expr(ctx, &**fin, false, false)?;
                 }
                 self.goto(head as _);
                 self.pop_lci();
@@ -1252,7 +1279,7 @@ impl ByteCompiler {
                 let head = self.code.code.len();
                 let d = self.scope.borrow().depth;
                 self.push_lci(head as _, d);
-                self.expr(ctx,&while_stmt.test, true, false)?;
+                self.expr(ctx, &while_stmt.test, true, false)?;
                 let jend = self.cjmp(false);
                 self.stmt(ctx, &while_stmt.body)?;
 
@@ -1264,9 +1291,9 @@ impl ByteCompiler {
                 self.pop_lci();
             }
             Stmt::If(if_stmt) => {
-                self.expr(ctx,&if_stmt.test, true, false)?;
+                self.expr(ctx, &if_stmt.test, true, false)?;
                 let jelse = self.cjmp(false);
-                self.stmt(ctx,&if_stmt.cons)?;
+                self.stmt(ctx, &if_stmt.cons)?;
                 match if_stmt.alt {
                     None => {
                         jelse(self);
@@ -1274,22 +1301,22 @@ impl ByteCompiler {
                     Some(ref alt) => {
                         let jend = self.jmp();
                         jelse(self);
-                        self.stmt(ctx,&**alt)?;
+                        self.stmt(ctx, &**alt)?;
                         jend(self);
                     }
                 }
             }
-            Stmt::Decl(decl) => self.decl(ctx,decl, false)?,
+            Stmt::Decl(decl) => self.decl(ctx, decl, false)?,
             Stmt::Empty(_) => {}
             Stmt::Throw(throw) => {
-                self.expr(ctx,&throw.arg, true, false)?;
+                self.expr(ctx, &throw.arg, true, false)?;
                 self.emit(Opcode::OP_THROW, &[], false);
             }
             Stmt::Try(try_stmt) => {
                 let try_push = self.try_();
 
                 for stmt in try_stmt.block.stmts.iter() {
-                    self.stmt(ctx,stmt)?;
+                    self.stmt(ctx, stmt)?;
                 }
                 self.emit(Opcode::OP_POP_CATCH, &[], false);
                 let jfinally = self.jmp();
@@ -1308,7 +1335,7 @@ impl ByteCompiler {
                             }
                         }
                         for stmt in catch.body.stmts.iter() {
-                            self.stmt(ctx,stmt)?;
+                            self.stmt(ctx, stmt)?;
                         }
                         self.pop_scope();
                         self.jmp()
@@ -1326,7 +1353,7 @@ impl ByteCompiler {
                         self.push_scope();
 
                         for stmt in block.stmts.iter() {
-                            self.stmt(ctx,stmt)?;
+                            self.stmt(ctx, stmt)?;
                         }
 
                         self.pop_scope();
@@ -1388,7 +1415,12 @@ impl ByteCompiler {
         }
         Ok(())
     }
-    pub fn compile_access_pat(&mut self, ctx:&mut Context , pat: &Pat, dup: bool) -> Result<Access, CompileError> {
+    pub fn compile_access_pat(
+        &mut self,
+        ctx: &mut Context,
+        pat: &Pat,
+        dup: bool,
+    ) -> Result<Access, CompileError> {
         match pat {
             Pat::Ident(id) => Ok(self.access_var(Self::ident_to_sym(&id.id))),
             Pat::Expr(expr) => self.compile_access(ctx, expr, dup),
@@ -1412,7 +1444,13 @@ impl ByteCompiler {
         }
     }
 
-    pub fn expr(&mut self, ctx: &mut Context, expr: &Expr, used: bool, tail: bool) -> Result<(), CompileError> {
+    pub fn expr(
+        &mut self,
+        ctx: &mut Context,
+        expr: &Expr,
+        used: bool,
+        tail: bool,
+    ) -> Result<(), CompileError> {
         match expr {
             Expr::Yield(yield_expr) => {
                 if yield_expr.delegate {
@@ -1420,7 +1458,7 @@ impl ByteCompiler {
                 }
                 match yield_expr.arg {
                     Some(ref expr) => {
-                        self.expr(ctx,&**expr, true, false)?;
+                        self.expr(ctx, &**expr, true, false)?;
                     }
                     None => {
                         self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
@@ -1473,15 +1511,29 @@ impl ByteCompiler {
                         let flags = JsString::new(ctx, flags);
                         let mut args = [JsValue::new(exp), JsValue::new(flags)];
                         let args = Arguments::new(JsValue::encode_undefined_value(), &mut args);
-                        let regexp = crate::jsrt::regexp::regexp_constructor(ctx, &args).map_err(|_| CompileError::NotYetImpl(format!("Regexp constructor error")))?;
+                        let regexp =
+                            crate::jsrt::regexp::regexp_constructor(ctx, &args).map_err(|_| {
+                                CompileError::NotYetImpl(format!("Regexp constructor error"))
+                            })?;
                         let val = self.get_val2(regexp);
                         self.emit(Opcode::OP_PUSH_LITERAL, &[val], false);
                     }
-                    Lit::BigInt(_) => {todo!();},
-                    Lit::JSXText(_) => {todo!();}, //todo!("{:?}", x),
+                    Lit::BigInt(_) => {
+                        return Err(CompileError::NotYetImpl(format!(
+                            "Unimplemented JS literal: BigInt",
+                        )))
+                    }
+                    Lit::JSXText(_) => {
+                        return Err(CompileError::NotYetImpl(format!(
+                            "Unimplemented JS literal: JSXText",
+                        )))
+                    } //todo!("{:?}", x),
                     #[allow(unreachable_patterns)]
                     x => {
-                        return Err(CompileError::NotYetImpl(format!("Unimplemented JS literal: {:?}", x)))
+                        return Err(CompileError::NotYetImpl(format!(
+                            "Unimplemented JS literal: {:?}",
+                            x
+                        )))
                     }
                 }
                 if !used {
@@ -1526,8 +1578,7 @@ impl ByteCompiler {
                                         self.emit(Opcode::OP_PUT_BY_ID, &[sym], true);
                                     }
                                     PropName::Str(ref s) => {
-                                        let ix =
-                                            self.get_val(ctx, Val::Str(s.value.to_string()));
+                                        let ix = self.get_val(ctx, Val::Str(s.value.to_string()));
                                         self.emit(Opcode::OP_SWAP, &[], false);
                                         self.emit(Opcode::OP_PUSH_LITERAL, &[ix], false);
                                         self.emit(Opcode::OP_SWAP, &[], false);
@@ -1545,8 +1596,7 @@ impl ByteCompiler {
                                             self.emit(Opcode::OP_SWAP, &[], false);
                                             self.emit(Opcode::OP_PUT_BY_VAL, &[0], false);
                                         } else {
-                                            let ix =
-                                                self.get_val(ctx, Val::Float(val.to_bits()));
+                                            let ix = self.get_val(ctx, Val::Float(val.to_bits()));
                                             self.emit(Opcode::OP_SWAP, &[], false);
                                             self.emit(Opcode::OP_PUSH_LITERAL, &[ix], false);
                                             self.emit(Opcode::OP_SWAP, &[], false);
@@ -1554,7 +1604,10 @@ impl ByteCompiler {
                                         }
                                     }
                                     ref x => {
-                                        return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));
+                                        return Err(CompileError::NotYetImpl(format!(
+                                            "NYI: {:?}",
+                                            x
+                                        )));
                                     }
                                 }
                             }
@@ -1570,12 +1623,12 @@ impl ByteCompiler {
             }
             x if is_builtin_call(x, self.builtins) => {
                 if let Expr::Call(call) = x {
-                    self.handle_builtin_call(ctx,call)?;
+                    self.handle_builtin_call(ctx, call)?;
                 }
             }
             x if is_codegen_plugin_call(ctx, x, self.builtins) => {
                 if let Expr::Call(call) = x {
-                    self.handle_codegen_plugin_call(ctx,call)?;
+                    self.handle_codegen_plugin_call(ctx, call)?;
                 }
             }
             Expr::Call(call) if !is_builtin_call(expr, self.builtins) => {
@@ -1601,7 +1654,9 @@ impl ByteCompiler {
                                     }
                                 }
                                 ExprOrSuper::Super(_super) => {
-                                    return Err(CompileError::NotYetImpl(format!("NYI: super call")));
+                                    return Err(CompileError::NotYetImpl(format!(
+                                        "NYI: super call"
+                                    )));
                                 }
                             }
                             if let Some(name) = name {
@@ -1693,7 +1748,7 @@ impl ByteCompiler {
                     self.access_set(acc)?;
                     //self.emit_store_expr(&update.arg);
                 } else {
-                    self.expr(ctx,&update.arg, true, false)?;
+                    self.expr(ctx, &update.arg, true, false)?;
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
@@ -1751,7 +1806,7 @@ impl ByteCompiler {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
                     let acc = match &assign.left {
-                        PatOrExpr::Expr(expr) => self.compile_access(ctx,expr, false)?,
+                        PatOrExpr::Expr(expr) => self.compile_access(ctx, expr, false)?,
                         PatOrExpr::Pat(p) => self.compile_access_pat(ctx, p, false)?,
                     };
 
@@ -1759,7 +1814,7 @@ impl ByteCompiler {
                 } else {
                     self.expr(ctx, &assign.right, true, false)?;
                     let left = match &assign.left {
-                        PatOrExpr::Expr(e) => self.compile_access(ctx,e, false)?,
+                        PatOrExpr::Expr(e) => self.compile_access(ctx, e, false)?,
                         PatOrExpr::Pat(p) => self.compile_access_pat(ctx, p, false)?,
                     };
                     self.access_get(left)?;
@@ -1793,7 +1848,7 @@ impl ByteCompiler {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
                     let left = match &assign.left {
-                        PatOrExpr::Expr(e) => self.compile_access(ctx,e, false)?,
+                        PatOrExpr::Expr(e) => self.compile_access(ctx, e, false)?,
                         PatOrExpr::Pat(p) => self.compile_access_pat(ctx, p, false)?,
                     };
                     self.access_set(left)?;
@@ -1868,9 +1923,7 @@ impl ByteCompiler {
                     BinaryOp::LtEq => self.emit(Opcode::OP_LESSEQ, &[], false),
                     BinaryOp::In => self.emit(Opcode::OP_IN, &[], false),
                     BinaryOp::InstanceOf => self.emit(Opcode::OP_INSTANCEOF, &[], false),
-                    x => {
-                        return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)))
-                    }
+                    x => return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x))),
                 }
 
                 if !used {
@@ -1990,9 +2043,9 @@ impl ByteCompiler {
             }
 
             Expr::Cond(cond) => {
-                self.expr(ctx,&cond.test, true, false)?;
+                self.expr(ctx, &cond.test, true, false)?;
                 let jelse = self.cjmp(false);
-                self.expr(ctx,&cond.cons, used, tail)?;
+                self.expr(ctx, &cond.cons, used, tail)?;
 
                 let jend = self.jmp();
                 jelse(self);
@@ -2250,16 +2303,23 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
     false
 }
 impl ByteCompiler {
-    pub fn handle_codegen_plugin_call(&mut self, ctx: &mut Context, call: &CallExpr) -> Result<(), CompileError> {
+    pub fn handle_codegen_plugin_call(
+        &mut self,
+        ctx: &mut Context,
+        call: &CallExpr,
+    ) -> Result<(), CompileError> {
         let plugin_name = if let ExprOrSuper::Expr(expr) = &call.callee {
             if let Expr::Ident(x) = &**expr {
-                
                 &*x.sym
             } else {
-                return Err(CompileError::NotYetImpl(format!("Incorrect codegen plugin syntax")));
+                return Err(CompileError::NotYetImpl(format!(
+                    "Incorrect codegen plugin syntax"
+                )));
             }
         } else {
-            return Err(CompileError::NotYetImpl(format!("Incorrect codegen plugin syntax")));
+            return Err(CompileError::NotYetImpl(format!(
+                "Incorrect codegen plugin syntax"
+            )));
         };
         let vm = ctx.vm;
         let plugin = vm.codegen_plugins.get(plugin_name).unwrap();
@@ -2269,7 +2329,11 @@ impl ByteCompiler {
     /// TODO List:
     /// - Implement  `___call` ,`___tailcall`.
     /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
-    pub fn handle_builtin_call(&mut self,ctx: &mut Context, call: &CallExpr) -> Result<(), CompileError> {
+    pub fn handle_builtin_call(
+        &mut self,
+        ctx: &mut Context,
+        call: &CallExpr,
+    ) -> Result<(), CompileError> {
         let (member, builtin_call_name) = if let ExprOrSuper::Expr(expr) = &call.callee {
             match &**expr {
                 // ___foo(x,y)
@@ -2300,36 +2364,36 @@ impl ByteCompiler {
         match nstr {
             "___toObject" => {
                 if let Some(msg) = call.args.get(1) {
-                    self.expr(ctx,&msg.expr, true, false)?;
+                    self.expr(ctx, &msg.expr, true, false)?;
                 } else {
                     self.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                 }
-                self.expr(ctx,&call.args[0].expr, true, false)?;
+                self.expr(ctx, &call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_TO_OBJECT, &[], false);
             }
 
             "___toLength" => {
-                self.expr(ctx,&call.args[0].expr, true, false)?;
+                self.expr(ctx, &call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_TO_LENGTH, &[], false);
             }
             "___toIntegerOrInfinity" => {
-                self.expr(ctx,&call.args[0].expr, true, false)?;
+                self.expr(ctx, &call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_TO_INTEGER_OR_INFINITY, &[], false);
             }
             "___isCallable" => {
-                self.expr(ctx,&call.args[0].expr, true, false)?;
+                self.expr(ctx, &call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_IS_CALLABLE, &[], false);
             }
             "___isObject" => {
-                self.expr(ctx,&call.args[0].expr, true, false)?;
+                self.expr(ctx, &call.args[0].expr, true, false)?;
                 self.emit(Opcode::OP_IS_OBJECT, &[], false);
             }
             "___isConstructor" => {
-                self.expr(ctx,&call.args[0].expr, true, false)?;
+                self.expr(ctx, &call.args[0].expr, true, false)?;
 
                 self.emit(Opcode::OP_IS_CTOR, &[], false);
             }
@@ -2337,10 +2401,10 @@ impl ByteCompiler {
                 if let Some(func) = &member {
                     if let ExprOrSuper::Expr(x) = &func {
                         if let Expr::Ident(_) = &**x {
-                            self.expr(ctx,&call.args[0].expr, true, false)?;
-                            self.expr(ctx,&**x, true, false)?;
+                            self.expr(ctx, &call.args[0].expr, true, false)?;
+                            self.expr(ctx, &**x, true, false)?;
                             for i in 1..call.args.len() {
-                                self.expr(ctx,&call.args[i].expr, true, false)?;
+                                self.expr(ctx, &call.args[i].expr, true, false)?;
                             }
                             let operands: u32 = (call.args.len() - 1).try_into().unwrap();
                             self.emit(Opcode::OP_CALL, &[operands], false);

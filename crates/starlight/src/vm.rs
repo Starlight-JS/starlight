@@ -352,6 +352,7 @@ pub struct GlobalData {
     pub(crate) empty_object_struct: Option<GcPointer<Structure>>,
     pub(crate) function_struct: Option<GcPointer<Structure>>,
     pub(crate) object_prototype: Option<GcPointer<JsObject>>,
+    pub(crate) object_constructor: Option<GcPointer<JsObject>>,
     pub(crate) number_prototype: Option<GcPointer<JsObject>>,
     pub(crate) string_prototype: Option<GcPointer<JsObject>>,
     pub(crate) boolean_prototype: Option<GcPointer<JsObject>>,
@@ -388,6 +389,7 @@ pub struct GlobalData {
     pub(crate) spread_builtin: Option<GcPointer<JsObject>>,
     pub(crate) weak_ref_structure: Option<GcPointer<Structure>>,
     pub(crate) weak_ref_prototype: Option<GcPointer<JsObject>>,
+    pub(crate) symbol_structure: Option<GcPointer<Structure>>,
 }
 
 impl GlobalData {

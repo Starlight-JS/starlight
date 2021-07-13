@@ -1,3 +1,5 @@
+use crate::js262;
+
 use super::{
     Harness, Outcome, Phase, SuiteResult, Test, TestFlags, TestOutcomeResult, TestResult,
     TestSuite, IGNORED,
@@ -319,9 +321,9 @@ impl Test {
                     }
                 })
                 .unwrap_or_else(|_| {
-                    if verbose >= 1 {
-                        eprintln!("last panic was on test \"{}\"", self.name);
-                    }
+                    //if verbose >= 1 {
+                    eprintln!("last panic was on test \"{}\"", self.name);
+                    //}
                     (TestOutcomeResult::Panic, String::new())
                 });
 
@@ -374,6 +376,7 @@ impl Test {
                 .with_conservative_marking(false),
             None,
         );*/
+        let _ = js262::init(context).unwrap_or_else(|_| panic!("Failed to create $262 object"));
         context
             .eval_internal(None, false, &harness.assert.as_ref(), false)
             .map_err(|e| {

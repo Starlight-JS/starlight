@@ -1,4 +1,8 @@
-use crate::{prelude::*, vm::context::Context};
+use crate::{
+    prelude::*,
+    vm::{context::Context, object::TypedJsObject},
+    JsTryFrom,
+};
 use std::intrinsics::unlikely;
 
 macro_rules! builtin_symbols {
@@ -36,7 +40,13 @@ impl Context {
     pub(crate) fn init_symbol_in_global_object(&mut self) {
         let mut init = || -> Result<(), JsValue> {
             let name = "constructor".intern();
-            let constructor = self.global_data.symbol_prototype.unwrap().get_own_property(self, name).unwrap().value();
+            let constructor = self
+                .global_data
+                .symbol_prototype
+                .unwrap()
+                .get_own_property(self, name)
+                .unwrap()
+                .value();
             self.global_object()
                 .put(self, "Symbol".intern(), JsValue::new(constructor), false)?;
             Ok(())
@@ -49,9 +59,14 @@ impl Context {
 
     pub(crate) fn init_symbol_in_global_data(&mut self, proto: GcPointer<JsObject>) {
         let mut init = || -> Result<(), JsValue> {
+            self.global_data.symbol_structure = Some(Structure::new_indexed(self, None, false));
             let structure = Structure::new_indexed(self, Some(proto), false);
             let mut sym_proto =
                 JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+            self.global_data
+                .symbol_structure
+                .unwrap()
+                .change_prototype_with_no_transition(sym_proto);
             self.global_data.symbol_prototype = Some(sym_proto);
             def_native_method!(self, sym_proto, toString, symbol_to_string, 0)?;
             def_native_method!(self, sym_proto, valueOf, symbol_value_of, 0)?;
@@ -61,12 +76,22 @@ impl Context {
             def_native_method!(self, ctor, for, symbol_for, 1)?;
             def_native_method!(self, ctor, keyFor, symbol_key_for, 1)?;
             builtin_symbols!(self, ctor, def_symbols);
-            
+
             let name = "prototype".intern();
-            ctor.define_own_property(self, name, &*DataDescriptor::new(JsValue::from(sym_proto), NONE) , false)?;
-            
+            ctor.define_own_property(
+                self,
+                name,
+                &*DataDescriptor::new(JsValue::from(sym_proto), NONE),
+                false,
+            )?;
+
             let name = "constructor".intern();
-            sym_proto.define_own_property(self, name, &*DataDescriptor::new(JsValue::from(ctor), W | C), false)?;
+            sym_proto.define_own_property(
+                self,
+                name,
+                &*DataDescriptor::new(JsValue::from(ctor), W | C),
+                false,
+            )?;
 
             Ok(())
         };
@@ -101,17 +126,26 @@ pub fn symbol_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValu
 }
 
 pub fn symbol_key_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
-    let sym = args.at(0).to_symbol(ctx)?;
+    let sym = TypedJsObject::<JsSymbolObject>::try_from(ctx, args.at(0))?
+        .symbol()
+        .symbol();
     let desc = ctx.description(sym);
     Ok(JsValue::new(JsString::new(ctx, desc)))
 }
 
 pub fn symbol_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
-    let sym = args.this.to_symbol(ctx)?;
+    let sym = TypedJsObject::<JsSymbolObject>::try_from(ctx, args.this)?
+        .symbol()
+        .symbol();
     let desc = ctx.description(sym);
-    Ok(JsValue::new(JsString::new(ctx, format!("Symbol({})", desc))))
+    Ok(JsValue::new(JsString::new(
+        ctx,
+        format!("Symbol({})", desc),
+    )))
 }
 
 pub fn symbol_value_of(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
-    Ok(args.this)
+    Ok(JsValue::new(
+        TypedJsObject::<JsSymbolObject>::try_from(_ctx, args.this)?.symbol(),
+    ))
 }

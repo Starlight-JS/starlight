@@ -1,6 +1,18 @@
 use std::intrinsics::unlikely;
 
-use crate::{vm::{context::Context, arguments::Arguments, array::*, attributes::*, error::JsTypeError, object::{JsObject, ObjectTag, *}, property_descriptor::DataDescriptor, string::JsString, structure::Structure, symbol_table::*, value::{JsValue, Undefined}}};
+use crate::vm::{
+    arguments::Arguments,
+    array::*,
+    attributes::*,
+    context::Context,
+    error::JsTypeError,
+    object::{JsObject, ObjectTag, *},
+    property_descriptor::DataDescriptor,
+    string::JsString,
+    structure::Structure,
+    symbol_table::*,
+    value::{JsValue, Undefined},
+};
 
 pub fn object_get_prototype_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.at(0);
@@ -59,11 +71,9 @@ pub fn object_create(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
             if !args.at(1).is_undefined() {
                 let mut res_val = JsValue::new(res);
                 let mut args_ = [res_val, properties];
-                let props = ctx
-                    .global_data
-                    .object_prototype
-                    .unwrap()
-                    .get(ctx, "defineProperties".intern())?;
+                let mut ctor = ctx.global_data().object_constructor.unwrap();
+                let props = ctor.get(ctx, "___defineProperties___".intern())?;
+
                 assert!(props.is_callable());
 
                 return props.get_jsobject().as_function_mut().call(

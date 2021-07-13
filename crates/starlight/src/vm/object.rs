@@ -1,7 +1,25 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{Context, Runtime, arguments::*, array_storage::ArrayStorage, attributes::*, class::{Class, JsClass}, context, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, property_descriptor::StoredSlot, property_descriptor::{DataDescriptor, PropertyDescriptor}, slot::*, string::*, structure::Structure, symbol_table::{Internable, Symbol}, value::JsValue};
+use super::{
+    arguments::*,
+    array_storage::ArrayStorage,
+    attributes::*,
+    class::{Class, JsClass},
+    context,
+    error::*,
+    function::*,
+    global::JsGlobal,
+    indexed_elements::IndexedElements,
+    property_descriptor::StoredSlot,
+    property_descriptor::{DataDescriptor, PropertyDescriptor},
+    slot::*,
+    string::*,
+    structure::Structure,
+    symbol_table::{Internable, Symbol},
+    value::JsValue,
+    Context, Runtime,
+};
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::vm::promise::JsPromise;
 use crate::{
@@ -602,7 +620,12 @@ impl JsObject {
             if !slot.is_not_found() {
                 if let Some(base) = slot.base() {
                     if GcPointer::ptr_eq(base, obj)
-                        && !slot.is_defined_property_accepted(ctx, desc, throwable, &mut returned)?
+                        && !slot.is_defined_property_accepted(
+                            ctx,
+                            desc,
+                            throwable,
+                            &mut returned,
+                        )?
                     {
                         return Ok(returned);
                     }
@@ -890,12 +913,9 @@ impl JsObject {
         ctx.heap().allocate(this)
     }
 
-    // only for internal use 
+    // only for internal use
     // copy constructor and prototype
-    pub fn copy(
-        ctx: &mut Context,
-        source: &mut GcPointer<JsObject>
-    ) -> GcPointer<Self> {
+    pub fn copy(ctx: &mut Context, source: &mut GcPointer<JsObject>) -> GcPointer<Self> {
         let stack = ctx.shadowstack();
         let init = IndexedElements::new(ctx);
         let structure = source.structure;
@@ -919,18 +939,21 @@ impl JsObject {
             flags: OBJ_FLAG_EXTENSIBLE,
             tag,
         };
-        let mut target= ctx.heap().allocate(this);
+        let mut target = ctx.heap().allocate(this);
         let mut names = vec![];
-        source.get_own_property_names(ctx, &mut |name,_| {
-            names.push(name);
-        },EnumerationMode::IncludeNotEnumerable);
+        source.get_own_property_names(
+            ctx,
+            &mut |name, _| {
+                names.push(name);
+            },
+            EnumerationMode::IncludeNotEnumerable,
+        );
         for name in names {
             let desc = source.get_own_property(ctx, name).unwrap();
             target.define_own_property(ctx, name, &desc, false).unwrap();
         }
         target
     }
-
 
     pub fn tag(&self) -> ObjectTag {
         self.tag
@@ -1134,6 +1157,7 @@ impl GcPointer<JsObject> {
                 } else {
                     let desc = ctx.description(name);
                     let msg = JsString::new(ctx, format!("Property '{}' is not a method", desc));
+
                     Err(JsValue::encode_object_value(JsTypeError::new(
                         ctx, msg, None,
                     )))
@@ -1153,7 +1177,12 @@ impl GcPointer<JsObject> {
         self.put_slot(ctx, name, val, &mut slot, throwable)
     }
 
-    pub fn can_put_non_indexed(&mut self, ctx: &mut Context, name: Symbol, slot: &mut Slot) -> bool {
+    pub fn can_put_non_indexed(
+        &mut self,
+        ctx: &mut Context,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
         if self.get_non_indexed_property_slot(ctx, name, slot) && slot.attributes().is_accessor() {
             if slot.attributes().is_accessor() {
                 return slot.accessor().setter().is_pointer()

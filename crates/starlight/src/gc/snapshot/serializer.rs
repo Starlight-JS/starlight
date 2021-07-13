@@ -1,10 +1,32 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{bytecode::TypeFeedBack, gc::cell::{GcCell, GcPointer, GcPointerBase, WeakRef}, vm::{GlobalData, arguments::JsArguments, array_storage::ArrayStorage, attributes::AttrSafe, code_block::CodeBlock, context::Context, function::{FuncType, JsFunction}, global::JsGlobal, indexed_elements::*, interpreter::SpreadValue, object::{JsObject, ObjectTag}, property_descriptor::{Accessor, StoredSlot}, slot::*, string::JsString, structure::{
+use crate::{
+    bytecode::TypeFeedBack,
+    gc::cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
+    vm::{
+        arguments::JsArguments,
+        array_storage::ArrayStorage,
+        attributes::AttrSafe,
+        code_block::CodeBlock,
+        context::Context,
+        function::{FuncType, JsFunction},
+        global::JsGlobal,
+        indexed_elements::*,
+        interpreter::SpreadValue,
+        object::{JsObject, ObjectTag},
+        property_descriptor::{Accessor, StoredSlot},
+        slot::*,
+        string::JsString,
+        structure::{
             DeletedEntry, DeletedEntryHolder, MapEntry, Structure, Transition, TransitionKey,
             TransitionsTable,
-        }, symbol_table::{symbol_table, JsSymbol, Symbol, SymbolID}, value::*}};
+        },
+        symbol_table::{symbol_table, JsSymbol, Symbol, SymbolID},
+        value::*,
+        GlobalData,
+    },
+};
 use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
 use std::{collections::HashMap, io::Write};
 
@@ -256,8 +278,6 @@ use super::deserializer::Deserializable;
 pub trait Serializable {
     fn serialize(&self, serializer: &mut SnapshotSerializer);
 }
-
-
 
 impl Serializable for JsValue {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
@@ -768,6 +788,8 @@ impl Serializable for GlobalData {
         self.spread_builtin.serialize(serializer);
         self.weak_ref_structure.serialize(serializer);
         self.weak_ref_prototype.serialize(serializer);
+        self.object_constructor.serialize(serializer);
+        self.symbol_structure.serialize(serializer);
     }
 }
 

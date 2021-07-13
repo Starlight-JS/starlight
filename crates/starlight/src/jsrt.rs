@@ -1,7 +1,17 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{gc::cell::{GcPointer, WeakRef, WeakSlot}, vm::{context::Context ,ModuleKind, arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer, array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, data_view::JsDataView, environment::Environment, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*, property_descriptor::*, string::*, structure::*, structure_chain::StructureChain, symbol_table::*, value::*}};
+use crate::{
+    gc::cell::{GcPointer, WeakRef, WeakSlot},
+    vm::{
+        arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
+        array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, context::Context,
+        data_view::JsDataView, environment::Environment, error::*, function::*, global::JsGlobal,
+        indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*,
+        property_descriptor::*, string::*, structure::*, structure_chain::StructureChain,
+        symbol_table::*, value::*, ModuleKind,
+    },
+};
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
@@ -152,7 +162,7 @@ impl Context {
             .unwrap_or_else(|_| panic!());
         assert!(func.is_callable());
         self.global_data.spread_builtin = Some(func.get_jsobject());
-        
+
         let mut eval = |path, source| {
             self.eval_internal(Some(path), false, source, true)
                 .unwrap_or_else(|error| match error.to_string(self) {
@@ -189,6 +199,7 @@ impl Context {
             "builtins/StringIterator.js",
             include_str!("builtins/StringIterator.js"),
         );
+        eval("builtins/Object.js", include_str!("builtins/Object.js"))
     }
     pub(crate) fn init_func_in_global_object(&mut self) {
         let mut proto = self.global_data.func_prototype.unwrap();
@@ -197,7 +208,8 @@ impl Context {
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        let _ = self.global_object()
+        let _ = self
+            .global_object()
             .put(self, name, JsValue::from(constrcutor), false);
     }
     pub(crate) fn init_func_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
@@ -932,7 +944,7 @@ impl Context {
     pub(crate) fn init_object_in_global_data(&mut self, mut proto: GcPointer<JsObject>) {
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(self, name, object_constructor, 1);
-
+        self.global_data.object_constructor = Some(obj_constructor);
         let func =
             JsNativeFunction::new(self, "defineProperty".intern(), object_define_property, 3);
         let _ = obj_constructor.define_own_property(

@@ -1,10 +1,16 @@
+use super::class::{Class, JsClass};
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{Context};
-use crate::gc::cell::{GcCell, GcPointer, Trace};
-use crate::gc::snapshot::deserializer::Deserializable;
+use super::method_table::*;
+use super::object::ObjectTag;
+use super::Context;
+use crate::gc::cell::{GcCell, GcPointer, Trace, Tracer};
+use crate::gc::snapshot::deserializer::{Deserializable, Deserializer};
+use crate::gc::snapshot::serializer::SnapshotSerializer;
+use crate::vm::object::JsObject;
 use dashmap::DashMap;
+use std::mem::ManuallyDrop;
 use std::sync::atomic::Ordering;
 use std::{mem::MaybeUninit, sync::atomic::AtomicU32};
 pub struct SymbolTable {
@@ -243,3 +249,52 @@ impl std::fmt::Display for SymbolID {
 }
 
 static mut LENGTH: Symbol = Symbol::Key(SymbolID(0));
+
+pub struct JsSymbolObject {
+    sym: GcPointer<JsSymbol>,
+}
+
+extern "C" fn fsz() -> usize {
+    std::mem::size_of::<JsSymbolObject>()
+}
+
+extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
+    todo!()
+}
+
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
+    todo!()
+}
+#[allow(improper_ctypes_definitions)]
+extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+    obj.data::<JsSymbolObject>().sym.trace(tracer);
+}
+
+impl JsSymbolObject {
+    define_jsclass_with_symbol!(
+        JsObject,
+        Symbol,
+        Symbol,
+        None,
+        Some(trace),
+        Some(deser),
+        Some(ser),
+        Some(fsz)
+    );
+    pub fn symbol(&self) -> GcPointer<JsSymbol> {
+        self.sym
+    }
+
+    pub fn new(ctx: &mut Context, sym: GcPointer<JsSymbol>) -> GcPointer<JsObject> {
+        let map = ctx.global_data().symbol_structure.unwrap();
+        let mut obj = JsObject::new(ctx, &map, Self::get_class(), ObjectTag::Ordinary);
+        *obj.data::<Self>() = ManuallyDrop::new(Self { sym });
+        obj
+    }
+}
+
+impl JsClass for JsSymbolObject {
+    fn class() -> &'static Class {
+        Self::get_class()
+    }
+}
