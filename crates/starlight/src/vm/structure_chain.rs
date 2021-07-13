@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::structure::Structure;
+use super::{Context, structure::Structure};
 use crate::gc::cell::GcPointer;
 use crate::prelude::*;
 use std::{any::TypeId, mem::size_of};
@@ -14,12 +14,12 @@ impl StructureChain {
         self.vector[0]
     }
 
-    pub fn create(rt: &mut Runtime, head: Option<GcPointer<JsObject>>) -> GcPointer<Self> {
+    pub fn create(ctx: &mut Context, head: Option<GcPointer<JsObject>>) -> GcPointer<Self> {
         let mut size = 0;
         let mut current = head;
         while let Some(object) = current {
             size += 1;
-            let next = object.structure().stored_prototype(rt, &object);
+            let next = object.structure().stored_prototype(ctx, &object);
             current = if next.is_jsobject() {
                 Some(next.get_jsobject())
             } else {
@@ -32,7 +32,7 @@ impl StructureChain {
         while let Some(object) = current {
             let structure = object.structure();
             buffer.push(structure);
-            let next = object.structure().stored_prototype(rt, &object);
+            let next = object.structure().stored_prototype(ctx, &object);
             current = if next.is_jsobject() {
                 Some(next.get_jsobject())
             } else {
@@ -40,7 +40,7 @@ impl StructureChain {
             };
         }
 
-        rt.heap().allocate(Self {
+        ctx.heap().allocate(Self {
             vector: buffer.into_boxed_slice(),
         })
     }
@@ -73,8 +73,8 @@ impl Deserializable for StructureChain {
         at.cast::<Self>().write(Self::deserialize_inplace(deser));
     }
 
-    unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
-        rt.heap().allocate_raw(
+    unsafe fn allocate(ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+        ctx.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
             size_of::<Self>(),
             TypeId::of::<Self>(),

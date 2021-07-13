@@ -8,6 +8,8 @@ use std::{
     mem::size_of,
 };
 
+use super::context::Context;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct Variable {
@@ -23,7 +25,7 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn new(rt: &mut Runtime, cap: u32) -> GcPointer<Self> {
+    pub fn new(ctx: &mut Context, cap: u32) -> GcPointer<Self> {
         unsafe {
             let mut ptr =
                 alloc_zeroed(Layout::array::<Variable>(cap as _).unwrap()).cast::<Variable>();
@@ -34,7 +36,7 @@ impl Environment {
                     mutable: true,
                 });
             }
-            rt.heap().allocate(Self {
+            ctx.heap().allocate(Self {
                 parent: None,
                 values_ptr: ptr,
                 values_count: cap,
@@ -99,8 +101,8 @@ impl Deserializable for Environment {
         at.cast::<Self>().write(Self::deserialize_inplace(deser))
     }
 
-    unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
-        rt.heap().allocate_raw(
+    unsafe fn allocate(ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+        ctx.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
             size_of::<Self>(),
             TypeId::of::<Self>(),

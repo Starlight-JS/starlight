@@ -8,17 +8,12 @@ use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
     () => {};
 }
-use crate::{
-    bytecode::{GetByIdMode, TypeFeedBack},
-    gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef},
-    gc::{cell::WeakSlot, Heap},
-    jsrt::VM_NATIVE_REFERENCES,
-    prelude::{Class, Options},
-    vm::{
+use crate::{bytecode::{GetByIdMode, TypeFeedBack}, gc::{Heap, cell::WeakSlot}, gc::cell::{vtable_of_type, GcCell, GcPointer, GcPointerBase, WeakRef}, jsrt::VM_NATIVE_REFERENCES, prelude::{Class, Options}, vm::{
         self,
         arguments::JsArguments,
         array_storage::ArrayStorage,
         code_block::{CodeBlock, FileLocation},
+        context::Context,
         function::{
             FuncType, JsBoundFunction, JsGeneratorFunction, JsNativeFunction, JsVMFunction,
         },
@@ -37,8 +32,7 @@ use crate::{
         symbol_table::{JsSymbol, Symbol, SymbolID},
         value::*,
         Runtime, *,
-    },
-};
+    }};
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -49,7 +43,6 @@ use std::{
 };
 
 pub struct Deserializer<'a> {
-    pub rt: *mut Runtime,
     reader: &'a [u8],
     pub pc: usize,
     reference_map: Vec<usize>,
@@ -197,16 +190,13 @@ impl<'a> Deserializer<'a> {
         logln_if!(self.log_deser, "- Object deserialization completed -");
         self.pc = last_stop;
 
-        rt.global_data = self.deserialize_global_data();
-        let global_object = self.read_opt_gc();
-
-        let mut realm = Realm::new();
-        realm.global_object = global_object;
-        rt.realm = Some(realm);
-
-        rt.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
-        rt.module_loader = self.read_opt_gc();
-        rt.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
+        let mut ctx_num = self.get_u32() as i32;
+        while ctx_num > 0 {
+            let mut ctx = GcPointer::<Context>::deserialize_inplace(self);
+            ctx.vm = RuntimeRef(rt);
+            rt.contexts.push(ctx);
+            ctx_num -= 1;
+        }
     }
     pub unsafe fn read_opt_gc<T: GcCell + ?Sized>(&mut self) -> Option<GcPointer<T>> {
         Option::<GcPointer<T>>::deserialize_inplace(self)
@@ -261,8 +251,8 @@ impl<'a> Deserializer<'a> {
     /// was used in snapshot it should be there too.
     /// ```rust,ignore
     ///
-    /// fn my_native_fun(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {...}
-    /// fn another_native_fun(rt: &mut Runtime,args: &Arguments) -> Result<JsValue,JsValue> {...}
+    /// fn my_native_fun(ctx: &mut Context,args: &Arguments) -> Result<JsValue,JsValue> {...}
+    /// fn another_native_fun(ctx: &mut Context,args: &Arguments) -> Result<JsValue,JsValue> {...}
     ///
     /// let native_refs = Box::leak(Box::new([my_naive_fun as usize,another_native_fun as usize]));
     /// let mut rt = Runtime::new(false,Some(native_refs));
@@ -284,15 +274,17 @@ impl<'a> Deserializer<'a> {
         callback: impl FnOnce(&mut Self, &mut Runtime),
     ) -> Box<Runtime> {
         let mut runtime = Runtime::new_empty(gc, options, external_refs);
+
         let mut this = Self {
             reader: snapshot,
             pc: 0,
             log_deser,
             symbol_map: Default::default(),
             reference_map: Default::default(),
-            rt: &mut *runtime,
         };
+
         runtime.heap().defer();
+
         unsafe {
             let ref_count = this.get_u32();
 
@@ -305,6 +297,21 @@ impl<'a> Deserializer<'a> {
         runtime.heap().undefer();
         runtime
     }
+
+    pub fn deserialize_context(&mut self,rt: &mut Runtime, log_deser: bool, snapshot: &'a [u8]) -> GcPointer<Context> {
+        rt.heap().defer();
+        let mut ctx = Context::new_empty(rt);
+        unsafe  {
+            ctx.global_data = self.deserialize_global_data();
+            ctx.global_object = self.read_opt_gc();
+            ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
+            ctx.module_loader = self.read_opt_gc();
+            ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
+        }
+        rt.contexts.push(ctx);
+        rt.heap().undefer();
+        ctx
+    }
 }
 
 pub trait Deserializable {
@@ -313,7 +320,7 @@ pub trait Deserializable {
     }
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self;
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer);
-    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase;
+    unsafe fn allocate(ctx: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase;
 }
 
 impl Deserializable for JsValue {
@@ -708,6 +715,34 @@ impl<T: Deserializable + GcCell> Deserializable for Option<T> {
     }
 }
 
+impl Deserializable for Context {
+    unsafe fn dummy_read(deser: &mut Deserializer) {}
+    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
+        let mut ctx = Context::new_raw();
+        ctx.global_data = deser.deserialize_global_data();
+
+        ctx.global_object = deser.read_opt_gc();
+
+        ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(deser);
+        ctx.module_loader = deser.read_opt_gc();
+        ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(deser);
+        ctx
+    }
+
+    unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
+        at.cast::<Self>().write(Self::deserialize_inplace(deser));
+    }
+
+    unsafe fn allocate(rt: &mut Runtime, deser: &mut Deserializer) -> *mut GcPointerBase {
+        rt.heap().allocate_raw(
+            vtable_of_type::<Self>() as _,
+            size_of::<Self>(),
+            TypeId::of::<Self>(),
+        )
+    }
+}
+
+
 impl Deserializable for JsObject {
     unsafe fn dummy_read(deser: &mut Deserializer) {}
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
@@ -794,13 +829,14 @@ impl Deserializable for JsObject {
                 )
             }
             ObjectTag::Global => {
+                let ctx = GcPointer::<Context>::deserialize_inplace(deser);
                 let sym_map = HashMap::<Symbol, u32>::deserialize_inplace(deser);
                 let variables = SegmentedVec::<StoredSlot>::deserialize_inplace(deser);
                 ((*object).data::<JsGlobal>() as *mut ManuallyDrop<_> as *mut JsGlobal).write(
                     JsGlobal {
-                        vm: deser.rt,
                         sym_map,
                         variables,
+                        ctx,
                     },
                 )
             }
@@ -814,8 +850,7 @@ impl Deserializable for JsObject {
             _ => (),
         }
         if let Some(deser_fn) = (*object).class.deserialize {
-            let rt = deser.rt;
-            deser_fn(&mut *object, deser, &mut *rt);
+            deser_fn(&mut *object, deser);
         }
     }
 
@@ -1539,6 +1574,9 @@ impl Deserializable for JsSymbol {
     }
 }
 
+
+
+
 impl<A: Deserializable, B: Deserializable> Deserializable for (A, B) {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
         (A::deserialize_inplace(deser), B::deserialize_inplace(deser))
@@ -1547,7 +1585,7 @@ impl<A: Deserializable, B: Deserializable> Deserializable for (A, B) {
         unreachable!()
     }
 
-    unsafe fn allocate(_rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(_ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }

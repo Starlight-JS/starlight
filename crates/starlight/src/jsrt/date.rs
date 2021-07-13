@@ -58,7 +58,7 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
     todo!()
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
     todo!()
 }
 

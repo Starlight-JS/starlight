@@ -4,8 +4,8 @@
         "type": "lldb",
         "request": "launch",
         "name": "Launch",
-        "program": "${workspaceFolder}/target/debug/test262-runner",
-        "args": ["run","-vvv"],
+        "program": "${workspaceFolder}/target/debug/sl",
+        "args": ["examples/hello-world.js"],
         "cwd": "${workspaceFolder}"
     }
     ]

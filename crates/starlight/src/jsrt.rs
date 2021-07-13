@@ -1,17 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    gc::cell::{GcPointer, WeakRef, WeakSlot},
-    vm::{
-        arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
-        array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, data_view::JsDataView,
-        environment::Environment, error::*, function::*, global::JsGlobal,
-        indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*,
-        property_descriptor::*, string::*, structure::*, structure_chain::StructureChain,
-        symbol_table::*, value::*, ModuleKind, Runtime,
-    },
-};
+use crate::{gc::cell::{GcPointer, WeakRef, WeakSlot}, vm::{context::Context ,ModuleKind, arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer, array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, data_view::JsDataView, environment::Environment, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*, property_descriptor::*, string::*, structure::*, structure_chain::StructureChain, symbol_table::*, value::*}};
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
@@ -38,27 +28,26 @@ use function::*;
 use promise::*;
 use wtf_rs::keep_on_stack;
 
-pub fn print(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn print(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     for i in 0..args.size() {
         let value = args.at(i);
-        let string = value.to_string(rt)?;
+        let string = value.to_string(ctx)?;
         print!("{}", string);
     }
     println!();
     Ok(JsValue::new(args.size() as i32))
 }
 
-impl Runtime {
-    pub(crate) fn init_builtin_in_realm(&mut self) {
-        let _ = self.realm().global_object().put(
+impl Context {
+    pub(crate) fn init_builtin_in_global_object(&mut self) {
+        let _ = self.global_object().put(
             self,
             "Infinity".intern(),
             JsValue::new(std::f64::INFINITY),
             false,
         );
         let func = JsNativeFunction::new(self, "print".intern(), print, 0);
-        self.realm()
-            .global_object()
+        self.global_object()
             .put(
                 self,
                 "print".intern(),
@@ -67,9 +56,7 @@ impl Runtime {
             )
             .unwrap_or_else(|_| unreachable!());
 
-        string::initialize(self, self.global_data().object_prototype.unwrap());
-
-        let mut global = self.realm().global_object();
+        let mut global = self.global_object();
         let _ = global.put(
             self,
             "undefined".intern(),
@@ -165,6 +152,7 @@ impl Runtime {
             .unwrap_or_else(|_| panic!());
         assert!(func.is_callable());
         self.global_data.spread_builtin = Some(func.get_jsobject());
+        
         let mut eval = |path, source| {
             self.eval_internal(Some(path), false, source, true)
                 .unwrap_or_else(|error| match error.to_string(self) {
@@ -202,16 +190,14 @@ impl Runtime {
             include_str!("builtins/StringIterator.js"),
         );
     }
-    pub(crate) fn init_func_in_realm(&mut self) {
+    pub(crate) fn init_func_in_global_object(&mut self) {
         let mut proto = self.global_data.func_prototype.unwrap();
         let name = "Function".intern();
         let constrcutor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        let _ = self
-            .realm()
-            .global_object()
+        let _ = self.global_object()
             .put(self, name, JsValue::from(constrcutor), false);
     }
     pub(crate) fn init_func_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
@@ -277,7 +263,7 @@ impl Runtime {
             false,
         );
     }
-    pub(crate) fn init_promise_in_realm(&mut self) -> Result<(), JsValue> {
+    pub(crate) fn init_promise_in_global_object(&mut self) -> Result<(), JsValue> {
         // copied from file
         let mut ctor = JsNativeFunction::new(self, "Promise".intern(), promise_constructor, 1);
 
@@ -297,15 +283,15 @@ impl Runtime {
         def_native_method!(self, ctor, resolve, promise_static_resolve, 1)?;
 
         // add to global
-        self.realm()
-            .global_object()
+        self.global_object()
             .put(self, "Promise".intern(), JsValue::new(ctor), false)?;
 
         ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
+        proto.put(self, "constructor".intern(), JsValue::new(ctor), false)?;
 
         Ok(())
     }
-    pub(crate) fn init_weak_ref_in_realm(&mut self) {
+    pub(crate) fn init_weak_ref_in_global_object(&mut self) {
         let mut init = || -> Result<(), JsValue> {
             let mut proto = self.global_data().weak_ref_prototype.unwrap();
             let ctor = proto.get(self, "constructor".intern())?;
@@ -365,7 +351,7 @@ impl Runtime {
         }
     }
 
-    pub(crate) fn init_array_in_realm(&mut self) {
+    pub(crate) fn init_array_in_global_object(&mut self) {
         let mut proto = self.global_data.array_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
@@ -373,12 +359,7 @@ impl Runtime {
             .value();
 
         let arr = "Array".intern();
-        // let name = "Array".intern();
-        // let _ = self
-        //     .global_object()
-        //     .put(self, name, JsValue::from(constructor), false);
-
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             arr,
             &*DataDescriptor::new(JsValue::from(constructor), W | C),
@@ -508,7 +489,7 @@ impl Runtime {
         self.global_data.array_prototype = Some(proto);
     }
 
-    pub(crate) fn init_error_in_realm(&mut self) {
+    pub(crate) fn init_error_in_global_object(&mut self) {
         self.init_base_error_in_realm();
         self.init_eval_error_in_realm();
         self.init_type_error_in_realm();
@@ -560,7 +541,7 @@ impl Runtime {
             false,
         );
         let sym = "Error".intern();
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(ctor), W | C),
@@ -609,7 +590,7 @@ impl Runtime {
             &*DataDescriptor::new(JsValue::from(to_str), W | C),
             false,
         );
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
@@ -662,7 +643,7 @@ impl Runtime {
                 false,
             )
             .unwrap_or_else(|_| panic!());
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
@@ -715,7 +696,7 @@ impl Runtime {
                 false,
             )
             .unwrap_or_else(|_| panic!());
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(sub_ctor), W | C),
@@ -765,7 +746,7 @@ impl Runtime {
             false,
         );
 
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(sub_proto), W | C),
@@ -815,7 +796,7 @@ impl Runtime {
             false,
         );
 
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             sym,
             &*DataDescriptor::new(JsValue::from(sub_proto), W | C),
@@ -923,24 +904,24 @@ impl Runtime {
 
 use object::*;
 
-impl Runtime {
-    pub(crate) fn init_object_in_realm(&mut self) {
+impl Context {
+    pub(crate) fn init_object_in_global_object(&mut self) {
         let name = "Object".intern();
         let mut proto = self.global_data.object_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        let _ = self.realm().global_object().define_own_property(
+        let _ = self.global_object().define_own_property(
             self,
             name,
             &*DataDescriptor::new(JsValue::from(constructor), W | C),
             false,
         );
-        let global = self.realm().global_object();
+        let global = self.global_object();
 
         let _name = "Object".intern();
-        let _ = self.realm().global_object().put(
+        let _ = self.global_object().put(
             self,
             "globalThis".intern(),
             JsValue::encode_object_value(global),
@@ -1092,6 +1073,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         GcPointer::<u8>::allocate as _,
         WeakRef::<u8>::deserialize as _,
         WeakRef::<u8>::allocate as _,
+        Context::deserialize as _,
+        Context::allocate as _,
         JsObject::deserialize as _,
         JsObject::allocate as _,
         JsValue::deserialize as _,
@@ -1332,27 +1315,27 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
     Box::leak(refs.into_boxed_slice())
 });
 
-pub fn get_length(rt: &mut Runtime, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
+pub fn get_length(ctx: &mut Context, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
     if std::ptr::eq(val.class(), JsArray::get_class()) {
         return Ok(val.indexed.length());
     }
-    let len = val.get(rt, "length".intern())?;
-    len.to_uint32(rt)
+    let len = val.get(ctx, "length".intern())?;
+    len.to_uint32(ctx)
 }
 
 /// Convert JS object to JS property descriptor
 pub fn to_property_descriptor(
-    rt: &mut Runtime,
+    ctx: &mut Context,
     target: JsValue,
 ) -> Result<PropertyDescriptor, JsValue> {
     if !target.is_jsobject() {
         return Err(JsValue::new(
-            rt.new_type_error("ToPropertyDescriptor requires Object argument"),
+            ctx.new_type_error("ToPropertyDescriptor requires Object argument"),
         ));
     }
 
     let mut attr: u32 = DEFAULT;
-    let stack = rt.shadowstack();
+    let stack = ctx.shadowstack();
     letroot!(obj = stack, target.get_jsobject());
     let mut value = JsValue::encode_undefined_value();
     let mut getter = JsValue::encode_undefined_value();
@@ -1360,8 +1343,8 @@ pub fn to_property_descriptor(
 
     {
         let sym = "enumerable".intern();
-        if obj.has_property(rt, sym) {
-            let enumerable = obj.get(rt, sym)?.to_boolean();
+        if obj.has_property(ctx, sym) {
+            let enumerable = obj.get(ctx, sym)?.to_boolean();
             if enumerable {
                 attr = (attr & !UNDEF_ENUMERABLE) | ENUMERABLE;
             } else {
@@ -1371,8 +1354,8 @@ pub fn to_property_descriptor(
     }
     {
         let sym = "configurable".intern();
-        if obj.has_property(rt, sym) {
-            let configurable = obj.get(rt, sym)?.to_boolean();
+        if obj.has_property(ctx, sym) {
+            let configurable = obj.get(ctx, sym)?.to_boolean();
             if configurable {
                 attr = (attr & !UNDEF_CONFIGURABLE) | CONFIGURABLE;
             } else {
@@ -1383,8 +1366,8 @@ pub fn to_property_descriptor(
 
     {
         let sym = "value".intern();
-        if obj.has_property(rt, sym) {
-            value = obj.get(rt, sym)?;
+        if obj.has_property(ctx, sym) {
+            value = obj.get(ctx, sym)?;
             attr |= DATA;
             attr &= !UNDEF_VALUE;
         }
@@ -1392,8 +1375,8 @@ pub fn to_property_descriptor(
 
     {
         let sym = "writable".intern();
-        if obj.has_property(rt, sym) {
-            let writable = obj.get(rt, sym)?.to_boolean();
+        if obj.has_property(ctx, sym) {
+            let writable = obj.get(ctx, sym)?.to_boolean();
             attr |= DATA;
             attr &= !UNDEF_WRITABLE;
             if writable {
@@ -1403,11 +1386,11 @@ pub fn to_property_descriptor(
     }
     {
         let sym = "get".intern();
-        if obj.has_property(rt, sym) {
-            let r = obj.get(rt, sym)?;
+        if obj.has_property(ctx, sym) {
+            let r = obj.get(ctx, sym)?;
             if !r.is_callable() && !r.is_undefined() {
                 return Err(JsValue::new(
-                    rt.new_type_error("property 'get' is not callable"),
+                    ctx.new_type_error("property 'get' is not callable"),
                 ));
             }
 
@@ -1422,11 +1405,11 @@ pub fn to_property_descriptor(
 
     {
         let sym = "set".intern();
-        if obj.has_property(rt, sym) {
-            let r = obj.get(rt, sym)?;
+        if obj.has_property(ctx, sym) {
+            let r = obj.get(ctx, sym)?;
             if !r.is_callable() && !r.is_undefined() {
                 return Err(JsValue::new(
-                    rt.new_type_error("property 'set' is not callable"),
+                    ctx.new_type_error("property 'set' is not callable"),
                 ));
             }
 
@@ -1440,7 +1423,7 @@ pub fn to_property_descriptor(
 
     if (attr & ACCESSOR) != 0 && (attr & DATA) != 0 {
         return Err(JsValue::new(
-            rt.new_type_error("invalid property descriptor object"),
+            ctx.new_type_error("invalid property descriptor object"),
         ));
     }
 
@@ -1454,9 +1437,9 @@ pub fn to_property_descriptor(
     }
 }
 
-pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
-    let name = args.at(0).to_string(rt)?;
-    let rel_path = unsafe { (*rt.stack.current).code_block.unwrap().path.clone() };
+pub(crate) fn module_load(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+    let name = args.at(0).to_string(ctx)?;
+    let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
     let _is_js_load = (name.starts_with("./")
         || name.starts_with("../")
         || name.starts_with('/')
@@ -1474,7 +1457,7 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     let path = std::path::Path::new(&spath);
     let path = match path.canonicalize() {
         Err(e) => {
-            return Err(JsValue::new(rt.new_reference_error(format!(
+            return Err(JsValue::new(ctx.new_reference_error(format!(
                 "Module '{}' not found: '{}'",
                 path.display(),
                 e
@@ -1482,24 +1465,24 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         }
         Ok(path) => path,
     };
-    let stack = rt.shadowstack();
-    letroot!(module_object = stack, JsObject::new_empty(rt));
-    let mut exports = JsObject::new_empty(rt);
-    module_object.put(rt, "@exports".intern(), JsValue::new(exports), false)?;
+    let stack = ctx.shadowstack();
+    letroot!(module_object = stack, JsObject::new_empty(ctx));
+    let mut exports = JsObject::new_empty(ctx);
+    module_object.put(ctx, "@exports".intern(), JsValue::new(exports), false)?;
     let mut args = [JsValue::new(*module_object)];
     letroot!(
         args = stack,
         Arguments::new(JsValue::encode_undefined_value(), &mut args)
     );
-    if let Some(module) = rt.modules.get(&spath).copied() {
+    if let Some(module) = ctx.modules().get(&spath).copied() {
         match module {
             ModuleKind::Initialized(x) => {
                 return Ok(JsValue::new(x));
             }
             ModuleKind::NativeUninit(init) => {
                 let mut module = *module_object;
-                init(rt, module)?;
-                rt.modules
+                init(ctx, module)?;
+                ctx.modules()
                     .insert(spath.clone(), ModuleKind::Initialized(module));
 
                 return Ok(JsValue::new(module));
@@ -1508,13 +1491,13 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
     }
     if !path.exists() {
         return Err(JsValue::new(
-            rt.new_type_error(format!("Module '{}' not found", spath)),
+            ctx.new_type_error(format!("Module '{}' not found", spath)),
         ));
     }
     let source = match std::fs::read_to_string(&path) {
         Ok(source) => source,
         Err(e) => {
-            return Err(JsValue::new(rt.new_type_error(format!(
+            return Err(JsValue::new(ctx.new_type_error(format!(
                 "Failed to read module '{}': {}",
                 spath,
                 e.to_string()
@@ -1522,28 +1505,28 @@ pub(crate) fn module_load(rt: &mut Runtime, args: &Arguments) -> Result<JsValue,
         }
     };
     let name = path.file_name().unwrap().to_str().unwrap().to_string();
-    let module_fun = rt.compile_module(&spath, &name, &source)?;
+    let module_fun = ctx.compile_module(&spath, &name, &source)?;
     let mut module_fun = module_fun.get_jsobject();
     module_fun
         .as_function_mut()
-        .call(rt, &mut args, JsValue::encode_undefined_value())?;
-    rt.modules
+        .call(ctx, &mut args, JsValue::encode_undefined_value())?;
+    ctx.modules()
         .insert(spath.clone(), ModuleKind::Initialized(*module_object));
     Ok(JsValue::new(*module_object))
 }
 
-pub fn to_index(rt: &mut Runtime, val: JsValue) -> Result<usize, JsValue> {
+pub fn to_index(ctx: &mut Context, val: JsValue) -> Result<usize, JsValue> {
     let value = if val.is_undefined() {
         JsValue::new(0)
     } else {
         val
     };
-    let res = value.to_number(rt)?;
+    let res = value.to_number(ctx)?;
     if res < 0.0 {
-        return Err(JsValue::new(rt.new_range_error("Negative index")));
+        return Err(JsValue::new(ctx.new_range_error("Negative index")));
     }
     if res >= 9007199254740991.0 {
-        return Err(JsValue::new(rt.new_range_error(
+        return Err(JsValue::new(ctx.new_range_error(
             "The value given for the index must be between 0 and 2 ^ 53 - 1",
         )));
     }
@@ -1551,7 +1534,7 @@ pub fn to_index(rt: &mut Runtime, val: JsValue) -> Result<usize, JsValue> {
 }
 
 pub fn define_lazy_property(
-    vm: &mut Runtime,
+    ctx: &mut Context,
     mut object: GcPointer<JsObject>,
     name: Symbol,
     init: Rc<dyn Fn() -> PropertyDescriptor>,
@@ -1559,29 +1542,29 @@ pub fn define_lazy_property(
 ) -> Result<(), JsValue> {
     let c = init.clone();
     let getter = JsClosureFunction::new(
-        vm,
+        ctx,
         "<init_property>".intern(),
-        move |vm, args| {
+        move |ctx, args| {
             let desc = init();
-            let mut this = args.this.to_object(vm)?;
-            this.define_own_property(vm, name, &desc, throwable)?;
-            this.get(vm, name)
+            let mut this = args.this.to_object(ctx)?;
+            this.define_own_property(ctx, name, &desc, throwable)?;
+            this.get(ctx, name)
         },
         0,
     );
     let setter = JsClosureFunction::new(
-        vm,
+        ctx,
         "<init_property>".intern(),
-        move |vm, args| {
-            let mut this = args.this.to_object(vm)?;
+        move |ctx, args| {
+            let mut this = args.this.to_object(ctx)?;
             let desc = c();
-            this.define_own_property(vm, name, &desc, throwable)?;
-            this.put(vm, name, args.at(0), true)?;
+            this.define_own_property(ctx, name, &desc, throwable)?;
+            this.put(ctx, name, args.at(0), true)?;
             Ok(JsValue::encode_undefined_value())
         },
         0,
     );
     let desc = AccessorDescriptor::new(JsValue::new(getter), JsValue::new(setter), C | E);
-    object.define_own_property(vm, name, &*desc, throwable)?;
+    object.define_own_property(ctx, name, &*desc, throwable)?;
     Ok(())
 }

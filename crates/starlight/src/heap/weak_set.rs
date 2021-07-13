@@ -3,7 +3,7 @@ use crate::vm::Runtime;
 pub struct WeakSet {}
 
 impl WeakSet {
-    pub fn new(vm: &mut Runtime) -> Self {
+    pub fn new(_: &mut Runtime) -> Self {
         Self {}
     }
 }

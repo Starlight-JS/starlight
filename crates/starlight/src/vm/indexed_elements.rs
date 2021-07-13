@@ -8,10 +8,7 @@ use crate::gc::{
     snapshot::deserializer::Deserializable,
 };
 
-use super::{
-    array_storage::ArrayStorage, attributes::object_data, property_descriptor::StoredSlot,
-    value::JsValue, Runtime,
-};
+use super::{Context, array_storage::ArrayStorage, attributes::object_data, property_descriptor::StoredSlot, value::JsValue};
 
 const FLAG_DENSE: u8 = 1;
 const FLAG_WRITABLE: u8 = 2;
@@ -31,9 +28,9 @@ pub struct IndexedElements {
 
 impl IndexedElements {
     #[allow(clippy::explicit_counter_loop)]
-    pub fn make_sparse(&mut self, vm: &mut Runtime) {
+    pub fn make_sparse(&mut self, ctx: &mut Context) {
         self.flags &= !(FLAG_DENSE as u32);
-        let mut sparse = self.ensure_map(vm);
+        let mut sparse = self.ensure_map(ctx);
         let mut index = 0;
         for i in 0..self.vector.size() {
             if !self.vector.at(i).is_empty() {
@@ -54,11 +51,11 @@ impl IndexedElements {
         self.map = None;
     }
 
-    pub fn ensure_map(&mut self, vm: &mut Runtime) -> GcPointer<SparseArrayMap> {
+    pub fn ensure_map(&mut self, ctx: &mut Context) -> GcPointer<SparseArrayMap> {
         match self.map.as_ref() {
             Some(map) => *map,
             None => {
-                let map = vm.heap().allocate(HashMap::with_capacity(8));
+                let map = ctx.heap().allocate(HashMap::with_capacity(8));
                 self.map = Some(map);
                 map
             }
@@ -89,11 +86,11 @@ impl IndexedElements {
         self.flags &= !(FLAG_WRITABLE as u32);
     }
 
-    pub fn new(_vm: &mut Runtime) -> Self {
+    pub fn new(ctx: &mut Context) -> Self {
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,
-            vector: ArrayStorage::new(_vm.heap(), 0),
+            vector: ArrayStorage::new(ctx.heap(), 0),
             map: None,
             non_gc: true,
         }

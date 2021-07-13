@@ -30,7 +30,7 @@ pub type TypePointer = *mut ffi_type;
 /// A raw C pointer.
 pub type RawPointer = *mut c_void;
 
-pub fn initialize_ffi(rt: &mut Runtime) {
+pub fn initialize_ffi(ctx: &mut Context) {
     rt.heap().defer();
     let structure =
         Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
@@ -298,7 +298,7 @@ macro_rules! ffi_type_error {
 /// Returns the size of a type ID.
 ///
 /// The size of the type is returned as a tagged integer.
-pub fn type_size(rt: &mut Runtime, id: i64) -> Result<JsValue, JsValue> {
+pub fn type_size(ctx: &mut Context, id: i64) -> Result<JsValue, JsValue> {
     let size = unsafe {
         match id {
             TYPE_VOID => types::void.size,
@@ -324,7 +324,7 @@ pub fn type_size(rt: &mut Runtime, id: i64) -> Result<JsValue, JsValue> {
 /// Returns the alignment of a type ID.
 ///
 /// The alignment of the type is returned as a tagged integer.
-pub fn type_alignment(rt: &mut Runtime, id: i64) -> Result<JsValue, JsValue> {
+pub fn type_alignment(ctx: &mut Context, id: i64) -> Result<JsValue, JsValue> {
     let size = unsafe {
         match id {
             TYPE_VOID => types::void.alignment,
@@ -367,7 +367,7 @@ impl Argument {
     unsafe fn wrap(
         ffi_type: *mut ffi_type,
         val: JsValue,
-        rt: &mut Runtime,
+        ctx: &mut Context,
     ) -> Result<Argument, JsValue> {
         match_ffi_type!(
             ffi_type,
@@ -432,7 +432,7 @@ impl Argument {
     }
 }
 /// Returns an FFI type for an integer pointer.
-unsafe fn ffi_type_for(pointer: JsValue, rt: &mut Runtime) -> Result<TypePointer, JsValue> {
+unsafe fn ffi_type_for(pointer: JsValue, ctx: &mut Context) -> Result<TypePointer, JsValue> {
     let int = pointer.to_int32(rt)?;
     let typ = match int as i64 {
         TYPE_VOID => ffi_type!(void),
@@ -467,7 +467,7 @@ unsafe fn ffi_type_for(pointer: JsValue, rt: &mut Runtime) -> Result<TypePointer
 impl FFILibrary {
     /// Opens a library using one or more possible names, stored as pointers to
     /// heap allocated objects.
-    pub fn from_pointers(rt: &mut Runtime, search_for: &[JsValue]) -> Result<FFILibrary, JsValue> {
+    pub fn from_pointers(ctx: &mut Context, search_for: &[JsValue]) -> Result<FFILibrary, JsValue> {
         let mut names = Vec::with_capacity(search_for.len());
 
         for name in search_for {
@@ -535,7 +535,7 @@ impl Pointer {
 
     /// Reads the value of this pointer into a particular type, based on the
     /// integer specified in `kind`.
-    pub unsafe fn read_as(self, rt: &mut Runtime, kind: JsValue) -> Result<JsValue, JsValue> {
+    pub unsafe fn read_as(self, ctx: &mut Context, kind: JsValue) -> Result<JsValue, JsValue> {
         let int = kind.to_int32(rt)? as i64;
         let pointer = match int {
             TYPE_POINTER => {
@@ -575,7 +575,7 @@ impl Pointer {
     /// Writes a value to the underlying pointer.
     pub unsafe fn write_as(
         self,
-        rt: &mut Runtime,
+        ctx: &mut Context,
         kind: JsValue,
         value: JsValue,
     ) -> Result<(), JsValue> {
@@ -655,7 +655,7 @@ impl Pointer {
 impl FFIFunction {
     /// Creates a new function using object pointers.
     pub unsafe fn attach(
-        rt: &mut Runtime,
+        ctx: &mut Context,
         library: &FFILibrary,
         name: &str,
         arguments: &[JsValue],
@@ -676,7 +676,7 @@ impl FFIFunction {
 
     /// Creates a new prepared function.
     unsafe fn create(
-        rt: &mut Runtime,
+        ctx: &mut Context,
         pointer: Pointer,
         arguments: Vec<TypePointer>,
         return_type: TypePointer,
@@ -721,7 +721,7 @@ impl FFIFunction {
     }
 
     /// Calls the function with the given arguments.
-    pub unsafe fn call(&self, rt: &mut Runtime, arg_ptrs: &[JsValue]) -> Result<JsValue, JsValue> {
+    pub unsafe fn call(&self, ctx: &mut Context, arg_ptrs: &[JsValue]) -> Result<JsValue, JsValue> {
         if arg_ptrs.len() != self.arguments.len() {
             return Err(JsValue::new(JsString::new(
                 rt,
@@ -791,7 +791,7 @@ impl FFIFunction {
     }
 }
 
-pub fn ffi_library_open(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ffi_library_open(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let names = args.at(0);
     if !names.is_jsobject() {
         let msg = JsString::new(
@@ -820,7 +820,7 @@ pub fn ffi_library_open(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::new(obj))
 }
 
-pub fn ffi_function_attach(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ffi_function_attach(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
     let func = unsafe {
         let lib = {
@@ -864,7 +864,7 @@ pub fn ffi_function_attach(rt: &mut Runtime, args: &Arguments) -> Result<JsValue
     Ok(JsValue::new(func))
 }
 
-pub fn ffi_function_call(rt: &mut Runtime, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ffi_function_call(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = rt.shadowstack();
     rt.heap().defer();
     let func = unsafe {

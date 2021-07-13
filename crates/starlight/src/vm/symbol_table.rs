@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::Runtime;
+use super::{Context};
 use crate::gc::cell::{GcCell, GcPointer, Trace};
 use crate::gc::snapshot::deserializer::Deserializable;
 use dashmap::DashMap;
@@ -220,8 +220,8 @@ pub struct JsSymbol {
 }
 
 impl JsSymbol {
-    pub fn new(rt: &mut Runtime, sym: Symbol) -> GcPointer<Self> {
-        rt.heap().allocate(Self { sym })
+    pub fn new(ctx: &mut Context, sym: Symbol) -> GcPointer<Self> {
+        ctx.heap().allocate(Self { sym })
     }
 
     pub fn symbol(&self) -> Symbol {

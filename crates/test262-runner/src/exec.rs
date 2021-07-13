@@ -4,7 +4,8 @@ use super::{
 };
 
 use colored::Colorize;
-use starlight::vm::{parse, Runtime};
+use starlight::prelude::GcPointer;
+use starlight::vm::{context::Context, parse, Runtime};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
@@ -217,25 +218,28 @@ impl Test {
                         error_type: _,
                     }
                 )) {
+            let mut ctx = Context::new(rt);
             let res = panic::catch_unwind(AssertUnwindSafe(|| match self.expected_outcome {
                 Outcome::Positive => {
                     // TODO: implement async and add `harness/doneprintHandle.js` to the includes.
 
-                    match self.set_up_env(&harness, strict, rt) {
+                    match self.set_up_env(&harness, strict, ctx) {
                         Ok(_) => {
                             let content = if strict {
                                 format!("\"use strict\";\n {}", self.content)
                             } else {
                                 self.content.to_string()
                             };
-                            let res = rt.eval_internal(None, false, &content, false);
+                            let res = ctx.eval_internal(None, false, &content, false);
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => val.to_string(rt).unwrap_or_else(|_| String::new()),
+                                Ok(val) => {
+                                    val.to_string(&mut ctx).unwrap_or_else(|_| String::new())
+                                }
                                 Err(e) => format!(
                                     "Uncaught {}",
-                                    e.to_string(rt).unwrap_or_else(|_| String::new())
+                                    e.to_string(&mut ctx).unwrap_or_else(|_| String::new())
                                 ),
                             };
 
@@ -275,15 +279,17 @@ impl Test {
                     if let Err(e) = parse(&self.content.as_ref(), strict) {
                         (false, format!("Uncaught {:?}", e))
                     } else {
-                        match self.set_up_env(&harness, strict, rt) {
+                        match self.set_up_env(&harness, strict, ctx) {
                             Ok(_) => {
-                                match rt.eval_internal(None, false, &self.content.as_ref(), false) {
-                                    Ok(res) => {
-                                        (false, res.to_string(rt).unwrap_or_else(|_| String::new()))
-                                    }
+                                match ctx.eval_internal(None, false, &self.content.as_ref(), false)
+                                {
+                                    Ok(res) => (
+                                        false,
+                                        res.to_string(&mut ctx).unwrap_or_else(|_| String::new()),
+                                    ),
                                     Err(e) => {
                                         let passed = e
-                                            .to_string(rt)
+                                            .to_string(&mut ctx)
                                             .unwrap_or_else(|_| String::new())
                                             .contains(error_type.as_ref());
 
@@ -291,7 +297,8 @@ impl Test {
                                             passed,
                                             format!(
                                                 "Uncaught {}",
-                                                e.to_string(rt).unwrap_or_else(|_| String::new())
+                                                e.to_string(&mut ctx)
+                                                    .unwrap_or_else(|_| String::new())
                                             ),
                                         )
                                     }
@@ -302,7 +309,7 @@ impl Test {
                     }
                 }
             }));
-
+            rt.remove_context(ctx);
             let result = res
                 .map(|(res, text)| {
                     if res {
@@ -357,12 +364,9 @@ impl Test {
         &self,
         harness: &Harness,
         _strict: bool,
-        context: &mut Box<Runtime>,
+        mut context: GcPointer<Context>,
     ) -> Result<(), String> {
-        // Create new Realm
         // TODO: in parallel.
-        context.create_realm().unwrap_or_else(|_| unreachable!());
-
         /*let mut context = Runtime::new(
             RuntimeParams::default().with_dump_bytecode(false),
             GcParams::default()
@@ -375,7 +379,7 @@ impl Test {
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
-                    e.to_string(context).unwrap_or_else(|_| String::new())
+                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
                 )
             })?;
         context
@@ -383,7 +387,7 @@ impl Test {
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
-                    e.to_string(context).unwrap_or_else(|_| String::new())
+                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
                 )
             })?;
 
@@ -403,7 +407,7 @@ impl Test {
                     format!(
                         "could not run the {} include file:\nUncaught {}",
                         include,
-                        e.to_string(context).unwrap_or_else(|_| String::new())
+                        e.to_string(&mut context).unwrap_or_else(|_| String::new())
                     )
                 })?;
         }

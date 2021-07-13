@@ -1,8 +1,9 @@
+use super::context::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::value::JsValue;
-use super::{symbol_table::Symbol, Runtime};
+use super::{symbol_table::Symbol};
 use crate::bytecode::opcodes::*;
 use crate::gc::{cell::GcPointer, cell::Tracer};
 use crate::{
@@ -457,7 +458,7 @@ impl CodeBlock {
         }
     }
     /// Create new empty code block.
-    pub fn new(rt: &mut Runtime, name: Symbol, strict: bool, path: Rc<str>) -> GcPointer<Self> {
+    pub fn new(ctx: &mut Context, name: Symbol, strict: bool, path: Rc<str>) -> GcPointer<Self> {
         let this = Self {
             path,
             name,
@@ -481,7 +482,7 @@ impl CodeBlock {
             is_generator: false,
         };
 
-        rt.heap().allocate(this)
+        ctx.heap().allocate(this)
     }
 }
 

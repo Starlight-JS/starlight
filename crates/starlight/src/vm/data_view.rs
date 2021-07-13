@@ -1,10 +1,11 @@
 use wtf_rs::endian::{byte_swap, Endianess};
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
+use super::context::Context;
 use super::class::JsClass;
 use super::method_table::MethodTable;
 use super::object::TypedJsObject;
-use super::{array_buffer::JsArrayBuffer, object::JsObject, Runtime};
+use super::{array_buffer::JsArrayBuffer, object::JsObject};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
 use crate::vm::object::ObjectTag;
 use std::mem::ManuallyDrop;
@@ -93,13 +94,13 @@ impl JsDataView {
     }
 
     pub fn new(
-        rt: &mut Runtime,
+        ctx: &mut Context,
         buffer: TypedJsObject<JsArrayBuffer>,
         offset: usize,
         length: usize,
     ) -> GcPointer<JsObject> {
-        let map = rt.global_data().data_view_structure.unwrap();
-        let mut obj = JsObject::new(rt, &map, Self::get_class(), ObjectTag::Ordinary);
+        let map = ctx.global_data().data_view_structure.unwrap();
+        let mut obj = JsObject::new(ctx, &map, Self::get_class(), ObjectTag::Ordinary);
         *obj.data::<Self>() = ManuallyDrop::new(Self {
             buffer,
             offset,

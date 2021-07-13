@@ -1,4 +1,4 @@
-use starlight::{gc::snapshot::Snapshot, vm::Runtime, Platform};
+use starlight::{Platform, gc::snapshot::Snapshot, vm::{context::Context, Runtime}};
 use std::path::PathBuf;
 use structopt::*;
 
@@ -23,24 +23,17 @@ fn main() {
     });
 
     let mut rt = Runtime::new(starlight::options::Options::default(), None);
+    let mut ctx = Context::new(&mut rt);
     rt.heap().defer();
-    let func = rt
+    let func = ctx
         .compile(
             opts.input.as_os_str().to_str().unwrap(),
             "<script>",
             &string,
             false,
         )
-        .unwrap_or_else(|error| match error.to_string(&mut rt) {
-            Ok(s) => {
-                eprintln!("Failed to compile JS file: {}", s);
-                std::process::exit(1);
-            }
-            Err(_) => {
-                eprintln!("Failed to convert error to string");
-                std::process::exit(1);
-            }
-        });
+        .unwrap_or_else(|error| {eprintln!("Failed to compile JS file: {:?}", error);
+        std::process::exit(1);});
     let snapshot = Snapshot::take(false, &mut rt, |ser, _rt| {
         ser.write_gcpointer(func.get_object())
     });

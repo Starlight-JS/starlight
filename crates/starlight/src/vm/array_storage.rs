@@ -3,7 +3,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::mem::size_of;
 
-use super::{value::JsValue, Runtime};
+use super::context::Context;
+use super::{value::JsValue};
 use crate::gc::Heap;
 use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
@@ -11,7 +12,7 @@ use crate::gc::{
 };
 ///
 /// A GC-managed resizable vector of values. It is used for storage of property
-/// values in objects and also indexed property values in arrays. It supports
+/// values in objects and also indexed property values in arrays. It suppoctxs
 /// resizing on both ends which is necessary for the simplest implementation of
 /// JavaScript arrays (using a base offset and length).
 #[repr(C)]
@@ -22,7 +23,7 @@ pub struct ArrayStorage {
 }
 
 impl GcPointer<ArrayStorage> {
-    pub fn resize_within_capacity(&mut self, _rt: &mut Heap, new_size: u32) {
+    pub fn resize_within_capacity(&mut self, _ctx: &mut Heap, new_size: u32) {
         assert!(
             new_size <= self.capacity(),
             "new_size must be <= capacity in resize_Within_capacity"
@@ -41,7 +42,7 @@ impl GcPointer<ArrayStorage> {
         self.size = new_size;
     }
 
-    pub fn ensure_capacity(&mut self, rt: &mut Heap, capacity: u32) {
+    pub fn ensure_capacity(&mut self, ctx: &mut Heap, capacity: u32) {
         assert!(
             capacity <= ArrayStorage::max_elements() as u32,
             "capacity overflows 32-bit storage"
@@ -51,21 +52,21 @@ impl GcPointer<ArrayStorage> {
             return;
         }
 
-        unsafe { self.reallocate_to_larger(rt, capacity, 0, 0, self.size()) }
+        unsafe { self.reallocate_to_larger(ctx, capacity, 0, 0, self.size()) }
     }
-    pub fn resize(&mut self, rt: &mut Heap, new_size: u32) {
-        self.shift(rt, 0, 0, new_size)
+    pub fn resize(&mut self, ctx: &mut Heap, new_size: u32) {
+        self.shift(ctx, 0, 0, new_size)
     }
 
     #[cold]
-    pub fn push_back_slowpath(&mut self, rt: &mut Heap, value: JsValue) {
+    pub fn push_back_slowpath(&mut self, ctx: &mut Heap, value: JsValue) {
         let size = self.size();
 
-        self.resize(rt, self.size() + 1);
+        self.resize(ctx, self.size() + 1);
         *self.at_mut(size) = value;
     }
 
-    pub fn push_back(&mut self, rt: &mut Heap, value: JsValue) {
+    pub fn push_back(&mut self, ctx: &mut Heap, value: JsValue) {
         let currsz = self.size();
         if currsz < self.capacity() {
             unsafe {
@@ -74,10 +75,10 @@ impl GcPointer<ArrayStorage> {
             }
             return;
         }
-        self.push_back_slowpath(rt, value)
+        self.push_back_slowpath(ctx, value)
     }
 
-    pub fn pop_back(&mut self, _rt: &mut Heap) -> JsValue {
+    pub fn pop_back(&mut self, _ctx: &mut Heap) -> JsValue {
         let sz = self.size();
         assert!(sz > 0, "empty ArrayStorage");
 
@@ -88,7 +89,7 @@ impl GcPointer<ArrayStorage> {
         }
     }
 
-    pub fn shift(&mut self, rt: &mut Heap, from_first: u32, to_first: u32, to_last: u32) {
+    pub fn shift(&mut self, ctx: &mut Heap, from_first: u32, to_first: u32, to_last: u32) {
         assert!(to_first <= to_last, "First must be before last");
         assert!(from_first <= self.size, "from_first must be before size");
         unsafe {
@@ -124,13 +125,13 @@ impl GcPointer<ArrayStorage> {
             } else {
                 capacity = ArrayStorage::max_elements() as u32;
             }
-            self.reallocate_to_larger(rt, capacity, from_first, to_first, to_last)
+            self.reallocate_to_larger(ctx, capacity, from_first, to_first, to_last)
         }
     }
 
     pub unsafe fn reallocate_to_larger(
         &mut self,
-        rt: &mut Heap,
+        ctx: &mut Heap,
         capacity: u32,
         from_first: u32,
         to_first: u32,
@@ -138,7 +139,7 @@ impl GcPointer<ArrayStorage> {
     ) {
         assert!(capacity > self.capacity());
 
-        let mut arr_res = ArrayStorage::new(rt, capacity);
+        let mut arr_res = ArrayStorage::new(ctx, capacity);
         let copy_size = std::cmp::min(self.size() - from_first, to_last - to_first);
 
         {
@@ -183,14 +184,14 @@ impl ArrayStorage {
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
-    pub fn with_size(rt: &mut Runtime, size: u32, capacity: u32) -> GcPointer<Self> {
-        let stack = rt.shadowstack();
-        crate::letroot!(this = stack, Self::new(rt.heap(), capacity));
-        this.resize_within_capacity(rt.heap(), size);
+    pub fn with_size(ctx: &mut Context, size: u32, capacity: u32) -> GcPointer<Self> {
+        let stack = ctx.shadowstack();
+        crate::letroot!(this = stack, Self::new(ctx.heap(), capacity));
+        this.resize_within_capacity(ctx.heap(), size);
         *this
     }
-    pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {
-        rt.allocate(Self {
+    pub fn new(ctx: &mut Heap, capacity: u32) -> GcPointer<Self> {
+        ctx.allocate(Self {
             capacity,
             size: 0,
             data: [],
