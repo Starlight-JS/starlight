@@ -323,8 +323,6 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
                 if matches!(new_test.result, crate::TestOutcomeResult::Passed) {
                     failed_tests.push(get_key_of_test(test));
                 }
-            } else {
-                println!("Warn {}", test.name);
             }
         }
     }
@@ -339,8 +337,6 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
                 if matches!(base_test.result, crate::TestOutcomeResult::Passed) {
                     failed_tests.push(get_key_of_test(test));
                 }
-            } else {
-                println!("Warn {}", test.name);
             }
         }
     }
