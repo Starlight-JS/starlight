@@ -512,7 +512,7 @@ impl JsObject {
     // section 8.12.9 `[[DefineOwnProperty]]`
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<Self>,
-       mut  ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -950,7 +950,9 @@ impl JsObject {
         );
         for name in names {
             let desc = source.get_own_property(ctx, name).unwrap();
-            target.define_own_property(ctx, name, &desc, false).unwrap();
+            target
+                .define_own_property(ctx, name, &desc, false)
+                .unwrap_or_else(|_| unreachable!());
         }
         target
     }

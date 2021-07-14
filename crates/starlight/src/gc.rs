@@ -511,7 +511,7 @@ impl Tracer for SlotVisitor {
                     continue;
                 }
 
-                /*#[cfg(target_pointer_width = "64")]
+                #[cfg(target_pointer_width = "64")]
                 {
                     // on 64 bit platforms we have nice opportunity to check if JS value on stack is
                     // object.
@@ -520,10 +520,10 @@ impl Tracer for SlotVisitor {
                         let ptr = val.get_pointer();
                         if (*self.heap).is_heap_pointer(ptr.cast()) {
                             let mut ptr = ptr.cast::<GcPointerBase>();
-                            self.visit_raw(&mut ptr);
+                            self.visit_raw(ptr);
                         }
                     }
-                }*/
+                }
                 scan += size_of::<usize>();
             }
         }

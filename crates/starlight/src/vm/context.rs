@@ -128,12 +128,15 @@ impl GcPointer<Context> {
         self.init_string_in_global_object();
         self.init_builtin_in_global_object();
         self.init_symbol_in_global_object();
-        self.init_regexp_in_global_object().unwrap();
+        self.init_regexp_in_global_object()
+            .unwrap_or_else(|_| unreachable!());
         self.init_promise_in_global_object()
             .ok()
             .expect("init prom failed");
-        self.init_array_buffer_in_global_object().unwrap();
-        self.init_data_view_in_global_object().unwrap();
+        self.init_array_buffer_in_global_object()
+            .unwrap_or_else(|_| unreachable!());
+        self.init_data_view_in_global_object()
+            .unwrap_or_else(|_| unreachable!());
         self.init_weak_ref_in_global_object();
 
         self.init_self_hosted();

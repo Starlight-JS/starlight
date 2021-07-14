@@ -34,10 +34,10 @@ use super::{
 pub const CMP_FALSE: i32 = 0;
 pub const CMP_TRUE: i32 = 1;
 pub const CMP_UNDEF: i32 = -1;
-
+/*
 #[cfg(target_pointer_width = "64")]
 pub use new_value::*;
-#[cfg(target_pointer_width = "32")]
+#[cfg(target_pointer_width = "32")]*/
 pub use old_value::*;
 pub mod old_value {
     use super::*;
