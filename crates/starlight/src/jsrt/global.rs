@@ -1,10 +1,14 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{prelude::JsString, vm::{context::Context, arguments::Arguments, value::*}};
+use crate::{
+    gc::cell::GcPointer,
+    prelude::JsString,
+    vm::{arguments::Arguments, context::Context, value::*},
+};
 use num::traits::*;
 use std::io::Write;
-pub fn parse_float(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn parse_float(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.size() != 0 {
         let str = args.at(0).to_string(ctx)?;
 
@@ -37,7 +41,7 @@ pub(crate) fn is_trimmable_whitespace(c: char) -> bool {
     )
 }
 
-pub fn parse_int(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn parse_int(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() >= 1 {
         let str = args.at(0).to_string(ctx)?;
         let mut var_s = str.trim_start_matches(is_trimmable_whitespace);
@@ -130,7 +134,7 @@ pub fn parse_int(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
     }
 }
 
-pub fn is_nan(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn is_nan(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let val = args.at(0);
         let number = val.to_number(ctx)?;
@@ -139,7 +143,7 @@ pub fn is_nan(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::encode_bool_value(true))
 }
 
-pub fn is_finite(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn is_finite(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let val = args.at(0);
         let number = val.to_number(ctx)?;
@@ -148,36 +152,36 @@ pub fn is_finite(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
     Ok(JsValue::encode_bool_value(false))
 }
 
-pub fn gc(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn gc(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     ctx.heap().gc();
     let _ = args;
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn ___trunc(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ___trunc(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let n = args.at(0).to_number(ctx)?.trunc();
     Ok(JsValue::new(n))
 }
 
-pub fn ___is_callable(_: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ___is_callable(_: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).is_callable()))
 }
 
-pub fn to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     args.at(0)
         .to_string(ctx)
         .map(|x| JsValue::new(JsString::new(ctx, x)))
 }
 
 // TODO: Breakpoints
-pub fn __breakpoint(_ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn __breakpoint(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
     todo!()
 }
-pub fn __breakpoint_noop(_ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn __breakpoint_noop(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn ___is_constructor(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn ___is_constructor(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let arg = args.at(0);
     if arg.is_callable() {
         let fun = arg.get_jsobject();
@@ -190,7 +194,7 @@ pub fn ___is_constructor(_ctx: &mut Context, args: &Arguments) -> Result<JsValue
     Ok(JsValue::new(false))
 }
 
-pub fn read_line(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn read_line(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let prompt = if args.size() > 0 {
         Some(args.at(0).to_string(ctx)?)
     } else {

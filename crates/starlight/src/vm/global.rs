@@ -3,7 +3,14 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::{collections::HashMap, mem::ManuallyDrop};
 
-use super::{Context, attributes::*, object::{EnumerationMode, JsHint}, property_descriptor::*, slot::*, value::JsValue};
+use super::{
+    attributes::*,
+    object::{EnumerationMode, JsHint},
+    property_descriptor::*,
+    slot::*,
+    value::JsValue,
+    Context,
+};
 use super::{method_table::*, symbol_table::Internable};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
 use wtf_rs::segmented_vec::SegmentedVec;
@@ -33,20 +40,18 @@ impl JsGlobal {
         let stack = ctx.shadowstack();
         letroot!(
             shape = stack,
-            Structure::new_unique_with_proto(&mut ctx, None, false)
+            Structure::new_unique_with_proto(ctx, None, false)
         );
-        let js_object = JsObject::new(&mut ctx, &shape, Self::get_class(), ObjectTag::Global);
+        let js_object = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Global);
         {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),
                 variables: SegmentedVec::with_chunk_size(8),
-                ctx: ctx ,
+                ctx: ctx,
             });
         }
         js_object
     }
-
-    
 
     define_jsclass!(JsGlobal, global);
     pub fn lookup_constant(&self, name: Symbol) -> Option<JsValue> {
@@ -87,7 +92,7 @@ impl JsGlobal {
 
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
@@ -95,14 +100,14 @@ impl JsGlobal {
     }
     pub fn DefaultValueMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         JsObject::DefaultValueMethod(obj, ctx, hint)
     }
     pub fn DefineOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -112,7 +117,7 @@ impl JsGlobal {
     }
     pub fn GetOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
@@ -120,7 +125,7 @@ impl JsGlobal {
     }
     pub fn PutIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
@@ -130,7 +135,7 @@ impl JsGlobal {
     }
     pub fn PutNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
@@ -140,7 +145,7 @@ impl JsGlobal {
     }
     pub fn GetOwnPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
@@ -152,7 +157,7 @@ impl JsGlobal {
 
     pub fn DeleteNonIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -166,7 +171,7 @@ impl JsGlobal {
 
     pub fn DeleteIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -175,7 +180,7 @@ impl JsGlobal {
 
     pub fn GetNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -184,7 +189,7 @@ impl JsGlobal {
 
     pub fn GetIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -192,7 +197,7 @@ impl JsGlobal {
     }
     pub fn GetNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -201,7 +206,7 @@ impl JsGlobal {
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -226,7 +231,7 @@ impl JsGlobal {
 
     pub fn GetNonIndexedPropertySlot(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -235,7 +240,7 @@ impl JsGlobal {
 
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         mut obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -257,7 +262,7 @@ impl JsGlobal {
 
     pub fn GetIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> bool {

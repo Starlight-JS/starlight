@@ -23,7 +23,7 @@ impl NativeIterator {
         None
     }
 
-    pub fn new(ctx: &mut Context, obj: GcPointer<dyn GcCell>) -> GcPointer<Self> {
+    pub fn new(ctx: GcPointer<Context>, obj: GcPointer<dyn GcCell>) -> GcPointer<Self> {
         let mut names = vec![];
         if let Some(mut obj) = obj.downcast::<JsObject>() {
             obj.get_property_names(

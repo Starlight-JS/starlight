@@ -260,8 +260,8 @@ impl<'a> Deserializer<'a> {
     /// was used in snapshot it should be there too.
     /// ```rust,ignore
     ///
-    /// fn my_native_fun(ctx: &mut Context,args: &Arguments) -> Result<JsValue,JsValue> {...}
-    /// fn another_native_fun(ctx: &mut Context,args: &Arguments) -> Result<JsValue,JsValue> {...}
+    /// fn my_native_fun(ctx: GcPointer<Context>,args: &Arguments) -> Result<JsValue,JsValue> {...}
+    /// fn another_native_fun(ctx: GcPointer<Context>,args: &Arguments) -> Result<JsValue,JsValue> {...}
     ///
     /// let native_refs = Box::leak(Box::new([my_naive_fun as usize,another_native_fun as usize]));
     /// let mut rt = Runtime::new(false,Some(native_refs));

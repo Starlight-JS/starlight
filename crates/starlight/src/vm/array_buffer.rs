@@ -72,7 +72,7 @@ impl JsArrayBuffer {
         self.data
     }
 
-    pub fn new(ctx: &mut Context) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>) -> GcPointer<JsObject> {
         let structure = ctx.global_data().array_buffer_structure.unwrap();
         let mut this = JsObject::new(ctx, &structure, Self::get_class(), ObjectTag::ArrayBuffer);
         *this.data::<Self>() = ManuallyDrop::new(Self {
@@ -113,7 +113,7 @@ impl JsArrayBuffer {
 
     pub fn create_data_block(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         size: usize,
         zero: bool,
     ) -> Result<(), JsValue> {

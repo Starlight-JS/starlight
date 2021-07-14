@@ -1,15 +1,24 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{vm::{context::Context, arguments::Arguments, error::JsTypeError, error::*, object::JsObject, slot::*, string::JsString, symbol_table::*, value::JsValue}};
+use crate::{
+    gc::cell::GcPointer,
+    vm::{
+        arguments::Arguments, context::Context, error::JsTypeError, error::*, object::JsObject,
+        slot::*, string::JsString, symbol_table::*, value::JsValue,
+    },
+};
 
-pub fn error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn error_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(ctx)?;
     let msg = JsString::new(ctx, message);
     Ok(JsValue::encode_object_value(JsError::new(ctx, msg, None)))
 }
 
-pub fn eval_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn eval_error_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(ctx)?;
     let msg = JsString::new(ctx, message);
     Ok(JsValue::encode_object_value(JsEvalError::new(
@@ -17,7 +26,10 @@ pub fn eval_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsV
     )))
 }
 
-pub fn reference_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn reference_error_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(ctx)?;
     let msg = JsString::new(ctx, message);
     Ok(JsValue::encode_object_value(JsReferenceError::new(
@@ -25,7 +37,10 @@ pub fn reference_error_constructor(ctx: &mut Context, args: &Arguments) -> Resul
     )))
 }
 
-pub fn type_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn type_error_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(ctx)?;
     let msg = JsString::new(ctx, message);
     Ok(JsValue::encode_object_value(JsTypeError::new(
@@ -33,7 +48,10 @@ pub fn type_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsV
     )))
 }
 
-pub fn syntax_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn syntax_error_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(ctx)?;
     let msg = JsString::new(ctx, message);
     Ok(JsValue::encode_object_value(JsEvalError::new(
@@ -41,7 +59,10 @@ pub fn syntax_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<J
     )))
 }
 
-pub fn range_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn range_error_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let message = args.at(0).to_string(ctx)?;
     let msg = JsString::new(ctx, message);
     Ok(JsValue::encode_object_value(JsRangeError::new(
@@ -50,7 +71,7 @@ pub fn range_error_constructor(ctx: &mut Context, args: &Arguments) -> Result<Js
 }
 
 /// section 15.11.4.4 Error.prototype.toString()
-pub fn error_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let stack = ctx.shadowstack();
     if obj.is_jsobject() {

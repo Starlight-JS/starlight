@@ -236,12 +236,10 @@ impl Test {
 
                             let passed = res.is_ok();
                             let text = match res {
-                                Ok(val) => {
-                                    val.to_string(&mut ctx).unwrap_or_else(|_| String::new())
-                                }
+                                Ok(val) => val.to_string(ctx).unwrap_or_else(|_| String::new()),
                                 Err(e) => format!(
                                     "Uncaught {}",
-                                    e.to_string(&mut ctx).unwrap_or_else(|_| String::new())
+                                    e.to_string(ctx).unwrap_or_else(|_| String::new())
                                 ),
                             };
 
@@ -287,11 +285,11 @@ impl Test {
                                 {
                                     Ok(res) => (
                                         false,
-                                        res.to_string(&mut ctx).unwrap_or_else(|_| String::new()),
+                                        res.to_string(ctx).unwrap_or_else(|_| String::new()),
                                     ),
                                     Err(e) => {
                                         let passed = e
-                                            .to_string(&mut ctx)
+                                            .to_string(ctx)
                                             .unwrap_or_else(|_| String::new())
                                             .contains(error_type.as_ref());
 
@@ -299,8 +297,7 @@ impl Test {
                                             passed,
                                             format!(
                                                 "Uncaught {}",
-                                                e.to_string(&mut ctx)
-                                                    .unwrap_or_else(|_| String::new())
+                                                e.to_string(ctx).unwrap_or_else(|_| String::new())
                                             ),
                                         )
                                     }
@@ -382,7 +379,7 @@ impl Test {
             .map_err(|e| {
                 format!(
                     "could not run assert.js:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    e.to_string(context).unwrap_or_else(|_| String::new())
                 )
             })?;
         context
@@ -390,7 +387,7 @@ impl Test {
             .map_err(|e| {
                 format!(
                     "could not run sta.js:\n{}",
-                    e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                    e.to_string(context).unwrap_or_else(|_| String::new())
                 )
             })?;
 
@@ -410,7 +407,7 @@ impl Test {
                     format!(
                         "could not run the {} include file:\nUncaught {}",
                         include,
-                        e.to_string(&mut context).unwrap_or_else(|_| String::new())
+                        e.to_string(context).unwrap_or_else(|_| String::new())
                     )
                 })?;
         }

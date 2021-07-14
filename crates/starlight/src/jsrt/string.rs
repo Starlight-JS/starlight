@@ -9,11 +9,11 @@ use std::{
 
 use super::regexp::RegExp;
 
-pub fn string_to_string(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_to_string(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
 }
 
-pub fn string_concat(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_concat(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let val = args.this;
     val.check_object_coercible(ctx)?;
     let mut str = val.to_string(ctx)?;
@@ -25,11 +25,11 @@ pub fn string_concat(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
     Ok(JsValue::encode_object_value(JsString::new(ctx, str)))
 }
 
-pub fn string_value_of(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_value_of(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
 }
 
-pub fn string_char_at(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_char_at(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let pos = args.at(0).to_int32(ctx)?;
     if pos < 0 || pos >= primitive_val.len() as i32 {
@@ -46,7 +46,7 @@ pub fn string_char_at(ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     }
 }
 
-pub fn string_code_point_at(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_code_point_at(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let pos = args.at(0).to_int32(ctx)?;
     if pos < 0 || pos >= primitive_val.len() as i32 {
@@ -59,7 +59,7 @@ pub fn string_code_point_at(ctx: &mut Context, args: &Arguments) -> Result<JsVal
     }
 }
 
-pub fn string_char_code_at(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_char_code_at(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let pos = args.at(0).to_int32(ctx)?;
     if pos < 0 || pos >= primitive_val.len() as i32 {
@@ -73,7 +73,7 @@ pub fn string_char_code_at(ctx: &mut Context, args: &Arguments) -> Result<JsValu
     }
 }
 
-pub fn string_replace(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_replace(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     if args.size() == 0 {
         return Ok(JsValue::new(JsString::new(ctx, primitive_val)));
@@ -189,7 +189,7 @@ pub fn string_replace(ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     )))
 }
 
-pub fn string_index_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     args.this.check_object_coercible(ctx)?;
     let string = args.this.to_string(ctx)?;
     let search_string = args.at(0).to_string(ctx)?;
@@ -216,7 +216,7 @@ pub fn string_index_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::new(-1))
 }
 
-pub fn string_last_index_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_last_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     args.this.check_object_coercible(ctx)?;
     let string: String = args.this.to_string(ctx)?;
     let search_string: String = args.at(0).to_string(ctx)?;
@@ -242,7 +242,7 @@ pub fn string_last_index_of(ctx: &mut Context, args: &Arguments) -> Result<JsVal
     Ok(JsValue::new(-1))
 }
 
-pub fn string_repeat(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_repeat(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     args.this.check_object_coercible(ctx)?;
     let object = args.this.to_string(ctx)?;
     if args.size() > 0 {
@@ -261,16 +261,16 @@ pub fn string_repeat(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
         Ok(JsValue::new(JsString::new(ctx, "")))
     }
 }
-pub fn string_to_lowercase(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_to_lowercase(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_string(ctx)?;
     Ok(JsValue::new(JsString::new(ctx, this.to_lowercase())))
 }
 
-pub fn string_to_uppercase(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_to_uppercase(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_string(ctx)?;
     Ok(JsValue::new(JsString::new(ctx, this.to_uppercase())))
 }
-pub fn string_starts_with(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_starts_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
     if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
@@ -304,7 +304,7 @@ pub fn string_starts_with(ctx: &mut Context, args: &Arguments) -> Result<JsValue
     }
 }
 
-pub fn string_ends_with(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_ends_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
     if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
@@ -338,7 +338,7 @@ pub fn string_ends_with(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     }
 }
 
-pub fn string_includes(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_includes(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
     if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
@@ -361,7 +361,7 @@ pub fn string_includes(ctx: &mut Context, args: &Arguments) -> Result<JsValue, J
     let this_string = primitive_val.chars().skip(start as _).collect::<String>();
     Ok(JsValue::new(this_string.contains(search_string.as_str())))
 }
-pub fn string_slice(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let length = primitive_val.chars().count() as i32;
     let start = args.at(0).to_int32(ctx)?;
@@ -390,7 +390,7 @@ pub fn string_slice(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVa
         .collect::<String>();
     Ok(JsValue::new(JsString::new(ctx, new_str)))
 }
-pub fn string_substring(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_substring(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let start = if args.size() == 0 {
         0
@@ -427,7 +427,7 @@ pub fn string_substring(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     }
 }
 
-pub fn string_substr(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_substr(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let mut start = if args.size() == 0 {
         0
@@ -461,7 +461,7 @@ pub fn string_substr(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
     Ok(JsValue::new(JsString::new(ctx, extracted_string)))
 }
 
-pub fn string_split(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_split(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let val = args.this;
     val.check_object_coercible(ctx)?;
     let str = val.to_string(ctx)?;
@@ -501,7 +501,7 @@ pub fn string_split(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVa
     Ok(JsValue::encode_object_value(arr))
 }
 
-pub fn string_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.ctor_call {
         let str;
         if args.size() != 0 {
@@ -693,7 +693,7 @@ fn is_trailing_surrogate(value: u16) -> bool {
     (0xDC00..=0xDFFF).contains(&value)
 }
 
-fn get_regex_string(_ctx: &mut Context, val: JsValue) -> Result<(String, String), JsValue> {
+fn get_regex_string(_ctx: GcPointer<Context>, val: JsValue) -> Result<(String, String), JsValue> {
     if val.is_jsstring() {
         return Ok((val.get_jsstring().string.clone(), String::new()));
     }
@@ -709,17 +709,17 @@ fn get_regex_string(_ctx: &mut Context, val: JsValue) -> Result<(String, String)
     return Ok(("undefined".to_string(), "".to_string()));
 }
 
-pub fn string_trim(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_trim(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let prim = args.this.to_string(ctx)?;
     Ok(JsValue::new(JsString::new(ctx, prim.trim())))
 }
 
-pub fn string_trim_start(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_trim_start(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let prim = args.this.to_string(ctx)?;
     Ok(JsValue::new(JsString::new(ctx, prim.trim_start())))
 }
 
-pub fn string_trim_end(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_trim_end(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let prim = args.this.to_string(ctx)?;
     Ok(JsValue::new(JsString::new(ctx, prim.trim_end())))
 }
@@ -730,7 +730,7 @@ pub enum Alignment {
 }
 
 pub fn string_pad(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     args: &Arguments,
     alignment: Alignment,
 ) -> Result<JsValue, JsValue> {
@@ -774,10 +774,10 @@ pub fn string_pad(
     }
 }
 
-pub fn string_pad_end(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_pad_end(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     string_pad(ctx, args, Alignment::End)
 }
 
-pub fn string_pad_start(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn string_pad_start(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     string_pad(ctx, args, Alignment::Stactx)
 }

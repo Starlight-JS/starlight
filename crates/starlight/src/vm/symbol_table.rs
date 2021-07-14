@@ -226,7 +226,7 @@ pub struct JsSymbol {
 }
 
 impl JsSymbol {
-    pub fn new(ctx: &mut Context, sym: Symbol) -> GcPointer<Self> {
+    pub fn new(ctx: GcPointer<Context>, sym: Symbol) -> GcPointer<Self> {
         ctx.heap().allocate(Self { sym })
     }
 
@@ -285,7 +285,7 @@ impl JsSymbolObject {
         self.sym
     }
 
-    pub fn new(ctx: &mut Context, sym: GcPointer<JsSymbol>) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>, sym: GcPointer<JsSymbol>) -> GcPointer<JsObject> {
         let map = ctx.global_data().symbol_structure.unwrap();
         let mut obj = JsObject::new(ctx, &map, Self::get_class(), ObjectTag::Ordinary);
         *obj.data::<Self>() = ManuallyDrop::new(Self { sym });

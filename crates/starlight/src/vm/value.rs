@@ -382,7 +382,7 @@ impl JsValue {
     pub fn same_value_zero(lhs: Self, rhs: Self) -> bool {
         Self::same_value_impl(lhs, rhs, true)
     }
-    pub fn to_object(self, ctx: &mut Context) -> Result<GcPointer<JsObject>, JsValue> {
+    pub fn to_object(self, ctx: GcPointer<Context>) -> Result<GcPointer<JsObject>, JsValue> {
         if self.is_undefined() || self.is_null() {
             let msg = JsString::new(ctx, "ToObject to null or undefined");
             return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -413,7 +413,7 @@ impl JsValue {
     pub fn is_symbol(self) -> bool {
         self.is_object() && self.get_object().is::<JsSymbol>()
     }
-    pub fn to_primitive(self, ctx: &mut Context, hint: JsHint) -> Result<JsValue, JsValue> {
+    pub fn to_primitive(self, ctx: GcPointer<Context>, hint: JsHint) -> Result<JsValue, JsValue> {
         if self.is_object() && self.get_object().is::<JsObject>() {
             let mut object = unsafe { self.get_object().downcast_unchecked::<JsObject>() };
             object.to_primitive(ctx, hint)
@@ -445,7 +445,7 @@ impl JsValue {
         self.is_jsstring()
     }
 
-    pub fn abstract_equal(self, other: JsValue, ctx: &mut Context) -> Result<bool, JsValue> {
+    pub fn abstract_equal(self, other: JsValue, ctx: GcPointer<Context>) -> Result<bool, JsValue> {
         let mut lhs = self;
         let mut rhs = other;
 
@@ -518,7 +518,12 @@ impl JsValue {
         self.get_raw() == other.get_raw()
     }
     #[inline]
-    pub fn compare(self, rhs: Self, left_first: bool, ctx: &mut Context) -> Result<i32, JsValue> {
+    pub fn compare(
+        self,
+        rhs: Self,
+        left_first: bool,
+        ctx: GcPointer<Context>,
+    ) -> Result<i32, JsValue> {
         let lhs = self;
         if likely(lhs.is_number() && rhs.is_number()) {
             return Ok(Self::number_compare(self.get_number(), rhs.get_number()));
@@ -562,10 +567,10 @@ impl JsValue {
             Ok(Self::number_compare(nx, ny))
         }
     }
-    pub fn compare_left(self, rhs: Self, ctx: &mut Context) -> Result<i32, JsValue> {
+    pub fn compare_left(self, rhs: Self, ctx: GcPointer<Context>) -> Result<i32, JsValue> {
         Self::compare(self, rhs, true, ctx)
     }
-    pub fn to_int32(self, ctx: &mut Context) -> Result<i32, JsValue> {
+    pub fn to_int32(self, ctx: GcPointer<Context>) -> Result<i32, JsValue> {
         if self.is_int32() {
             return Ok(self.get_int32());
         }
@@ -576,7 +581,7 @@ impl JsValue {
         Ok(number.floor() as i32)
     }
 
-    pub fn to_uint32(self, ctx: &mut Context) -> Result<u32, JsValue> {
+    pub fn to_uint32(self, ctx: GcPointer<Context>) -> Result<u32, JsValue> {
         if self.is_int32() {
             return Ok(self.get_int32() as _);
         }
@@ -587,7 +592,7 @@ impl JsValue {
         Ok(number.floor() as u32)
     }
 
-    pub fn to_number(self, ctx: &mut Context) -> Result<f64, JsValue> {
+    pub fn to_number(self, ctx: GcPointer<Context>) -> Result<f64, JsValue> {
         if likely(self.is_double()) {
             Ok(self.get_double())
         } else if likely(self.is_int32()) {
@@ -641,7 +646,7 @@ impl JsValue {
             || (self.is_object() && self.get_object().is::<JsSymbol>())
     }
 
-    pub fn to_string(&self, ctx: &mut Context) -> Result<String, JsValue> {
+    pub fn to_string(&self, ctx: GcPointer<Context>) -> Result<String, JsValue> {
         if self.is_number() {
             Ok(self.get_number().to_string())
         } else if self.is_null() {
@@ -675,7 +680,7 @@ impl JsValue {
             unreachable!("{:?}", self.type_of())
         }
     }
-    pub fn to_symbol(self, ctx: &mut Context) -> Result<Symbol, JsValue> {
+    pub fn to_symbol(self, ctx: GcPointer<Context>) -> Result<Symbol, JsValue> {
         if self.is_object() && self.get_object().is::<JsSymbol>() {
             return Ok(self.get_object().downcast::<JsSymbol>().unwrap().symbol());
         }
@@ -712,7 +717,7 @@ impl JsValue {
         prim.to_symbol(ctx)
     }
 
-    pub fn get_primitive_proto(self, ctx: &mut Context) -> GcPointer<JsObject> {
+    pub fn get_primitive_proto(self, ctx: GcPointer<Context>) -> GcPointer<JsObject> {
         assert!(!self.is_empty());
         assert!(self.is_primitive());
         if self.is_jsstring() {
@@ -756,7 +761,7 @@ impl JsValue {
     }
     pub fn get_slot(
         self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -832,7 +837,7 @@ impl JsValue {
             true
         }
     }
-    pub fn check_object_coercible(self, ctx: &mut Context) -> Result<(), Self> {
+    pub fn check_object_coercible(self, ctx: GcPointer<Context>) -> Result<(), Self> {
         if self.is_null() || self.is_undefined() {
             let msg = JsString::new(ctx, "null or undefined has no propectxies");
             return Err(JsValue::encode_object_value(JsTypeError::new(

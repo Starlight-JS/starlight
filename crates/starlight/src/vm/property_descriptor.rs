@@ -271,7 +271,7 @@ impl StoredSlot {
         )
     }
     #[allow(unused_variables)]
-    pub fn get(&self, ctx: &mut Context, this_binding: JsValue) -> Result<JsValue, JsValue> {
+    pub fn get(&self, ctx: GcPointer<Context>, this_binding: JsValue) -> Result<JsValue, JsValue> {
         if self.attributes.is_accessor() {
             return self.accessor().invoke_getter(ctx, this_binding);
         }
@@ -290,7 +290,7 @@ impl StoredSlot {
     /// current is currently set PropertyDescriptor, and desc is which we try to set.
     pub fn is_defined_property_accepted(
         &self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         desc: &PropertyDescriptor,
         throwable: bool,
         returned: &mut bool,
@@ -393,7 +393,7 @@ impl StoredSlot {
         }
     }
 
-    pub fn merge(&mut self, context: &mut Context, desc: &PropertyDescriptor) {
+    pub fn merge(&mut self, context: GcPointer<Context>, desc: &PropertyDescriptor) {
         let mut attr = AttrExternal::new(Some(self.attributes().raw()));
         if !desc.is_configurable_absent() {
             attr.set_configurable(desc.is_configurable());
@@ -441,7 +441,7 @@ impl StoredSlot {
         self.attributes = AttrSafe::un_safe(attr);
     }
 
-    pub fn new(context: &mut Context, desc: &PropertyDescriptor) -> Self {
+    pub fn new(context: GcPointer<Context>, desc: &PropertyDescriptor) -> Self {
         let mut this = Self {
             value: JsValue::encode_undefined_value(),
             attributes: AttrSafe::not_found(),
@@ -489,14 +489,14 @@ impl Accessor {
     pub fn setter(&self) -> JsValue {
         self.setter
     }
-    pub fn new(ctx: &mut Context, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
+    pub fn new(ctx: GcPointer<Context>, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
         let this = Self { getter, setter };
         ctx.heap().allocate(this)
     }
 
     pub fn invoke_getter(
         &self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         this_binding: JsValue,
     ) -> Result<JsValue, JsValue> {
         if self.getter().is_callable() {

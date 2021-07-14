@@ -41,7 +41,7 @@ impl JsWeakRef {
     );
 }
 
-pub fn weak_ref_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn weak_ref_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let target = args.at(0);
     if unlikely(!target.is_jsobject()) {
         return Err(JsValue::new(
@@ -57,7 +57,7 @@ pub fn weak_ref_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsVal
     Ok(JsValue::new(weak_ref))
 }
 
-pub fn weak_ref_prototype_deref(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn weak_ref_prototype_deref(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let weak_ref = TypedJsObject::<JsWeakRef>::try_from(ctx, args.this)?;
     match weak_ref.value.upgrade() {
         Some(value) => Ok(JsValue::new(value)),

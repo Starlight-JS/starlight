@@ -14,7 +14,7 @@ impl StructureChain {
         self.vector[0]
     }
 
-    pub fn create(ctx: &mut Context, head: Option<GcPointer<JsObject>>) -> GcPointer<Self> {
+    pub fn create(ctx: GcPointer<Context>, head: Option<GcPointer<JsObject>>) -> GcPointer<Self> {
         let mut size = 0;
         let mut current = head;
         while let Some(object) = current {

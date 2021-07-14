@@ -37,7 +37,7 @@ impl NumberObject {
         Some(sz)
     );
 
-    pub fn new(ctx: &mut Context, value: f64) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>, value: f64) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             ctx,
             &ctx.global_data().number_structure.unwrap(),
@@ -48,7 +48,7 @@ impl NumberObject {
         obj
     }
     pub fn new_plain(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         structure: GcPointer<Structure>,
         value: f64,
     ) -> GcPointer<JsObject> {

@@ -127,7 +127,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     );
     match function
         .as_function_mut()
-        .call(&mut ctx, &mut args, JsValue::new(*funcc))
+        .call(ctx, &mut args, JsValue::new(*funcc))
     {
         Ok(x) => {
             if x.is_number() {
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
             }
         }
         Err(e) => {
-            let str = e.to_string(&mut ctx);
+            let str = e.to_string(ctx);
             match str {
                 Err(_) => panic!("Failed to get error"),
                 Ok(str) => {
@@ -175,5 +175,5 @@ pub mod prelude {
 }
 
 pub trait JsTryFrom<T>: Sized {
-    fn try_from(ctx: &mut Context, value: T) -> Result<Self, JsValue>;
+    fn try_from(ctx: GcPointer<Context>, value: T) -> Result<Self, JsValue>;
 }

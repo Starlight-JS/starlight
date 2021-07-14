@@ -184,7 +184,7 @@ impl ArrayStorage {
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
-    pub fn with_size(ctx: &mut Context, size: u32, capacity: u32) -> GcPointer<Self> {
+    pub fn with_size(ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
         let stack = ctx.shadowstack();
         crate::letroot!(this = stack, Self::new(ctx.heap(), capacity));
         this.resize_within_capacity(ctx.heap(), size);

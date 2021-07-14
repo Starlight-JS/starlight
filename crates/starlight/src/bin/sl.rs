@@ -50,7 +50,11 @@ fn main() {
         rt.add_ffi();
     }
 
-    let mut ctx = if !deserialized { Context::new(&mut rt)} else {rt.context(0)};
+    let mut ctx = if !deserialized {
+        Context::new(&mut rt)
+    } else {
+        rt.context(0)
+    };
 
     if !deserialized {
         let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
@@ -71,7 +75,7 @@ fn main() {
                 match ctx.compile_module(&name, "<script>", &source,) {
                     Ok(function) => function.get_jsobject(),
                     Err(e) => {
-                        let string = e.to_string(&mut ctx);
+                        let string = e.to_string(ctx);
                         match string {
                             Ok(val) => {
                                 eprintln!("Compilation failed: {}", val);
@@ -87,10 +91,10 @@ fn main() {
             );
             letroot!(funcc = gcstack, *function);
             let global = ctx.global_object();
-            letroot!(module_object = gcstack, JsObject::new_empty(&mut ctx));
-            let exports = JsObject::new_empty(&mut ctx);
+            letroot!(module_object = gcstack, JsObject::new_empty(ctx));
+            let exports = JsObject::new_empty(ctx);
             module_object
-                .put(&mut ctx, "@exports".intern(), JsValue::new(exports), false)
+                .put(ctx, "@exports".intern(), JsValue::new(exports), false)
                 .unwrap_or_else(|_| unreachable!());
             let mut args = [JsValue::new(*module_object)];
             letroot!(
@@ -101,14 +105,14 @@ fn main() {
             let start = std::time::Instant::now();
             match function
                 .as_function_mut()
-                .call(&mut ctx, &mut args, JsValue::new(*funcc))
+                .call(ctx, &mut args, JsValue::new(*funcc))
             {
                 Ok(_) => {
                     let elapsed = start.elapsed();
                     eprintln!("Executed in {}ms", elapsed.as_nanos() as f64 / 1000000f64);
                 }
                 Err(e) => {
-                    let str = match e.to_string(&mut ctx) {
+                    let str = match e.to_string(ctx) {
                         Ok(s) => s,
                         Err(_) => "<unknown error>".to_owned(),
                     };

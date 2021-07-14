@@ -1,7 +1,7 @@
 /*
 pub trait TypedArrayType: Default + Copy + Deserializable + Serializable + GcCell + Unpin {
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue>;
-    fn into_jsvalue(self, ctx: &mut Context) -> Result<JsValue, JsValue>;
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue>;
+    fn into_jsvalue(self, ctx: GcPointer<Context>) -> Result<JsValue, JsValue>;
 
     #[inline]
     unsafe fn fill(start: *mut Self, end: *mut Self, fill: Self) {
@@ -222,7 +222,7 @@ impl<T: TypedArrayType> TypedArrayStorage<T> {
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
-    pub fn with_size(ctx: &mut Context, size: u32, capacity: u32) -> GcPointer<Self> {
+    pub fn with_size(ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
         let stack = rt.shadowstack();
         crate::letroot!(this = stack, Self::new(rt.heap(), capacity));
         this.resize_within_capacity(rt.heap(), size);
@@ -288,7 +288,7 @@ impl<T: TypedArrayType> Serializable for TypedArrayStorage<T> {
 }
 
 impl<T: TypedArrayType> Deserializable for TypedArrayStorage<T> {
-    unsafe fn allocate(ctx: &mut Context, deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(ctx: GcPointer<Context>, deser: &mut Deserializer) -> *mut GcPointerBase {
         let cap = u32::deserialize_inplace(deser);
         deser.pc -= 4;
         rt.heap().allocate_raw(
@@ -326,72 +326,72 @@ impl<T: TypedArrayType> Deserializable for TypedArrayStorage<T> {
 }
 
 impl TypedArrayType for u32 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::encode_int32(self as i32))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         val.to_uint32(vm)
     }
 }
 
 impl TypedArrayType for u16 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::encode_int32(self as i32))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         val.to_uint32(vm).map(|x| x as Self)
     }
 }
 impl TypedArrayType for u8 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::encode_int32(self as i32))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         val.to_uint32(vm).map(|x| x as Self)
     }
 }
 
 impl TypedArrayType for i8 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::encode_int32(self as i32))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         val.to_int32(vm).map(|x| x as Self)
     }
 }
 
 impl TypedArrayType for i16 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::encode_int32(self as i32))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         val.to_int32(vm).map(|x| x as Self)
     }
 }
 
 impl TypedArrayType for i32 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::encode_int32(self as i32))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         val.to_int32(vm).map(|x| x as Self)
     }
 }
 impl TypedArrayType for i64 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::new(self))
     }
 
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         Ok(val.to_number(vm)? as _)
     }
 }
 
 impl TypedArrayType for u64 {
-    fn into_jsvalue(self, _ctx: &mut Context) -> Result<JsValue, JsValue> {
+    fn into_jsvalue(self, _ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         Ok(JsValue::new(self as f64))
     }
-    fn from_jsvalue(ctx: &mut Context, val: JsValue) -> Result<Self, JsValue> {
+    fn from_jsvalue(ctx: GcPointer<Context>, val: JsValue) -> Result<Self, JsValue> {
         Ok(val.to_number(vm)? as u64)
     }
 }

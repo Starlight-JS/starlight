@@ -94,7 +94,7 @@ impl JsDataView {
     }
 
     pub fn new(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         buffer: TypedJsObject<JsArrayBuffer>,
         offset: usize,
         length: usize,

@@ -1,5 +1,5 @@
 use crate::{prelude::*, vm::{context::Context, array_buffer::JsArrayBuffer}};
-pub fn array_buffer_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn array_buffer_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Err(JsValue::new(ctx.new_type_error(
             "ArrayBuffer() called in function context instead of constructor",
@@ -18,7 +18,7 @@ pub fn array_buffer_constructor(ctx: &mut Context, args: &Arguments) -> Result<J
     Ok(JsValue::new(*this))
 }
 
-pub fn array_buffer_byte_length(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn array_buffer_byte_length(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(this = stack, args.this.to_object(ctx)?);
     if !this.is_class(JsArrayBuffer::get_class()) {
@@ -31,7 +31,7 @@ pub fn array_buffer_byte_length(ctx: &mut Context, args: &Arguments) -> Result<J
     Ok(JsValue::new(buf.size() as u32))
 }
 
-pub fn array_buffer_slice(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(this = stack, args.this.to_object(ctx)?);
     if !this.is_class(JsArrayBuffer::get_class()) {

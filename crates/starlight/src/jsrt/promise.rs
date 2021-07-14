@@ -1,11 +1,12 @@
+use crate::gc::cell::GcPointer;
 use crate::prelude::JsArray;
 use crate::vm::arguments::Arguments;
+use crate::vm::context::Context;
 use crate::vm::promise::{JsPromise, TrackingMode};
 use crate::vm::string::JsString;
 use crate::vm::value::JsValue;
-use crate::vm::{context::Context};
 
-pub fn promise_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let func = args.at(0);
     if !func.is_callable() {
         Err(JsValue::encode_object_value(JsString::new(
@@ -17,8 +18,10 @@ pub fn promise_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValu
     }
 }
 
-fn with_prom<C: FnOnce(&mut Context, &Arguments, &mut JsPromise) -> Result<JsValue, JsValue>>(
-    ctx: &mut Context,
+fn with_prom<
+    C: FnOnce(GcPointer<Context>, &Arguments, &mut JsPromise) -> Result<JsValue, JsValue>,
+>(
+    ctx: GcPointer<Context>,
     args: &Arguments,
     consumer: C,
 ) -> Result<JsValue, JsValue> {
@@ -42,7 +45,7 @@ fn with_prom<C: FnOnce(&mut Context, &Arguments, &mut JsPromise) -> Result<JsVal
     }
 }
 
-pub fn promise_then(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_then(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     // onResolved and onRejected arg, both optional but callable if has val
     with_prom(ctx, args, |ctx, args, prom| {
         let mut on_resolved_opt = None;
@@ -73,7 +76,7 @@ pub fn promise_then(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVa
     })
 }
 
-pub fn promise_catch(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_catch(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     with_prom(ctx, args, |ctx, args, prom| {
         if args.size() == 1 {
             let rejected = args.at(0);
@@ -94,7 +97,7 @@ pub fn promise_catch(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
     })
 }
 
-pub fn promise_finally(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_finally(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     with_prom(ctx, args, |ctx, args, prom| {
         if args.size() == 1 {
             let finally = args.at(0);
@@ -115,7 +118,7 @@ pub fn promise_finally(ctx: &mut Context, args: &Arguments) -> Result<JsValue, J
     })
 }
 
-pub fn promise_resolve(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_resolve(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     with_prom(ctx, args, |ctx, args, prom| {
         if args.size() == 1 {
             prom.resolve(ctx, args.this, args.at(0))?;
@@ -129,7 +132,7 @@ pub fn promise_resolve(ctx: &mut Context, args: &Arguments) -> Result<JsValue, J
     })
 }
 
-pub fn promise_reject(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_reject(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     with_prom(ctx, args, |ctx, args, prom| {
         if args.size() == 1 {
             prom.reject(ctx, args.this, args.at(0))?;
@@ -143,7 +146,10 @@ pub fn promise_reject(ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     })
 }
 
-pub fn promise_static_resolve(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_static_resolve(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if args.size() != 1 {
         return Err(JsValue::encode_object_value(JsString::new(
             ctx,
@@ -161,7 +167,10 @@ pub fn promise_static_resolve(ctx: &mut Context, args: &Arguments) -> Result<JsV
     res
 }
 
-pub fn promise_static_reject(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_static_reject(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if args.size() != 1 {
         return Err(JsValue::encode_object_value(JsString::new(
             ctx,
@@ -179,7 +188,7 @@ pub fn promise_static_reject(ctx: &mut Context, args: &Arguments) -> Result<JsVa
     res
 }
 
-pub fn promise_static_race(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_static_race(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
         || !args.at(0).get_jsobject().is_class(JsArray::get_class())
@@ -193,7 +202,7 @@ pub fn promise_static_race(ctx: &mut Context, args: &Arguments) -> Result<JsValu
     JsPromise::new_tracking(ctx, TrackingMode::Race, args.at(0))
 }
 
-pub fn promise_static_all(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_static_all(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
         || !args.at(0).get_jsobject().is_class(JsArray::get_class())
@@ -207,7 +216,10 @@ pub fn promise_static_all(ctx: &mut Context, args: &Arguments) -> Result<JsValue
     JsPromise::new_tracking(ctx, TrackingMode::All, args.at(0))
 }
 
-pub fn promise_static_all_settled(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_static_all_settled(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
         || !args.at(0).get_jsobject().is_class(JsArray::get_class())
@@ -221,7 +233,7 @@ pub fn promise_static_all_settled(ctx: &mut Context, args: &Arguments) -> Result
     JsPromise::new_tracking(ctx, TrackingMode::AllSettled, args.at(0))
 }
 
-pub fn promise_static_any(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn promise_static_any(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
         || !args.at(0).get_jsobject().is_class(JsArray::get_class())

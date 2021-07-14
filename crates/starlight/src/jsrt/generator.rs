@@ -44,11 +44,11 @@ impl Context {
     }
 }
 
-pub fn generator_iterator(_: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn generator_iterator(_: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
 }
 
-pub fn generator_next(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn generator_next(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if unlikely(!this.is_class(JsGeneratorFunction::get_class())) {
         return Err(JsValue::new(ctx.new_type_error("not generator function")));
@@ -70,7 +70,7 @@ pub fn generator_next(ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     Ok(ret)
 }
 
-pub fn generator_return(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn generator_return(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if unlikely(!this.is_class(JsGeneratorFunction::get_class())) {
         return Err(JsValue::new(ctx.new_type_error("not generator function")));
@@ -92,7 +92,7 @@ pub fn generator_return(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     Ok(ret)
 }
 
-pub fn generator_throw(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn generator_throw(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if unlikely(!this.is_class(JsGeneratorFunction::get_class())) {
         return Err(JsValue::new(ctx.new_type_error("not generator function")));

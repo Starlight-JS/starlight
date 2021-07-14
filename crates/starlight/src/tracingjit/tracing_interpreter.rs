@@ -30,7 +30,7 @@ pub enum RecordResult {
 }
 #[inline(never)]
 unsafe fn eval_record(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     code: GcPointer<CodeBlock>,
     ip: *mut u8,
     this: JsValue,
@@ -76,7 +76,7 @@ unsafe fn eval_record(
 }
 pub const MAX_TRACE_SIZE: usize = 5000;
 pub unsafe fn eval(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     frame: *mut CallFrame,
     res: &mut RecordResult,
     trace: &mut Vec<(usize, Ir)>,
@@ -279,7 +279,7 @@ pub unsafe fn eval(
                 }
                 #[cold]
                 unsafe fn add_slowpath(
-                    ctx: &mut Context,
+                    ctx: GcPointer<Context>,
                     frame: &mut CallFrame,
                     lhs: JsValue,
                     rhs: JsValue,
@@ -290,7 +290,7 @@ pub unsafe fn eval(
                     if lhs.is_jsstring() || rhs.is_jsstring() {
                         #[inline(never)]
                         fn concat(
-                            ctx: &mut Context,
+                            ctx: GcPointer<Context>,
                             lhs: JsValue,
                             rhs: JsValue,
                         ) -> Result<JsValue, JsValue> {
@@ -491,7 +491,7 @@ pub unsafe fn eval(
                     #[inline(never)]
                     #[cold]
                     unsafe fn slow_get_by_id(
-                        ctx: &mut Context,
+                        ctx: GcPointer<Context>,
                         frame: &mut CallFrame,
                         obj: &mut GcPointer<JsObject>,
                         name: Symbol,
@@ -794,7 +794,7 @@ pub unsafe fn eval(
                 } else {
                     #[inline(never)]
                     unsafe fn slow(
-                        ctx: &mut Context,
+                        ctx: GcPointer<Context>,
                         object: JsValue,
                         key: Symbol,
                         value: JsValue,

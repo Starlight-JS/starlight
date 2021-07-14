@@ -1,5 +1,5 @@
 use crate::{prelude::*, vm::context::Context};
-pub fn math_abs(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_abs(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         if args.at(0).is_int32() {
             return Ok(JsValue::new(args.at(0).get_int32().abs()));
@@ -11,7 +11,7 @@ pub fn math_abs(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue>
     }
 }
 
-pub fn math_acos(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_acos(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.acos()))
@@ -20,7 +20,7 @@ pub fn math_acos(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
     }
 }
 
-pub fn math_asin(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_asin(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.asin()))
@@ -29,7 +29,7 @@ pub fn math_asin(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
     }
 }
 
-pub fn math_atan(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_atan(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.atan()))
@@ -37,7 +37,7 @@ pub fn math_atan(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
         Ok(JsValue::encode_nan_value())
     }
 }
-pub fn math_atan2(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_atan2(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() < 1 {
         let num = args.at(0).to_number(ctx)?;
         let x = args.at(1).to_number(ctx);
@@ -47,7 +47,7 @@ pub fn math_atan2(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValu
     }
 }
 
-pub fn math_ceil(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_ceil(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.ceil()))
@@ -56,7 +56,7 @@ pub fn math_ceil(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue
     }
 }
 
-pub fn math_cos(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_cos(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.cos()))
@@ -65,7 +65,7 @@ pub fn math_cos(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue>
     }
 }
 
-pub fn math_sin(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_sin(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.sin()))
@@ -74,7 +74,7 @@ pub fn math_sin(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue>
     }
 }
 
-pub fn math_exp(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_exp(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.exp()))
@@ -83,7 +83,7 @@ pub fn math_exp(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue>
     }
 }
 
-pub fn math_floor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_floor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.floor()))
@@ -91,7 +91,7 @@ pub fn math_floor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValu
         Ok(JsValue::encode_nan_value())
     }
 }
-pub fn math_trunc(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_trunc(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         Ok(JsValue::new(num.trunc()))
@@ -100,7 +100,7 @@ pub fn math_trunc(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValu
     }
 }
 
-pub fn math_log(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_log(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
         let y = args.at(1).to_number(ctx)?;
@@ -110,10 +110,10 @@ pub fn math_log(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue>
     }
 }
 
-pub fn math_random(_ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_random(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(rand::random::<f64>()))
 }
-pub fn math_sqrt(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn math_sqrt(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).to_number(ctx)?.sqrt()))
 }
 impl Context {

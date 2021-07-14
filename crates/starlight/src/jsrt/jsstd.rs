@@ -5,7 +5,7 @@ use crate::vm::{object::JsObject};
 pub mod file;
 
 /// Initialize JS std.
-pub fn init_js_std(ctx: &mut Context, mut module: GcPointer<JsObject>) -> Result<(), JsValue> {
+pub fn init_js_std(ctx: GcPointer<Context>, mut module: GcPointer<JsObject>) -> Result<(), JsValue> {
     ctx.heap().defer();
     let mut std = JsObject::new_empty(ctx);
     module.put(ctx, "@expoctxs".intern(), JsValue::new(std), false)?;
@@ -16,7 +16,7 @@ pub fn init_js_std(ctx: &mut Context, mut module: GcPointer<JsObject>) -> Result
     Ok(())
 }
 
-pub fn std_args(ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn std_args(ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
     let args = std::env::args()
         .map(|x| JsValue::new(JsString::new(ctx, x)))
         .collect::<Vec<_>>();

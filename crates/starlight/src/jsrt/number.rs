@@ -1,7 +1,7 @@
 use num::traits::float::FloatCore;
 
 use crate::{prelude::*, vm::{context::Context, number::NumberObject}};
-pub fn number_value_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
@@ -17,7 +17,7 @@ pub fn number_value_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, J
         Ok(obj)
     }
 }
-pub fn number_clz(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_clz(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let x = if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
@@ -33,7 +33,7 @@ pub fn number_clz(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValu
     Ok(JsValue::new(x.leading_zeros()))
 }
 
-pub fn number_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.ctor_call {
         let mut res = 0.0;
         if args.size() != 0 {
@@ -46,7 +46,7 @@ pub fn number_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue
         return args.at(0).to_number(ctx).map(JsValue::new);
     }
 }
-pub fn number_is_nan(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_is_nan(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     if !num.is_number() {
         return Ok(JsValue::new(false));
@@ -54,7 +54,7 @@ pub fn number_is_nan(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     Ok(JsValue::new(num.get_number().is_nan()))
 }
 
-pub fn number_is_finite(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_is_finite(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     if !num.is_number() {
         return Ok(JsValue::new(false));
@@ -62,7 +62,7 @@ pub fn number_is_finite(_ctx: &mut Context, args: &Arguments) -> Result<JsValue,
     Ok(JsValue::new(num.get_number().is_finite()))
 }
 
-fn this_number_val(ctx: &mut Context, obj: JsValue) -> Result<f64, JsValue> {
+fn this_number_val(ctx: GcPointer<Context>, obj: JsValue) -> Result<f64, JsValue> {
     let num;
     if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
@@ -79,7 +79,7 @@ fn this_number_val(ctx: &mut Context, obj: JsValue) -> Result<f64, JsValue> {
     Ok(num)
 }
 
-pub fn number_is_integer(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_is_integer(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     if !num.is_number() {
         return Ok(JsValue::new(false));
@@ -89,11 +89,11 @@ pub fn number_is_integer(_ctx: &mut Context, args: &Arguments) -> Result<JsValue
     ))
 }
 
-pub fn number_to_int(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_int(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let num = args.at(0);
     num.to_int32(ctx).map(JsValue::new)
 }
-pub fn number_to_precisiion(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_precisiion(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let precision_var = args.at(0);
     let mut this_num = this_number_val(ctx, args.this)?;
     if precision_var.is_undefined() || !this_num.is_finite() {
@@ -186,7 +186,7 @@ pub fn number_to_precisiion(ctx: &mut Context, args: &Arguments) -> Result<JsVal
     Ok(JsValue::new(JsString::new(ctx, prefix + &suffix)))
 }
 
-pub fn number_to_fixed(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_fixed(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let fixed_var = args.at(0);
     let mut this_num = this_number_val(ctx, args.this)?;
 
@@ -209,7 +209,7 @@ pub fn number_to_fixed(ctx: &mut Context, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::new(JsString::new(ctx, string)))
 }
 
-pub fn number_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let num;
     if !obj.is_number() {

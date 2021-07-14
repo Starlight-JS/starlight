@@ -132,7 +132,7 @@ impl TransitionsTable {
 
     pub fn insert(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         attrs: AttrSafe,
         map: GcPointer<Structure>,
@@ -237,7 +237,7 @@ pub struct DeletedEntryHolder {
 }
 
 impl DeletedEntryHolder {
-    pub fn push(&mut self, ctx: &mut Context, offset: u32) {
+    pub fn push(&mut self, ctx: GcPointer<Context>, offset: u32) {
         let entry = ctx.heap().allocate(DeletedEntry {
             prev: self.entry,
             offset,
@@ -289,7 +289,7 @@ impl GcCell for DeletedEntry {
 }
 
 impl Structure {
-    fn ctor(ctx: &mut Context, previous: GcPointer<Self>, unique: bool) -> GcPointer<Self> {
+    fn ctor(ctx: GcPointer<Context>, previous: GcPointer<Self>, unique: bool) -> GcPointer<Self> {
         let mut this = ctx.heap().allocate(Structure {
             prototype: previous.prototype,
             previous: Some(previous),
@@ -319,7 +319,7 @@ impl Structure {
     }
 
     fn ctor1(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prototype: Option<GcPointer<JsObject>>,
         unique: bool,
         indexed: bool,
@@ -349,7 +349,7 @@ impl Structure {
     }
     #[allow(dead_code)]
     fn ctor2(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         table: Option<GcPointer<TargetTable>>,
         prototype: Option<GcPointer<JsObject>>,
         unique: bool,
@@ -361,7 +361,7 @@ impl Structure {
         this
     }
 
-    fn ctor3(ctx: &mut Context, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
+    fn ctor3(ctx: GcPointer<Context>, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
         let table = it.iter().copied().collect::<TargetTable>();
         let table = ctx.heap().allocate(table);
         let mut this = ctx.heap().allocate(Structure {
@@ -390,25 +390,25 @@ impl Structure {
         this
     }
 
-    pub fn new(ctx: &mut Context, previous: GcPointer<Self>) -> GcPointer<Structure> {
+    pub fn new(ctx: GcPointer<Context>, previous: GcPointer<Self>) -> GcPointer<Structure> {
         Self::ctor(ctx, previous, false)
     }
 
-    pub fn new_unique(ctx: &mut Context, previous: GcPointer<Self>) -> GcPointer<Structure> {
+    pub fn new_unique(ctx: GcPointer<Context>, previous: GcPointer<Self>) -> GcPointer<Structure> {
         Self::ctor(ctx, previous, true)
     }
     pub fn new_unique_with_proto(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         proto: Option<GcPointer<JsObject>>,
         indexed: bool,
     ) -> GcPointer<Self> {
         Self::ctor2(ctx, None, proto, true, indexed)
     }
-    pub fn new_(ctx: &mut Context, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
+    pub fn new_(ctx: GcPointer<Context>, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
         Self::ctor3(ctx, it)
     }
     pub fn new_from_table(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         table: Option<TargetTable>,
         prototype: Option<GcPointer<JsObject>>,
         unique: bool,
@@ -419,21 +419,21 @@ impl Structure {
         Self::ctor2(ctx, table, prototype, unique, indexed)
     }
     pub fn new_indexed(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prototype: Option<GcPointer<JsObject>>,
         indexed: bool,
     ) -> GcPointer<Self> {
         Self::ctor1(ctx, prototype, false, indexed)
     }
     pub fn new_unique_indexed(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prototype: Option<GcPointer<JsObject>>,
         indexed: bool,
     ) -> GcPointer<Self> {
         Self::ctor1(ctx, prototype, true, indexed)
     }
 
-    pub fn new_from_point(ctx: &mut Context, map: GcPointer<Structure>) -> GcPointer<Self> {
+    pub fn new_from_point(ctx: GcPointer<Context>, map: GcPointer<Structure>) -> GcPointer<Self> {
         if map.is_unique() {
             return Self::new_unique(ctx, map);
         }
@@ -444,7 +444,7 @@ impl Structure {
 impl GcPointer<Structure> {
     fn is_valid(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         cached_prototype_chain: Option<GcPointer<StructureChain>>,
         base: GcPointer<JsObject>,
     ) -> bool {
@@ -474,7 +474,7 @@ impl GcPointer<Structure> {
     }
     pub fn prototype_chain(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         base: GcPointer<JsObject>,
     ) -> GcPointer<StructureChain> {
         if !self.is_valid(ctx, self.cached_prototype_chain, base) {
@@ -492,7 +492,7 @@ impl GcPointer<Structure> {
     }
     pub fn flatten_dictionary_structure(
         &mut self,
-        _ctx: &mut Context,
+        _ctx: GcPointer<Context>,
         object: &GcPointer<JsObject>,
     ) -> GcPointer<Structure> {
         assert!(self.is_unique());
@@ -501,7 +501,7 @@ impl GcPointer<Structure> {
         self.flatten();
         *self
     }
-    pub fn stored_prototype(&mut self, ctx: &mut Context, object: &GcPointer<JsObject>) -> JsValue {
+    pub fn stored_prototype(&mut self, ctx: GcPointer<Context>, object: &GcPointer<JsObject>) -> JsValue {
         if likely(self.has_mono_proto()) {
             return JsValue::new(self.prototype.unwrap());
         }
@@ -511,7 +511,7 @@ impl GcPointer<Structure> {
         }
         *object.direct(entry.offset as usize)
     }
-    pub fn delete(&mut self, ctx: &mut Context, name: Symbol) {
+    pub fn delete(&mut self, ctx: GcPointer<Context>, name: Symbol) {
         let it = unwrap_unchecked(self.table.as_mut()).remove(&name).unwrap();
         self.deleted.push(ctx, it.offset);
     }
@@ -533,7 +533,7 @@ impl GcPointer<Structure> {
     pub fn has_table(&self) -> bool {
         self.table.is_some()
     }
-    pub fn allocate_table(&mut self, ctx: &mut Context) {
+    pub fn allocate_table(&mut self, ctx: GcPointer<Context>) {
         let mut stack = ctx.heap().allocate(Vec::with_capacity(8));
 
         if self.is_adding_map() {
@@ -569,7 +569,7 @@ impl GcPointer<Structure> {
         self.previous = None;
     }
 
-    pub fn allocate_table_if_needed(&mut self, ctx: &mut Context) -> bool {
+    pub fn allocate_table_if_needed(&mut self, ctx: GcPointer<Context>) -> bool {
         if !self.has_table() {
             if self.previous.is_none() {
                 return false;
@@ -619,7 +619,7 @@ impl GcPointer<Structure> {
 impl GcPointer<Structure> {
     pub fn delete_property_transition(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
     ) -> GcPointer<Structure> {
         let mut map = Structure::new_unique(ctx, *self);
@@ -629,7 +629,7 @@ impl GcPointer<Structure> {
         map.delete(ctx, name);
         map
     }
-    pub fn change_indexed_transition(&mut self, ctx: &mut Context) -> GcPointer<Structure> {
+    pub fn change_indexed_transition(&mut self, ctx: GcPointer<Context>) -> GcPointer<Structure> {
         if self.is_unique() {
             let mut map = if self.transitions.is_enabled_unique_transition() {
                 Structure::new_unique(ctx, *self)
@@ -645,7 +645,7 @@ impl GcPointer<Structure> {
 
     pub fn change_prototype_transition(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prototype: Option<GcPointer<JsObject>>,
     ) -> GcPointer<Structure> {
         if self.is_unique() {
@@ -662,12 +662,12 @@ impl GcPointer<Structure> {
         }
     }
 
-    pub fn change_extensible_transition(&mut self, ctx: &mut Context) -> GcPointer<Structure> {
+    pub fn change_extensible_transition(&mut self, ctx: GcPointer<Context>) -> GcPointer<Structure> {
         Structure::new_unique(ctx, *self)
     }
     pub fn change_attributes_transition(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         attributes: AttrSafe,
     ) -> GcPointer<Structure> {
@@ -681,7 +681,7 @@ impl GcPointer<Structure> {
 
     pub fn get_own_property_names(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         include: bool,
         mut collector: impl FnMut(Symbol, u32),
     ) {
@@ -702,7 +702,7 @@ impl GcPointer<Structure> {
 
     pub fn add_property_transition(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         attributes: AttrSafe,
         offset: &mut u32,
@@ -774,7 +774,7 @@ impl GcPointer<Structure> {
         map
     }
 
-    pub fn get(&mut self, ctx: &mut Context, name: Symbol) -> MapEntry {
+    pub fn get(&mut self, ctx: GcPointer<Context>, name: Symbol) -> MapEntry {
         if !self.has_table() {
             if self.previous.is_none() {
                 return MapEntry::not_found();

@@ -1,20 +1,26 @@
 use std::intrinsics::unlikely;
 
-use crate::vm::{
-    arguments::Arguments,
-    array::*,
-    attributes::*,
-    context::Context,
-    error::JsTypeError,
-    object::{JsObject, ObjectTag, *},
-    property_descriptor::DataDescriptor,
-    string::JsString,
-    structure::Structure,
-    symbol_table::*,
-    value::{JsValue, Undefined},
+use crate::{
+    gc::cell::GcPointer,
+    vm::{
+        arguments::Arguments,
+        array::*,
+        attributes::*,
+        context::Context,
+        error::JsTypeError,
+        object::{JsObject, ObjectTag, *},
+        property_descriptor::DataDescriptor,
+        string::JsString,
+        structure::Structure,
+        symbol_table::*,
+        value::{JsValue, Undefined},
+    },
 };
 
-pub fn object_get_prototype_of(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_get_prototype_of(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let this = args.at(0);
     if unlikely(this.is_undefined() || this.is_null()) {
         return Err(JsValue::new(
@@ -29,7 +35,7 @@ pub fn object_get_prototype_of(ctx: &mut Context, args: &Arguments) -> Result<Js
     })
 }
 
-pub fn object_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this_binding = args.this;
 
     if this_binding.is_undefined() {
@@ -49,7 +55,7 @@ pub fn object_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     Ok(JsValue::encode_object_value(JsString::new(ctx, s)))
 }
 
-pub fn object_create(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_create(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let stack = ctx.shadowstack();
         let first = args.at(0);
@@ -93,7 +99,7 @@ pub fn object_create(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
     )));
 }
 
-pub fn object_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let val = args.at(0);
     if args.ctor_call {
         if val.is_jsstring() || val.is_number() || val.is_bool() {
@@ -107,7 +113,10 @@ pub fn object_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue
     }
 }
 
-pub fn object_define_property(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_define_property(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     if args.size() != 0 {
         let first = args.at(0);
@@ -128,7 +137,7 @@ pub fn object_define_property(ctx: &mut Context, args: &Arguments) -> Result<JsV
     ));
 }
 
-pub fn has_own_property(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn has_own_property(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() == 0 {
         return Ok(JsValue::new(false));
     }
@@ -138,7 +147,7 @@ pub fn has_own_property(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
 }
 
 pub fn object_get_own_property_descriptor(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
@@ -213,7 +222,7 @@ pub fn object_get_own_property_descriptor(
     }
 }
 
-pub fn object_keys(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_keys(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     if args.size() != 0 {
         let first = args.at(0);
@@ -241,7 +250,7 @@ pub fn object_keys(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVal
     ))
 }
 
-pub fn object_freeze(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_freeze(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let first = args.at(0);
         let stack = ctx.shadowstack();
@@ -256,7 +265,7 @@ pub fn object_freeze(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
     ))
 }
 
-pub fn object_seal(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_seal(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let first = args.at(0);
         let stack = ctx.shadowstack();
@@ -270,7 +279,10 @@ pub fn object_seal(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVal
         ctx.new_type_error("Object.seal requires object argument"),
     ))
 }
-pub fn object_prevent_extensions(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_prevent_extensions(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let first = args.at(0);
         let stack = ctx.shadowstack();
@@ -285,7 +297,7 @@ pub fn object_prevent_extensions(ctx: &mut Context, args: &Arguments) -> Result<
     )))
 }
 
-pub fn object_is_sealed(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_is_sealed(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let first = args.at(0);
         let stack = ctx.shadowstack();
@@ -311,7 +323,7 @@ pub fn object_is_sealed(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     ))
 }
 
-pub fn object_is_frozen(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_is_frozen(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let first = args.at(0);
         let stack = ctx.shadowstack();
@@ -340,7 +352,7 @@ pub fn object_is_frozen(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     ))
 }
 
-pub fn object_is_extensible(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_is_extensible(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let first = args.at(0);
         let stack = ctx.shadowstack();

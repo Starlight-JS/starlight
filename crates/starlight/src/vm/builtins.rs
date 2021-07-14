@@ -8,13 +8,14 @@
 //!
 //!
 
-use super::{Context, value::*};
 use super::{
     arguments::*, array::*, error::*, interpreter::frame::CallFrame, string::*, symbol_table::*,
 };
+use super::{value::*, Context};
+use crate::gc::cell::GcPointer;
 use crate::jsrt::get_length;
 pub unsafe fn reflect_apply(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     frame: &mut CallFrame,
     _ip: &mut *mut u8,
     _argc: u32,
@@ -65,7 +66,7 @@ pub unsafe fn reflect_apply(
 }
 
 pub unsafe fn to_object(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     frame: &mut CallFrame,
     _ip: &mut *mut u8,
     _argc: u32,
@@ -85,6 +86,6 @@ pub unsafe fn to_object(
 }
 
 pub type Builtin =
-    unsafe fn(&mut Context, &mut CallFrame, &mut *mut u8, u32, u8) -> Result<(), JsValue>;
+    unsafe fn(GcPointer<Context>, &mut CallFrame, &mut *mut u8, u32, u8) -> Result<(), JsValue>;
 
 pub static BUILTINS: [Builtin; 1] = [reflect_apply];

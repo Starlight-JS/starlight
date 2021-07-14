@@ -1,7 +1,12 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{bytecompiler::*, letroot, vm::{context::Context}, vm::{
+use crate::{
+    bytecompiler::*,
+    gc::cell::GcPointer,
+    letroot,
+    vm::context::Context,
+    vm::{
         arguments::Arguments,
         array_storage::ArrayStorage,
         error::JsTypeError,
@@ -10,9 +15,10 @@ use crate::{bytecompiler::*, letroot, vm::{context::Context}, vm::{
         string::JsString,
         symbol_table::{Internable, Symbol},
         value::JsValue,
-    }};
+    },
+};
 
-pub fn function_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn function_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     let obj = &args.this;
     if obj.is_callable() {
@@ -40,7 +46,7 @@ pub fn function_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue
     )));
 }
 
-pub fn function_prototype(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn function_prototype(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let mut params = vec![];
     if args.size() >= 2 {
         for i in 0..args.size() - 1 {
@@ -53,10 +59,11 @@ pub fn function_prototype(ctx: &mut Context, args: &Arguments) -> Result<JsValue
         format!("{{ {} }}", args.at(args.size() - 1).to_string(ctx)?)
     };
     let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
-    ByteCompiler::compile_code(ctx, &params, &rel_path, body, false).map_err(|e| JsValue::from(ctx.new_syntax_error(format!("Compile Error {:?}",e))))
+    ByteCompiler::compile_code(ctx, &params, &rel_path, body, false)
+        .map_err(|e| JsValue::from(ctx.new_syntax_error(format!("Compile Error {:?}", e))))
 }
 
-pub fn function_bind(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn function_bind(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(obj = stack, args.this);
 
@@ -98,7 +105,7 @@ pub fn function_bind(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
     )));
 }
 
-pub fn function_apply(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn function_apply(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(this = stack, args.this);
     if this.is_callable() {
@@ -140,7 +147,7 @@ pub fn function_apply(ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     )))
 }
 
-pub fn function_call(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this;
     let stack = ctx.shadowstack();
     if this.is_callable() {

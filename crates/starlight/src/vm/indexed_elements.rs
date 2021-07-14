@@ -28,7 +28,7 @@ pub struct IndexedElements {
 
 impl IndexedElements {
     #[allow(clippy::explicit_counter_loop)]
-    pub fn make_sparse(&mut self, ctx: &mut Context) {
+    pub fn make_sparse(&mut self, ctx: GcPointer<Context>) {
         self.flags &= !(FLAG_DENSE as u32);
         let mut sparse = self.ensure_map(ctx);
         let mut index = 0;
@@ -51,7 +51,7 @@ impl IndexedElements {
         self.map = None;
     }
 
-    pub fn ensure_map(&mut self, ctx: &mut Context) -> GcPointer<SparseArrayMap> {
+    pub fn ensure_map(&mut self, ctx: GcPointer<Context>) -> GcPointer<SparseArrayMap> {
         match self.map.as_ref() {
             Some(map) => *map,
             None => {
@@ -86,7 +86,7 @@ impl IndexedElements {
         self.flags &= !(FLAG_WRITABLE as u32);
     }
 
-    pub fn new(ctx: &mut Context) -> Self {
+    pub fn new(ctx: GcPointer<Context>) -> Self {
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,

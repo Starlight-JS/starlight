@@ -75,7 +75,7 @@ pub mod promise;
 #[derive(Copy, Clone)]
 pub enum ModuleKind {
     Initialized(GcPointer<JsObject>),
-    NativeUninit(fn(&mut Context, GcPointer<JsObject>) -> Result<(), JsValue>),
+    NativeUninit(fn(GcPointer<Context>, GcPointer<JsObject>) -> Result<(), JsValue>),
 }
 impl GcCell for ModuleKind {
     fn deser_pair(&self) -> (usize, usize) {
@@ -135,7 +135,11 @@ pub struct Runtime {
     pub(crate) codegen_plugins: HashMap<
         String,
         Box<
-            dyn Fn(&mut ByteCompiler, &mut Context, &Vec<ExprOrSpread>) -> Result<(), CompileError>,
+            dyn Fn(
+                &mut ByteCompiler,
+                GcPointer<Context>,
+                &Vec<ExprOrSpread>,
+            ) -> Result<(), CompileError>,
         >,
     >,
     #[cfg(feature = "perf")]
@@ -144,7 +148,7 @@ pub struct Runtime {
     /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
     pub(crate) eval_history: String,
     pub(crate) persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
-    pub(crate) sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>>,
+    pub(crate) sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(GcPointer<Context>)>)>>,
     pub(crate) safepoint: GlobalSafepoint,
 
     pub(crate) contexts: Vec<GcPointer<Context>>,
@@ -174,7 +178,7 @@ impl Runtime {
     /// ```
     pub fn with_async_scheduler(
         mut self: Box<Self>,
-        scheduler: Box<dyn Fn(Box<dyn FnOnce(&mut Context)>)>,
+        scheduler: Box<dyn Fn(Box<dyn FnOnce(GcPointer<Context>)>)>,
     ) -> Box<Self> {
         self.sched_async_func = Some(scheduler);
         self
@@ -293,7 +297,11 @@ impl Runtime {
         &mut self,
         plugin_name: &str,
         codegen_func: Box<
-            dyn Fn(&mut ByteCompiler, &mut Context, &Vec<ExprOrSpread>) -> Result<(), CompileError>,
+            dyn Fn(
+                &mut ByteCompiler,
+                GcPointer<Context>,
+                &Vec<ExprOrSpread>,
+            ) -> Result<(), CompileError>,
         >,
     ) -> Result<(), &str> {
         if !self.options.codegen_plugins {
@@ -503,6 +511,7 @@ pub(crate) fn init_es_config() -> EsConfig {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::gc::cell::GcPointer;
     use crate::options::Options;
     use crate::vm::symbol_table::Internable;
     use crate::vm::value::JsValue;
@@ -516,7 +525,7 @@ pub mod tests {
         // start a runtime
         Platform::initialize();
 
-        type JobType = dyn FnOnce(&mut Context);
+        type JobType = dyn FnOnce(GcPointer<Context>);
         // the todo Rc is where we will store our async job, in real life this would be an EventLoop to which we could add multiple jobs
         let todo: Rc<RefCell<Option<Box<JobType>>>> = Rc::new(RefCell::new(None));
         let todo_clone = todo.clone();
@@ -544,7 +553,7 @@ pub mod tests {
         // it should serve pretty good as a simple as it gets first example of doing things async
         let arg_count = 0;
         let func = crate::vm::function::JsNativeFunction::new(
-            &mut ctx,
+            ctx,
             name_symbol,
             move |vm, args| {
                 if args.size() == 1 {
@@ -592,7 +601,7 @@ pub mod tests {
 
         // add the function to the global object
         global
-            .put(&mut ctx, name_symbol, JsValue::new(func), true)
+            .put(ctx, name_symbol, JsValue::new(func), true)
             .ok()
             .expect("could not add func to global");
 
@@ -601,12 +610,12 @@ pub mod tests {
             Ok(e) => e,
             Err(err) => panic!(
                 "func failed: {}",
-                err.to_string(&mut ctx).ok().expect("conversion failed")
+                err.to_string(ctx).ok().expect("conversion failed")
             ),
         };
 
         if let Some(job) = todo.take() {
-            job(&mut ctx);
+            job(ctx);
         } else {
             panic!("did not get job")
         }
@@ -627,7 +636,9 @@ pub mod tests {
         let result = rt.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
-                |compiler: &mut ByteCompiler, ctx: &mut Context, call_args: &Vec<ExprOrSpread>| {
+                |compiler: &mut ByteCompiler,
+                 ctx: GcPointer<Context>,
+                 call_args: &Vec<ExprOrSpread>| {
                     compiler.expr(ctx, &call_args[0].expr, true, false)?;
                     compiler.expr(ctx, &call_args[1].expr, true, false)?;
                     compiler.emit(Opcode::OP_ADD, &[0], false);
@@ -651,7 +662,9 @@ pub mod tests {
         let result = rt.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
-                |compiler: &mut ByteCompiler, ctx: &mut Context, call_args: &Vec<ExprOrSpread>| {
+                |compiler: &mut ByteCompiler,
+                 ctx: GcPointer<Context>,
+                 call_args: &Vec<ExprOrSpread>| {
                     compiler.expr(ctx, &call_args[0].expr, true, false)?;
                     compiler.expr(ctx, &call_args[1].expr, true, false)?;
                     compiler.emit(Opcode::OP_ADD, &[0], false);

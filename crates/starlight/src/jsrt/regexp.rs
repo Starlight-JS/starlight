@@ -180,7 +180,7 @@ impl Context {
     }
 }
 
-pub fn regexp_split_fast(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_split_fast(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.at(0).is_jsobject()) {
         return Err(JsValue::new(ctx.new_type_error(
             "Regex.@@splitFast requires regexp object as first argument",
@@ -227,7 +227,7 @@ pub fn regexp_split_fast(ctx: &mut Context, args: &Arguments) -> Result<JsValue,
     }
     Ok(JsValue::new(result))
 }
-pub fn regexp_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let proto = ctx.global_data.regexp_prototype.unwrap();
     let structure = Structure::new_indexed(ctx, Some(proto), false);
 
@@ -330,7 +330,7 @@ pub fn regexp_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue
     Ok(JsValue::new(this))
 }
 
-pub fn regexp_test(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_test(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.this.is_jsobject()) {
         return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
@@ -371,7 +371,7 @@ pub fn regexp_test(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVal
     }
 }
 
-pub fn regexp_exec(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_exec(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(!args.this.is_jsobject()) {
         return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
@@ -441,7 +441,7 @@ fn to_regexp(val: JsValue) -> Option<GcPointer<JsObject>> {
     None
 }
 
-pub fn regexp_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     match to_regexp(args.this) {
         Some(object) => {
             let regex = object.data::<RegExp>();
@@ -458,7 +458,7 @@ pub fn regexp_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
 }
 
 /// @@match
-pub fn regexp_match(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn regexp_match(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let arg_str = args.at(0).to_string(ctx)?;
     let matches = if let Some(object) = to_regexp(args.this) {
         let regex = object.data::<RegExp>();

@@ -119,7 +119,7 @@ pub struct ByteCompiler {
 }
 
 impl ByteCompiler {
-    pub fn get_val(&mut self, ctx: &mut Context, val: Val) -> u32 {
+    pub fn get_val(&mut self, ctx: GcPointer<Context>, val: Val) -> u32 {
         if let Some(ix) = self.val_map.get(&val) {
             return *ix;
         }
@@ -236,7 +236,7 @@ impl ByteCompiler {
     }
     pub fn var_decl(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         var: &VarDecl,
         export: bool,
     ) -> Result<Vec<Symbol>, CompileError> {
@@ -382,7 +382,7 @@ impl ByteCompiler {
 
     pub fn compile_access(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         expr: &Expr,
         dup: bool,
     ) -> Result<Access, CompileError> {
@@ -418,7 +418,7 @@ impl ByteCompiler {
             x => Err(CompileError::NotYetImpl(format!("NYI: Access {:?}", x))),
         }
     }
-    pub fn finish(&mut self, ctx: &mut Context) -> GcPointer<CodeBlock> {
+    pub fn finish(&mut self, ctx: GcPointer<Context>) -> GcPointer<CodeBlock> {
         if ctx.vm.options.dump_bytecode {
             let mut buf = String::new();
             let name = ctx.description(self.code.name);
@@ -428,7 +428,11 @@ impl ByteCompiler {
         self.code.literals_ptr = self.code.literals.as_ptr();
         self.code
     }
-    pub fn compile_fn(&mut self, ctx: &mut Context, fun: &Function) -> Result<(), CompileError> {
+    pub fn compile_fn(
+        &mut self,
+        ctx: GcPointer<Context>,
+        fun: &Function,
+    ) -> Result<(), CompileError> {
         /*#[cfg(feature = "perf")]
         {
             self.vm.perf.set_prev_inst(crate::vm::perf::Perf::CODEGEN);
@@ -461,7 +465,7 @@ impl ByteCompiler {
         Ok(())
     }
     pub fn compile_code(
-        mut ctx: &mut Context,
+        mut ctx: GcPointer<Context>,
         params_: &[String],
         rel_path: &str,
         body: String,
@@ -530,7 +534,7 @@ impl ByteCompiler {
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         //compiler.compile(&script.body);
-        let mut code = compiler.finish(&mut ctx);
+        let mut code = compiler.finish(ctx);
 
         //let mut code = ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned());
 
@@ -542,7 +546,7 @@ impl ByteCompiler {
     }
     pub fn function(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         function: &Function,
         name: Symbol,
         expr: bool,
@@ -634,7 +638,7 @@ impl ByteCompiler {
     }
     pub fn fn_expr(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         fun: &FnExpr,
         used: bool,
     ) -> Result<(), CompileError> {
@@ -657,7 +661,7 @@ impl ByteCompiler {
         Ok(())
     }
     pub fn compile_module(
-        mut ctx: &mut Context,
+        mut ctx: GcPointer<Context>,
         file: &str,
         path: &str,
         name: &str,
@@ -665,7 +669,7 @@ impl ByteCompiler {
     ) -> Result<GcPointer<CodeBlock>, CompileError> {
         let name = name.intern();
 
-        let mut code = CodeBlock::new(&mut ctx, name, false, path.into());
+        let mut code = CodeBlock::new(ctx, name, false, path.into());
         code.file_name = file.to_string();
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
@@ -742,8 +746,7 @@ impl ByteCompiler {
                 }
                 ModuleItem::ModuleDecl(module_decl) => match module_decl {
                     ModuleDecl::Import(import) => {
-                        let src =
-                            compiler.get_val(&mut ctx, Val::Str(import.src.value.to_string()));
+                        let src = compiler.get_val(ctx, Val::Str(import.src.value.to_string()));
                         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
                         compiler.emit(Opcode::OP_PUSH_LITERAL, &[loader_val], false);
                         compiler.emit(Opcode::OP_PUSH_LITERAL, &[src], false);
@@ -847,14 +850,14 @@ impl ByteCompiler {
         Ok(result)
     }
     pub fn compile_script(
-        mut ctx: &mut Context,
+        mut ctx: GcPointer<Context>,
         p: &Script,
         path: &str,
         fname: String,
         builtins: bool,
     ) -> Result<GcPointer<CodeBlock>, CompileError> {
         let name = "<script>".intern();
-        let mut code = CodeBlock::new(&mut ctx, name, false, path.into());
+        let mut code = CodeBlock::new(ctx, name, false, path.into());
         code.file_name = fname;
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
@@ -891,14 +894,14 @@ impl ByteCompiler {
     }
 
     pub fn compile_eval(
-        mut ctx: &mut Context,
+        mut ctx: GcPointer<Context>,
         p: &Script,
         path: &str,
         fname: String,
         builtins: bool,
     ) -> Result<GcPointer<CodeBlock>, CompileError> {
         let name = "<script>".intern();
-        let mut code = CodeBlock::new(&mut ctx, name, false, path.into());
+        let mut code = CodeBlock::new(ctx, name, false, path.into());
         code.file_name = fname;
         let mut compiler = ByteCompiler {
             lci: Vec::new(),
@@ -929,13 +932,13 @@ impl ByteCompiler {
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let result = compiler.finish(&mut ctx);
+        let result = compiler.finish(ctx);
 
         Ok(result)
     }
     pub fn compile(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         body: &[Stmt],
         _last_val_ret: bool,
     ) -> Result<(), CompileError> {
@@ -1042,7 +1045,7 @@ impl ByteCompiler {
     }
     pub fn decl(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         decl: &Decl,
         export: bool,
     ) -> Result<(), CompileError> {
@@ -1074,7 +1077,7 @@ impl ByteCompiler {
         }
         Ok(())
     }
-    pub fn stmt(&mut self, ctx: &mut Context, stmt: &Stmt) -> Result<(), CompileError> {
+    pub fn stmt(&mut self, ctx: GcPointer<Context>, stmt: &Stmt) -> Result<(), CompileError> {
         match stmt {
             Stmt::Switch(switch) => {
                 let d = self.scope.borrow().depth;
@@ -1417,7 +1420,7 @@ impl ByteCompiler {
     }
     pub fn compile_access_pat(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         pat: &Pat,
         dup: bool,
     ) -> Result<Access, CompileError> {
@@ -1446,7 +1449,7 @@ impl ByteCompiler {
 
     pub fn expr(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         expr: &Expr,
         used: bool,
         tail: bool,
@@ -2253,7 +2256,7 @@ impl Visit for IdentFinder<'_> {
     }
 }
 
-fn is_codegen_plugin_call(ctx: &mut Context, e: &Expr, builtins: bool) -> bool {
+fn is_codegen_plugin_call(ctx: GcPointer<Context>, e: &Expr, builtins: bool) -> bool {
     if !builtins && !ctx.vm.options.codegen_plugins {
         return false;
     }
@@ -2305,7 +2308,7 @@ fn is_builtin_call(e: &Expr, builtin_compilation: bool) -> bool {
 impl ByteCompiler {
     pub fn handle_codegen_plugin_call(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         call: &CallExpr,
     ) -> Result<(), CompileError> {
         let plugin_name = if let ExprOrSuper::Expr(expr) = &call.callee {
@@ -2331,7 +2334,7 @@ impl ByteCompiler {
     /// - Getters for special symbols. Should be expanded to PUSH_LITERAL.
     pub fn handle_builtin_call(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         call: &CallExpr,
     ) -> Result<(), CompileError> {
         let (member, builtin_call_name) = if let ExprOrSuper::Expr(expr) = &call.callee {

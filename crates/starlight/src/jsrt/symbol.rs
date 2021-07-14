@@ -103,7 +103,7 @@ impl Context {
     }
 }
 
-pub fn symbol_ctor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_ctor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if unlikely(args.ctor_call) {
         return Err(JsValue::new(
             ctx.new_type_error("Symbol is not an constructor"),
@@ -113,7 +113,7 @@ pub fn symbol_ctor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsVal
     let arg = args.at(0).to_string(ctx)?.intern();
     Ok(JsValue::new(JsSymbol::new(ctx, arg)))
 }
-pub fn symbol_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_for(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let arg = args.at(0).to_string(ctx)?.intern();
 
     if let Some(sym) = ctx.symbol_table.get(&arg) {
@@ -125,7 +125,7 @@ pub fn symbol_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValu
     }
 }
 
-pub fn symbol_key_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_key_for(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let sym = TypedJsObject::<JsSymbolObject>::try_from(ctx, args.at(0))?
         .symbol()
         .symbol();
@@ -133,7 +133,7 @@ pub fn symbol_key_for(ctx: &mut Context, args: &Arguments) -> Result<JsValue, Js
     Ok(JsValue::new(JsString::new(ctx, desc)))
 }
 
-pub fn symbol_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let sym = TypedJsObject::<JsSymbolObject>::try_from(ctx, args.this)?
         .symbol()
         .symbol();
@@ -144,7 +144,7 @@ pub fn symbol_to_string(ctx: &mut Context, args: &Arguments) -> Result<JsValue, 
     )))
 }
 
-pub fn symbol_value_of(_ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_value_of(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(
         TypedJsObject::<JsSymbolObject>::try_from(_ctx, args.this)?.symbol(),
     ))

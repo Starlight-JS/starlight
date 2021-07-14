@@ -5,8 +5,7 @@ use self::{frame::CallFrame, stack::Stack};
 use super::function::*;
 use super::{
     arguments::*, array::*, code_block::CodeBlock, environment::*, error::JsTypeError, error::*,
-    native_iterator::*, object::*, slot::*, string::JsString,
-    symbol_table::*, value::*,
+    native_iterator::*, object::*, slot::*, string::JsString, symbol_table::*, value::*,
 };
 use crate::letroot;
 use crate::vm::context::Context;
@@ -24,30 +23,24 @@ use wtf_rs::unwrap_unchecked;
 pub mod frame;
 pub mod stack;
 
-impl Context {
+impl GcPointer<Context> {
     pub(crate) fn perform_vm_call(
-        &mut self,
+        mut self,
         func: &JsVMFunction,
         env: JsValue,
         args_: &Arguments,
         callee: JsValue,
     ) -> Result<JsValue, JsValue> {
-        let stack = self.shadowstack();
-        letroot!(scope = stack, unsafe {
-            env.get_object().downcast::<Environment>().unwrap()
-        });
+        let mut scope = unsafe { env.get_object().downcast::<Environment>().unwrap() };
 
-        letroot!(
-            nscope = stack,
-            Environment::new(
-                self,
-                func.code.param_count
-                    + func.code.var_count
-                    + func.code.rest_at.map(|_| 1).unwrap_or(0)
-                    + if func.code.use_arguments { 1 } else { 0 }
-            )
+        let mut nscope = Environment::new(
+            self,
+            func.code.param_count
+                + func.code.var_count
+                + func.code.rest_at.map(|_| 1).unwrap_or(0)
+                + if func.code.use_arguments { 1 } else { 0 },
         );
-        nscope.parent = Some(*scope);
+        nscope.parent = Some(scope);
         let mut i = 0;
         for _ in 0..func.code.param_count {
             nscope.as_slice_mut()[i as usize].value = args_.at(i);
@@ -78,7 +71,7 @@ impl Context {
                 }
                 p
             };
-            let mut args = JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
+            let mut args = JsArguments::new(self, nscope, &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
@@ -101,14 +94,14 @@ impl Context {
                 &func.code.code[0] as *const u8 as *mut u8,
                 _this,
                 args_.ctor_call,
-                *nscope,
+                nscope,
                 callee,
             )
         }
     }
 
     pub(crate) fn setup_for_vm_call(
-        &mut self,
+        mut self,
         func: &JsVMFunction,
         env: JsValue,
         args_: &Arguments,
@@ -191,7 +184,7 @@ impl Context {
 
 #[inline(never)]
 unsafe fn eval_internal(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     code: GcPointer<CodeBlock>,
     ip: *mut u8,
     this: JsValue,
@@ -236,12 +229,12 @@ unsafe fn eval_internal(
     }
 }
 
-pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
+pub unsafe fn eval(ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
     ctx.heap().collect_if_necessary();
     let mut ip = (*frame).ip;
 
     let mut frame: &'static mut CallFrame = &mut *frame;
-    let stack = &mut ctx.stack as *mut Stack;
+    let stack = ctx.stack as *mut Stack;
     let stack = &mut *stack;
     let gcstack = ctx.shadowstack();
     loop {
@@ -434,7 +427,7 @@ pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, 
                 }
                 #[cold]
                 unsafe fn add_slowpath(
-                    ctx: &mut Context,
+                    ctx: GcPointer<Context>,
                     frame: &mut CallFrame,
                     lhs: JsValue,
                     rhs: JsValue,
@@ -445,7 +438,7 @@ pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, 
                     if lhs.is_jsstring() || rhs.is_jsstring() {
                         #[inline(never)]
                         fn concat(
-                            ctx: &mut Context,
+                            ctx: GcPointer<Context>,
                             lhs: JsValue,
                             rhs: JsValue,
                         ) -> Result<JsValue, JsValue> {
@@ -666,7 +659,7 @@ pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, 
                     #[inline(never)]
                     #[cold]
                     unsafe fn slow_get_by_id(
-                        ctx: &mut Context,
+                        ctx: GcPointer<Context>,
                         frame: &mut CallFrame,
                         obj: &mut GcPointer<JsObject>,
                         name: Symbol,
@@ -677,12 +670,11 @@ pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, 
                         if name == length_id() && obj.is_class(JsArray::get_class()) {
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
-                                .get_unchecked_mut(fdbk as usize) =
-                                TypeFeedBack::PropertyCache {
-                                    structure: obj.structure(),
-                                    mode: GetByIdMode::ArrayLength,
-                                    offset: u32::MAX,
-                                };
+                                .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
+                                structure: obj.structure(),
+                                mode: GetByIdMode::ArrayLength,
+                                offset: u32::MAX,
+                            };
                             frame.push(JsValue::new(obj.indexed.length()));
                             return Ok(());
                         }
@@ -1010,7 +1002,7 @@ pub unsafe fn eval(ctx: &mut Context, frame: *mut CallFrame) -> Result<JsValue, 
                 } else {
                     #[inline(never)]
                     unsafe fn slow(
-                        ctx: &mut Context,
+                        ctx: GcPointer<Context>,
                         object: JsValue,
                         key: Symbol,
                         value: JsValue,
@@ -1396,7 +1388,7 @@ pub struct SpreadValue {
 }
 
 impl SpreadValue {
-    pub fn new(ctx: &mut Context, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
+    pub fn new(ctx: GcPointer<Context>, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
         let mut builtin = ctx.global_data.spread_builtin.unwrap();
         let mut slice = [value];
         let mut args = Arguments::new(JsValue::encode_undefined_value(), &mut slice);
@@ -1426,13 +1418,17 @@ unsafe impl Trace for SpreadValue {
     }
 }
 
-pub fn get_by_id_slow(ctx: &mut Context, name: Symbol, val: JsValue) -> Result<JsValue, JsValue> {
+pub fn get_by_id_slow(
+    ctx: GcPointer<Context>,
+    name: Symbol,
+    val: JsValue,
+) -> Result<JsValue, JsValue> {
     let mut slot = Slot::new();
     val.get_slot(ctx, name, &mut slot)
 }
 
 pub(crate) unsafe fn put_by_id_slow(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     frame: &mut CallFrame,
     obj: &mut GcPointer<JsObject>,
     name: Symbol,

@@ -48,7 +48,7 @@ impl JsFunction {
     pub fn has_instance(
         &self,
         this: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         val: JsValue,
     ) -> Result<bool, JsValue> {
         if !val.is_jsobject() {
@@ -139,7 +139,7 @@ impl JsFunction {
 
     pub fn construct(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
 
         args: &mut Arguments,
         structure: Option<GcPointer<Structure>>,
@@ -163,7 +163,7 @@ impl JsFunction {
 
     pub fn call(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {
@@ -191,7 +191,7 @@ impl JsFunction {
     } /*
       pub fn call_with_env<'a>(
           &mut self,
-          ctx: &mut Context,
+          ctx: GcPointer<Context>,
           args: &mut Arguments,
           env: GcPointer<JsObject>,
       ) -> Result<JsValue, JsValue> {
@@ -218,7 +218,7 @@ impl JsFunction {
               }
           }
       }*/
-    pub fn new(ctx: &mut Context, ty: FuncType, _strict: bool) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>, ty: FuncType, _strict: bool) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             ctx,
             &ctx.global_data().get_function_struct(),
@@ -236,7 +236,7 @@ impl JsFunction {
         obj
     }
     pub fn new_with_struct(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         structure: &GcPointer<Structure>,
         ty: FuncType,
         _strict: bool,
@@ -255,7 +255,7 @@ impl JsFunction {
     define_jsclass!(JsFunction, Function);
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
@@ -263,14 +263,14 @@ impl JsFunction {
     }
     pub fn DefaultValueMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         JsObject::DefaultValueMethod(obj, ctx, hint)
     }
     pub fn DefineOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -280,7 +280,7 @@ impl JsFunction {
     }
     pub fn GetOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
@@ -288,7 +288,7 @@ impl JsFunction {
     }
     pub fn PutIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
@@ -298,7 +298,7 @@ impl JsFunction {
     }
     pub fn PutNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
@@ -308,7 +308,7 @@ impl JsFunction {
     }
     pub fn GetOwnPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
@@ -317,7 +317,7 @@ impl JsFunction {
 
     pub fn DeleteNonIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -326,7 +326,7 @@ impl JsFunction {
 
     pub fn DeleteIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -335,7 +335,7 @@ impl JsFunction {
 
     pub fn GetNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -361,7 +361,7 @@ impl JsFunction {
 
     pub fn GetIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -369,7 +369,7 @@ impl JsFunction {
     }
     pub fn GetNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -378,7 +378,7 @@ impl JsFunction {
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -387,7 +387,7 @@ impl JsFunction {
 
     pub fn GetNonIndexedPropertySlot(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -396,7 +396,7 @@ impl JsFunction {
 
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         mut obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -413,14 +413,14 @@ impl JsFunction {
 
     pub fn GetIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
         JsObject::GetIndexedPropertySlotMethod(obj, ctx, index, slot)
     }
 }
-pub type JsAPI = fn(ctx: &mut Context, arguments: &Arguments) -> Result<JsValue, JsValue>;
+pub type JsAPI = fn(ctx: GcPointer<Context>, arguments: &Arguments) -> Result<JsValue, JsValue>;
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct JsNativeFunction {
@@ -428,7 +428,7 @@ pub struct JsNativeFunction {
 }
 
 impl JsNativeFunction {
-    pub fn new(ctx: &mut Context, name: Symbol, f: JsAPI, n: u32) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>, name: Symbol, f: JsAPI, n: u32) -> GcPointer<JsObject> {
         let ctx = ctx;
         let mut func = JsFunction::new(ctx, FuncType::Native(JsNativeFunction { func: f }), false);
         let l = "length".intern();
@@ -448,7 +448,7 @@ impl JsNativeFunction {
     }
     #[allow(clippy::many_single_char_names)]
     pub fn new_with_struct(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         s: &GcPointer<Structure>,
         name: Symbol,
         f: JsAPI,
@@ -507,7 +507,7 @@ impl JsNativeFunction {
 /// // create a Function based on a closure
 /// let arg_count = 0;
 /// let func = starlight::vm::function::JsClosureFunction::new(
-///     &mut ctx,
+///     ctx,
 ///     name_symbol,
 ///     move |ctx, args| {
 ///         return Ok(JsValue::encode_int32(x));
@@ -516,21 +516,26 @@ impl JsNativeFunction {
 /// );
 ///
 /// // add the function to the global object
-/// global.put(&mut ctx, name_symbol, JsValue::new(func), true);
+/// global.put(ctx, name_symbol, JsValue::new(func), true);
 ///
 /// // run the function
 /// let outcome = ctx.eval("return (myFunction());").ok().expect("function failed");
 /// assert_eq!(outcome.get_int32(), 1234);
 /// ```
 pub struct JsClosureFunction {
-    pub(crate) func: Box<dyn Fn(&mut Context, &Arguments) -> Result<JsValue, JsValue>>,
+    pub(crate) func: Box<dyn Fn(GcPointer<Context>, &Arguments) -> Result<JsValue, JsValue>>,
 }
 
 impl JsClosureFunction {
     /// create a new JsClosureFunction
-    pub fn new<F>(ctx: &mut Context, name: Symbol, f: F, arg_count: u32) -> GcPointer<JsObject>
+    pub fn new<F>(
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        f: F,
+        arg_count: u32,
+    ) -> GcPointer<JsObject>
     where
-        F: Fn(&mut Context, &Arguments) -> Result<JsValue, JsValue> + 'static,
+        F: Fn(GcPointer<Context>, &Arguments) -> Result<JsValue, JsValue> + 'static,
     {
         let ctx = ctx;
         let mut func = JsFunction::new(
@@ -590,7 +595,7 @@ pub struct JsVMFunction {
 }
 impl JsVMFunction {
     pub fn new(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         code: GcPointer<CodeBlock>,
         env: GcPointer<Environment>,
     ) -> GcPointer<JsObject> {
@@ -629,7 +634,7 @@ impl JsVMFunction {
 impl GcPointer<JsObject> {
     pub fn func_construct_map(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
     ) -> Result<GcPointer<Structure>, JsValue> {
         let stack = ctx.shadowstack();
         letroot!(obj = stack, *self);
@@ -763,7 +768,7 @@ extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<GeneratorData>().func_state.trace(tracer);
 }
 impl JsGeneratorFunction {
-    pub fn new(ctx: &mut Context, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
         // let ctx = ctx.space().new_local_context();
         let stack = ctx.shadowstack();
         //root!(envs = stack, Structure::new_indexed(ctx, Some(env), false));
@@ -820,7 +825,7 @@ impl JsGeneratorFunction {
     /// - Return generator object.
     fn call(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {
@@ -849,7 +854,7 @@ pub enum GeneratorMagic {
     Throw,
 }
 fn async_func_resume(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     state: &mut AsyncFunctionState,
 ) -> Result<JsValue, JsValue> {
     let mut frame = ctx
@@ -866,7 +871,7 @@ fn async_func_resume(
     }
 }
 pub(crate) fn js_generator_next(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     this: JsValue,
     args: &Arguments,
     magic: GeneratorMagic,

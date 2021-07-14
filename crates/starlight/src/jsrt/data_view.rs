@@ -3,7 +3,7 @@ use std::{any::TypeId, mem::size_of};
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
 use crate::{JsTryFrom, prelude::*, vm::{context::Context, array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject}};
-pub fn data_view_prototype_buffer(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn data_view_prototype_buffer(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {
         return Err(JsValue::new(ctx.new_type_error(
@@ -13,7 +13,7 @@ pub fn data_view_prototype_buffer(ctx: &mut Context, args: &Arguments) -> Result
     Ok(JsValue::new(this.data::<JsDataView>().get_buffer()))
 }
 pub fn data_view_prototype_byte_offset(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
@@ -25,7 +25,7 @@ pub fn data_view_prototype_byte_offset(
     Ok(JsValue::new(this.data::<JsDataView>().byte_offset() as u32))
 }
 pub fn data_view_prototype_byte_length(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
@@ -38,7 +38,7 @@ pub fn data_view_prototype_byte_length(
 }
 
 pub fn data_view_prototype_get<T: SwapByteOrder + Into<JsValue> + Copy>(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
@@ -72,7 +72,7 @@ pub fn data_view_prototype_get<T: SwapByteOrder + Into<JsValue> + Copy>(
 }
 
 pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static>(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = TypedJsObject::<JsDataView>::try_from(ctx, args.this)?;
@@ -124,7 +124,7 @@ pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn data_view_constructor(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn data_view_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView() called in a function context instead of constructor",

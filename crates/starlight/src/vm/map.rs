@@ -46,7 +46,7 @@ impl JsMap {
         self.storage.remove(&HashValueZero(key))
     }
 
-    pub fn initialize(ctx: &mut Context, input: JsValue, it: JsValue) -> Result<JsValue, JsValue> {
+    pub fn initialize(ctx: GcPointer<Context>, input: JsValue, it: JsValue) -> Result<JsValue, JsValue> {
         if unlikely(!input.is_jsobject()) {
             return Err(JsValue::new(
                 ctx.new_type_error("MapInitialize to non-object"),

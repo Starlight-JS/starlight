@@ -29,7 +29,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
     populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, &mut long_lived);
-    let arr = ArrayStorage::with_size(&mut ctx, ARRAY_SIZE as _, ARRAY_SIZE as _);
+    let arr = ArrayStorage::with_size(ctx, ARRAY_SIZE as _, ARRAY_SIZE as _);
 
     letroot!(array = stack, arr);
     for i in 0..(ARRAY_SIZE / 2) {

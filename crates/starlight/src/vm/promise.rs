@@ -35,7 +35,7 @@ pub struct JsPromise {
 
 #[allow(non_snake_case)]
 impl JsPromise {
-    pub fn new(ctx: &mut Context, function_value: JsValue) -> Result<JsValue, JsValue> {
+    pub fn new(ctx: GcPointer<Context>, function_value: JsValue) -> Result<JsValue, JsValue> {
         let promise = Self::new_unresolving(ctx)?;
 
         // call the function passed to the promise constructor with a resolve and a reject arg
@@ -86,7 +86,7 @@ impl JsPromise {
 
         res.map(|_| promise)
     }
-    pub fn new_unresolving(ctx: &mut Context) -> Result<JsValue, JsValue> {
+    pub fn new_unresolving(ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         let proto = ctx
             .global_object()
             .get(ctx, "Promise".intern())?
@@ -106,7 +106,7 @@ impl JsPromise {
         Ok(JsValue::new(obj))
     }
     pub fn new_tracking(
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         mode: TrackingMode,
         promises_array: JsValue,
     ) -> Result<JsValue, JsValue> {
@@ -190,7 +190,7 @@ impl JsPromise {
     }
     fn resolve_single_tracked_resolution(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prom_this: JsValue,
         index: u32,
         resolution: Result<JsValue, JsValue>,
@@ -248,7 +248,7 @@ impl JsPromise {
     }
     pub fn resolve(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prom_this: JsValue,
         resolution: JsValue,
     ) -> Result<(), JsValue> {
@@ -256,7 +256,7 @@ impl JsPromise {
     }
     pub fn reject(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prom_this: JsValue,
         rejection: JsValue,
     ) -> Result<(), JsValue> {
@@ -265,7 +265,7 @@ impl JsPromise {
 
     fn do_resolve(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         prom_this: JsValue,
         resolution: Result<JsValue, JsValue>,
     ) -> Result<(), JsValue> {
@@ -388,7 +388,7 @@ impl JsPromise {
     }
     pub fn then(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         on_resolved: Option<JsValue>,
         on_rejected: Option<JsValue>,
         on_finally: Option<JsValue>,
@@ -416,14 +416,14 @@ impl JsPromise {
 }
 
 fn array_util_get_length(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     arr_object: &mut GcPointer<JsObject>,
 ) -> Result<u32, JsValue> {
     get_length(ctx, arr_object)
 }
 
 fn array_util_get_value_at(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     arr_object: &mut GcPointer<JsObject>,
     index: u32,
 ) -> Result<JsValue, JsValue> {
@@ -431,7 +431,7 @@ fn array_util_get_value_at(
 }
 
 fn array_util_set_value_at(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     arr_object: &mut GcPointer<JsObject>,
     index: u32,
     value: JsValue,
@@ -507,7 +507,7 @@ pub mod tests {
             Err(e) => {
                 println!(
                     "prom init failed: {}",
-                    e.to_string(&mut ctx)
+                    e.to_string(ctx)
                         .ok()
                         .expect("conversion failed")
                 );
@@ -524,7 +524,7 @@ pub mod tests {
             Err(e) => {
                 println!(
                     "prom init failed: {}",
-                    e.to_string(&mut ctx)
+                    e.to_string(ctx)
                         .ok()
                         .expect("conversion failed")
                 );
@@ -541,7 +541,7 @@ pub mod tests {
             Err(e) => {
                 println!(
                     "prom init failed: {}",
-                    e.to_string(&mut ctx)
+                    e.to_string(ctx)
                         .ok()
                         .expect("conversion failed")
                 );
@@ -560,7 +560,7 @@ pub mod tests {
 
             println!("running todo");
 
-            job(&mut ctx);
+            job(ctx);
         }
         println!("done running todos");
     }

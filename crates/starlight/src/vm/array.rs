@@ -14,7 +14,7 @@ use crate::gc::cell::GcPointer;
 pub struct JsArray;
 #[allow(non_snake_case)]
 impl JsArray {
-    pub fn from_slice(ctx: &mut Context, slice: &[JsValue]) -> GcPointer<JsObject> {
+    pub fn from_slice(ctx: GcPointer<Context>, slice: &[JsValue]) -> GcPointer<JsObject> {
         let mut this = Self::new(ctx, slice.len() as _);
 
         for i in 0..slice.len() {
@@ -24,7 +24,7 @@ impl JsArray {
 
         this
     }
-    pub fn new(ctx: &mut Context, n: u32) -> GcPointer<JsObject> {
+    pub fn new(ctx: GcPointer<Context>, n: u32) -> GcPointer<JsObject> {
         let mut arr = JsObject::new(
             ctx,
             &ctx.global_data().array_structure.unwrap(),
@@ -37,7 +37,7 @@ impl JsArray {
     define_jsclass!(JsArray, Array);
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
@@ -45,14 +45,14 @@ impl JsArray {
     }
     pub fn DefaultValueMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
         JsObject::DefaultValueMethod(obj, ctx, hint)
     }
     pub fn DefineOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -62,7 +62,7 @@ impl JsArray {
     }
     pub fn GetOwnIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
@@ -70,7 +70,7 @@ impl JsArray {
     }
     pub fn PutIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         val: JsValue,
         slot: &mut Slot,
@@ -80,7 +80,7 @@ impl JsArray {
     }
     pub fn PutNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         val: JsValue,
         slot: &mut Slot,
@@ -90,7 +90,7 @@ impl JsArray {
     }
     pub fn GetOwnPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         collector: &mut dyn FnMut(Symbol, u32),
         mode: EnumerationMode,
     ) {
@@ -102,7 +102,7 @@ impl JsArray {
 
     pub fn DeleteNonIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -120,7 +120,7 @@ impl JsArray {
 
     pub fn DeleteIndexedMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -129,7 +129,7 @@ impl JsArray {
 
     pub fn GetNonIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -138,7 +138,7 @@ impl JsArray {
 
     pub fn GetIndexedSlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
@@ -146,7 +146,7 @@ impl JsArray {
     }
     pub fn GetNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -155,7 +155,7 @@ impl JsArray {
 
     pub fn GetOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -176,7 +176,7 @@ impl JsArray {
 
     pub fn GetNonIndexedPropertySlot(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
@@ -185,7 +185,7 @@ impl JsArray {
 
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         mut obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -199,7 +199,7 @@ impl JsArray {
 
     pub fn GetIndexedPropertySlotMethod(
         obj: &mut GcPointer<JsObject>,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         index: u32,
         slot: &mut Slot,
     ) -> bool {
@@ -210,7 +210,7 @@ impl JsArray {
 impl GcPointer<JsObject> {
     fn change_length_writable(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         writable: bool,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -233,7 +233,7 @@ impl GcPointer<JsObject> {
 
     fn define_length_property(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         desc: &PropertyDescriptor,
         throwable: bool,
     ) -> Result<bool, JsValue> {
@@ -319,7 +319,7 @@ impl GcPointer<JsObject> {
 
     fn set_length(
         &mut self,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
         len: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {

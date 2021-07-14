@@ -1,7 +1,7 @@
 use chrono::{prelude::*, Duration, LocalResult};
 use std::fmt::Display;
 
-use crate::{define_jsclass_with_symbol, prelude::*};
+use crate::{define_jsclass_with_symbol, prelude::*, vm::class::JsClass};
 
 /// The number of nanoseconds in a millisecond.
 const NANOS_PER_MS: i64 = 1_000_000;
@@ -229,5 +229,10 @@ impl Date {
                 })
                 .filter(|dt| Self::time_clip(dt.timestamp_millis() as f64).is_some())
         });
+    }
+}
+impl JsClass for Date {
+    fn class() -> &'static Class {
+        Self::get_class()
     }
 }

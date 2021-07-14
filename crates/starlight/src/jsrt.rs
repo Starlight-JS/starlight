@@ -38,7 +38,7 @@ use function::*;
 use promise::*;
 use wtf_rs::keep_on_stack;
 
-pub fn print(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn print(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     for i in 0..args.size() {
         let value = args.at(i);
         let string = value.to_string(ctx)?;
@@ -48,8 +48,8 @@ pub fn print(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.size() as i32))
 }
 
-impl Context {
-    pub(crate) fn init_builtin_in_global_object(&mut self) {
+impl GcPointer<Context> {
+    pub(crate) fn init_builtin_in_global_object(mut self) {
         let _ = self.global_object().put(
             self,
             "Infinity".intern(),
@@ -155,7 +155,7 @@ impl Context {
             false,
         );
     }
-    pub(crate) fn init_self_hosted(&mut self) {
+    pub(crate) fn init_self_hosted(mut self) {
         let spread = include_str!("builtins/Spread.js");
         let func = self
             .compile_function("@spread", spread, &["iterable".to_string()])
@@ -201,7 +201,7 @@ impl Context {
         );
         eval("builtins/Object.js", include_str!("builtins/Object.js"))
     }
-    pub(crate) fn init_func_in_global_object(&mut self) {
+    pub(crate) fn init_func_in_global_object(mut self) {
         let mut proto = self.global_data.func_prototype.unwrap();
         let name = "Function".intern();
         let constrcutor = proto
@@ -212,7 +212,7 @@ impl Context {
             .global_object()
             .put(self, name, JsValue::from(constrcutor), false);
     }
-    pub(crate) fn init_func_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_func_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let name = "Function".intern();
 
@@ -275,7 +275,7 @@ impl Context {
             false,
         );
     }
-    pub(crate) fn init_promise_in_global_object(&mut self) -> Result<(), JsValue> {
+    pub(crate) fn init_promise_in_global_object(mut self) -> Result<(), JsValue> {
         // copied from file
         let mut ctor = JsNativeFunction::new(self, "Promise".intern(), promise_constructor, 1);
 
@@ -303,7 +303,7 @@ impl Context {
 
         Ok(())
     }
-    pub(crate) fn init_weak_ref_in_global_object(&mut self) {
+    pub(crate) fn init_weak_ref_in_global_object(mut self) {
         let mut init = || -> Result<(), JsValue> {
             let mut proto = self.global_data().weak_ref_prototype.unwrap();
             let ctor = proto.get(self, "constructor".intern())?;
@@ -321,7 +321,7 @@ impl Context {
             }
         }
     }
-    pub(crate) fn init_weak_ref_in_global_data(&mut self) {
+    pub(crate) fn init_weak_ref_in_global_data(mut self) {
         let mut init = || -> Result<(), JsValue> {
             let obj_proto = self.global_data().object_prototype.unwrap();
             self.global_data.weak_ref_structure = Some(Structure::new_indexed(self, None, false));
@@ -363,7 +363,7 @@ impl Context {
         }
     }
 
-    pub(crate) fn init_array_in_global_object(&mut self) {
+    pub(crate) fn init_array_in_global_object(mut self) {
         let mut proto = self.global_data.array_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
@@ -379,7 +379,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_array_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_array_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -501,7 +501,7 @@ impl Context {
         self.global_data.array_prototype = Some(proto);
     }
 
-    pub(crate) fn init_error_in_global_object(&mut self) {
+    pub(crate) fn init_error_in_global_object(mut self) {
         self.init_base_error_in_realm();
         self.init_eval_error_in_realm();
         self.init_type_error_in_realm();
@@ -510,7 +510,7 @@ impl Context {
         self.init_range_error_in_realm();
     }
 
-    pub(crate) fn init_base_error_in_realm(&mut self) {
+    pub(crate) fn init_base_error_in_realm(mut self) {
         let mut proto = self.global_data.error.unwrap();
         let e = "Error".intern();
         let mut ctor = JsNativeFunction::new(self, e, error_constructor, 1);
@@ -561,7 +561,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_eval_error_in_realm(&mut self) {
+    pub(crate) fn init_eval_error_in_realm(mut self) {
         let mut sub_proto = self.global_data.eval_error.unwrap();
         let sym = "EvalError".intern();
         let mut sub_ctor = JsNativeFunction::new(self, sym, eval_error_constructor, 1);
@@ -610,7 +610,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_type_error_in_realm(&mut self) {
+    pub(crate) fn init_type_error_in_realm(mut self) {
         let mut sub_proto = self.global_data.type_error.unwrap();
         let sym = "TypeError".intern();
         let mut sub_ctor = JsNativeFunction::new(self, sym, type_error_constructor, 1);
@@ -663,7 +663,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_syntax_error_in_realm(&mut self) {
+    pub(crate) fn init_syntax_error_in_realm(mut self) {
         let mut sub_proto = self.global_data.syntax_error.unwrap();
         let sym = "SyntaxError".intern();
         let mut sub_ctor = JsNativeFunction::new(self, sym, syntax_error_constructor, 1);
@@ -716,7 +716,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_reference_error_in_realm(&mut self) {
+    pub(crate) fn init_reference_error_in_realm(mut self) {
         let mut sub_proto = self.global_data.reference_error.unwrap();
         let sym = "ReferenceError".intern();
         let mut sub_ctor = JsNativeFunction::new(self, sym, reference_error_constructor, 1);
@@ -766,7 +766,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_range_error_in_realm(&mut self) {
+    pub(crate) fn init_range_error_in_realm(mut self) {
         let mut sub_proto = self.global_data.range_error.unwrap();
         let sym = "RangeError".intern();
         let mut sub_ctor = JsNativeFunction::new(self, sym, range_error_constructor, 1);
@@ -816,7 +816,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_error_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_error_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         self.global_data.error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
@@ -916,8 +916,8 @@ impl Context {
 
 use object::*;
 
-impl Context {
-    pub(crate) fn init_object_in_global_object(&mut self) {
+impl GcPointer<Context> {
+    pub(crate) fn init_object_in_global_object(mut self) {
         let name = "Object".intern();
         let mut proto = self.global_data.object_prototype.unwrap();
         let constructor = proto
@@ -941,7 +941,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_object_in_global_data(&mut self, mut proto: GcPointer<JsObject>) {
+    pub(crate) fn init_object_in_global_data(mut self, mut proto: GcPointer<JsObject>) {
         let name = "Object".intern();
         let mut obj_constructor = JsNativeFunction::new(self, name, object_constructor, 1);
         self.global_data.object_constructor = Some(obj_constructor);
@@ -1327,7 +1327,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
     Box::leak(refs.into_boxed_slice())
 });
 
-pub fn get_length(ctx: &mut Context, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
+pub fn get_length(ctx: GcPointer<Context>, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
     if std::ptr::eq(val.class(), JsArray::get_class()) {
         return Ok(val.indexed.length());
     }
@@ -1337,7 +1337,7 @@ pub fn get_length(ctx: &mut Context, val: &mut GcPointer<JsObject>) -> Result<u3
 
 /// Convert JS object to JS property descriptor
 pub fn to_property_descriptor(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     target: JsValue,
 ) -> Result<PropertyDescriptor, JsValue> {
     if !target.is_jsobject() {
@@ -1449,7 +1449,7 @@ pub fn to_property_descriptor(
     }
 }
 
-pub(crate) fn module_load(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub(crate) fn module_load(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let name = args.at(0).to_string(ctx)?;
     let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
     let _is_js_load = (name.starts_with("./")
@@ -1527,7 +1527,7 @@ pub(crate) fn module_load(ctx: &mut Context, args: &Arguments) -> Result<JsValue
     Ok(JsValue::new(*module_object))
 }
 
-pub fn to_index(ctx: &mut Context, val: JsValue) -> Result<usize, JsValue> {
+pub fn to_index(ctx: GcPointer<Context>, val: JsValue) -> Result<usize, JsValue> {
     let value = if val.is_undefined() {
         JsValue::new(0)
     } else {
@@ -1546,7 +1546,7 @@ pub fn to_index(ctx: &mut Context, val: JsValue) -> Result<usize, JsValue> {
 }
 
 pub fn define_lazy_property(
-    ctx: &mut Context,
+    ctx: GcPointer<Context>,
     mut object: GcPointer<JsObject>,
     name: Symbol,
     init: Rc<dyn Fn() -> PropertyDescriptor>,

@@ -25,7 +25,7 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn new(ctx: &mut Context, cap: u32) -> GcPointer<Self> {
+    pub fn new(ctx: GcPointer<Context>, cap: u32) -> GcPointer<Self> {
         unsafe {
             let mut ptr =
                 alloc_zeroed(Layout::array::<Variable>(cap as _).unwrap()).cast::<Variable>();

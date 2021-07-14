@@ -43,7 +43,6 @@ pub struct Context {
     pub(crate) modules: HashMap<String, ModuleKind>,
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
 }
-
 impl Context {
     pub fn global_object(&mut self) -> GcPointer<JsObject> {
         self.global_object.unwrap()
@@ -112,7 +111,8 @@ impl Context {
         vm.gc.collect_if_necessary();
         ctx
     }
-
+}
+impl GcPointer<Context> {
     pub fn init(&mut self) {
         self.init_global_data();
         self.init_global_object();
@@ -141,7 +141,7 @@ impl Context {
         self.init_internal_modules();
     }
 
-    pub fn init_global_data(&mut self) {
+    pub fn init_global_data(mut self) {
         self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
         let s = Structure::new_unique_indexed(self, None, false);
         let mut proto = JsObject::new(self, &s, JsObject::get_class(), ObjectTag::Ordinary);
@@ -180,7 +180,7 @@ impl Context {
     }
 }
 
-impl Context {
+impl GcPointer<Context> {
     /// Construct new type error from provided string.
     pub fn new_type_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
@@ -203,9 +203,9 @@ impl Context {
     }
 }
 
-impl Context {
+impl GcPointer<Context> {
     pub fn compile_function(
-        &mut self,
+        mut self,
         name: &str,
         code: &str,
         params: &[String],
@@ -218,7 +218,7 @@ impl Context {
     /// Compile provided script into JS function. If error when compiling happens `SyntaxError` instance
     /// is returned.
     pub fn compile(
-        &mut self,
+        mut self,
         path: &str,
         name: &str,
         script: &str,
@@ -268,7 +268,7 @@ impl Context {
         Ok(JsValue::encode_object_value(fun))
     }
     pub fn compile_module(
-        &mut self,
+        mut self,
         path: &str,
         name: &str,
         script: &str,
@@ -325,7 +325,7 @@ impl Context {
     ///
     /// TODO: Return script execution result. Right now just `undefined` value is returned.
     pub fn eval_internal(
-        &mut self,
+        mut self,
         path: Option<&str>,
         force_strict: bool,
         script: &str,
@@ -390,7 +390,7 @@ impl Context {
         res
     }
     pub fn evalm(
-        &mut self,
+        mut self,
         path: Option<&str>,
         force_strict: bool,
         script: &str,
@@ -481,7 +481,7 @@ impl Context {
         result
     }
 
-    pub fn init_module_loader(&mut self) {
+    pub fn init_module_loader(mut self) {
         let loader = JsNativeFunction::new(self, "@loader".intern(), jsrt::module_load, 1);
         self.module_loader = Some(loader);
     }
@@ -496,7 +496,7 @@ impl Context {
     }
 
     pub fn add_module(
-        &mut self,
+        mut self,
         name: &str,
         mut module_object: ModuleKind,
     ) -> Result<Option<ModuleKind>, &str> {
@@ -536,9 +536,9 @@ impl Context {
         }
     }
 
-    pub(crate) fn schedule_async<F>(&mut self, job: F) -> Result<(), JsValue>
+    pub(crate) fn schedule_async<F>(mut self, job: F) -> Result<(), JsValue>
     where
-        F: FnOnce(&mut Context) + 'static,
+        F: FnOnce(GcPointer<Context>) + 'static,
     {
         if let Some(scheduler) = &self.vm.sched_async_func {
             scheduler(Box::new(job));

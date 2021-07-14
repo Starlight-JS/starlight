@@ -5,7 +5,7 @@ use crate::prelude::*;
 
 use super::context::Context;
 
-pub fn normalize_prototype_chain(ctx: &mut Context, base: &GcPointer<JsObject>) -> (usize, bool) {
+pub fn normalize_prototype_chain(ctx: GcPointer<Context>, base: &GcPointer<JsObject>) -> (usize, bool) {
     let mut saw_poly_proto = false;
     let mut count = 0;
     let stack = ctx.shadowstack();
