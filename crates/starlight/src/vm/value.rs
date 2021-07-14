@@ -1243,10 +1243,10 @@ pub mod new_value {
          * The top 15-bits denote the type of the encoded JSValue:
          *
          *     Pointer {  0000:PPPP:PPPP:PPPP
-         *              / 0001:****:****:****
+         *              / 0002:****:****:****
          *     Double  {         ...
-         *              \ FFFE:****:****:****
-         *     Integer {  FFFF:0000:IIII:IIII
+         *              \ FFFC:****:****:****
+         *     Integer {  FFFE:0000:IIII:IIII
          *
          * The scheme we have implemented encodes double precision values by performing a
          * 64-bit integer addition of the value 2^49 to the number. After this manipulation
@@ -1285,7 +1285,7 @@ pub mod new_value {
 
         pub const DOUBLE_ENCODE_OFFSET_BIT: usize = 49;
         pub const DOUBLE_ENCODE_OFFSET: i64 = 1 << Self::DOUBLE_ENCODE_OFFSET_BIT as i64;
-        pub const NUMBER_TAG: i64 = 0xffff000000000000u64 as i64;
+        pub const NUMBER_TAG: i64 = 0xfffe000000000000u64 as i64;
         pub const LOWEST_OF_HIGH_BITS: i64 = 1 << 49;
 
         pub const OTHER_TAG: i32 = 0x2;
