@@ -36,8 +36,8 @@ macro_rules! def_symbols {
     }
 }
 
-impl Context {
-    pub(crate) fn init_symbol_in_global_object(&mut self) {
+impl GcPointer<Context> {
+    pub(crate) fn init_symbol_in_global_object(mut self) {
         let mut init = || -> Result<(), JsValue> {
             let name = "constructor".intern();
             let constructor = self
@@ -57,7 +57,7 @@ impl Context {
         }
     }
 
-    pub(crate) fn init_symbol_in_global_data(&mut self, proto: GcPointer<JsObject>) {
+    pub(crate) fn init_symbol_in_global_data(mut self, proto: GcPointer<JsObject>) {
         let mut init = || -> Result<(), JsValue> {
             self.global_data.symbol_structure = Some(Structure::new_indexed(self, None, false));
             let structure = Structure::new_indexed(self, Some(proto), false);
@@ -113,7 +113,7 @@ pub fn symbol_ctor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
     let arg = args.at(0).to_string(ctx)?.intern();
     Ok(JsValue::new(JsSymbol::new(ctx, arg)))
 }
-pub fn symbol_for(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn symbol_for(mut ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let arg = args.at(0).to_string(ctx)?.intern();
 
     if let Some(sym) = ctx.symbol_table.get(&arg) {

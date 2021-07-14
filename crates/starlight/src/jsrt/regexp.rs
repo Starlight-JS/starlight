@@ -119,19 +119,15 @@ impl RegExp {
     );
 }
 
-impl Context {
-    pub(crate) fn init_regexp_in_global_object(&mut self) -> Result<(), JsValue> {
+impl GcPointer<Context> {
+    pub(crate) fn init_regexp_in_global_object(mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.regexp_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        self.global_object().put(
-            self,
-            "RegExp".intern(),
-            JsValue::new(constructor),
-            false,
-        )?;
+        self.global_object()
+            .put(self, "RegExp".intern(), JsValue::new(constructor), false)?;
         let mut sym = self
             .global_object()
             .get(self, "Symbol".intern())?
@@ -142,7 +138,7 @@ impl Context {
         Ok(())
     }
 
-    pub(crate) fn init_regexp_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_regexp_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         self.global_data.regexp_structure = Some(Structure::new_indexed(self, None, false));
         let proto_map = self
             .global_data

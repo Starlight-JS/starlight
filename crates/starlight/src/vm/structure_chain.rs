@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{Context, structure::Structure};
+use super::{structure::Structure, Context};
 use crate::gc::cell::GcPointer;
 use crate::prelude::*;
 use std::{any::TypeId, mem::size_of};
@@ -14,7 +14,10 @@ impl StructureChain {
         self.vector[0]
     }
 
-    pub fn create(ctx: GcPointer<Context>, head: Option<GcPointer<JsObject>>) -> GcPointer<Self> {
+    pub fn create(
+        mut ctx: GcPointer<Context>,
+        head: Option<GcPointer<JsObject>>,
+    ) -> GcPointer<Self> {
         let mut size = 0;
         let mut current = head;
         while let Some(object) = current {

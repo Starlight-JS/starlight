@@ -1,5 +1,11 @@
-use crate::{prelude::*, vm::{context::Context, array_buffer::JsArrayBuffer}};
-pub fn array_buffer_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+use crate::{
+    prelude::*,
+    vm::{array_buffer::JsArrayBuffer, context::Context},
+};
+pub fn array_buffer_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Err(JsValue::new(ctx.new_type_error(
             "ArrayBuffer() called in function context instead of constructor",
@@ -18,7 +24,10 @@ pub fn array_buffer_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Re
     Ok(JsValue::new(*this))
 }
 
-pub fn array_buffer_byte_length(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn array_buffer_byte_length(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(this = stack, args.this.to_object(ctx)?);
     if !this.is_class(JsArrayBuffer::get_class()) {
@@ -71,8 +80,8 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     todo!()
 }
 
-impl Context {
-    pub(crate) fn init_array_buffer_in_global_object(&mut self) -> Result<(), JsValue> {
+impl GcPointer<Context> {
+    pub(crate) fn init_array_buffer_in_global_object(mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.array_buffer_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
@@ -87,7 +96,7 @@ impl Context {
         Ok(())
     }
 
-    pub(crate) fn init_array_buffer_in_global_data(&mut self) {
+    pub(crate) fn init_array_buffer_in_global_data(mut self) {
         // Do not care about GC since no GC is possible when initializing runtime.
         let mut init = || -> Result<(), JsValue> {
             let mut structure = Structure::new_indexed(

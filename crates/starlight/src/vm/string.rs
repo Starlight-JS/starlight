@@ -1,7 +1,17 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{Context, attributes::*, method_table::*, object::{EnumerationMode, JsHint, JsObject, ObjectTag}, property_descriptor::*, slot::*, structure::Structure, symbol_table::{Internable, Symbol}, value::*};
+use super::{
+    attributes::*,
+    method_table::*,
+    object::{EnumerationMode, JsHint, JsObject, ObjectTag},
+    property_descriptor::*,
+    slot::*,
+    structure::Structure,
+    symbol_table::{Internable, Symbol},
+    value::*,
+    Context,
+};
 use crate::gc::snapshot::deserializer::Deserializable;
 use crate::gc::{
     cell::{GcCell, GcPointer, Trace},
@@ -18,7 +28,7 @@ impl JsString {
     pub fn is_empty(&self) -> bool {
         self.string.is_empty()
     }
-    pub fn new(ctx: GcPointer<Context>, as_str: impl AsRef<str>) -> GcPointer<Self> {
+    pub fn new(mut ctx: GcPointer<Context>, as_str: impl AsRef<str>) -> GcPointer<Self> {
         let str = as_str.as_ref();
         let proto = Self {
             string: str.to_owned(),

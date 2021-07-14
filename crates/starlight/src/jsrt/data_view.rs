@@ -2,8 +2,17 @@ use std::{any::TypeId, mem::size_of};
 
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
-use crate::{JsTryFrom, prelude::*, vm::{context::Context, array_buffer::JsArrayBuffer, data_view::JsDataView, object::TypedJsObject}};
-pub fn data_view_prototype_buffer(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+use crate::{
+    prelude::*,
+    vm::{
+        array_buffer::JsArrayBuffer, context::Context, data_view::JsDataView, object::TypedJsObject,
+    },
+    JsTryFrom,
+};
+pub fn data_view_prototype_buffer(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if !this.is_class(JsDataView::get_class()) {
         return Err(JsValue::new(ctx.new_type_error(
@@ -124,7 +133,10 @@ pub fn data_view_prototype_set<T: SwapByteOrder + Into<JsValue> + Copy + 'static
     Ok(JsValue::encode_undefined_value())
 }
 
-pub fn data_view_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn data_view_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView() called in a function context instead of constructor",
@@ -167,23 +179,19 @@ pub fn data_view_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Resul
     Ok(JsValue::new(this))
 }
 
-impl Context {
-    pub(crate) fn init_data_view_in_global_object(&mut self) -> Result<(), JsValue> {
+impl GcPointer<Context> {
+    pub(crate) fn init_data_view_in_global_object(mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.data_view_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        self.global_object().put(
-            self,
-            "DataView".intern(),
-            JsValue::new(constructor),
-            false,
-        )?;
+        self.global_object()
+            .put(self, "DataView".intern(), JsValue::new(constructor), false)?;
         Ok(())
     }
 
-    pub(crate) fn init_data_view_in_global_data(&mut self) {
+    pub(crate) fn init_data_view_in_global_data(mut self) {
         let mut init = || -> Result<(), JsValue> {
             let obj_proto = self.global_data.object_prototype.unwrap();
             self.global_data.data_view_structure = Some(Structure::new_indexed(self, None, false));
@@ -273,7 +281,9 @@ impl Context {
             Err(e) => {
                 panic!(
                     "Failed to initialize DataView: {}",
-                    e.to_string(self).ok().expect("failed to convectx to string")
+                    e.to_string(self)
+                        .ok()
+                        .expect("failed to convectx to string")
                 )
             }
         }

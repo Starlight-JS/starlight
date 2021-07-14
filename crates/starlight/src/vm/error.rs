@@ -13,7 +13,7 @@ pub struct JsTypeError;
 pub struct JsURIError;
 impl JsError {
     pub fn new(
-        ctx: GcPointer<Context>,
+       mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -47,7 +47,7 @@ impl JsError {
 
 impl JsEvalError {
     pub fn new(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -81,7 +81,7 @@ impl JsEvalError {
 
 impl JsRangeError {
     pub fn new(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -115,7 +115,7 @@ impl JsRangeError {
 
 impl JsReferenceError {
     pub fn new(
-        ctx: GcPointer<Context>,
+       mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -149,7 +149,7 @@ impl JsReferenceError {
 
 impl JsSyntaxError {
     pub fn new(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -183,7 +183,7 @@ impl JsSyntaxError {
 
 impl JsTypeError {
     pub fn new(
-        ctx: GcPointer<Context>,
+       mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {

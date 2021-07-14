@@ -458,7 +458,7 @@ impl CodeBlock {
         }
     }
     /// Create new empty code block.
-    pub fn new(ctx: GcPointer<Context>, name: Symbol, strict: bool, path: Rc<str>) -> GcPointer<Self> {
+    pub fn new(mut ctx: GcPointer<Context>, name: Symbol, strict: bool, path: Rc<str>) -> GcPointer<Self> {
         let this = Self {
             path,
             name,

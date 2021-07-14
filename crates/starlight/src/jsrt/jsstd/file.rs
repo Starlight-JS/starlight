@@ -1,10 +1,7 @@
 use crate::define_jsclass_with_symbol;
 use crate::prelude::*;
 use crate::vm::context::Context;
-use crate::{
-    gc::cell::GcPointer,
-    vm::{object::JsObject},
-};
+use crate::{gc::cell::GcPointer, vm::object::JsObject};
 use std::{
     fs::{File, OpenOptions},
     intrinsics::unlikely,
@@ -12,7 +9,10 @@ use std::{
     mem::ManuallyDrop,
 };
 
-pub(super) fn std_init_file(ctx: GcPointer<Context>, mut std: GcPointer<JsObject>) -> Result<(), JsValue> {
+pub(super) fn std_init_file(
+    mut ctx: GcPointer<Context>,
+    mut std: GcPointer<JsObject>,
+) -> Result<(), JsValue> {
     let mut ctor = JsNativeFunction::new(ctx, "File".intern(), std_file_open, 2);
 
     let mut proto = JsObject::new_empty(ctx);
@@ -30,7 +30,7 @@ pub(super) fn std_init_file(ctx: GcPointer<Context>, mut std: GcPointer<JsObject
     Ok(())
 }
 
-pub fn std_file_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn std_file_open(mut ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let path = args.at(0).to_string(ctx)?;
     let flags = if args.at(1).is_jsstring() {
         args.at(1).to_string(ctx)?
@@ -64,7 +64,12 @@ pub fn std_file_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
         .get(ctx, "@@File".intern().private())?
         .to_object(ctx)?;
     let structure = Structure::new_indexed(ctx, Some(proto), false);
-    let mut obj = JsObject::new(ctx, &structure, FileObject::get_class(), ObjectTag::Ordinary);
+    let mut obj = JsObject::new(
+        ctx,
+        &structure,
+        FileObject::get_class(),
+        ObjectTag::Ordinary,
+    );
     *obj.data::<FileObject>() = ManuallyDrop::new(FileObject { file: Some(file) });
     Ok(JsValue::new(obj))
 }
@@ -212,7 +217,10 @@ pub fn std_file_read_bytes(ctx: GcPointer<Context>, args: &Arguments) -> Result<
 }
 
 /// std.File.prototype.readBytesToEnd: returns array of bytes that was read from file
-pub fn std_file_read_bytes_to_end(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn std_file_read_bytes_to_end(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     if this.is_class(FileObject::get_class()) {
         let mut buffer = Vec::new();
@@ -244,7 +252,10 @@ pub fn std_file_read_bytes_to_end(ctx: GcPointer<Context>, args: &Arguments) -> 
 }
 
 /// std.File.prototype.readBytesExact: returns array of bytes that was read from file
-pub fn std_file_read_bytes_exact(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn std_file_read_bytes_exact(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     let count = args.at(0).to_uint32(ctx)?;
     if this.is_class(FileObject::get_class()) {

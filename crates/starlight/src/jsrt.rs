@@ -1449,7 +1449,10 @@ pub fn to_property_descriptor(
     }
 }
 
-pub(crate) fn module_load(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub(crate) fn module_load(
+    mut ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let name = args.at(0).to_string(ctx)?;
     let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
     let _is_js_load = (name.starts_with("./")

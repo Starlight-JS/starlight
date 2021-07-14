@@ -4,9 +4,9 @@ use std::mem::ManuallyDrop;
 use crate::define_jsclass_with_symbol;
 use crate::prelude::*;
 use crate::vm::class::JsClass;
+use crate::vm::context::Context;
 use crate::vm::object::TypedJsObject;
 use crate::JsTryFrom;
-use crate::vm::context::Context;
 
 pub struct JsWeakRef {
     value: WeakRef<JsObject>,
@@ -41,7 +41,10 @@ impl JsWeakRef {
     );
 }
 
-pub fn weak_ref_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn weak_ref_constructor(
+    mut ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let target = args.at(0);
     if unlikely(!target.is_jsobject()) {
         return Err(JsValue::new(
@@ -57,7 +60,10 @@ pub fn weak_ref_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result
     Ok(JsValue::new(weak_ref))
 }
 
-pub fn weak_ref_prototype_deref(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn weak_ref_prototype_deref(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let weak_ref = TypedJsObject::<JsWeakRef>::try_from(ctx, args.this)?;
     match weak_ref.value.upgrade() {
         Some(value) => Ok(JsValue::new(value)),

@@ -86,7 +86,7 @@ impl JsPromise {
 
         res.map(|_| promise)
     }
-    pub fn new_unresolving(ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
+    pub fn new_unresolving(mut ctx: GcPointer<Context>) -> Result<JsValue, JsValue> {
         let proto = ctx
             .global_object()
             .get(ctx, "Promise".intern())?
@@ -106,7 +106,7 @@ impl JsPromise {
         Ok(JsValue::new(obj))
     }
     pub fn new_tracking(
-        ctx: GcPointer<Context>,
+       mut ctx: GcPointer<Context>,
         mode: TrackingMode,
         promises_array: JsValue,
     ) -> Result<JsValue, JsValue> {
@@ -265,7 +265,7 @@ impl JsPromise {
 
     fn do_resolve(
         &mut self,
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         prom_this: JsValue,
         resolution: Result<JsValue, JsValue>,
     ) -> Result<(), JsValue> {

@@ -489,7 +489,7 @@ impl Accessor {
     pub fn setter(&self) -> JsValue {
         self.setter
     }
-    pub fn new(ctx: GcPointer<Context>, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
+    pub fn new(mut ctx: GcPointer<Context>, getter: JsValue, setter: JsValue) -> GcPointer<Self> {
         let this = Self { getter, setter };
         ctx.heap().allocate(this)
     }

@@ -595,7 +595,7 @@ pub struct JsVMFunction {
 }
 impl JsVMFunction {
     pub fn new(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         code: GcPointer<CodeBlock>,
         env: GcPointer<Environment>,
     ) -> GcPointer<JsObject> {
@@ -768,7 +768,7 @@ extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<GeneratorData>().func_state.trace(tracer);
 }
 impl JsGeneratorFunction {
-    pub fn new(ctx: GcPointer<Context>, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
+    pub fn new(mut ctx: GcPointer<Context>, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
         // let ctx = ctx.space().new_local_context();
         let stack = ctx.shadowstack();
         //root!(envs = stack, Structure::new_indexed(ctx, Some(env), false));
@@ -825,7 +825,7 @@ impl JsGeneratorFunction {
     /// - Return generator object.
     fn call(
         &mut self,
-        ctx: GcPointer<Context>,
+      mut  ctx: GcPointer<Context>,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {
@@ -854,7 +854,7 @@ pub enum GeneratorMagic {
     Throw,
 }
 fn async_func_resume(
-    ctx: GcPointer<Context>,
+    mut ctx: GcPointer<Context>,
     state: &mut AsyncFunctionState,
 ) -> Result<JsValue, JsValue> {
     let mut frame = ctx
@@ -871,7 +871,7 @@ fn async_func_resume(
     }
 }
 pub(crate) fn js_generator_next(
-    ctx: GcPointer<Context>,
+    mut ctx: GcPointer<Context>,
     this: JsValue,
     args: &Arguments,
     magic: GeneratorMagic,

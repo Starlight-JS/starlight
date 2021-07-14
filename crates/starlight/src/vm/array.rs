@@ -3,7 +3,15 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::intrinsics::unlikely;
 
-use super::{Context, attributes::*, class::JsClass, error::{JsRangeError, JsTypeError}, indexed_elements::MAX_VECTOR_SIZE, object::*, string::JsString};
+use super::{
+    attributes::*,
+    class::JsClass,
+    error::{JsRangeError, JsTypeError},
+    indexed_elements::MAX_VECTOR_SIZE,
+    object::*,
+    string::JsString,
+    Context,
+};
 use super::{
     method_table::*,
     object::EnumerationMode,
@@ -319,7 +327,7 @@ impl GcPointer<JsObject> {
 
     fn set_length(
         &mut self,
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         len: u32,
         throwable: bool,
     ) -> Result<bool, JsValue> {

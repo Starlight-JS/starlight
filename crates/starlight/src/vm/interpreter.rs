@@ -184,7 +184,7 @@ impl GcPointer<Context> {
 
 #[inline(never)]
 unsafe fn eval_internal(
-    ctx: GcPointer<Context>,
+   mut  ctx: GcPointer<Context>,
     code: GcPointer<CodeBlock>,
     ip: *mut u8,
     this: JsValue,
@@ -229,12 +229,12 @@ unsafe fn eval_internal(
     }
 }
 
-pub unsafe fn eval(ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
+pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result<JsValue, JsValue> {
     ctx.heap().collect_if_necessary();
     let mut ip = (*frame).ip;
 
     let mut frame: &'static mut CallFrame = &mut *frame;
-    let stack = ctx.stack as *mut Stack;
+    let stack = &mut ctx.stack as *mut Stack;
     let stack = &mut *stack;
     let gcstack = ctx.shadowstack();
     loop {
@@ -1388,7 +1388,7 @@ pub struct SpreadValue {
 }
 
 impl SpreadValue {
-    pub fn new(ctx: GcPointer<Context>, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
+    pub fn new(mut ctx: GcPointer<Context>, value: JsValue) -> Result<GcPointer<Self>, JsValue> {
         let mut builtin = ctx.global_data.spread_builtin.unwrap();
         let mut slice = [value];
         let mut args = Arguments::new(JsValue::encode_undefined_value(), &mut slice);

@@ -1,6 +1,9 @@
 use num::traits::float::FloatCore;
 
-use crate::{prelude::*, vm::{context::Context, number::NumberObject}};
+use crate::{
+    prelude::*,
+    vm::{context::Context, number::NumberObject},
+};
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
@@ -511,8 +514,8 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-impl Context {
-    pub(crate) fn init_number_in_global_object(&mut self) {
+impl GcPointer<Context> {
+    pub(crate) fn init_number_in_global_object(mut self) {
         let mut proto = self.global_data.number_prototype.unwrap();
         let constructor = proto
             .get_own_property(self, "constructor".intern())
@@ -526,7 +529,7 @@ impl Context {
         );
     }
 
-    pub(crate) fn init_number_in_global_data(&mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_number_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let mut proto = NumberObject::new_plain(self, structure, 0.0);
 

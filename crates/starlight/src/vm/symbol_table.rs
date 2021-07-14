@@ -226,7 +226,7 @@ pub struct JsSymbol {
 }
 
 impl JsSymbol {
-    pub fn new(ctx: GcPointer<Context>, sym: Symbol) -> GcPointer<Self> {
+    pub fn new(mut ctx: GcPointer<Context>, sym: Symbol) -> GcPointer<Self> {
         ctx.heap().allocate(Self { sym })
     }
 

@@ -3,8 +3,8 @@ use std::intrinsics::unlikely;
 use crate::prelude::*;
 use crate::vm::{context::Context, function::*};
 
-impl Context {
-    pub(crate) fn init_generator_in_global_data(&mut self, _obj_proto: GcPointer<JsObject>) {
+impl GcPointer<Context> {
+    pub(crate) fn init_generator_in_global_data(mut self, _obj_proto: GcPointer<JsObject>) {
         let mut init = || -> Result<(), JsValue> {
             let f = Some(self.global_data.func_prototype.unwrap());
             let generator_structure = Structure::new_indexed(self, f, false);

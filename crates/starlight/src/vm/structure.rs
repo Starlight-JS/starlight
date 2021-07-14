@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::{attributes::*, object::JsObject, structure_chain::StructureChain};
-use super::{Context, symbol_table::*};
+use super::{symbol_table::*, Context};
 use crate::gc::cell::{GcCell, GcPointer, Trace, WeakRef};
 use crate::gc::{cell::Tracer, snapshot::deserializer::Deserializable};
 use crate::prelude::*;
@@ -132,7 +132,7 @@ impl TransitionsTable {
 
     pub fn insert(
         &mut self,
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         name: Symbol,
         attrs: AttrSafe,
         map: GcPointer<Structure>,
@@ -237,7 +237,7 @@ pub struct DeletedEntryHolder {
 }
 
 impl DeletedEntryHolder {
-    pub fn push(&mut self, ctx: GcPointer<Context>, offset: u32) {
+    pub fn push(&mut self, mut ctx: GcPointer<Context>, offset: u32) {
         let entry = ctx.heap().allocate(DeletedEntry {
             prev: self.entry,
             offset,
@@ -289,7 +289,11 @@ impl GcCell for DeletedEntry {
 }
 
 impl Structure {
-    fn ctor(ctx: GcPointer<Context>, previous: GcPointer<Self>, unique: bool) -> GcPointer<Self> {
+    fn ctor(
+        mut ctx: GcPointer<Context>,
+        previous: GcPointer<Self>,
+        unique: bool,
+    ) -> GcPointer<Self> {
         let mut this = ctx.heap().allocate(Structure {
             prototype: previous.prototype,
             previous: Some(previous),
@@ -319,7 +323,7 @@ impl Structure {
     }
 
     fn ctor1(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         prototype: Option<GcPointer<JsObject>>,
         unique: bool,
         indexed: bool,
@@ -361,7 +365,7 @@ impl Structure {
         this
     }
 
-    fn ctor3(ctx: GcPointer<Context>, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
+    fn ctor3(mut ctx: GcPointer<Context>, it: &[(Symbol, MapEntry)]) -> GcPointer<Self> {
         let table = it.iter().copied().collect::<TargetTable>();
         let table = ctx.heap().allocate(table);
         let mut this = ctx.heap().allocate(Structure {
@@ -408,7 +412,7 @@ impl Structure {
         Self::ctor3(ctx, it)
     }
     pub fn new_from_table(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         table: Option<TargetTable>,
         prototype: Option<GcPointer<JsObject>>,
         unique: bool,
@@ -501,7 +505,11 @@ impl GcPointer<Structure> {
         self.flatten();
         *self
     }
-    pub fn stored_prototype(&mut self, ctx: GcPointer<Context>, object: &GcPointer<JsObject>) -> JsValue {
+    pub fn stored_prototype(
+        &mut self,
+        ctx: GcPointer<Context>,
+        object: &GcPointer<JsObject>,
+    ) -> JsValue {
         if likely(self.has_mono_proto()) {
             return JsValue::new(self.prototype.unwrap());
         }
@@ -533,7 +541,7 @@ impl GcPointer<Structure> {
     pub fn has_table(&self) -> bool {
         self.table.is_some()
     }
-    pub fn allocate_table(&mut self, ctx: GcPointer<Context>) {
+    pub fn allocate_table(&mut self, mut ctx: GcPointer<Context>) {
         let mut stack = ctx.heap().allocate(Vec::with_capacity(8));
 
         if self.is_adding_map() {
@@ -662,7 +670,10 @@ impl GcPointer<Structure> {
         }
     }
 
-    pub fn change_extensible_transition(&mut self, ctx: GcPointer<Context>) -> GcPointer<Structure> {
+    pub fn change_extensible_transition(
+        &mut self,
+        ctx: GcPointer<Context>,
+    ) -> GcPointer<Structure> {
         Structure::new_unique(ctx, *self)
     }
     pub fn change_attributes_transition(

@@ -4,7 +4,7 @@
 use std::mem::size_of;
 
 use super::context::Context;
-use super::{value::JsValue};
+use super::value::JsValue;
 use crate::gc::Heap;
 use crate::gc::{
     cell::{GcCell, GcPointer, Trace, Tracer},
@@ -184,7 +184,7 @@ impl ArrayStorage {
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
-    pub fn with_size(ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
+    pub fn with_size(mut ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
         let stack = ctx.shadowstack();
         crate::letroot!(this = stack, Self::new(ctx.heap(), capacity));
         this.resize_within_capacity(ctx.heap(), size);

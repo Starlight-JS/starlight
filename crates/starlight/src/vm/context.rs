@@ -182,22 +182,22 @@ impl GcPointer<Context> {
 
 impl GcPointer<Context> {
     /// Construct new type error from provided string.
-    pub fn new_type_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+    pub fn new_type_error(mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsTypeError::new(self, msg, None)
     }
     /// Construct new reference error from provided string.
-    pub fn new_reference_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+    pub fn new_reference_error(mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsReferenceError::new(self, msg, None)
     }
     /// Construct new syntax error from provided string.
-    pub fn new_syntax_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+    pub fn new_syntax_error(mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsSyntaxError::new(self, msg, None)
     }
     /// Construct new range error from provided string.
-    pub fn new_range_error(&mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
+    pub fn new_range_error(mut self, msg: impl AsRef<str>) -> GcPointer<JsObject> {
         let msg = JsString::new(self, msg);
         JsRangeError::new(self, msg, None)
     }

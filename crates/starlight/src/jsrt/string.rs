@@ -1,6 +1,22 @@
 use regress::Regex;
 
-use crate::{gc::cell::GcPointer, vm::{context::Context, arguments::Arguments, array::JsArray, attributes::*, error::{JsRangeError, JsTypeError}, function::JsNativeFunction, object::JsObject, property_descriptor::DataDescriptor, string::{JsString, JsStringObject}, structure::Structure, symbol_table::{Internable, Symbol}, value::*}};
+use crate::{
+    gc::cell::GcPointer,
+    vm::{
+        arguments::Arguments,
+        array::JsArray,
+        attributes::*,
+        context::Context,
+        error::{JsRangeError, JsTypeError},
+        function::JsNativeFunction,
+        object::JsObject,
+        property_descriptor::DataDescriptor,
+        string::{JsString, JsStringObject},
+        structure::Structure,
+        symbol_table::{Internable, Symbol},
+        value::*,
+    },
+};
 use std::{
     char::{decode_utf16, from_u32},
     cmp::{max, min},
@@ -527,22 +543,22 @@ pub fn string_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     }
 }
 
-impl Context {
-
-    pub fn init_string_in_global_object(&mut self){
+impl GcPointer<Context> {
+    pub fn init_string_in_global_object(mut self) {
         let name = "constructor".intern();
-        let constructor = self.global_data.string_prototype.unwrap().get_own_property(self, name).unwrap().value();
+        let constructor = self
+            .global_data
+            .string_prototype
+            .unwrap()
+            .get_own_property(self, name)
+            .unwrap()
+            .value();
         self.global_object()
-            .put(
-                self,
-                "String".intern(),
-                constructor,
-                false,
-            )
+            .put(self, "String".intern(), constructor, false)
             .unwrap_or_else(|_| panic!());
     }
 
-    pub fn init_string_in_global_data(&mut self,obj_proto: GcPointer<JsObject>) {
+    pub fn init_string_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         self.global_data.string_structure = Some(Structure::new_indexed(self, None, true));
         let map = Structure::new_unique_with_proto(self, Some(obj_proto), false);
         let mut proto = JsStringObject::new_plain(self, &map);

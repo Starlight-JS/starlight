@@ -116,8 +116,8 @@ pub fn math_random(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValu
 pub fn math_sqrt(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).to_number(ctx)?.sqrt()))
 }
-impl Context {
-    pub(crate) fn init_math_in_global_object(&mut self) {
+impl GcPointer<Context> {
+    pub(crate) fn init_math_in_global_object(mut self) {
         let mut init = || -> Result<(), JsValue> {
             let mut math = JsObject::new_empty(self);
             /* let f = JsNativeFunction::new(self, "trunc".intern(), math_trunc, 1);

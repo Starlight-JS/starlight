@@ -51,7 +51,7 @@ impl IndexedElements {
         self.map = None;
     }
 
-    pub fn ensure_map(&mut self, ctx: GcPointer<Context>) -> GcPointer<SparseArrayMap> {
+    pub fn ensure_map(&mut self, mut ctx: GcPointer<Context>) -> GcPointer<SparseArrayMap> {
         match self.map.as_ref() {
             Some(map) => *map,
             None => {
@@ -86,7 +86,7 @@ impl IndexedElements {
         self.flags &= !(FLAG_WRITABLE as u32);
     }
 
-    pub fn new(ctx: GcPointer<Context>) -> Self {
+    pub fn new(mut ctx: GcPointer<Context>) -> Self {
         Self {
             length: 0,
             flags: FLAG_DENSE as u32 | FLAG_WRITABLE as u32,

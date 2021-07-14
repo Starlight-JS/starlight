@@ -512,7 +512,7 @@ impl JsObject {
     // section 8.12.9 `[[DefineOwnProperty]]`
     pub fn DefineOwnNonIndexedPropertySlotMethod(
         obj: &mut GcPointer<Self>,
-        ctx: GcPointer<Context>,
+       mut  ctx: GcPointer<Context>,
         name: Symbol,
         desc: &PropertyDescriptor,
         slot: &mut Slot,
@@ -884,7 +884,7 @@ impl JsObject {
     }
     /// Create new JS object instance with provided class, structure and tag.
     pub fn new(
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         structure: &GcPointer<Structure>,
         class: &'static Class,
         tag: ObjectTag,
@@ -915,7 +915,7 @@ impl JsObject {
 
     // only for internal use
     // copy constructor and prototype
-    pub fn copy(ctx: GcPointer<Context>, source: &mut GcPointer<JsObject>) -> GcPointer<Self> {
+    pub fn copy(mut ctx: GcPointer<Context>, source: &mut GcPointer<JsObject>) -> GcPointer<Self> {
         let stack = ctx.shadowstack();
         let init = IndexedElements::new(ctx);
         let structure = source.structure;
@@ -1289,7 +1289,7 @@ impl GcPointer<JsObject> {
     }
     fn define_own_indexe_value_dense_internal(
         &mut self,
-        ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         index: u32,
         val: JsValue,
         absent: bool,

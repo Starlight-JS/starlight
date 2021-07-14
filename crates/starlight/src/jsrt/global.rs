@@ -152,7 +152,7 @@ pub fn is_finite(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::encode_bool_value(false))
 }
 
-pub fn gc(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn gc(mut ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     ctx.heap().gc();
     let _ = args;
     Ok(JsValue::encode_undefined_value())

@@ -1,11 +1,14 @@
 //! Small standard library for JS featuring IO and other useful stuff.
 use crate::prelude::*;
 use crate::vm::context::Context;
-use crate::vm::{object::JsObject};
+use crate::vm::object::JsObject;
 pub mod file;
 
 /// Initialize JS std.
-pub fn init_js_std(ctx: GcPointer<Context>, mut module: GcPointer<JsObject>) -> Result<(), JsValue> {
+pub fn init_js_std(
+    mut ctx: GcPointer<Context>,
+    mut module: GcPointer<JsObject>,
+) -> Result<(), JsValue> {
     ctx.heap().defer();
     let mut std = JsObject::new_empty(ctx);
     module.put(ctx, "@expoctxs".intern(), JsValue::new(std), false)?;
