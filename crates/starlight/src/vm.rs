@@ -62,6 +62,7 @@ pub mod property_descriptor;
 pub mod slot;
 pub mod string;
 pub mod structure;
+pub mod structure_builder;
 pub mod structure_chain;
 pub mod symbol_table;
 pub mod thread;
