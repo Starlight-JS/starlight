@@ -1,10 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    bytecode::TypeFeedBack,
-    gc::cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
-    vm::{
+use crate::{bytecode::TypeFeedBack, gc::{SlotVisitor, cell::{GcCell, GcPointer, GcPointerBase, WeakRef}}, vm::{
         arguments::JsArguments,
         array_storage::ArrayStorage,
         attributes::AttrSafe,
@@ -25,8 +22,7 @@ use crate::{
         symbol_table::{symbol_table, JsSymbol, Symbol, SymbolID},
         value::*,
         GlobalData,
-    },
-};
+    }};
 use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
 use std::{collections::HashMap, io::Write};
 
@@ -124,6 +120,10 @@ impl SnapshotSerializer {
             self.reference_map.push(object as _);
             true
         });
+    }
+
+    pub(crate) fn build_heap_reference_map_in_context(&mut self, rt: &mut Runtime) {
+        gc.walk_in_context()
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {

@@ -151,7 +151,7 @@ impl<'a> Deserializer<'a> {
         logln_if!(self.log_deser, "- Object pre-allocation started -");
         for _ in 0..count {
             let ref_id = self.get_u32();
-            let _deser = self.get_reference();
+            self.get_reference();
             let alloc = transmute::<_, fn(&mut Runtime, &mut Self) -> *mut GcPointerBase>(
                 self.get_reference(),
             );
