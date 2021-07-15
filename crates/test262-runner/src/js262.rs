@@ -1,8 +1,8 @@
 use starlight::{prelude::*, vm::context::Context};
 
-pub fn _262_create_realm(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn _262_create_realm(ctx: &mut Context, _args: &Arguments) -> Result<JsValue, JsValue> {
     let new_ctx = Context::new(&mut ctx.vm());
-    init(new_ctx).map(|x| JsValue::new(x))
+    init(new_ctx).map(JsValue::new)
 }
 
 pub fn init(mut ctx: GcPointer<Context>) -> Result<GcPointer<JsObject>, JsValue> {
@@ -17,8 +17,8 @@ pub fn init(mut ctx: GcPointer<Context>) -> Result<GcPointer<JsObject>, JsValue>
         "evalScript".intern(),
         move |_ctx, args| {
             let mut rctx = ctx;
-            if let Some(source) = args.at(0).to_string(_ctx).ok() {
-                return rctx.eval(&source);
+            if let Ok(source) = args.at(0).to_string(_ctx) {
+                rctx.eval(&source)
             } else {
                 Ok(JsValue::encode_undefined_value())
             }

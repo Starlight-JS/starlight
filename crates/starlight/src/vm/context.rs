@@ -74,7 +74,8 @@ impl Context {
     }
 
     pub fn new_raw() -> Context {
-        let mut context = Self {
+        
+        Self {
             global_data: GlobalData::default(),
             global_object: None,
             vm: RuntimeRef(null::<*mut Runtime>() as *mut Runtime),
@@ -83,8 +84,7 @@ impl Context {
             module_loader: None,
             modules: HashMap::new(),
             symbol_table: HashMap::new(),
-        };
-        context
+        }
     }
 
     pub fn new_empty(vm: &mut Runtime) -> GcPointer<Context> {
@@ -245,7 +245,7 @@ impl Context {
             Ok(script) => script,
             Err(_e) => {
                 // let msg = JsString::new(self, e.kind().msg());
-                return Err(CompileError::NotYetImpl(format!("parser error",)));
+                return Err(CompileError::NotYetImpl("parser error".to_string()));
             }
         };
         let mut code = ByteCompiler::compile_script(

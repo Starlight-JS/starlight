@@ -40,7 +40,7 @@ impl JsGlobal {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),
                 variables: SegmentedVec::with_chunk_size(8),
-                ctx: ctx ,
+                ctx ,
             });
         }
         js_object

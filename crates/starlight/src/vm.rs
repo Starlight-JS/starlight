@@ -315,7 +315,7 @@ impl Runtime {
 
     pub fn context(&mut self, index: usize) -> GcPointer<Context> {
         let ctx = self.contexts.get(index);
-        ctx.unwrap().clone()
+        *ctx.unwrap()
     }
 }
 

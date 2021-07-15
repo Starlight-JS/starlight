@@ -141,8 +141,8 @@ pub(super) fn read_suite(path: &Path) -> io::Result<TestSuite> {
 
     Ok(TestSuite {
         name: name.into(),
-        suites: suites,
-        tests: tests,
+        suites,
+        tests,
     })
 }
 
