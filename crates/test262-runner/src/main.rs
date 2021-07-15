@@ -42,7 +42,7 @@ impl Ignored {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     /// Checks if the ignore list contains the given feature name in the list

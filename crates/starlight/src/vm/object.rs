@@ -6,7 +6,6 @@ use super::{
     array_storage::ArrayStorage,
     attributes::*,
     class::{Class, JsClass},
-    context,
     error::*,
     function::*,
     global::JsGlobal,
@@ -932,7 +931,7 @@ impl JsObject {
             )
         );
         let this = Self {
-            structure: structure,
+            structure,
             class,
 
             slots: *storage,

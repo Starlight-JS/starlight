@@ -153,7 +153,7 @@ pub fn std_file_write_all(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         None => return Err(JsValue::new(JsString::new(ctx, "File closed"))),
     };
     match file.write_all(&mut buffer) {
-        Ok(_) => Ok(JsValue::new(())),
+        Ok(_) => Ok(JsValue::encode_undefined_value()),
         Err(e) => Err(JsValue::new(JsString::new(ctx, e.to_string()))),
     }
 }
