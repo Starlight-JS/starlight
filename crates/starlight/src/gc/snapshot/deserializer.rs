@@ -145,7 +145,53 @@ impl<'a> Deserializer<'a> {
         }
     }
 
-    unsafe fn deserialize_internal_in_context(&mut self, rt: &mut Runtime, context: &mut Context) {}
+    unsafe fn deserialize_internal_in_context(&mut self, rt: &mut Runtime) -> GcPointer<Context> {
+        let count = self.get_u32();
+        let heap_at = self.pc;
+        logln_if!(self.log_deser, "- Object pre-allocation started -");
+        for _ in 0..count {
+            let ref_id = self.get_u32();
+            self.get_reference();
+            let alloc = transmute::<_, fn(&mut Runtime, &mut Self) -> *mut GcPointerBase>(
+                self.get_reference(),
+            );
+            let offset = self.get_u32();
+            let ptr = alloc(rt, self);
+            logln_if!(
+                self.log_deser,
+                "pre allocated reference #{} '{}' at {:p}",
+                ref_id,
+                (*ptr).get_dyn().type_name(),
+                ptr
+            );
+            self.pc = offset as usize;
+            *self.reference_map.get_mut(ref_id as usize).unwrap() = ptr as usize;
+        }
+        logln_if!(self.log_deser, "- Object pre-allocated completed -");
+        self.pc = heap_at;
+        logln_if!(self.log_deser, "- Object deserialization started -");
+        for _ in 0..count {
+            let ref_id = self.get_u32();
+            let base = *self.reference_map.get_mut(ref_id as usize).unwrap();
+            logln_if!(
+                self.log_deser,
+                "deserialize #{}:0x{:x} '{}'",
+                ref_id,
+                base,
+                (*(base as *mut GcPointerBase)).get_dyn().type_name()
+            );
+            let _deser = transmute::<_, fn(*mut u8, &mut Self)>(self.get_reference());
+            let _alloc = self.get_reference();
+            let _off = self.get_u32();
+            let data = (*(base as *mut GcPointerBase)).data::<u8>();
+            _deser(data, self);
+        }
+        logln_if!(self.log_deser, "- Object deserialization completed -");
+        let mut ctx = GcPointer::<Context>::deserialize_inplace(self);
+        ctx.vm = RuntimeRef(rt);
+        rt.contexts.push(ctx);
+        ctx
+    }
 
     unsafe fn deserialize_internal(&mut self, rt: &mut Runtime) {
         let count = self.get_u32();
@@ -324,17 +370,15 @@ impl<'a> Deserializer<'a> {
         };
 
         rt.heap().defer();
-
-        let context = Context::new_empty(rt);
-        unsafe {
+        let ctx = unsafe {
             let ref_count = this.get_u32();
             this.reference_map = vec![0; ref_count as usize];
             this.build_reference_map(rt);
             this.build_symbol_table();
-            this.deserialize_internal_in_context(rt, context);
-        }
+            this.deserialize_internal_in_context(rt)
+        };
         rt.heap().undefer();
-        context
+        ctx
     }
 }
 
