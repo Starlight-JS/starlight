@@ -391,7 +391,7 @@ impl ByteCompiler {
             Expr::Member(member) => {
                 match &member.obj {
                     ExprOrSuper::Expr(e) => self.expr(ctx, e, true, false)?,
-                    _ => return Err(CompileError::NotYetImpl(format!("NYI: super access"))),
+                    _ => return Err(CompileError::NotYetImpl("NYI: super access".to_string())),
                 }
                 if dup {
                     self.emit(Opcode::OP_DUP, &[], false);
@@ -566,7 +566,7 @@ impl ByteCompiler {
             (code, self.code.codes.len() - 1)
         };
         if function.is_async {
-            return Err(CompileError::NotYetImpl(format!("NYI: async")));
+            return Err(CompileError::NotYetImpl("NYI: async".to_string()));
         }
         code.is_generator = function.is_generator;
         let scope = Rc::new(RefCell::new(Scope {
@@ -809,9 +809,7 @@ impl ByteCompiler {
                     }
                     ModuleDecl::ExportNamed(named_export) => {
                         if named_export.src.is_some() {
-                            return Err(CompileError::NotYetImpl(format!(
-                                "NYI: export * from mod"
-                            )));
+                            return Err(CompileError::NotYetImpl("NYI: export * from mod".to_string()));
                         }
 
                         for specifier in named_export.specifiers.iter() {
@@ -1457,7 +1455,7 @@ impl ByteCompiler {
         match expr {
             Expr::Yield(yield_expr) => {
                 if yield_expr.delegate {
-                    return Err(CompileError::NotYetImpl(format!("NYI: yield*")));
+                    return Err(CompileError::NotYetImpl("NYI: yield*".to_string()));
                 }
                 match yield_expr.arg {
                     Some(ref expr) => {
@@ -1516,20 +1514,16 @@ impl ByteCompiler {
                         let args = Arguments::new(JsValue::encode_undefined_value(), &mut args);
                         let regexp =
                             crate::jsrt::regexp::regexp_constructor(ctx, &args).map_err(|_| {
-                                CompileError::NotYetImpl(format!("Regexp constructor error"))
+                                CompileError::NotYetImpl("Regexp constructor error".to_string())
                             })?;
                         let val = self.get_val2(regexp);
                         self.emit(Opcode::OP_PUSH_LITERAL, &[val], false);
                     }
                     Lit::BigInt(_) => {
-                        return Err(CompileError::NotYetImpl(format!(
-                            "Unimplemented JS literal: BigInt",
-                        )))
+                        return Err(CompileError::NotYetImpl("Unimplemented JS literal: BigInt".to_string()))
                     }
                     Lit::JSXText(_) => {
-                        return Err(CompileError::NotYetImpl(format!(
-                            "Unimplemented JS literal: JSXText",
-                        )))
+                        return Err(CompileError::NotYetImpl("Unimplemented JS literal: JSXText".to_string()))
                     } //todo!("{:?}", x),
                     #[allow(unreachable_patterns)]
                     x => {
@@ -1637,7 +1631,7 @@ impl ByteCompiler {
             Expr::Call(call) if !is_builtin_call(expr, self.builtins) => {
                 match call.callee {
                     ExprOrSuper::Super(_) => {
-                        return Err(CompileError::NotYetImpl(format!("NYI: super call")));
+                        return Err(CompileError::NotYetImpl("NYI: super call".to_string()));
                     } // todo super call
                     ExprOrSuper::Expr(ref expr) => match &**expr {
                         Expr::Member(member) => {
@@ -1657,9 +1651,7 @@ impl ByteCompiler {
                                     }
                                 }
                                 ExprOrSuper::Super(_super) => {
-                                    return Err(CompileError::NotYetImpl(format!(
-                                        "NYI: super call"
-                                    )));
+                                    return Err(CompileError::NotYetImpl("NYI: super call".to_string()));
                                 }
                             }
                             if let Some(name) = name {
@@ -2315,14 +2307,10 @@ impl ByteCompiler {
             if let Expr::Ident(x) = &**expr {
                 &*x.sym
             } else {
-                return Err(CompileError::NotYetImpl(format!(
-                    "Incorrect codegen plugin syntax"
-                )));
+                return Err(CompileError::NotYetImpl("Incorrect codegen plugin syntax".to_string()));
             }
         } else {
-            return Err(CompileError::NotYetImpl(format!(
-                "Incorrect codegen plugin syntax"
-            )));
+            return Err(CompileError::NotYetImpl("Incorrect codegen plugin syntax".to_string()));
         };
         let vm = ctx.vm;
         let plugin = vm.codegen_plugins.get(plugin_name).unwrap();

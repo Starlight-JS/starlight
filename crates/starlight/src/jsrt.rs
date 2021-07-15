@@ -210,7 +210,7 @@ impl GcPointer<Context> {
             .value();
         let _ = self
             .global_object()
-            .put(self, name, JsValue::from(constrcutor), false);
+            .put(self, name, constrcutor, false);
     }
     pub(crate) fn init_func_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -374,7 +374,7 @@ impl GcPointer<Context> {
         let _ = self.global_object().define_own_property(
             self,
             arr,
-            &*DataDescriptor::new(JsValue::from(constructor), W | C),
+            &*DataDescriptor::new(constructor, W | C),
             false,
         );
     }
@@ -927,7 +927,7 @@ impl GcPointer<Context> {
         let _ = self.global_object().define_own_property(
             self,
             name,
-            &*DataDescriptor::new(JsValue::from(constructor), W | C),
+            &*DataDescriptor::new(constructor, W | C),
             false,
         );
         let global = self.global_object();

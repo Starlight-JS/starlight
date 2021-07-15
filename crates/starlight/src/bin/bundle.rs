@@ -23,7 +23,7 @@ fn main() {
     });
 
     let mut rt = Runtime::new(starlight::options::Options::default(), None);
-    let mut ctx = Context::new(&mut rt);
+    let ctx = Context::new(&mut rt);
     rt.heap().defer();
     let func = ctx
         .compile(
