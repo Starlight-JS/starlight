@@ -912,12 +912,6 @@ impl From<bool> for JsValue {
     }
 }
 
-impl From<()> for JsValue {
-    fn from(_x: ()) -> Self {
-        Self::encode_undefined_value()
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Undefined;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -1,10 +1,7 @@
 use crate::define_jsclass_with_symbol;
 use crate::prelude::*;
 use crate::vm::context::Context;
-use crate::{
-    gc::cell::GcPointer,
-    vm::{object::JsObject},
-};
+use crate::{gc::cell::GcPointer, vm::object::JsObject};
 use std::{
     fs::{File, OpenOptions},
     intrinsics::unlikely,
@@ -12,7 +9,10 @@ use std::{
     mem::ManuallyDrop,
 };
 
-pub(super) fn std_init_file(ctx: &mut Context, mut std: GcPointer<JsObject>) -> Result<(), JsValue> {
+pub(super) fn std_init_file(
+    ctx: &mut Context,
+    mut std: GcPointer<JsObject>,
+) -> Result<(), JsValue> {
     let mut ctor = JsNativeFunction::new(ctx, "File".intern(), std_file_open, 2);
 
     let mut proto = JsObject::new_empty(ctx);
@@ -64,7 +64,12 @@ pub fn std_file_open(ctx: &mut Context, args: &Arguments) -> Result<JsValue, JsV
         .get(ctx, "@@File".intern().private())?
         .to_object(ctx)?;
     let structure = Structure::new_indexed(ctx, Some(proto), false);
-    let mut obj = JsObject::new(ctx, &structure, FileObject::get_class(), ObjectTag::Ordinary);
+    let mut obj = JsObject::new(
+        ctx,
+        &structure,
+        FileObject::get_class(),
+        ObjectTag::Ordinary,
+    );
     *obj.data::<FileObject>() = ManuallyDrop::new(FileObject { file: Some(file) });
     Ok(JsValue::new(obj))
 }
@@ -148,7 +153,7 @@ pub fn std_file_write_all(ctx: &mut Context, args: &Arguments) -> Result<JsValue
         None => return Err(JsValue::new(JsString::new(ctx, "File closed"))),
     };
     match file.write_all(&mut buffer) {
-        Ok(_) => Ok(JsValue::new(())),
+        Ok(_) => Ok(JsValue::encode_undefined_value()),
         Err(e) => Err(JsValue::new(JsString::new(ctx, e.to_string()))),
     }
 }
