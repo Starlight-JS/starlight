@@ -106,7 +106,7 @@ impl JsPromise {
         Ok(JsValue::new(obj))
     }
     pub fn new_tracking(
-       mut ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         mode: TrackingMode,
         promises_array: JsValue,
     ) -> Result<JsValue, JsValue> {
@@ -439,7 +439,7 @@ fn array_util_set_value_at(
     arr_object.put(ctx, Symbol::Index(index), value, false)
 }
 
-extern "C" fn drop_promise_fn(obj: &mut JsObject) {
+extern "C" fn drop_promise_fn(obj: GcPointer<JsObject>) {
     unsafe { ManuallyDrop::drop(obj.data::<JsPromise>()) }
 }
 

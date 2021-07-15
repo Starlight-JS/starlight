@@ -6,16 +6,15 @@ use std::{
     ptr::null_mut,
 };
 
-use super::{Context, class::JsClass};
+use super::{class::JsClass, object::TypedJsObject, Context};
 pub struct JsArrayBuffer {
     pub(crate) data: *mut u8,
-    pub(crate) size: usize,
     pub(crate) attached: bool,
 }
 
-extern "C" fn drop_array_buffer(x: &mut JsObject) {
+extern "C" fn drop_array_buffer(x: GcPointer<JsObject>) {
     unsafe {
-        x.data::<JsArrayBuffer>().detach();
+        TypedJsObject::<JsArrayBuffer>::new(x).detach();
         ManuallyDrop::drop(x.data::<JsArrayBuffer>());
     }
 }
@@ -23,20 +22,18 @@ extern "C" fn drop_array_buffer(x: &mut JsObject) {
 extern "C" fn array_buffer_serialize(x: &JsObject, serializer: &mut SnapshotSerializer) {
     let data = x.data::<JsArrayBuffer>();
     data.attached.serialize(serializer);
-    (data.size as u32).serialize(serializer);
+    let size = x.direct(JsArrayBuffer::BYTE_LENGTH_OFFSET).get_int32() as u32;
+    size.serialize(serializer);
     if data.attached {
         assert!(!data.data.is_null());
-        for i in 0..data.size {
+        for i in 0..size {
             unsafe {
-                data.data.add(i).read().serialize(serializer);
+                data.data.add(i as _).read().serialize(serializer);
             }
         }
     }
 }
-extern "C" fn array_buffer_deserialize(
-    x: &mut JsObject,
-    deser: &mut Deserializer,
-) {
+extern "C" fn array_buffer_deserialize(x: &mut JsObject, deser: &mut Deserializer) {
     unsafe {
         let attached = bool::deserialize_inplace(deser);
         let size = u32::deserialize_inplace(deser) as usize;
@@ -47,10 +44,10 @@ extern "C" fn array_buffer_deserialize(
                 buf.add(i).write(u8::deserialize_inplace(deser));
             }
         }
+        *x.direct_mut(JsArrayBuffer::BYTE_LENGTH_OFFSET) = JsValue::new(size as u32);
         *x.data::<JsArrayBuffer>() = ManuallyDrop::new(JsArrayBuffer {
             attached,
             data: buf,
-            size,
         })
     }
 }
@@ -58,6 +55,7 @@ extern "C" fn array_buffer_size() -> usize {
     size_of::<JsArrayBuffer>()
 }
 impl JsArrayBuffer {
+    pub const BYTE_LENGTH_OFFSET: usize = 0;
     define_jsclass_with_symbol!(
         JsObject,
         ArrayBuffer,
@@ -78,16 +76,31 @@ impl JsArrayBuffer {
         *this.data::<Self>() = ManuallyDrop::new(Self {
             data: null_mut(),
             attached: false,
-            size: 0,
         });
+
+        *this.direct_mut(Self::BYTE_LENGTH_OFFSET) = JsValue::new(0u32);
         this
-    }
-    pub fn size(&self) -> usize {
-        self.size
     }
 
     pub fn attached(&self) -> bool {
         self.attached
+    }
+}
+
+impl JsClass for JsArrayBuffer {
+    fn class() -> &'static Class {
+        Self::get_class()
+    }
+}
+
+impl TypedJsObject<JsArrayBuffer> {
+    pub fn byte_length(&self) -> usize {
+        self.object()
+            .direct(JsArrayBuffer::BYTE_LENGTH_OFFSET)
+            .get_int32() as u32 as usize
+    }
+    pub fn size(&self) -> usize {
+        self.byte_length()
     }
 
     pub fn data(&self) -> &[u8] {
@@ -105,10 +118,13 @@ impl JsArrayBuffer {
             unsafe {
                 libc::free(self.data.cast());
                 self.data = null_mut();
-                self.size = 0;
+                self.set_size(0);
             }
         }
         self.attached = false;
+    }
+    pub unsafe fn set_size(&mut self, size: usize) {
+        *self.object().direct_mut(JsArrayBuffer::BYTE_LENGTH_OFFSET) = JsValue::new(size as u32);
     }
 
     pub fn create_data_block(
@@ -139,14 +155,8 @@ impl JsArrayBuffer {
                 return Err(JsValue::new(JsRangeError::new(ctx, msg, None)));
             }
             self.attached = true;
-            self.size = size;
+            self.set_size(size);
         }
         Ok(())
-    }
-}
-
-impl JsClass for JsArrayBuffer {
-    fn class() -> &'static Class {
-        Self::get_class()
     }
 }

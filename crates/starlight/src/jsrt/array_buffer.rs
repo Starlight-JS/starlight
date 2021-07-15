@@ -1,6 +1,9 @@
 use crate::{
     prelude::*,
-    vm::{array_buffer::JsArrayBuffer, context::Context},
+    vm::{
+        array_buffer::JsArrayBuffer, context::Context, object::TypedJsObject,
+        structure_builder::StructureBuilder,
+    },
 };
 pub fn array_buffer_constructor(
     ctx: GcPointer<Context>,
@@ -14,7 +17,7 @@ pub fn array_buffer_constructor(
     let stack = ctx.shadowstack();
     letroot!(this = stack, JsArrayBuffer::new(ctx));
 
-    let buf = this.data::<JsArrayBuffer>();
+    let mut buf = TypedJsObject::<JsArrayBuffer>::new(*this);
     let length = args.at(0).to_int32(ctx)?;
     assert!(
         !buf.attached(),
@@ -36,7 +39,7 @@ pub fn array_buffer_byte_length(
         ));
     }
 
-    let buf = this.data::<JsArrayBuffer>();
+    let buf = TypedJsObject::<JsArrayBuffer>::new(*this);
     Ok(JsValue::new(buf.size() as u32))
 }
 
@@ -48,7 +51,7 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
             ctx.new_type_error("ArrayBuffer.prototype.slice is not generic"),
         ));
     }
-    let buf = this.data::<JsArrayBuffer>();
+    let buf = TypedJsObject::<JsArrayBuffer>::new(*this);
     let start = args.at(0).to_int32(ctx)?;
     let end = args.at(1).to_int32(ctx)?;
     let len = buf.size();
@@ -72,10 +75,8 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         std::cmp::min(relative_end, len as i64) as usize
     };
     let new_len = std::cmp::max(finale as i64 - first as i64, 0) as usize;
-    let new_buf = JsArrayBuffer::new(ctx);
-    new_buf
-        .data::<JsArrayBuffer>()
-        .create_data_block(ctx, new_len, true)?;
+    let mut new_buf = TypedJsObject::<JsArrayBuffer>::new(JsArrayBuffer::new(ctx));
+    new_buf.create_data_block(ctx, new_len, true)?;
 
     todo!()
 }
@@ -99,42 +100,40 @@ impl GcPointer<Context> {
     pub(crate) fn init_array_buffer_in_global_data(mut self) {
         // Do not care about GC since no GC is possible when initializing runtime.
         let mut init = || -> Result<(), JsValue> {
-            let mut structure = Structure::new_indexed(
+            let mut builder = StructureBuilder::new(None);
+            assert_eq!(
+                builder
+                    .add("byteLength".intern(), create_data(AttrExternal::new(None)))
+                    .offset,
+                0
+            );
+            let mut structure = builder.build(self, false, false);
+            let proto_map = structure.change_prototype_transition(
                 self,
-                Some(self.global_data.object_prototype.unwrap()),
-                false,
+                Some(self.global_data().object_prototype.unwrap()),
             );
             let mut proto = JsObject::new(
                 self,
-                &structure,
+                &proto_map,
                 JsArrayBuffer::get_class(),
                 ObjectTag::ArrayBuffer,
             );
+
+            structure.change_prototype_with_no_transition(proto);
             *proto.data::<JsArrayBuffer>() = std::mem::ManuallyDrop::new(JsArrayBuffer {
                 data: std::ptr::null_mut(),
-                size: 0,
+
                 attached: false,
             });
-            let map = structure.change_prototype_transition(self, Some(proto));
+
             self.global_data.array_buffer_prototype = Some(proto);
-            self.global_data.array_buffer_structure = Some(map);
+            self.global_data.array_buffer_structure = Some(structure);
 
             let mut ctor =
                 JsNativeFunction::new(self, "ArrayBuffer".intern(), array_buffer_constructor, 1);
             ctor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
             proto.put(self, "constructor".intern(), JsValue::new(ctor), false)?;
-            let byte_length =
-                JsNativeFunction::new(self, "byteLength".intern(), array_buffer_byte_length, 0);
-            proto.define_own_property(
-                self,
-                "byteLength".intern(),
-                &*AccessorDescriptor::new(
-                    JsValue::new(byte_length),
-                    JsValue::encode_undefined_value(),
-                    NONE,
-                ),
-                false,
-            )?;
+
             //def_native_method!(ctx, proto, byteLength, array_buffer_byte_length, 0)?;
             def_native_method!(self, proto, slice, array_buffer_slice, 2)?;
             Ok(())

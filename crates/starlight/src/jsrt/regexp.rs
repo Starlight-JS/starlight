@@ -38,7 +38,7 @@ pub struct RegExp {
     pub(crate) original_source: Box<str>,
     pub(crate) original_flags: Box<str>,
 }
-extern "C" fn drop_regexp_fn(obj: &mut JsObject) {
+extern "C" fn drop_regexp_fn(obj: GcPointer<JsObject>) {
     unsafe { ManuallyDrop::drop(obj.data::<RegExp>()) }
 }
 

@@ -312,7 +312,7 @@ impl Structure {
                 },
             ),
             id: 0,
-            calculated_size: 0,
+            calculated_size: previous.get_slots_size() as _,
             transit_count: 0,
             has_been_flattened_before: previous.has_been_flattened_before,
             cached_prototype_chain: None,

@@ -308,7 +308,7 @@ pub struct FileObject {
     pub file: Option<File>,
 }
 
-extern "C" fn drop_file_fn(obj: &mut JsObject) {
+extern "C" fn drop_file_fn(obj: GcPointer<JsObject>) {
     unsafe { ManuallyDrop::drop(obj.data::<FileObject>()) }
 }
 

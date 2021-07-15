@@ -747,7 +747,7 @@ pub struct JsGeneratorFunction {
     pub(crate) function: GcPointer<JsObject>,
 }
 
-extern "C" fn drop_generator(obj: &mut JsObject) {
+extern "C" fn drop_generator(obj: GcPointer<JsObject>) {
     unsafe {
         ManuallyDrop::drop(obj.data::<GeneratorData>());
     }
@@ -825,7 +825,7 @@ impl JsGeneratorFunction {
     /// - Return generator object.
     fn call(
         &mut self,
-      mut  ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {

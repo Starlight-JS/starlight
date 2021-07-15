@@ -21,7 +21,7 @@ use super::{
     Context, Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
-use crate::vm::promise::JsPromise;
+use crate::{gc::cell::GcPointerBase, vm::promise::JsPromise};
 use crate::{
     gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
@@ -214,7 +214,9 @@ impl Drop for JsObject {
             _ => (),
         }
         if let Some(drop_fn) = self.class.drop {
-            drop_fn(self);
+            drop_fn(unsafe {
+                std::mem::transmute(self as *mut Self as usize - size_of::<GcPointerBase>())
+            });
         }
     }
 }
@@ -553,7 +555,7 @@ impl JsObject {
                             );
                             obj.structure = new_struct;
                             let s = &obj.structure;
-                            let sz = s.get_slots_size();
+                            let sz = s.storage_capacity();
                             letroot!(slots = stack, obj.slots);
 
                             slots.mut_handle().resize(ctx.heap(), sz as _);
@@ -586,7 +588,7 @@ impl JsObject {
         obj.structure = s;
 
         let s = &obj.structure;
-        let sz = s.get_slots_size();
+        let sz = s.storage_capacity();
         letroot!(slots = stack, obj.slots);
         slots.mut_handle().resize(ctx.heap(), sz as _);
         obj.slots = *slots;
@@ -896,8 +898,8 @@ impl JsObject {
             storage = stack,
             ArrayStorage::with_size(
                 ctx,
-                structure.get_slots_size() as _,
-                structure.get_slots_size() as _,
+                structure.storage_capacity() as _,
+                structure.storage_capacity() as _,
             )
         );
         let this = Self {
@@ -925,8 +927,8 @@ impl JsObject {
             storage = stack,
             ArrayStorage::with_size(
                 ctx,
-                source.structure.get_slots_size() as _,
-                source.structure.get_slots_size() as _,
+                source.structure.storage_capacity() as _,
+                source.structure.storage_capacity() as _,
             )
         );
         let this = Self {

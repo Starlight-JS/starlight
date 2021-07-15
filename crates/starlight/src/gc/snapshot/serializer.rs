@@ -189,7 +189,9 @@ impl SnapshotSerializer {
             .iter()
             .enumerate()
             .find(|x| x.1 == &(at.base.as_ptr() as usize))
-            .unwrap()
+            .unwrap_or_else(|| {
+                panic!("No GC reference at {:p}", at.base.as_ptr());
+            })
             .0 as u32
     }
     pub fn write_symbol(&mut self, sym: Symbol) {
@@ -229,7 +231,15 @@ impl SnapshotSerializer {
     }
     pub fn write_gcpointer<T: GcCell + ?Sized>(&mut self, at: GcPointer<T>) {
         let reference = self.get_gcpointer(at);
-        self.output.write_all(&reference.to_le_bytes()).unwrap();
+        self.output
+            .write_all(&reference.to_le_bytes())
+            .unwrap_or_else(|_| {
+                panic!(
+                    "No GC reference for '{}' at {:p}",
+                    at.get_dyn().type_name(),
+                    at.base.as_ptr()
+                );
+            });
     }
 
     pub fn write_u64(&mut self, val: u64) {
@@ -281,7 +291,7 @@ pub trait Serializable {
 
 impl Serializable for JsValue {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
-        if self.is_object() {
+        if self.is_object() && !self.is_empty() {
             let object = self.get_object();
             serializer.output.push(0xff);
             serializer.write_gcpointer(object);

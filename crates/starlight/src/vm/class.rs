@@ -4,7 +4,7 @@
 
 use super::{method_table::MethodTable, object::JsObject};
 use crate::gc::{
-    cell::Tracer,
+    cell::{GcPointer, Tracer},
     snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
 };
 
@@ -82,7 +82,7 @@ pub struct Class {
     pub method_table: MethodTable,
     /// `trace` method that is used by GC to mark object.
     pub trace: Option<extern "C" fn(&mut dyn Tracer, &mut JsObject)>,
-    pub drop: Option<extern "C" fn(&mut JsObject)>,
+    pub drop: Option<extern "C" fn(GcPointer<JsObject>)>,
     pub deserialize: Option<extern "C" fn(&mut JsObject, &mut Deserializer)>,
     pub serialize: Option<extern "C" fn(&JsObject, &mut SnapshotSerializer)>,
     pub additional_size: Option<extern "C" fn() -> usize>,
