@@ -50,8 +50,8 @@ impl Snapshot {
         serializer.write_u32(0);
         serializer.build_reference_map(runtime);
         serializer.build_symbol_table();
-        serializer.build_heap_reference_map_in_context(context);
-        serializer.serialize(runtime);
+        serializer.build_heap_reference_map_in_context(runtime, context);
+        serializer.serialize_context(runtime, context);
         callback(&mut serializer, context);
         let buf = (serializer.reference_map.len() as u32).to_le_bytes();
         serializer.output[ids_patch] = buf[0];

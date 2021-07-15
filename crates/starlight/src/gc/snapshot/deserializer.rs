@@ -145,6 +145,8 @@ impl<'a> Deserializer<'a> {
         }
     }
 
+    unsafe fn deserialize_internal_in_context(&mut self, rt: &mut Runtime, context: &mut Context) {}
+
     unsafe fn deserialize_internal(&mut self, rt: &mut Runtime) {
         let count = self.get_u32();
         let heap_at = self.pc;
@@ -313,18 +315,26 @@ impl<'a> Deserializer<'a> {
         log_deser: bool,
         snapshot: &'a [u8],
     ) -> GcPointer<Context> {
+        let mut this = Self {
+            reader: snapshot,
+            pc: 0,
+            log_deser,
+            symbol_map: Default::default(),
+            reference_map: Default::default(),
+        };
+
         rt.heap().defer();
-        let mut ctx = Context::new_empty(rt);
+
+        let context = Context::new_empty(rt);
         unsafe {
-            ctx.global_data = self.deserialize_global_data();
-            ctx.global_object = self.read_opt_gc();
-            ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
-            ctx.module_loader = self.read_opt_gc();
-            ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
+            let ref_count = this.get_u32();
+            this.reference_map = vec![0; ref_count as usize];
+            this.build_reference_map(rt);
+            this.build_symbol_table();
+            this.deserialize_internal_in_context(rt, context);
         }
-        rt.contexts.push(ctx);
         rt.heap().undefer();
-        ctx
+        context
     }
 }
 
