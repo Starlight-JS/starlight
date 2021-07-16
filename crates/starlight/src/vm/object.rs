@@ -6,7 +6,6 @@ use super::{
     array_storage::ArrayStorage,
     attributes::*,
     class::{Class, JsClass},
-    context,
     error::*,
     function::*,
     global::JsGlobal,

@@ -792,7 +792,7 @@ impl Heap {
 
     pub fn walk_in_context(
         &mut self,
-        context: &mut Context,
+        mut context: GcPointer<Context>,
         callback: &mut dyn FnMut(*mut GcPointerBase) -> bool,
     ) {
         let mut visitor = SlotVisitor {
@@ -801,13 +801,20 @@ impl Heap {
             heap: unsafe { std::mem::transmute(&self.space) },
         };
         context.trace(&mut visitor);
+
+        let mut all_ptrs = vec![];
         while let Some(ptr) = visitor.queue.pop() {
             unsafe {
-                callback(ptr);
+                all_ptrs.push(ptr);
                 (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
                 (*ptr).get_dyn().trace(&mut visitor);
             }
         }
+        all_ptrs.reverse();
+        all_ptrs.into_iter().for_each(|ptr| unsafe {
+            callback(ptr);
+            (*ptr).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE);
+        });
     }
 
     #[inline]

@@ -3,10 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
     bytecode::TypeFeedBack,
-    gc::{
-        cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
-        SlotVisitor,
-    },
+    gc::cell::{GcCell, GcPointer, GcPointerBase, WeakRef},
     vm::{
         arguments::JsArguments,
         array_storage::ArrayStorage,
@@ -31,11 +28,11 @@ use crate::{
     },
 };
 use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write, u8};
 
 pub struct SnapshotSerializer {
     pub(crate) reference_map: Vec<usize>,
-    pub(super) output: Vec<u8>,
+    pub(crate) output: Vec<u8>,
     symbol_map: HashMap<Symbol, u32>,
     log: bool,
 }
@@ -132,22 +129,33 @@ impl SnapshotSerializer {
     pub(crate) fn build_heap_reference_map_in_context(
         &mut self,
         rt: &mut Runtime,
-        ctx: &mut Context,
+        ctx: GcPointer<Context>,
     ) {
         let gc = rt.heap();
-        gc.walk_in_context(ctx, &mut |object| {
+        let callback = &mut |object| {
             self.reference_map.push(object as _);
             true
-        })
+        };
+        gc.walk_in_context(ctx, callback);
+        gc.weak_slots(&mut |slot| {
+            callback(slot.base.as_ptr());
+            let value = slot.value;
+            match value {
+                Some(pointer) => {
+                    callback(pointer.base.as_ptr());
+                }
+                None => {}
+            }
+        });
     }
 
-    pub(crate) fn serialize_context(&mut self, rt: &mut Runtime, context: &mut Context) {
+    pub(crate) fn serialize_context(&mut self, rt: &mut Runtime, mut context: GcPointer<Context>) {
         let gc = rt.heap();
         let patch_at = self.output.len();
         self.write_u32(0);
         let mut count: u32 = 0;
 
-        gc.walk_in_context(context, &mut |object| unsafe {
+        let callback = &mut |object| unsafe {
             let object = object as usize;
             //Heap::walk(gc.mi_heap, |object, _| unsafe {
             let base = &mut *(object as *mut GcPointerBase);
@@ -179,6 +187,30 @@ impl SnapshotSerializer {
             self.output[patch_at + 3] = buf[3];
             count += 1;
             true
+        };
+
+        gc.walk_in_context(context, callback);
+        gc.weak_slots(&mut |slot| {
+            callback(slot.base.as_ptr());
+            let value = slot.value;
+            match value {
+                Some(pointer) => {
+                    // callback();
+                }
+                None => {}
+            }
+        });
+        let buf = count.to_le_bytes();
+        self.output[patch_at] = buf[0];
+        self.output[patch_at + 1] = buf[1];
+        self.output[patch_at + 2] = buf[2];
+        self.output[patch_at + 3] = buf[3];
+        let mut count: u32 = 0;
+        let patch_at = self.output.len();
+        self.write_u32(0);
+        gc.weak_slots(&mut |weak_slot| unsafe {
+            weak_slot.serialize(self);
+            count += 1;
         });
         let buf = count.to_le_bytes();
         self.output[patch_at] = buf[0];

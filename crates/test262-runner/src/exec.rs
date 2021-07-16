@@ -220,7 +220,7 @@ impl Test {
                         error_type: _,
                     }
                 )) {
-            let mut ctx = Context::new(rt);
+            let ctx = rt.new_context();
             let res = panic::catch_unwind(AssertUnwindSafe(|| match self.expected_outcome {
                 Outcome::Positive => {
                     // TODO: implement async and add `harness/doneprintHandle.js` to the includes.
@@ -363,7 +363,7 @@ impl Test {
         &self,
         harness: &Harness,
         _strict: bool,
-        mut context: GcPointer<Context>,
+        context: GcPointer<Context>,
     ) -> Result<(), String> {
         // TODO: in parallel.
         /*let mut context = Runtime::new(

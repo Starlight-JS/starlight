@@ -1,7 +1,7 @@
 use starlight::{prelude::*, vm::context::Context};
 
-pub fn _262_create_realm(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let new_ctx = Context::new(&mut *ctx.vm());
+pub fn _262_create_realm(ctx: GcPointer<Context>, _: &Arguments) -> Result<JsValue, JsValue> {
+    let new_ctx = ctx.vm().new_context();
     init(new_ctx).map(|x| JsValue::new(x))
 }
 

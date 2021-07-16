@@ -168,6 +168,14 @@ impl<'a> Deserializer<'a> {
             *self.reference_map.get_mut(ref_id as usize).unwrap() = ptr as usize;
         }
         logln_if!(self.log_deser, "- Object pre-allocated completed -");
+        let weak_count = self.get_u32();
+        logln_if!(self.log_deser, "- Weak slot deserialization started -");
+        for _ in 0..weak_count {
+            let gc = self.get_reference();
+            rt.heap().weak_refs.push(transmute(gc));
+        }
+        logln_if!(self.log_deser, "- Weak slot deserialization completed -");
+        let last_stop = self.pc;
         self.pc = heap_at;
         logln_if!(self.log_deser, "- Object deserialization started -");
         for _ in 0..count {
@@ -187,6 +195,7 @@ impl<'a> Deserializer<'a> {
             _deser(data, self);
         }
         logln_if!(self.log_deser, "- Object deserialization completed -");
+        self.pc = last_stop;
         let mut ctx = GcPointer::<Context>::deserialize_inplace(self);
         ctx.vm = RuntimeRef(rt);
         rt.contexts.push(ctx);
@@ -356,7 +365,6 @@ impl<'a> Deserializer<'a> {
     }
 
     pub fn deserialize_context(
-        &mut self,
         rt: &mut Runtime,
         log_deser: bool,
         snapshot: &'a [u8],

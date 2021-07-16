@@ -5,6 +5,8 @@ use crate::vm::{context::Context, Runtime};
 
 use self::serializer::SnapshotSerializer;
 
+use super::cell::GcPointer;
+
 pub mod deserializer;
 pub mod serializer;
 
@@ -42,17 +44,20 @@ impl Snapshot {
     pub fn take_context(
         log: bool,
         runtime: &mut Runtime,
-        context: &mut Context,
+        mut context: GcPointer<Context>,
         callback: impl FnOnce(&mut SnapshotSerializer, &mut Context),
     ) -> Self {
         let mut serializer = serializer::SnapshotSerializer::new(log);
         let ids_patch = serializer.output.len();
+
+        runtime.heap().defer();
+
         serializer.write_u32(0);
         serializer.build_reference_map(runtime);
         serializer.build_symbol_table();
         serializer.build_heap_reference_map_in_context(runtime, context);
         serializer.serialize_context(runtime, context);
-        callback(&mut serializer, context);
+        callback(&mut serializer, &mut context);
         let buf = (serializer.reference_map.len() as u32).to_le_bytes();
         serializer.output[ids_patch] = buf[0];
         serializer.output[ids_patch + 1] = buf[1];
@@ -61,6 +66,8 @@ impl Snapshot {
 
         let buffer = serializer.output.into_boxed_slice();
         serializer.output = vec![];
+
+        runtime.heap().undefer();
 
         Snapshot { buffer, serializer }
     }
