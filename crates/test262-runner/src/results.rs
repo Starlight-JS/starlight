@@ -144,18 +144,18 @@ pub(crate) fn get_all_tests_from_suite(suite: SuiteResult) -> Vec<TestResult> {
         let mut sub_tests = get_all_tests_from_suite(sub_suite);
         tests.append(&mut sub_tests);
     }
-    return tests;
+    tests
 }
 
 pub(crate) fn get_key_of_test(test: &TestResult) -> String {
-    let key = (if test.strict {
+    
+    (if test.strict {
         "[strict] "
     } else {
         "[non-strict] "
     })
     .to_string()
-        + &test.name.to_string()[2..];
-    return key;
+        + &test.name.to_string()[2..]
 }
 
 /// Compares the results of two test suite runs.
@@ -344,7 +344,7 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
 }
 
 pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {
-    if failed_tests.len() != 0 {
+    if !failed_tests.is_empty() {
         println!(
             "<details><summary>{}</summary>\n\n```\n{}\n```\n</details>",
             title,

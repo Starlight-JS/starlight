@@ -931,7 +931,7 @@ impl JsObject {
             )
         );
         let this = Self {
-            structure: structure,
+            structure,
             class,
 
             slots: *storage,
