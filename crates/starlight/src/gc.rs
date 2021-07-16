@@ -15,6 +15,7 @@
 //!
 #![allow(dead_code, unused_variables)]
 use crate::options::Options;
+use crate::vm::context::Context;
 use crate::vm::Runtime;
 use crate::{
     gc::cell::*,
@@ -787,6 +788,33 @@ impl Heap {
 
     pub fn walk(&mut self, callback: &mut dyn FnMut(*mut GcPointerBase, usize) -> bool) {
         self.space.for_each_cell(callback);
+    }
+
+    pub fn walk_in_context(
+        &mut self,
+        mut context: GcPointer<Context>,
+        callback: &mut dyn FnMut(*mut GcPointerBase) -> bool,
+    ) {
+        let mut visitor = SlotVisitor {
+            bytes_visited: 0,
+            queue: Vec::with_capacity(256),
+            heap: unsafe { std::mem::transmute(&self.space) },
+        };
+        context.trace(&mut visitor);
+
+        let mut all_ptrs = vec![];
+        while let Some(ptr) = visitor.queue.pop() {
+            unsafe {
+                all_ptrs.push(ptr);
+                (*ptr).set_state(POSSIBLY_GREY, POSSIBLY_BLACK);
+                (*ptr).get_dyn().trace(&mut visitor);
+            }
+        }
+        all_ptrs.reverse();
+        all_ptrs.into_iter().for_each(|ptr| unsafe {
+            callback(ptr);
+            (*ptr).set_state(POSSIBLY_BLACK, DEFINETELY_WHITE);
+        });
     }
 
     #[inline]

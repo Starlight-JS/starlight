@@ -28,11 +28,11 @@ use crate::{
     },
 };
 use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write, u8};
 
 pub struct SnapshotSerializer {
     pub(crate) reference_map: Vec<usize>,
-    pub(super) output: Vec<u8>,
+    pub(crate) output: Vec<u8>,
     symbol_map: HashMap<Symbol, u32>,
     log: bool,
 }
@@ -124,6 +124,100 @@ impl SnapshotSerializer {
             self.reference_map.push(object as _);
             true
         });
+    }
+
+    pub(crate) fn build_heap_reference_map_in_context(
+        &mut self,
+        rt: &mut Runtime,
+        ctx: GcPointer<Context>,
+    ) {
+        let gc = rt.heap();
+        let callback = &mut |object| {
+            self.reference_map.push(object as _);
+            true
+        };
+        gc.walk_in_context(ctx, callback);
+        gc.weak_slots(&mut |slot| {
+            callback(slot.base.as_ptr());
+            let value = slot.value;
+            match value {
+                Some(pointer) => {
+                    callback(pointer.base.as_ptr());
+                }
+                None => {}
+            }
+        });
+    }
+
+    pub(crate) fn serialize_context(&mut self, rt: &mut Runtime, mut context: GcPointer<Context>) {
+        let gc = rt.heap();
+        let patch_at = self.output.len();
+        self.write_u32(0);
+        let mut count: u32 = 0;
+
+        let callback = &mut |object| unsafe {
+            let object = object as usize;
+            //Heap::walk(gc.mi_heap, |object, _| unsafe {
+            let base = &mut *(object as *mut GcPointerBase);
+            self.write_reference(object as *const u8);
+            logln_if!(
+                self.log,
+                "serialize reference {:p} '{}' at index {}",
+                base,
+                base.get_dyn().type_name(),
+                self.reference_map
+                    .iter()
+                    .enumerate()
+                    .find(|x| *x.1 == object)
+                    .unwrap()
+                    .0,
+            );
+            self.try_write_reference(base.get_dyn().deser_pair().0 as *const u8)
+                .unwrap_or_else(|| {
+                    panic!("no deserializer for type '{}'", base.get_dyn().type_name());
+                });
+            self.write_reference(base.get_dyn().deser_pair().1 as *const u8);
+            let patch_at = self.output.len();
+            self.write_u32(0);
+            base.get_dyn().serialize(self);
+            let buf = (self.output.len() as u32).to_le_bytes();
+            self.output[patch_at] = buf[0];
+            self.output[patch_at + 1] = buf[1];
+            self.output[patch_at + 2] = buf[2];
+            self.output[patch_at + 3] = buf[3];
+            count += 1;
+            true
+        };
+
+        gc.walk_in_context(context, callback);
+        gc.weak_slots(&mut |slot| {
+            callback(slot.base.as_ptr());
+            let value = slot.value;
+            match value {
+                Some(pointer) => {
+                    // callback();
+                }
+                None => {}
+            }
+        });
+        let buf = count.to_le_bytes();
+        self.output[patch_at] = buf[0];
+        self.output[patch_at + 1] = buf[1];
+        self.output[patch_at + 2] = buf[2];
+        self.output[patch_at + 3] = buf[3];
+        let mut count: u32 = 0;
+        let patch_at = self.output.len();
+        self.write_u32(0);
+        gc.weak_slots(&mut |weak_slot| unsafe {
+            weak_slot.serialize(self);
+            count += 1;
+        });
+        let buf = count.to_le_bytes();
+        self.output[patch_at] = buf[0];
+        self.output[patch_at + 1] = buf[1];
+        self.output[patch_at + 2] = buf[2];
+        self.output[patch_at + 3] = buf[3];
+        context.serialize(self);
     }
 
     pub(crate) fn serialize(&mut self, rt: &mut Runtime) {

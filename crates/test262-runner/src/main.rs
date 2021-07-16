@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use starlight::prelude::Options;
 use starlight::{vm::Runtime, Platform};
 
+use std::time::Instant;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -444,6 +445,8 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     }
     let harness = read_harness(test262_path).expect("could not read initialization bindings");
 
+    let start = Instant::now();
+
     let results = if suite.to_string_lossy().ends_with(".js") {
         let options = Options::default();
         let mut rt = Runtime::new(options, None);
@@ -472,4 +475,6 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
     show_result(&results);
     write_json(results, output, verbose)
         .expect("could not write the results to the output JSON file");
+
+    println!("Test262 Cost: {:?}", start.elapsed());
 }

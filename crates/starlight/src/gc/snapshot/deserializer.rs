@@ -145,13 +145,70 @@ impl<'a> Deserializer<'a> {
         }
     }
 
+    unsafe fn deserialize_internal_in_context(&mut self, rt: &mut Runtime) -> GcPointer<Context> {
+        let count = self.get_u32();
+        let heap_at = self.pc;
+        logln_if!(self.log_deser, "- Object pre-allocation started -");
+        for _ in 0..count {
+            let ref_id = self.get_u32();
+            self.get_reference();
+            let alloc = transmute::<_, fn(&mut Runtime, &mut Self) -> *mut GcPointerBase>(
+                self.get_reference(),
+            );
+            let offset = self.get_u32();
+            let ptr = alloc(rt, self);
+            logln_if!(
+                self.log_deser,
+                "pre allocated reference #{} '{}' at {:p}",
+                ref_id,
+                (*ptr).get_dyn().type_name(),
+                ptr
+            );
+            self.pc = offset as usize;
+            *self.reference_map.get_mut(ref_id as usize).unwrap() = ptr as usize;
+        }
+        logln_if!(self.log_deser, "- Object pre-allocated completed -");
+        let weak_count = self.get_u32();
+        logln_if!(self.log_deser, "- Weak slot deserialization started -");
+        for _ in 0..weak_count {
+            let gc = self.get_reference();
+            rt.heap().weak_refs.push(transmute(gc));
+        }
+        logln_if!(self.log_deser, "- Weak slot deserialization completed -");
+        let last_stop = self.pc;
+        self.pc = heap_at;
+        logln_if!(self.log_deser, "- Object deserialization started -");
+        for _ in 0..count {
+            let ref_id = self.get_u32();
+            let base = *self.reference_map.get_mut(ref_id as usize).unwrap();
+            logln_if!(
+                self.log_deser,
+                "deserialize #{}:0x{:x} '{}'",
+                ref_id,
+                base,
+                (*(base as *mut GcPointerBase)).get_dyn().type_name()
+            );
+            let _deser = transmute::<_, fn(*mut u8, &mut Self)>(self.get_reference());
+            let _alloc = self.get_reference();
+            let _off = self.get_u32();
+            let data = (*(base as *mut GcPointerBase)).data::<u8>();
+            _deser(data, self);
+        }
+        logln_if!(self.log_deser, "- Object deserialization completed -");
+        self.pc = last_stop;
+        let mut ctx = GcPointer::<Context>::deserialize_inplace(self);
+        ctx.vm = RuntimeRef(rt);
+        rt.contexts.push(ctx);
+        ctx
+    }
+
     unsafe fn deserialize_internal(&mut self, rt: &mut Runtime) {
         let count = self.get_u32();
         let heap_at = self.pc;
         logln_if!(self.log_deser, "- Object pre-allocation started -");
         for _ in 0..count {
             let ref_id = self.get_u32();
-            let _deser = self.get_reference();
+            self.get_reference();
             let alloc = transmute::<_, fn(&mut Runtime, &mut Self) -> *mut GcPointerBase>(
                 self.get_reference(),
             );
@@ -308,21 +365,26 @@ impl<'a> Deserializer<'a> {
     }
 
     pub fn deserialize_context(
-        &mut self,
         rt: &mut Runtime,
         log_deser: bool,
         snapshot: &'a [u8],
     ) -> GcPointer<Context> {
+        let mut this = Self {
+            reader: snapshot,
+            pc: 0,
+            log_deser,
+            symbol_map: Default::default(),
+            reference_map: Default::default(),
+        };
+
         rt.heap().defer();
-        let mut ctx = Context::new_empty(rt);
-        unsafe {
-            ctx.global_data = self.deserialize_global_data();
-            ctx.global_object = self.read_opt_gc();
-            ctx.symbol_table = HashMap::<Symbol, GcPointer<JsSymbol>>::deserialize_inplace(self);
-            ctx.module_loader = self.read_opt_gc();
-            ctx.modules = HashMap::<String, ModuleKind>::deserialize_inplace(self);
-        }
-        rt.contexts.push(ctx);
+        let ctx = unsafe {
+            let ref_count = this.get_u32();
+            this.reference_map = vec![0; ref_count as usize];
+            this.build_reference_map(rt);
+            this.build_symbol_table();
+            this.deserialize_internal_in_context(rt)
+        };
         rt.heap().undefer();
         ctx
     }

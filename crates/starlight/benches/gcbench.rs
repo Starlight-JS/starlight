@@ -2,7 +2,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use starlight::letroot;
 use starlight::prelude::Options;
-use starlight::vm::context::Context;
+
 use starlight::{
     gc::{
         cell::{GcCell, GcPointer, Trace, Tracer},
@@ -17,7 +17,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let rrt = Runtime::new(Options::default(), None);
     let stack = rrt.shadowstack();
     let mut rt = rrt;
-    let ctx = Context::new(&mut rt);
+    let ctx = rt.new_context();
 
     let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;

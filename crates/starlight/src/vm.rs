@@ -5,7 +5,6 @@ use self::{attributes::*, context::Context, object::JsObject, structure::Structu
 use crate::{
     bytecompiler::{ByteCompiler, CompileError},
     gc::default_heap,
-    gc::safepoint::GlobalSafepoint,
     gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{
@@ -14,12 +13,13 @@ use crate::{
         cell::{GcCell, GcPointerBase, Tracer},
         SimpleMarkingConstraint,
     },
+    gc::{safepoint::GlobalSafepoint, snapshot::Snapshot},
     options::Options,
 };
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
-    u32, usize,
+    u32, u8, usize,
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
 use swc_common::{
@@ -153,6 +153,8 @@ pub struct Runtime {
     pub(crate) safepoint: GlobalSafepoint,
 
     pub(crate) contexts: Vec<GcPointer<Context>>,
+
+    pub(crate) context_snapshot: Rc<Box<[u8]>>,
 }
 
 impl Runtime {
@@ -222,6 +224,7 @@ impl Runtime {
             sched_async_func: None,
             codegen_plugins: HashMap::new(),
             contexts: vec![],
+            context_snapshot: Rc::new(Box::new([])),
         }
     }
 
@@ -325,6 +328,18 @@ impl Runtime {
     pub fn context(&mut self, index: usize) -> GcPointer<Context> {
         let ctx = self.contexts.get(index);
         *ctx.unwrap()
+    }
+
+    pub fn new_context(&mut self) -> GcPointer<Context> {
+        if self.context_snapshot.len() == 0 {
+            let ctx = Context::new(self);
+            self.context_snapshot =
+                Rc::new(Snapshot::take_context(false, self, ctx, |_, _| {}).buffer);
+            ctx
+        } else {
+            let snapshot = self.context_snapshot.clone();
+            Deserializer::deserialize_context(self, false, &snapshot)
+        }
     }
 }
 
