@@ -1079,16 +1079,16 @@ pub mod new_value {
     use super::*;
     use wtf_rs::pure_nan::{pure_nan, purify_nan};
     #[derive(Copy, Clone, Debug)]
-    pub struct JsValue(pub EncodedValueDescriptor);
+    pub struct JsValue(EncodedValueDescriptor);
     #[derive(Clone, Copy)]
-    pub union EncodedValueDescriptor {
-        pub as_int64: i64,
+    union EncodedValueDescriptor {
+        as_int64: i64,
         #[cfg(target_pointer_width = "32")]
-        pub as_double: f64,
+        as_double: f64,
 
-        pub ptr: usize,
+        ptr: usize,
         #[cfg(target_pointer_width = "32")]
-        pub as_bits: AsBits,
+        as_bits: AsBits,
     }
     impl Debug for EncodedValueDescriptor {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
