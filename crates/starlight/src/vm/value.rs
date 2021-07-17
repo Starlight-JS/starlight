@@ -451,10 +451,10 @@ impl JsValue {
 
         loop {
             if likely(lhs.is_int32() && rhs.is_int32()) {
-                return Ok(self.get_int32() == rhs.get_int32());
+                return Ok(lhs.get_int32() == rhs.get_int32());
             }
             if likely(lhs.is_number() && rhs.is_number()) {
-                return Ok(self.get_number() == rhs.get_number());
+                return Ok(lhs.get_number() == rhs.get_number());
             }
 
             if (lhs.is_undefined() || lhs.is_null()) && (rhs.is_undefined() || rhs.is_null()) {
@@ -526,7 +526,7 @@ impl JsValue {
     ) -> Result<i32, JsValue> {
         let lhs = self;
         if likely(lhs.is_number() && rhs.is_number()) {
-            return Ok(Self::number_compare(self.get_number(), rhs.get_number()));
+            return Ok(Self::number_compare(lhs.get_number(), rhs.get_number()));
         }
 
         let px;
