@@ -56,13 +56,13 @@ fn main() {
         rt.context(0)
     };
 
-    if !deserialized {
-        let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
-        let mut buf = Vec::<u8>::with_capacity(8 + snapshot.buffer.len());
-        buf.extend(&BIN_ID.to_ne_bytes());
-        buf.extend(snapshot.buffer.iter());
-        std::fs::write(SNAPSHOT_FILENAME, &buf).unwrap();
-    }
+    // if !deserialized {
+    //     let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
+    //     let mut buf = Vec::<u8>::with_capacity(8 + snapshot.buffer.len());
+    //     buf.extend(&BIN_ID.to_ne_bytes());
+    //     buf.extend(snapshot.buffer.iter());
+    //     std::fs::write(SNAPSHOT_FILENAME, &buf).unwrap();
+    // }
 
     let gcstack = rt.shadowstack();
 

@@ -242,6 +242,7 @@ impl DeletedEntryHolder {
             prev: self.entry,
             offset,
         });
+        self.size +=1;
         self.entry = Some(entry);
     }
     pub fn pop(&mut self) -> u32 {

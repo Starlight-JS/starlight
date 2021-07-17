@@ -194,7 +194,6 @@ impl Test {
             );
             eprintln!("Description: {}\nesid: {:?}\n", self.description, self.esid,);
         }
-
         let (result, result_text) = if !IGNORED.contains_any_flag(self.flags)
             && !IGNORED.contains_test(&self.name)
             && !IGNORED.contains_any_feature(&self.features)

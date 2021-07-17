@@ -4,9 +4,7 @@ use cranelift::{
     frontend::{FunctionBuilder, Variable},
     prelude::{types, InstBuilder, IntCC, MemFlags, Value},
 };
-use starlight::offsetof;
 use starlight::prelude::*;
-use starlight::{bytecode::profile::ArithProfile, gc::cell::*};
 
 /// Full codegen JIT aka single-pass JIT.
 pub struct FullCodegenBuilder<'a> {

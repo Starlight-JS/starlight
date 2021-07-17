@@ -137,7 +137,7 @@ pub fn object_define_property(
     ));
 }
 
-pub fn has_own_property(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_has_own_property(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() == 0 {
         return Ok(JsValue::new(false));
     }
@@ -195,19 +195,19 @@ pub fn object_get_own_property_descriptor(
                         false,
                     )?;
                 } else {
-                    letroot!(getter = stack, property_descriptor.getter());
-                    letroot!(setter = stack, property_descriptor.setter());
+                    let getter = property_descriptor.getter();
+                    let setter =  property_descriptor.setter();
 
                     res.define_own_property(
                         ctx,
                         "get".intern(),
-                        &*DataDescriptor::new(JsValue::new(*getter), W | C),
+                        &*DataDescriptor::new(getter, W | C),
                         false,
                     )?;
                     res.define_own_property(
                         ctx,
                         "set".intern(),
-                        &*DataDescriptor::new(JsValue::new(*setter), W | C),
+                        &*DataDescriptor::new(setter, W | C),
                         false,
                     )?;
                 }
@@ -219,6 +219,21 @@ pub fn object_get_own_property_descriptor(
         Err(JsValue::new(ctx.new_type_error(
             "Object.getOwnPropertyDescriptor requires object argument",
         )))
+    }
+}
+
+pub fn object_property_is_enumerable(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() < 1 {
+        return Ok(JsValue::encode_bool_value(false));
+    }
+    let prop = args.at(0).to_symbol(ctx)?;
+    let mut obj = args.this.to_object(ctx)?;
+    let desc = obj.get_own_property(ctx, prop);
+    if desc.is_none() {
+        return Ok(JsValue::encode_bool_value(false));
+    } else {
+        let desc = desc.unwrap();
+        return Ok(JsValue::encode_bool_value(desc.is_enumerable()));
     }
 }
 
