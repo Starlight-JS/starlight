@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 #![allow(unused_variables)]
-use std::{marker::PhantomData, rc::Rc};
+use std::{marker::PhantomData, ptr::NonNull, rc::Rc};
 use vm::function::JsFunction;
 use wtf_rs::segmented_vec::SegmentedVec;
 macro_rules! unique {
@@ -448,11 +448,18 @@ impl Deserializable for ArrayStorage {
         let _size = deser.get_u32();
         let capacity = deser.get_u32();
         deser.pc -= 8;
-        rt.gc.allocate_raw(
+        let res = rt.gc.allocate_raw(
             vtable_of_type::<ArrayStorage>() as _,
             size_of::<ArrayStorage>() + (capacity as usize * 8),
             TypeId::of::<Self>(),
-        )
+        );
+        let mut pointer: GcPointer<ArrayStorage> = GcPointer {
+            base: NonNull::new_unchecked(res),
+            marker: PhantomData,
+        };
+        pointer.size = _size;
+        pointer.capacity = capacity;
+        res
     }
 
     unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
