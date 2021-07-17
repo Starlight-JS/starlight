@@ -458,6 +458,7 @@ impl Deserializable for ArrayStorage {
             marker: PhantomData,
         };
         pointer.size = _size;
+        pointer.capacity = capacity;
         res
     }
 
