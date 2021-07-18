@@ -346,7 +346,6 @@ impl JsObject {
                     args = stack,
                     Arguments::new(JsValue::encode_object_value(*obj), &mut tmp)
                 );
-
                 *args.at_mut(0) = val;
                 return ac
                     .setter()
@@ -354,7 +353,7 @@ impl JsObject {
                     .downcast::<JsObject>()
                     .unwrap()
                     .as_function_mut()
-                    .call(ctx, &mut args, ac.setter())
+                    .call(ctx, &mut args, JsValue::encode_object_value(*obj))
                     .map(|_| ());
             }
         }
@@ -591,7 +590,6 @@ impl JsObject {
         letroot!(slots = stack, obj.slots);
         slots.mut_handle().resize(ctx.heap(), sz as _);
         obj.slots = *slots;
-
         *obj.direct_mut(offset as _) = stored.value();
         slot.mark_put_result(PutResultType::New, offset);
         slot.base = Some(obj.as_dyn());
@@ -1204,7 +1202,7 @@ impl GcPointer<JsObject> {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        if self.get_non_indexed_property_slot(ctx, name, slot) && slot.attributes().is_accessor() {
+        if self.get_non_indexed_property_slot(ctx, name, slot){
             if slot.attributes().is_accessor() {
                 return slot.accessor().setter().is_pointer()
                     && !slot.accessor().setter().is_empty();

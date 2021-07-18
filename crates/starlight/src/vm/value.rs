@@ -290,7 +290,7 @@ pub mod old_value {
 
 unsafe impl Trace for JsValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
-        if self.is_object() && !self.is_empty() && !self.is_int32() {
+        if self.is_object(){
             visitor.visit(self.get_object());
         }
     }
@@ -768,7 +768,7 @@ impl JsValue {
         let stack = ctx.shadowstack();
         if !self.is_jsobject() {
             if self.is_null() {
-                let msg = JsString::new(ctx, "null does not have propectxies");
+                let msg = JsString::new(ctx, "null does not have properties");
                 return Err(JsValue::encode_object_value(JsTypeError::new(
                     ctx, msg, None,
                 )));
@@ -778,7 +778,7 @@ impl JsValue {
                 let d = ctx.description(name);
                 let msg = JsString::new(
                     ctx,
-                    &format!("undefined does not have propectxies ('{}')", d),
+                    &format!("undefined does not have properties ('{}')", d),
                 );
                 return Err(JsValue::encode_object_value(JsTypeError::new(
                     ctx, msg, None,
@@ -839,7 +839,7 @@ impl JsValue {
     }
     pub fn check_object_coercible(self, ctx: GcPointer<Context>) -> Result<(), Self> {
         if self.is_null() || self.is_undefined() {
-            let msg = JsString::new(ctx, "null or undefined has no propectxies");
+            let msg = JsString::new(ctx, "null or undefined has no properties");
             return Err(JsValue::encode_object_value(JsTypeError::new(
                 ctx, msg, None,
             )));
@@ -1092,7 +1092,9 @@ pub mod new_value {
     }
     impl Debug for EncodedValueDescriptor {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_fmt(format_args!("EncodedValueDescriptor {}", "to do"))
+            f.write_fmt(format_args!("EncodedValueDescriptor {}", unsafe {
+                self.ptr
+            }))
         }
     }
 
@@ -1258,7 +1260,7 @@ pub mod new_value {
          *     Undefined: 0x0a
          *     Null:      0x02
          *
-         * These values have the following propectxies:
+         * These values have the following properties:
          * - Bit 1 (Othectxag) is set for all four values, allowing real pointers to be
          *   quickly distinguished from all immediate values, including these invalid pointers.
          * - With bit 3 masked out (UndefinedTag), Undefined and Null share the
@@ -1384,13 +1386,14 @@ pub mod new_value {
 
         #[inline]
         pub fn get_object(self) -> GcPointer<dyn GcCell> {
-            assert!(self.is_pointer());
+            assert!(self.is_object());
+            
             unsafe { std::mem::transmute(self.0.ptr) }
         }
 
         #[inline]
         pub fn is_object(self) -> bool {
-            self.is_pointer()
+            self.is_pointer() && !self.is_empty()
         }
         #[inline]
         pub fn get_int32(self) -> i32 {

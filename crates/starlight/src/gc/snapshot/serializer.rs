@@ -385,7 +385,7 @@ pub trait Serializable {
 
 impl Serializable for JsValue {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
-        if self.is_object() && !self.is_empty() {
+        if self.is_object() {
             let object = self.get_object();
             serializer.output.push(0xff);
             serializer.write_gcpointer(object);

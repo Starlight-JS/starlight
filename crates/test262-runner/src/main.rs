@@ -12,7 +12,7 @@ use bitflags::bitflags;
 use colored::Colorize;
 use fxhash::{FxHashMap, FxHashSet};
 use once_cell::sync::Lazy;
-use results::{compare_results, write_json};
+use results::{analyze_results, compare_results, write_json};
 use serde::{Deserialize, Serialize};
 use starlight::prelude::Options;
 use starlight::{vm::Runtime, Platform};
@@ -171,6 +171,15 @@ enum Cli {
         #[structopt(short, long)]
         detail: bool,
     },
+    Analyze {
+        // results of the suite
+        #[structopt(parse(from_os_str))]
+        base: PathBuf,
+
+        // show failed tests num
+        #[structopt(short)]
+        num: u32
+    }
 }
 
 /// All the harness include files.
@@ -405,6 +414,10 @@ fn main() {
             markdown,
             detail,
         } => compare_results(base.as_path(), new.as_path(), markdown, detail),
+        Cli::Analyze {
+            base,
+            num
+        } => analyze_results(base.as_path(),num),
     }
 }
 

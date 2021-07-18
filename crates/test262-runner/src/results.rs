@@ -5,12 +5,7 @@ use super::SuiteResult;
 use git2::Repository;
 use hex::ToHex;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    env, fs,
-    io::{self, BufReader, BufWriter},
-    path::Path,
-};
+use std::{collections::HashMap, env, fs, io::{self, BufReader, BufWriter}, path::Path};
 
 /// Structure to store full result information.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -341,6 +336,37 @@ pub(crate) fn compare_results(base: &Path, new: &Path, markdown: bool, detail: b
         }
     }
     show_detail_faled_tests("New Failed But Base Passed", failed_tests);
+}
+
+pub(crate) fn analyze_results(base: &Path,num: u32) {
+    let base_results:ResultInfo = serde_json::from_reader(BufReader::new(
+        fs::File::open(base).expect("can't open the file"))).unwrap();
+    
+    let tests = get_all_tests_from_suite(base_results.results);
+
+    let mut failed_num = num;
+    println!("Failed: ");
+    for test in &tests {
+        if failed_num <=0 {
+            break;
+        }
+        if matches!(test.result, TestOutcomeResult::Failed) {
+            failed_num-=1;
+            println!("{}",get_key_of_test(test));
+        }
+    }
+
+    let mut panic_num = num;
+    println!("Panic: ");
+    for test in &tests {
+        if panic_num <=0 {
+            break;
+        }
+        if matches!(test.result, TestOutcomeResult::Panic){
+            panic_num-=1;
+            println!("{}",get_key_of_test(test));
+        }
+    }
 }
 
 pub fn show_detail_faled_tests(title: &str, failed_tests: Vec<String>) {

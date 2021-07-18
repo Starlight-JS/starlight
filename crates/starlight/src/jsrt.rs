@@ -1061,11 +1061,19 @@ impl GcPointer<Context> {
             false,
         );
 
-        let func = JsNativeFunction::new(self, "hasOwnProperty".intern(), has_own_property, 1);
+        let func = JsNativeFunction::new(self, "hasOwnProperty".intern(), object_has_own_property, 1);
         let _ = proto.define_own_property(
             self,
             "hasOwnProperty".intern(),
             &*DataDescriptor::new(JsValue::from(func), W | C),
+            false,
+        );
+
+        let func = JsNativeFunction::new(self,"propertyIsEnumerable".intern(),object_property_is_enumerable,1);
+        let _ = proto.define_own_property(
+            self,
+            "propertyIsEnumerable".intern(),
+            &*DataDescriptor::new(JsValue::from(func),W|C),
             false,
         );
     }
@@ -1147,7 +1155,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         object::object_create as usize,
         object::object_to_string as usize,
         object::object_define_property as usize,
-        object::has_own_property as usize,
+        object::object_has_own_property as usize,
+        object::object_property_is_enumerable as usize,
         object::object_keys as usize,
         object::object_get_own_property_descriptor as usize,
         object::object_freeze as _,
