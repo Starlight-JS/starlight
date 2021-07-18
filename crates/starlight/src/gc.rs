@@ -663,11 +663,6 @@ impl Heap {
     }
 
     fn collect_internal(&mut self) {
-        // Capture all the registers to scan them conservatively. Note that this also captures
-        // FPU registers too because JS values is NaN boxed and exist in FPU registers.
-
-        // Get stack pointer for scanning thread stack.
-
         if self.defers > 0 {
             return;
         }
@@ -689,13 +684,6 @@ impl Heap {
         crate::vm::thread::THREAD.with(|thread| {
             visitor.add_conservative(thread.bounds.origin as _, sp as usize);
         });
-        /*let regs = crate::vm::thread::Thread::capture_registers();
-        visitor.add_conservative(
-            regs.as_ptr() as usize,
-            regs.last().unwrap() as *const _ as usize,
-        );
-
-        drop(regs);*/
         self.process_roots(&mut visitor);
 
         if let Some(ref mut pool) = self.threadpool {
