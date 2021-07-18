@@ -1393,7 +1393,7 @@ pub mod new_value {
 
         #[inline]
         pub fn is_object(self) -> bool {
-            self.is_pointer() && !self.is_bool() && !self.is_undefined() && !self.is_null() && !self.is_empty()
+            self.is_pointer() && !self.is_empty()
         }
         #[inline]
         pub fn get_int32(self) -> i32 {
