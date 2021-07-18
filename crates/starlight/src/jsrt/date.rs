@@ -1,7 +1,11 @@
 use chrono::{prelude::*, Duration, LocalResult};
-use std::fmt::Display;
+use std::{fmt::Display, mem::ManuallyDrop};
 
-use crate::{define_jsclass_with_symbol, prelude::*, vm::class::JsClass};
+use crate::{
+    define_jsclass_with_symbol,
+    prelude::*,
+    vm::{class::JsClass, context::Context},
+};
 
 /// The number of nanoseconds in a millisecond.
 const NANOS_PER_MS: i64 = 1_000_000;
@@ -230,9 +234,99 @@ impl Date {
                 .filter(|dt| Self::time_clip(dt.timestamp_millis() as f64).is_some())
         });
     }
+
+    fn make_date_string(ctx: GcPointer<Context>) -> JsValue {
+        JsValue::new(JsString::new(ctx, Local::now().to_rfc3339()))
+    }
+    /// `Date()`
+    ///
+    /// The newly-created `Date` object represents the current date and time as of the time of instantiation.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date-constructor
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/Date
+    fn make_date_now(ctx: GcPointer<Context>, object: GcPointer<JsObject>) -> JsValue {
+        *object.data::<Date>() = ManuallyDrop::new(Date::default());
+        JsValue::new(object)
+    }
+
+    /// `Date(value)`
+    ///
+    /// The newly-created `Date` object represents the value provided to the constructor.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date-constructor
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/Date
+    fn make_date_single(
+        ctx: GcPointer<Context>,
+        object: GcPointer<JsObject>,
+        value: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let tv = match this_time_value(value, ctx) {
+            Ok(dt) => dt.0,
+            _ => {
+                let prim = value.to_primitive(ctx, JsHint::None)?;
+                if prim.is_jsstring() {
+                    match chrono::DateTime::parse_from_rfc3339(&prim.to_string(ctx)?) {
+                        Ok(dt) => Some(dt.naive_utc()),
+                        _ => None,
+                    }
+                } else {
+                    let tv = prim.to_number(ctx)?;
+                    let secs = (tv / 1_000f64) as i64;
+                    let nsecs = ((tv % 1_000f64) * 1_000_000f64) as u32;
+                    NaiveDateTime::from_timestamp_opt(secs, nsecs)
+                }
+            }
+        };
+        let tv = tv.filter(|time| Self::time_clip(time.timestamp_millis() as f64).is_some());
+        let date = Date(tv);
+        *object.data::<Date>() = ManuallyDrop::new(date);
+        Ok(JsValue::new(object))
+    }
 }
 impl JsClass for Date {
     fn class() -> &'static Class {
         Self::get_class()
     }
+}
+
+pub fn date_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    if !args.ctor_call {
+        return Ok(Date::make_date_string(ctx));
+    } else {
+        let structure = ctx.global_data().date_structure.unwrap();
+        let mut object = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+
+        Ok(JsValue::new(object))
+    }
+}
+/// The abstract operation `thisTimeValue` takes argument value.
+///
+/// In following descriptions of functions that are properties of the Date prototype object, the phrase “this
+/// Date object” refers to the object that is the this value for the invocation of the function. If the `Type` of
+/// the this value is not `Object`, a `TypeError` exception is thrown. The phrase “this time value” within the
+/// specification of a method refers to the result returned by calling the abstract operation `thisTimeValue` with
+/// the this value of the method invocation passed as the argument.
+///
+/// More information:
+///  - [ECMAScript reference][spec]
+///
+/// [spec]: https://tc39.es/ecma262/#sec-thistimevalue
+#[inline]
+
+fn this_time_value(value: JsValue, ctx: GcPointer<Context>) -> Result<Date, JsValue> {
+    if value.is_jsobject() {
+        let object = value.get_jsobject();
+        if object.is_class(Date::get_class()) {
+            return Ok(**object.data::<Date>());
+        }
+    }
+    Err(JsValue::new(ctx.new_type_error("'this' is not a Date")))
 }

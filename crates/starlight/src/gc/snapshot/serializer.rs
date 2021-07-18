@@ -894,6 +894,7 @@ impl Serializable for GlobalData {
         self.weak_ref_prototype.serialize(serializer);
         self.object_constructor.serialize(serializer);
         self.symbol_structure.serialize(serializer);
+        self.date_structure.serialize(serializer);
     }
 }
 

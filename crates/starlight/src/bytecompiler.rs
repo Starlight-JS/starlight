@@ -29,6 +29,7 @@ pub type ScopeRef = Rc<RefCell<Scope>>;
 pub struct Scope {
     pub parent: Option<ScopeRef>,
     pub variables: HashMap<Symbol, Variable>,
+
     pub depth: u32,
 }
 impl Scope {
@@ -198,7 +199,10 @@ impl ByteCompiler {
             self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
             return ix;
         } else {
-            unreachable!()
+            unreachable!(
+                "const '{}' not found",
+                crate::vm::symbol_table::symbol_table().description(name.get_id())
+            )
         }
     }
 
@@ -809,7 +813,9 @@ impl ByteCompiler {
                     }
                     ModuleDecl::ExportNamed(named_export) => {
                         if named_export.src.is_some() {
-                            return Err(CompileError::NotYetImpl("NYI: export * from mod".to_string()));
+                            return Err(CompileError::NotYetImpl(
+                                "NYI: export * from mod".to_string(),
+                            ));
                         }
 
                         for specifier in named_export.specifiers.iter() {
@@ -1520,10 +1526,14 @@ impl ByteCompiler {
                         self.emit(Opcode::OP_PUSH_LITERAL, &[val], false);
                     }
                     Lit::BigInt(_) => {
-                        return Err(CompileError::NotYetImpl("Unimplemented JS literal: BigInt".to_string()))
+                        return Err(CompileError::NotYetImpl(
+                            "Unimplemented JS literal: BigInt".to_string(),
+                        ))
                     }
                     Lit::JSXText(_) => {
-                        return Err(CompileError::NotYetImpl("Unimplemented JS literal: JSXText".to_string()))
+                        return Err(CompileError::NotYetImpl(
+                            "Unimplemented JS literal: JSXText".to_string(),
+                        ))
                     } //todo!("{:?}", x),
                     #[allow(unreachable_patterns)]
                     x => {
@@ -1651,7 +1661,9 @@ impl ByteCompiler {
                                     }
                                 }
                                 ExprOrSuper::Super(_super) => {
-                                    return Err(CompileError::NotYetImpl("NYI: super call".to_string()));
+                                    return Err(CompileError::NotYetImpl(
+                                        "NYI: super call".to_string(),
+                                    ));
                                 }
                             }
                             if let Some(name) = name {
@@ -2307,10 +2319,14 @@ impl ByteCompiler {
             if let Expr::Ident(x) = &**expr {
                 &*x.sym
             } else {
-                return Err(CompileError::NotYetImpl("Incorrect codegen plugin syntax".to_string()));
+                return Err(CompileError::NotYetImpl(
+                    "Incorrect codegen plugin syntax".to_string(),
+                ));
             }
         } else {
-            return Err(CompileError::NotYetImpl("Incorrect codegen plugin syntax".to_string()));
+            return Err(CompileError::NotYetImpl(
+                "Incorrect codegen plugin syntax".to_string(),
+            ));
         };
         let vm = ctx.vm;
         let plugin = vm.codegen_plugins.get(plugin_name).unwrap();

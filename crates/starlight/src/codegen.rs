@@ -184,7 +184,7 @@ impl Analyzer<'_> {
 
 impl Visit for Analyzer<'_> {
     fn visit_arrow_expr(&mut self, n: &ArrowExpr, _: &dyn Node) {
-        self.with(ScopeKind::Arrow, |a| n.visit_children_with(a))
+        // self.with(ScopeKind::Arrow, |a| n.visit_children_with(a))
     }
 
     /// Overriden not to add ScopeKind::Block
@@ -229,6 +229,7 @@ impl Visit for Analyzer<'_> {
 
     /// Overriden not to add ScopeKind::Block
     fn visit_function(&mut self, n: &Function, _: &dyn Node) {
+        return;
         n.decorators.visit_with(n, self);
         n.params.visit_with(n, self);
 
@@ -241,7 +242,7 @@ impl Visit for Analyzer<'_> {
 
     fn visit_fn_decl(&mut self, n: &FnDecl, _: &dyn Node) {
         self.declare(BindingKind::Function, &n.ident);
-
+        return;
         self.visit_with_path(ScopeKind::Function, &n.function);
     }
 
@@ -249,11 +250,12 @@ impl Visit for Analyzer<'_> {
         if let Some(ident) = &n.ident {
             self.declare(BindingKind::Function, ident);
         }
-
+        return;
         self.visit_with_path(ScopeKind::Function, &n.function);
     }
 
     fn visit_class_decl(&mut self, n: &ClassDecl, _: &dyn Node) {
+        return;
         self.declare(BindingKind::Class, &n.ident);
 
         self.visit_with_path(ScopeKind::Class, &n.class);

@@ -131,6 +131,13 @@ impl Symbol {
             _ => unreachable!(),
         }
     }
+    pub fn get_id(self) -> SymbolID {
+        match self {
+            Self::Key(x) => x,
+            Self::Private(x) => x,
+            _ => unreachable!(),
+        }
+    }
     pub fn is_index(self) -> bool {
         /*match self {
             Self::Index(_) => true,
