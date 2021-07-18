@@ -77,8 +77,22 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     let new_len = std::cmp::max(finale as i64 - first as i64, 0) as usize;
     let mut new_buf = TypedJsObject::<JsArrayBuffer>::new(JsArrayBuffer::new(ctx));
     new_buf.create_data_block(ctx, new_len, true)?;
+    // 17. If new does not have an [[ArrayBufferData]] internal slot, throw a
+    // TypeError exception.
+    // 18. If IsDetachedBuffer(new) is true, throw a TypeError exception.
+    // 19. If SameValue(new, O) is true, throw a TypeError exception.
+    // 20. If the value of new’s [[ArrayBufferByteLength]] internal
+    // slot < newLen, throw a TypeError exception.
+    // 21. NOTE: Side-effects of the above steps may have detached O.
+    // 22. If IsDetachedBuffer(O) is true, throw a TypeError exception.
+    if !buf.attached() || !new_buf.attached() {
+        return Err(JsValue::new(
+            ctx.new_type_error("Cannot split with detached ArrayBuffers"),
+        ));
+    }
+    JsArrayBuffer::copy_data_block_bytes(new_buf, 0, buf, first, new_len);
 
-    todo!()
+    Ok(JsValue::new(new_buf))
 }
 
 impl GcPointer<Context> {

@@ -615,7 +615,7 @@ impl ByteCompiler {
                                 as u32,
                         );
                     }
-                    _ => unreachable!(),
+                    ref x => return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x))),
                 },
                 ref x => {
                     return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));
@@ -1162,7 +1162,7 @@ impl ByteCompiler {
                         self.decl_let(sym);
                         sym
                     }
-                    _ => unreachable!(),
+                    ref x => return Err(CompileError::NotYetImpl(format!("{:?}", x))),
                 };
 
                 self.expr(ctx, &for_in.right, true, false)?;
@@ -1200,7 +1200,7 @@ impl ByteCompiler {
                         self.decl_let(sym);
                         sym
                     }
-                    _ => unreachable!(),
+                    ref x => return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x))),
                 };
                 let iterator_id = "Symbol.iterator".intern().private();
                 let iterator = self.get_sym(iterator_id);
@@ -1994,7 +1994,7 @@ impl ByteCompiler {
                                         as u32,
                                 );
                             }
-                            _ => unreachable!(),
+                            ref x => return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x))),
                         },
                         x => {
                             return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));

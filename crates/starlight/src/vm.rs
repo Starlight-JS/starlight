@@ -415,6 +415,7 @@ pub struct GlobalData {
     pub(crate) weak_ref_prototype: Option<GcPointer<JsObject>>,
     pub(crate) symbol_structure: Option<GcPointer<Structure>>,
     pub(crate) date_structure: Option<GcPointer<Structure>>,
+    pub(crate) boolean_structure: Option<GcPointer<Structure>>,
 }
 
 impl GlobalData {

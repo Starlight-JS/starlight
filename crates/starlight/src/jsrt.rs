@@ -15,6 +15,7 @@ use crate::{
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
+pub mod boolean;
 pub mod data_view;
 pub mod date;
 pub mod error;
@@ -208,9 +209,7 @@ impl GcPointer<Context> {
             .get_own_property(self, "constructor".intern())
             .unwrap()
             .value();
-        let _ = self
-            .global_object()
-            .put(self, name, constrcutor, false);
+        let _ = self.global_object().put(self, name, constrcutor, false);
     }
     pub(crate) fn init_func_global_data(mut self, obj_proto: GcPointer<JsObject>) {
         let _structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
@@ -1061,7 +1060,8 @@ impl GcPointer<Context> {
             false,
         );
 
-        let func = JsNativeFunction::new(self, "hasOwnProperty".intern(), object_has_own_property, 1);
+        let func =
+            JsNativeFunction::new(self, "hasOwnProperty".intern(), object_has_own_property, 1);
         let _ = proto.define_own_property(
             self,
             "hasOwnProperty".intern(),
@@ -1069,11 +1069,16 @@ impl GcPointer<Context> {
             false,
         );
 
-        let func = JsNativeFunction::new(self,"propertyIsEnumerable".intern(),object_property_is_enumerable,1);
+        let func = JsNativeFunction::new(
+            self,
+            "propertyIsEnumerable".intern(),
+            object_property_is_enumerable,
+            1,
+        );
         let _ = proto.define_own_property(
             self,
             "propertyIsEnumerable".intern(),
-            &*DataDescriptor::new(JsValue::from(func),W|C),
+            &*DataDescriptor::new(JsValue::from(func), W | C),
             false,
         );
     }
@@ -1324,6 +1329,10 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         weak_ref::weak_ref_prototype_deref as _,
         WeakSlot::deserialize as _,
         WeakSlot::allocate as _,
+        boolean::boolean_constructor as _,
+        boolean::boolean_to_string as _,
+        boolean::boolean_value_of as _,
+        boolean::BooleanObject::get_class() as *const _ as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

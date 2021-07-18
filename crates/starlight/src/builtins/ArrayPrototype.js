@@ -191,13 +191,13 @@ Array.prototype.fill = function fill(value, start, end) {
 
     return array;
 }
-function min(left, right) {
+let min = (left, right) => {
     if (left < right) {
         return left;
     }
     return right;
 }
-function sortMerge(dst, src, srcIndex, srcEnd, width, comparator) {
+const sortMerge = (dst, src, srcIndex, srcEnd, width, comparator) => {
     "use strict";
 
     var left = srcIndex;
@@ -229,7 +229,7 @@ function sortMerge(dst, src, srcIndex, srcEnd, width, comparator) {
 }
 
 
-function sortMergeSort(array, comparator) {
+const sortMergeSort = (array, comparator) => {
     "use strict";
 
     var valueCount = array.length;
@@ -249,7 +249,7 @@ function sortMergeSort(array, comparator) {
     return src;
 }
 
-function sortStringComparator(a, b) {
+const sortStringComparator = (a, b) => {
     "use strict";
 
     var aString = a.string;
@@ -261,7 +261,7 @@ function sortStringComparator(a, b) {
     return aString > bString ? 1 : -1;
 }
 
-function sortBucketSort(array, dst, bucket, depth) {
+const sortBucketSort = (array, dst, bucket, depth) => {
     "use strict";
 
     if (bucket.length < 32 || depth > 32) {
@@ -302,7 +302,7 @@ function sortBucketSort(array, dst, bucket, depth) {
 }
 
 
-function sortCommit(receiver, receiverLength, sorted, undefinedCount) {
+const sortCommit = (receiver, receiverLength, sorted, undefinedCount) => {
     "use strict";
 
     // Move undefineds and holes to the end of an array. Result is [values..., undefineds..., holes...].
@@ -320,7 +320,7 @@ function sortCommit(receiver, receiverLength, sorted, undefinedCount) {
     for (; i < receiverLength; ++i)
         delete receiver[i];
 }
-function sortCompact(receiver, receiverLength, compacted, isStringSort) {
+const sortCompact = (receiver, receiverLength, compacted, isStringSort) => {
     "use strict";
 
     var undefinedCount = 0;

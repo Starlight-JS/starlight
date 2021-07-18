@@ -85,6 +85,24 @@ impl JsArrayBuffer {
     pub fn attached(&self) -> bool {
         self.attached
     }
+    pub fn copy_data_block_bytes(
+        dst: TypedJsObject<Self>,
+        dst_index: usize,
+        src: TypedJsObject<Self>,
+        src_index: usize,
+        count: usize,
+    ) {
+        if count == 0 {
+            return;
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                src.get_data_block().add(src_index),
+                dst.get_data_block().add(dst_index),
+                count,
+            )
+        }
+    }
 }
 
 impl JsClass for JsArrayBuffer {

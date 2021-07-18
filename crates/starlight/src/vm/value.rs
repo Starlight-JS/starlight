@@ -9,6 +9,7 @@ use crate::{
             serializer::{Serializable, SnapshotSerializer},
         },
     },
+    jsrt::boolean::BooleanObject,
     vm::interpreter::SpreadValue,
 };
 
@@ -290,7 +291,7 @@ pub mod old_value {
 
 unsafe impl Trace for JsValue {
     fn trace(&mut self, visitor: &mut dyn Tracer) {
-        if self.is_object(){
+        if self.is_object() {
             visitor.visit(self.get_object());
         }
     }
@@ -402,6 +403,9 @@ impl JsValue {
             return Ok(JsSymbolObject::new(ctx, unsafe {
                 self.get_object().downcast_unchecked()
             }));
+        }
+        if self.is_bool() {
+            return Ok(BooleanObject::new(ctx, self.get_bool()));
         }
         Err(JsValue::new(
             ctx.new_type_error("NYI: JsValue::to_object cases"),
@@ -1387,7 +1391,7 @@ pub mod new_value {
         #[inline]
         pub fn get_object(self) -> GcPointer<dyn GcCell> {
             assert!(self.is_object());
-            
+
             unsafe { std::mem::transmute(self.0.ptr) }
         }
 

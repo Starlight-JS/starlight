@@ -895,6 +895,7 @@ impl Serializable for GlobalData {
         self.object_constructor.serialize(serializer);
         self.symbol_structure.serialize(serializer);
         self.date_structure.serialize(serializer);
+        self.boolean_structure.serialize(serializer);
     }
 }
 
