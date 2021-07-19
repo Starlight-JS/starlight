@@ -18,6 +18,7 @@ use crate::{
 };
 use crate::{bytecode::*, gc::cell::Tracer};
 use profile::{ArithProfile, ByValProfile};
+use std::array::from_ref;
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
 pub mod frame;
@@ -184,7 +185,7 @@ impl GcPointer<Context> {
 
 #[inline(never)]
 unsafe fn eval_internal(
-   mut  ctx: GcPointer<Context>,
+    mut ctx: GcPointer<Context>,
     code: GcPointer<CodeBlock>,
     ip: *mut u8,
     this: JsValue,
