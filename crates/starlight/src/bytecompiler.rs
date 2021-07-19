@@ -680,6 +680,54 @@ impl ByteCompiler {
         }
         Ok(())
     }
+
+    pub fn analyze_module(
+        &mut self,
+        ctx: GcPointer<Context>,
+        body: &[ModuleItem],
+    ) -> Result<(), CompileError> {
+        let scopea = Analyzer::analyze_module_items(body);
+        for var in scopea.vars.iter() {
+            match var.1.kind() {
+                BindingKind::Const => {
+                    let s: &str = &(var.0).0;
+                    let name = s.intern();
+                    let c = self.code.var_count;
+                    self.scope.borrow_mut().add_const_var(name, c as _);
+                    self.code.var_count += 1;
+                }
+                BindingKind::Function => {
+                    let s: &str = &(var.0).0;
+                    let name = s.intern();
+                    let c = self.code.var_count;
+                    self.scope.borrow_mut().add_let_var(name, c as _);
+                    self.code.var_count += 1;
+                }
+                _ => (),
+            }
+        }
+
+        let mut res = Ok(());
+        VisitFnDecl::visit_module(body, &mut |decl| {
+            let name = Self::ident_to_sym(&decl.ident);
+            let p = self.code.path.clone();
+            let mut code = CodeBlock::new(ctx, name, false, p);
+            code.file_name = self.code.file_name.clone();
+            let ix = self.code.codes.len();
+            self.code.codes.push(code);
+            self.fmap.insert(name, ix as _);
+            let name = Self::ident_to_sym(&decl.ident);
+            match self.function(ctx, &decl.function, Self::ident_to_sym(&decl.ident), false) {
+                Ok(()) => {}
+                Err(e) => res = Err(e),
+            }
+            self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
+            let var = self.access_var(name);
+            self.access_set(var).unwrap_or_else(|_| panic!("wtf"));
+        });
+        res
+    }
+
     pub fn compile_module(
         mut ctx: GcPointer<Context>,
         file: &str,
@@ -715,33 +763,8 @@ impl ByteCompiler {
         let loader = JsValue::new(ctx.module_loader().unwrap());
 
         let loader_val = compiler.get_val2(loader);
-        let scopea = Analyzer::analyze_module_items(&module.body);
+        compiler.analyze_module(ctx, &module.body)?;
 
-        for var in scopea.vars.iter() {
-            match var.1.kind() {
-                BindingKind::Const => {
-                    let s: &str = &(var.0).0;
-                    let name = s.intern();
-                    let c = compiler.code.var_count;
-                    compiler.scope.borrow_mut().add_const_var(name, c as _);
-                    compiler.code.var_count += 1;
-                }
-                _ => (),
-            }
-        }
-
-        VisitFnDecl::visit_module(&module.body, &mut |decl| {
-            let name = Self::ident_to_sym(&decl.ident);
-            let p = compiler.code.path.clone();
-            let mut code = CodeBlock::new(ctx, name, false, p);
-            code.file_name = compiler.code.file_name.clone();
-            let ix = compiler.code.codes.len();
-            compiler.code.codes.push(code);
-            compiler.fmap.insert(name, ix as _);
-            compiler.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
-            let var = compiler.access_var(name);
-            compiler.access_set(var).unwrap_or_else(|_| panic!("wtf"));
-        });
         if let Some(item) = module.body.get(0) {
             match item {
                 ModuleItem::Stmt(stmt) => match stmt {
@@ -956,12 +979,8 @@ impl ByteCompiler {
 
         Ok(result)
     }
-    pub fn compile(
-        &mut self,
-        ctx: GcPointer<Context>,
-        body: &[Stmt],
-        _last_val_ret: bool,
-    ) -> Result<(), CompileError> {
+
+    pub fn analyze(&mut self, ctx: GcPointer<Context>, body: &[Stmt]) -> Result<(), CompileError> {
         let scopea = Analyzer::analyze_stmts(body);
 
         for var in scopea.vars.iter() {
@@ -987,11 +1006,11 @@ impl ByteCompiler {
                     self.scope.borrow_mut().add_const_var(name, c as _);
                     self.code.var_count += 1;
                 }
-                _ => (),
+                _ => {}
             }
         }
-
-        VisitFnDecl::visit(body, &mut |decl| {
+        let mut res = Ok(());
+        VisitFnDecl::visit(body, &mut |decl: &FnDecl| {
             let name = Self::ident_to_sym(&decl.ident);
             let p = self.code.path.clone();
             let mut code = CodeBlock::new(ctx, name, false, p);
@@ -999,6 +1018,13 @@ impl ByteCompiler {
             let ix = self.code.codes.len();
             self.code.codes.push(code);
             self.fmap.insert(name, ix as _);
+            let name = Self::ident_to_sym(&decl.ident);
+
+            match self.function(ctx, &decl.function, Self::ident_to_sym(&decl.ident), false) {
+                Ok(()) => {}
+                Err(e) => res = Err(e),
+            }
+
             self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             let var = self.access_var(name);
             self.access_set(var).unwrap_or_else(|_| panic!("wtf"));
@@ -1015,7 +1041,16 @@ impl ByteCompiler {
                 break;
             }
         }
+        res
+    }
 
+    pub fn compile(
+        &mut self,
+        ctx: GcPointer<Context>,
+        body: &[Stmt],
+        _last_val_ret: bool,
+    ) -> Result<(), CompileError> {
+        self.analyze(ctx, body)?;
         for (index, stmt) in body.iter().enumerate() {
             if index == body.len() - 1 && _last_val_ret {
                 if let Stmt::Expr(ref expr) = stmt {
@@ -1076,11 +1111,8 @@ impl ByteCompiler {
 
             Decl::Fn(fun) => {
                 let name = Self::ident_to_sym(&fun.ident);
-
-                self.function(ctx, &fun.function, Self::ident_to_sym(&fun.ident), false)?;
-                let var = self.access_var(name);
-                self.access_set(var.clone())?;
                 if export {
+                    let var = self.access_var(name);
                     self.access_get(var)?;
                     let module = self.access_var("@module".intern());
                     self.access_get(module)?;
@@ -1141,6 +1173,7 @@ impl ByteCompiler {
             }
             Stmt::Block(block) => {
                 let _prev = self.push_scope();
+                self.analyze(ctx, &block.stmts)?;
                 // self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 for stmt in block.stmts.iter() {
                     self.stmt(ctx, stmt)?;
@@ -1168,6 +1201,9 @@ impl ByteCompiler {
             }
             Stmt::ForIn(for_in) => {
                 let depth = self.push_scope();
+
+                self.analyze(ctx, &[Stmt::ForIn(for_in.clone())])?;
+
                 // self.emit(Opcode::OP_PUSH_ENV, &[], false);
                 let name = match for_in.left {
                     VarDeclOrPat::VarDecl(ref var_decl) => self.var_decl(ctx, var_decl, false)?[0],
@@ -1207,6 +1243,8 @@ impl ByteCompiler {
             Stmt::ForOf(for_of) => {
                 let depth = self.push_scope();
                 // self.emit(Opcode::OP_PUSH_ENV, &[], false);
+                self.analyze(ctx, &[Stmt::ForOf(for_of.clone())])?;
+
                 let name = match for_of.left {
                     VarDeclOrPat::VarDecl(ref var_decl) => self.var_decl(ctx, var_decl, false)?[0],
                     VarDeclOrPat::Pat(Pat::Ident(ref ident)) => {
@@ -2222,6 +2260,9 @@ pub struct VisitFnDecl<'a> {
 impl<'a> Visit for VisitFnDecl<'a> {
     fn visit_fn_decl(&mut self, n: &FnDecl, _: &dyn Node) {
         (self.cb)(n);
+    }
+    fn visit_block_stmt(&mut self, _n: &BlockStmt, _: &dyn Node) {
+        return;
     }
 }
 pub trait IsDirective {

@@ -18,7 +18,6 @@ use crate::{
 };
 use crate::{bytecode::*, gc::cell::Tracer};
 use profile::{ArithProfile, ByValProfile};
-use std::array::from_ref;
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
 pub mod frame;

@@ -1,6 +1,6 @@
-use starlight::{Platform, prelude::{AccessorDescriptor, Arguments, C, DataDescriptor, GcPointer, Internable, JsNativeFunction, JsObject, JsValue, Options, W}, vm::context::Context};
+use starlight::{Platform, prelude::{Arguments, C, DataDescriptor, GcPointer, Internable, JsObject, JsValue, Options, W}, vm::context::Context};
 
-fn nop(ctx: GcPointer<Context>,args: &Arguments) -> Result<JsValue, JsValue>{
+fn nop(_ctx: GcPointer<Context>,_args: &Arguments) -> Result<JsValue, JsValue>{
     Ok(JsValue::encode_undefined_value())
 }
 

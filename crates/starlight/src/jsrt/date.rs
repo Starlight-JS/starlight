@@ -248,7 +248,7 @@ impl Date {
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-date-constructor
     /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/Date
-    fn make_date_now(ctx: GcPointer<Context>, object: GcPointer<JsObject>) -> JsValue {
+    fn make_date_now(_ctx: GcPointer<Context>, object: GcPointer<JsObject>) -> JsValue {
         *object.data::<Date>() = ManuallyDrop::new(Date::default());
         JsValue::new(object)
     }
