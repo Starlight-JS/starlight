@@ -206,17 +206,17 @@ impl ByteCompiler {
     }
 
     pub fn decl_const(&mut self, name: Symbol) -> u16 {
-        let ix = if let Some(ix) = self.variable_freelist.pop() {
-            self.scope.borrow_mut().add_const_var(name, ix as _);
-            ix as u16
+        if let Some((ix, scope)) = self.lookup_scope(name) {
+            let cur_depth = self.scope.borrow().depth;
+            let _depth = cur_depth - scope.borrow().depth;
+            self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
+            return ix;
         } else {
-            self.code.var_count += 1;
-            self.scope
-                .borrow_mut()
-                .add_const_var(name, self.code.var_count as u16 - 1)
-        };
-        self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
-        ix
+            unreachable!(
+                "const '{}' not found",
+                crate::vm::symbol_table::symbol_table().description(name.get_id())
+            )
+        }
     }
 
     pub fn create_const(&mut self, name: Symbol) -> u16 {
