@@ -62,6 +62,7 @@ impl Scope {
         }
         scope
     }
+
     pub fn analyze(program: &Program) -> Self {
         let mut scope = Self {
             vars: Default::default(),
@@ -183,16 +184,17 @@ impl Analyzer<'_> {
 }
 
 impl Visit for Analyzer<'_> {
-    fn visit_arrow_expr(&mut self, n: &ArrowExpr, _: &dyn Node) {
+    fn visit_arrow_expr(&mut self, _n: &ArrowExpr, _: &dyn Node) {
         // self.with(ScopeKind::Arrow, |a| n.visit_children_with(a))
     }
 
     /// Overriden not to add ScopeKind::Block
-    fn visit_block_stmt_or_expr(&mut self, n: &BlockStmtOrExpr, _: &dyn Node) {
-        match n {
-            BlockStmtOrExpr::BlockStmt(s) => s.stmts.visit_with(n, self),
-            BlockStmtOrExpr::Expr(e) => e.visit_with(n, self),
-        }
+    fn visit_block_stmt_or_expr(&mut self, _n: &BlockStmtOrExpr, _: &dyn Node) {
+        // println!("Boob");
+        // match n {
+        //     BlockStmtOrExpr::BlockStmt(s) => s.stmts.visit_with(n, self),
+        //     BlockStmtOrExpr::Expr(e) => e.visit_with(n, self),
+        // }
     }
 
     fn visit_var_decl(&mut self, n: &VarDecl, _: &dyn Node) {
@@ -228,22 +230,13 @@ impl Visit for Analyzer<'_> {
     }
 
     /// Overriden not to add ScopeKind::Block
-    fn visit_function(&mut self, n: &Function, _: &dyn Node) {
+    fn visit_function(&mut self, _n: &Function, _: &dyn Node) {
         return;
-        n.decorators.visit_with(n, self);
-        n.params.visit_with(n, self);
-
-        // Don't add ScopeKind::Block
-        match &n.body {
-            Some(s) => s.stmts.visit_with(n, self),
-            None => {}
-        }
     }
 
     fn visit_fn_decl(&mut self, n: &FnDecl, _: &dyn Node) {
         self.declare(BindingKind::Function, &n.ident);
         return;
-        self.visit_with_path(ScopeKind::Function, &n.function);
     }
 
     fn visit_fn_expr(&mut self, n: &FnExpr, _: &dyn Node) {
@@ -251,18 +244,14 @@ impl Visit for Analyzer<'_> {
             self.declare(BindingKind::Function, ident);
         }
         return;
-        self.visit_with_path(ScopeKind::Function, &n.function);
     }
 
-    fn visit_class_decl(&mut self, n: &ClassDecl, _: &dyn Node) {
+    fn visit_class_decl(&mut self, _n: &ClassDecl, _: &dyn Node) {
         return;
-        self.declare(BindingKind::Class, &n.ident);
-
-        self.visit_with_path(ScopeKind::Class, &n.class);
     }
 
-    fn visit_block_stmt(&mut self, n: &BlockStmt, _: &dyn Node) {
-        self.visit_with_path(ScopeKind::Block, &n.stmts)
+    fn visit_block_stmt(&mut self, _n: &BlockStmt, _: &dyn Node) {
+        return;
     }
 
     fn visit_catch_clause(&mut self, n: &CatchClause, _: &dyn Node) {
