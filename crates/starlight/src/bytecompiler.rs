@@ -8,6 +8,7 @@ use crate::{
     vm::{code_block::CodeBlock, context::Context},
 };
 use std::convert::TryInto;
+use std::u16;
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 use swc_common::{errors::Handler, sync::Lrc};
 use swc_common::{FileName, SourceMap};
@@ -49,7 +50,20 @@ impl Scope {
         self.variables.insert(
             name,
             Variable {
-                kind: VariableKind::Var,
+                kind: VariableKind::Const,
+                name,
+                index: ix,
+                dont_free: true,
+            },
+        );
+        ix
+    }
+
+    pub fn add_let_var(&mut self, name: Symbol, ix: u16) -> u16 {
+        self.variables.insert(
+            name,
+            Variable {
+                kind: VariableKind::Let,
                 name,
                 index: ix,
                 dont_free: true,
@@ -192,29 +206,28 @@ impl ByteCompiler {
     }
 
     pub fn decl_const(&mut self, name: Symbol) -> u16 {
-        //self.emit(Opcode::OP_GET_ENV, &[0], false);
-        if let Some((ix, scope)) = self.lookup_scope(name) {
-            let cur_depth = self.scope.borrow().depth;
-            let _depth = cur_depth - scope.borrow().depth;
-            self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
-            return ix;
-        } else {
-            unreachable!(
-                "const '{}' not found",
-                crate::vm::symbol_table::symbol_table().description(name.get_id())
-            )
-        }
-    }
-
-    pub fn create_const(&mut self, name: Symbol) -> u16 {
         let ix = if let Some(ix) = self.variable_freelist.pop() {
-            self.scope.borrow_mut().add_var(name, ix as _);
+            self.scope.borrow_mut().add_const_var(name, ix as _);
             ix as u16
         } else {
             self.code.var_count += 1;
             self.scope
                 .borrow_mut()
-                .add_var(name, self.code.var_count as u16 - 1)
+                .add_const_var(name, self.code.var_count as u16 - 1)
+        };
+        self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
+        ix
+    }
+
+    pub fn create_const(&mut self, name: Symbol) -> u16 {
+        let ix = if let Some(ix) = self.variable_freelist.pop() {
+            self.scope.borrow_mut().add_const_var(name, ix as _);
+            ix as u16
+        } else {
+            self.code.var_count += 1;
+            self.scope
+                .borrow_mut()
+                .add_const_var(name, self.code.var_count as u16 - 1)
         };
         self.emit(Opcode::OP_DECL_CONST, &[ix as _], false);
         ix
@@ -222,13 +235,13 @@ impl ByteCompiler {
 
     pub fn decl_let(&mut self, name: Symbol) -> u16 {
         let ix = if let Some(ix) = self.variable_freelist.pop() {
-            self.scope.borrow_mut().add_var(name, ix as _);
+            self.scope.borrow_mut().add_let_var(name, ix as _);
             ix as u16
         } else {
             self.code.var_count += 1;
             self.scope
                 .borrow_mut()
-                .add_var(name, self.code.var_count as u16 - 1)
+                .add_let_var(name, self.code.var_count as u16 - 1)
         };
         self.emit(Opcode::OP_DECL_LET, &[ix as _], false);
         ix
@@ -253,13 +266,13 @@ impl ByteCompiler {
                         None
                     } else {
                         Some(if let Some(ix) = self.variable_freelist.pop() {
-                            self.scope.borrow_mut().add_var(name_, ix as _);
+                            self.scope.borrow_mut().add_let_var(name_, ix as _);
                             ix as u16
                         } else {
                             self.code.var_count += 1;
                             self.scope
                                 .borrow_mut()
-                                .add_var(name_, self.code.var_count as u16 - 1)
+                                .add_let_var(name_, self.code.var_count as u16 - 1)
                         })
                     };
                     match &decl.init {
@@ -322,6 +335,9 @@ impl ByteCompiler {
             Access::Variable(_ix, _depth) => {
                 self.emit(Opcode::OP_PUSH_TRUE, &[], false);
                 // self.access_set()
+            }
+            Access::This => {
+                self.emit(Opcode::OP_PUSH_THIS, &[], false);
             }
             _ => unreachable!(),
         }
@@ -707,7 +723,7 @@ impl ByteCompiler {
                     let s: &str = &(var.0).0;
                     let name = s.intern();
                     let c = compiler.code.var_count;
-                    compiler.scope.borrow_mut().add_var(name, c as _);
+                    compiler.scope.borrow_mut().add_const_var(name, c as _);
                     compiler.code.var_count += 1;
                 }
                 _ => (),
@@ -968,7 +984,7 @@ impl ByteCompiler {
                     let s: &str = &(var.0).0;
                     let name = s.intern();
                     let c = self.code.var_count;
-                    self.scope.borrow_mut().add_var(name, c as _);
+                    self.scope.borrow_mut().add_const_var(name, c as _);
                     self.code.var_count += 1;
                 }
                 _ => (),
@@ -1717,7 +1733,9 @@ impl ByteCompiler {
                 if let UnaryOp::Delete = unary.op {
                     let acc = self.compile_access(ctx, &*unary.arg, false)?;
                     self.access_delete(acc);
-
+                    if !used {
+                        self.emit(Opcode::OP_POP, &[], false)
+                    }
                     return Ok(());
                 }
                 self.expr(ctx, &unary.arg, true, false)?;

@@ -681,7 +681,10 @@ impl JsValue {
             println!("{:?}", (object.get_dyn()).type_name());
             todo!()
         } else {
-            unreachable!("{:?}", self.type_of())
+            Err(JsValue::new(ctx.new_type_error(format!(
+                "Cannot convert {:?} to string",
+                self.type_of()
+            ))))
         }
     }
     pub fn to_symbol(self, ctx: GcPointer<Context>) -> Result<Symbol, JsValue> {
