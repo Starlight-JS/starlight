@@ -1,4 +1,5 @@
 use super::context::Context;
+use super::interpreter::eval;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
@@ -867,7 +868,26 @@ fn async_func_resume(
     unsafe {
         state.frame.restore(&mut *frame);
         (*frame).exit_on_return = true;
-        crate::vm::interpreter::eval(ctx, frame)
+        loop {
+            let result = eval(ctx, frame);
+            match result {
+                Ok(value) => return Ok(value),
+                Err(e) => {
+                    ctx.stacktrace = ctx.stacktrace();
+
+                    if let Some(unwind_frame) = ctx.unwind() {
+                        let (env, ip, sp) = (*unwind_frame).try_stack.pop().unwrap();
+                        frame = unwind_frame;
+                        (*frame).env = env.unwrap();
+                        (*frame).ip = ip;
+                        (*frame).sp = sp;
+                        (*frame).push(e);
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
     }
 }
 pub(crate) fn js_generator_next(

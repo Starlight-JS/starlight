@@ -721,7 +721,7 @@ impl ByteCompiler {
                 Ok(()) => {}
                 Err(e) => res = Err(e),
             }
-            self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
+            // self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             let var = self.access_var(name);
             self.access_set(var).unwrap_or_else(|_| panic!("wtf"));
         });
@@ -1025,7 +1025,7 @@ impl ByteCompiler {
                 Err(e) => res = Err(e),
             }
 
-            self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
+            // self.emit(Opcode::OP_GET_FUNCTION, &[ix as _], false);
             let var = self.access_var(name);
             self.access_set(var).unwrap_or_else(|_| panic!("wtf"));
         });
