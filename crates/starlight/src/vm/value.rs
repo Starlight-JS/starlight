@@ -680,8 +680,6 @@ impl JsValue {
             }
             println!("{:?}", (object.get_dyn()).type_name());
             todo!()
-        } else if self.is_native_value() {
-            Ok(self.get_native_u32().to_string())
         } else {
             unreachable!("Should not be here")
         }
