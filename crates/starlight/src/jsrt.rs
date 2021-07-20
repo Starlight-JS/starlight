@@ -1333,6 +1333,9 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         boolean::boolean_to_string as _,
         boolean::boolean_value_of as _,
         boolean::BooleanObject::get_class() as *const _ as _,
+        date::date_constructor as _,
+        date::date_to_string as _,
+        date::Date::get_class() as *const _ as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

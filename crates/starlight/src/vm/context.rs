@@ -137,6 +137,7 @@ impl GcPointer<Context> {
         self.init_data_view_in_global_object()
             .unwrap_or_else(|_| unreachable!());
         self.init_weak_ref_in_global_object();
+        self.init_date_in_global_object();
         self.init_boolean_in_global_object();
         self.init_self_hosted();
         self.init_module_loader();
@@ -179,6 +180,7 @@ impl GcPointer<Context> {
         self.init_data_view_in_global_data();
         self.init_string_in_global_data(proto);
         self.init_weak_ref_in_global_data();
+        self.init_date_in_global_data();
         self.init_boolean_in_global_data();
     }
 }

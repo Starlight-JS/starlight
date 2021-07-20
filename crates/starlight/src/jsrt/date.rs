@@ -1,10 +1,15 @@
 use chrono::{prelude::*, Duration, LocalResult};
-use std::{fmt::Display, mem::ManuallyDrop};
+use std::{
+    fmt::Display,
+    intrinsics::transmute,
+    mem::{size_of, ManuallyDrop},
+};
 
 use crate::{
     define_jsclass_with_symbol,
     prelude::*,
-    vm::{class::JsClass, context::Context},
+    vm::{class::JsClass, context::Context, object::TypedJsObject},
+    JsTryFrom,
 };
 
 /// The number of nanoseconds in a millisecond.
@@ -58,12 +63,35 @@ extern "C" fn fsz() -> usize {
     std::mem::size_of::<Date>()
 }
 
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    todo!()
+extern "C" fn ser(object: &JsObject, ser: &mut SnapshotSerializer) {
+    let date = **object.data::<Date>();
+    match date.0 {
+        Some(time) => {
+            ser.write_u8(0x1);
+            let bytes: [u8; size_of::<NaiveDateTime>()] = unsafe { transmute(time) };
+            for byte in bytes {
+                ser.write_u8(byte);
+            }
+        }
+        None => {
+            ser.write_u8(0x0);
+        }
+    }
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    todo!()
+extern "C" fn deser(object: &mut JsObject, deser: &mut Deserializer) {
+    let is_valid = deser.get_u8();
+    match is_valid {
+        0x0 => *object.data::<Date>() = ManuallyDrop::new(Date(None)),
+        0x1 => unsafe {
+            let mut bytes: [u8; size_of::<NaiveDateTime>()] = [0; size_of::<NaiveDateTime>()];
+            for i in 0..bytes.len() {
+                bytes[i] = deser.get_u8();
+            }
+            *object.data::<Date>() = ManuallyDrop::new(Date(Some(transmute(bytes))));
+        },
+        _ => unreachable!(),
+    }
 }
 
 impl Date {
@@ -290,6 +318,61 @@ impl Date {
         *object.data::<Date>() = ManuallyDrop::new(date);
         Ok(JsValue::new(object))
     }
+
+    fn make_date_multiple(
+        ctx: GcPointer<Context>,
+        object: GcPointer<JsObject>,
+        args: &Arguments,
+    ) -> Result<JsValue, JsValue> {
+        let year = args.at(0).to_number(ctx)?;
+        let month = args.at(1).to_number(ctx)?;
+        let day = args
+            .try_at(2)
+            .map_or(Ok(1f64), |value| value.to_number(ctx))?;
+        let hour = args
+            .try_at(3)
+            .map_or(Ok(0f64), |value| value.to_number(ctx))?;
+        let min = args
+            .try_at(4)
+            .map_or(Ok(0f64), |value| value.to_number(ctx))?;
+        let sec = args
+            .try_at(5)
+            .map_or(Ok(0f64), |value| value.to_number(ctx))?;
+        let milli = args
+            .try_at(6)
+            .map_or(Ok(0f64), |value| value.to_number(ctx))?;
+        // If any of the args are infinity or NaN, return an invalid date.
+        if !check_normal_opt!(year, month, day, hour, min, sec, milli) {
+            let date = Date(None);
+            *object.data::<Self>() = ManuallyDrop::new(date);
+
+            return Ok(JsValue::new(object));
+        }
+
+        let year = year as i32;
+        let month = month as u32;
+        let day = day as u32;
+        let hour = hour as u32;
+        let min = min as u32;
+        let sec = sec as u32;
+        let milli = milli as u32;
+
+        let year = if (0..=99).contains(&year) {
+            1900 + year
+        } else {
+            year
+        };
+
+        let final_date = NaiveDate::from_ymd_opt(year, month + 1, day)
+            .and_then(|naive_date| naive_date.and_hms_milli_opt(hour, min, sec, milli))
+            .and_then(|local| ignore_ambiguity(Local.from_local_datetime(&local)))
+            .map(|local| local.naive_utc())
+            .filter(|time| Self::time_clip(time.timestamp_millis() as f64).is_some());
+
+        let date = Date(final_date);
+        *object.data::<Self>() = ManuallyDrop::new(date);
+        Ok(JsValue::new(object))
+    }
 }
 impl JsClass for Date {
     fn class() -> &'static Class {
@@ -303,8 +386,13 @@ pub fn date_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     } else {
         let structure = ctx.global_data().date_structure.unwrap();
         let mut object = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
-
-        Ok(JsValue::new(object))
+        if args.size() == 0 {
+            return Ok(Date::make_date_now(ctx, object));
+        } else if args.size() == 1 {
+            return Date::make_date_single(ctx, object, args.at(1));
+        } else {
+            return Date::make_date_multiple(ctx, object, args);
+        }
     }
 }
 /// The abstract operation `thisTimeValue` takes argument value.
@@ -329,4 +417,52 @@ fn this_time_value(value: JsValue, ctx: GcPointer<Context>) -> Result<Date, JsVa
         }
     }
     Err(JsValue::new(ctx.new_type_error("'this' is not a Date")))
+}
+pub fn date_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    let date = TypedJsObject::<Date>::try_from(ctx, args.this)?;
+    Ok(JsValue::new(JsString::new(ctx, (*date).to_string())))
+}
+impl GcPointer<Context> {
+    pub(crate) fn init_date_in_global_object(mut self) {
+        let mut ctx = self;
+        let mut init = || -> Result<(), JsValue> {
+            let mut proto = ctx.global_data().date_prototype.unwrap();
+            let ctor = proto.get(ctx, "constructor".intern())?;
+            self.global_object()
+                .put(ctx, "Date".intern(), ctor, false)?;
+            Ok(())
+        };
+        init().unwrap_or_else(|_| unreachable!());
+    }
+    pub(crate) fn init_date_in_global_data(mut self) {
+        let mut ctx = self;
+        let mut init = || -> Result<(), JsValue> {
+            let obj_proto = self.global_data().object_prototype.unwrap();
+            let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
+            let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+            *proto.data::<Date>() = ManuallyDrop::new(Date(None));
+
+            let date_map = Structure::new_indexed(ctx, Some(proto), false);
+            self.global_data.date_structure = Some(date_map);
+            let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
+            proto.define_own_property(
+                self,
+                "constructor".intern(),
+                &*DataDescriptor::new(JsValue::new(ctor), C | W),
+                false,
+            )?;
+            let fun = JsNativeFunction::new(ctx, "toString".intern(), date_to_string, 0);
+            proto.put(self, "toString".intern(), JsValue::new(fun), false)?;
+            ctor.define_own_property(
+                self,
+                "prototype".intern(),
+                &*DataDescriptor::new(JsValue::new(proto), NONE),
+                false,
+            )?;
+            self.global_data.date_prototype = Some(proto);
+
+            Ok(())
+        };
+        init().unwrap_or_else(|_| unreachable!());
+    }
 }

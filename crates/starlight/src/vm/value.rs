@@ -675,8 +675,9 @@ impl JsValue {
                 return Ok("spread".to_string());
             }
             if object.is::<JsSymbol>() {
-                let desc = ctx.description(object.downcast::<JsSymbol>().unwrap().symbol());
-                return Ok(desc);
+                return Err(JsValue::new(
+                    ctx.new_type_error("Cannot perform ToString on Symbol"),
+                ));
             }
             println!("{:?}", (object.get_dyn()).type_name());
             todo!()

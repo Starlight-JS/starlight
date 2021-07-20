@@ -3,7 +3,19 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::mem::ManuallyDrop;
 
-use super::{Context, environment::Environment, error::JsTypeError, method_table::*, object::{EnumerationMode, JsHint, JsObject, ObjectTag}, property_descriptor::*, slot::*, string::JsString, symbol_table::Internable, symbol_table::{Symbol, DUMMY_SYMBOL}, value::*};
+use super::{
+    environment::Environment,
+    error::JsTypeError,
+    method_table::*,
+    object::{EnumerationMode, JsHint, JsObject, ObjectTag},
+    property_descriptor::*,
+    slot::*,
+    string::JsString,
+    symbol_table::Internable,
+    symbol_table::{Symbol, DUMMY_SYMBOL},
+    value::*,
+    Context,
+};
 use crate::gc::cell::{GcPointer, Trace, Tracer};
 /// Arguments to JS function.
 pub struct Arguments<'a> {
@@ -17,7 +29,11 @@ pub struct Arguments<'a> {
 
 impl<'a> Arguments<'a> {
     #[deprecated = "Use [Arguments::new](Arguments::new) instead."]
-    pub fn from_array_storage(_ctx: GcPointer<Context>, this: JsValue, values: &'a mut [JsValue]) -> Self {
+    pub fn from_array_storage(
+        _ctx: GcPointer<Context>,
+        this: JsValue,
+        values: &'a mut [JsValue],
+    ) -> Self {
         Self {
             this,
             values,
@@ -51,6 +67,14 @@ impl<'a> Arguments<'a> {
             self.values[index]
         } else {
             JsValue::encode_undefined_value()
+        }
+    }
+
+    pub fn try_at(&self, index: usize) -> Option<JsValue> {
+        if index < self.size() {
+            Some(self.values[index])
+        } else {
+            None
         }
     }
 }
