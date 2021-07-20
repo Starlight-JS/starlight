@@ -184,7 +184,7 @@ impl GcPointer<Context> {
 
 #[inline(never)]
 unsafe fn eval_internal(
-   mut  ctx: GcPointer<Context>,
+    mut ctx: GcPointer<Context>,
     code: GcPointer<CodeBlock>,
     ip: *mut u8,
     this: JsValue,

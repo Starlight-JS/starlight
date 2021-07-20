@@ -682,7 +682,7 @@ impl JsValue {
             println!("{:?}", (object.get_dyn()).type_name());
             todo!()
         } else {
-            unreachable!("{:?}", self.type_of())
+            unreachable!("Should not be here")
         }
     }
     pub fn to_symbol(self, ctx: GcPointer<Context>) -> Result<Symbol, JsValue> {
