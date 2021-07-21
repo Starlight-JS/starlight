@@ -1358,9 +1358,8 @@ impl GcPointer<Context> {
     }
     pub(crate) fn init_date_in_global_data(mut self) -> Result<(), JsValue> {
         let mut ctx = self;
-<<<<<<< HEAD
         let mut init = || -> Result<(), JsValue> {
-            let obj_proto = self.global_data().object_prototype.unwrap();
+            /*let obj_proto = self.global_data().object_prototype.unwrap();
             let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
             let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
             *proto.data::<Date>() = ManuallyDrop::new(Date(None));
@@ -1376,6 +1375,33 @@ impl GcPointer<Context> {
             )?;
             let fun = JsNativeFunction::new(ctx, "toString".intern(), date_to_string, 0);
             proto.put(self, "toString".intern(), JsValue::new(fun), false)?;
+
+            def_native_method!(ctx, ctor, now, date_now, 0)?;
+            def_native_method!(ctx, ctor, parse, date_parse, 1)?;
+            def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
+            ctor.define_own_property(
+                self,
+                "prototype".intern(),
+                &*DataDescriptor::new(JsValue::new(proto), NONE),
+                false,
+            )?;
+            self.global_data.date_prototype = Some(proto);*/
+
+            let obj_proto = self.global_data().object_prototype.unwrap();
+            let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
+            let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+            *proto.data::<Date>() = ManuallyDrop::new(Date(None));
+
+            let date_map = Structure::new_indexed(ctx, Some(proto), false);
+            self.global_data.date_structure = Some(date_map);
+            let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
+
+            def_native_property!(self, proto, constructor, ctor, W | C)?;
+            def_native_method!(self, proto, toString, date_to_string, 0)?;
+            def_native_property!(self, ctor, prototype, proto, NONE)?;
+            def_native_method!(ctx, ctor, now, date_now, 0)?;
+            def_native_method!(ctx, ctor, parse, date_parse, 1)?;
+            def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
             def_native_method!(ctx, proto, valueOf, date_value_of, 0)?;
             def_native_method!(ctx, proto, setDate, date_set_date, 1)?;
             def_native_method!(ctx, proto, setFullYear, date_set_full_year, 3)?;
@@ -1386,36 +1412,42 @@ impl GcPointer<Context> {
             def_native_method!(ctx, proto, setSeconds, date_set_seconds, 2)?;
             def_native_method!(ctx, proto, setYear, date_set_year, 3)?;
             def_native_method!(ctx, proto, setTime, date_set_time, 1)?;
-            def_native_method!(ctx, ctor, now, date_now, 0)?;
-            def_native_method!(ctx, ctor, parse, date_parse, 1)?;
-            def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
-            ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::new(proto), NONE),
-                false,
-            )?;
+            def_native_method!(ctx, proto, setUTCDate, date_set_utc_date, 1)?;
+            def_native_method!(ctx, proto, setUTCFullYear, date_set_utc_full_year, 3)?;
+            def_native_method!(ctx, proto, setUTCHours, date_set_utc_hours, 4)?;
+            def_native_method!(ctx, proto, setUTCMinutes, date_set_utc_minutes, 3)?;
+            def_native_method!(ctx, proto, setUTCMonth, date_set_utc_month, 2)?;
+            def_native_method!(ctx, proto, setUTCSeconds, date_set_utc_seconds, 2)?;
+
+            def_native_method!(ctx, proto, getDate, date_get_date, 0)?;
+            def_native_method!(ctx, proto, getDay, date_get_day, 0)?;
+            def_native_method!(ctx, proto, getFullYear, date_get_full_year, 0)?;
+            def_native_method!(ctx, proto, getHours, date_get_hours, 0)?;
+            def_native_method!(ctx, proto, getMilliseconds, date_get_milliseconds, 0)?;
+            def_native_method!(ctx, proto, getMinutes, date_get_minutes, 0)?;
+            def_native_method!(ctx, proto, getMonth, date_get_month, 0)?;
+            def_native_method!(ctx, proto, getSeconds, date_get_seconds, 0)?;
+            def_native_method!(ctx, proto, getTime, date_get_time, 0)?;
+            def_native_method!(ctx, proto, getYear, date_get_year, 0)?;
+            def_native_method!(ctx, proto, getUTCDate, date_get_utc_date, 0)?;
+            def_native_method!(ctx, proto, getUTCDay, date_get_utc_day, 0)?;
+            def_native_method!(ctx, proto, getUTCFullYear, date_get_utc_full_year, 0)?;
+            def_native_method!(ctx, proto, getUTCHours, date_get_utc_hours, 0)?;
+            def_native_method!(ctx, proto, getUTCMinutes, date_get_utc_minutes, 0)?;
+            def_native_method!(ctx, proto, getUTCMilliseconds, date_get_utc_milliseconds, 0)?;
+            def_native_method!(ctx, proto, getUTCMonth, date_get_utc_month, 0)?;
+            def_native_method!(ctx, proto, getUTCSeconds, date_get_utc_seconds, 0)?;
+            def_native_method!(ctx, proto, toJSON, date_to_json, 0)?;
+            def_native_method!(ctx, proto, toTimeString, date_to_time_string, 0)?;
+            def_native_method!(ctx, proto, toGMTString, date_to_gmt_string, 0)?;
+            def_native_method!(ctx, proto, toISOString, date_to_iso_string, 0)?;
+            def_native_method!(ctx, proto, toUTCString, date_to_utc_string, 0)?;
+            def_native_method!(ctx, proto, toDateString, date_to_date_string, 0)?;
             self.global_data.date_prototype = Some(proto);
-=======
->>>>>>> 5a6a9e2b7788e989ce0ab492aca8d7689029823b
 
-        let obj_proto = self.global_data().object_prototype.unwrap();
-        let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-        let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
-        *proto.data::<Date>() = ManuallyDrop::new(Date(None));
+            Ok(())
+        };
 
-        let date_map = Structure::new_indexed(ctx, Some(proto), false);
-        self.global_data.date_structure = Some(date_map);
-        let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
-
-        def_native_property!(self, proto, constructor, ctor, W | C)?;
-        def_native_method!(self, proto, toString, date_to_string, 0)?;
-        def_native_property!(self, ctor, prototype, proto, NONE)?;
-        def_native_method!(ctx, ctor, now, date_now, 0)?;
-        def_native_method!(ctx, ctor, parse, date_parse, 1)?;
-        def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
-        self.global_data.date_prototype = Some(proto);
-
-        Ok(())
+        init()
     }
 }

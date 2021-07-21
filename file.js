@@ -1,2 +1,3 @@
-let d = Date();
-print(d);
+let d = new Date();
+print(d)
+print(d.getUTCDate());
