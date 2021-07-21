@@ -13,10 +13,12 @@ use super::{environment::Environment, object::*};
 use super::{error::JsRangeError, string::*};
 use super::{error::JsTypeError, method_table::*};
 use super::{interpreter::frame::CallFrame, slot::*};
+use crate::constant::S_CONSTURCTOR;
 use crate::gc::{
     cell::{GcPointer, Trace, Tracer},
     snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
 };
+use crate::prelude::*;
 use std::{intrinsics::unlikely, mem::ManuallyDrop};
 
 pub struct JsFunction {
@@ -31,6 +33,8 @@ pub enum FuncType {
     Bound(JsBoundFunction),
     Generator(JsGeneratorFunction),
 }
+
+define_jsclass!(JsFunction, Function);
 
 #[allow(non_snake_case)]
 impl JsFunction {
@@ -253,7 +257,6 @@ impl JsFunction {
 
         obj
     }
-    define_jsclass!(JsFunction, Function);
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
         ctx: GcPointer<Context>,
@@ -613,7 +616,7 @@ impl JsVMFunction {
         ctx.heap().undefer();
         let _ = proto.define_own_property(
             ctx,
-            "constructor".intern(),
+            S_CONSTURCTOR.intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
             false,
         );
@@ -768,6 +771,18 @@ extern "C" fn generator_size() -> usize {
 extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<GeneratorData>().func_state.trace(tracer);
 }
+
+define_jsclass!(
+    JsGeneratorFunction,
+    Generator,
+    Object,
+    Some(drop_generator),
+    Some(generator_trace),
+    Some(generator_deser),
+    Some(generator_ser),
+    Some(generator_size)
+);
+
 impl JsGeneratorFunction {
     pub fn new(mut ctx: GcPointer<Context>, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
         // let ctx = ctx.space().new_local_context();
@@ -785,7 +800,7 @@ impl JsGeneratorFunction {
         ctx.heap().undefer();
         let _ = proto.define_own_property(
             ctx,
-            "constructor".intern(),
+            S_CONSTURCTOR.intern(),
             &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
             false,
         );
@@ -806,16 +821,6 @@ impl JsGeneratorFunction {
         *this
     }
 
-    define_jsclass_with_symbol!(
-        JsObject,
-        Generator,
-        Object,
-        Some(drop_generator),
-        Some(generator_trace),
-        Some(generator_deser),
-        Some(generator_ser),
-        Some(generator_size)
-    );
     /// Call generator function creating new generator object instance.
     ///
     /// ## Algorithm

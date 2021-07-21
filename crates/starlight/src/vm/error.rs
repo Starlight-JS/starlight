@@ -1,8 +1,13 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use super::{Context, attributes::*, method_table::*, object::*, property_descriptor::*, string::JsString, structure::*, symbol_table::*, value::JsValue};
+use super::{
+    attributes::*, method_table::*, object::*, property_descriptor::*, string::JsString,
+    structure::*, symbol_table::*, value::JsValue, Context,
+};
 use crate::gc::cell::GcPointer;
+
+use crate::prelude::*;
 
 pub struct JsError;
 pub struct JsEvalError;
@@ -11,9 +16,11 @@ pub struct JsReferenceError;
 pub struct JsSyntaxError;
 pub struct JsTypeError;
 pub struct JsURIError;
+
+define_jsclass!(JsError, Error);
 impl JsError {
     pub fn new(
-       mut ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -42,9 +49,9 @@ impl JsError {
 
         obj
     }
-    define_jsclass!(JsObject, Error);
 }
 
+define_jsclass!(JsEvalError, Error, EvalError);
 impl JsEvalError {
     pub fn new(
         mut ctx: GcPointer<Context>,
@@ -76,8 +83,9 @@ impl JsEvalError {
 
         obj
     }
-    define_jsclass_with_symbol!(JsObject, Error, EvalError);
 }
+
+define_jsclass!(JsRangeError, Error, RangeError);
 
 impl JsRangeError {
     pub fn new(
@@ -110,12 +118,13 @@ impl JsRangeError {
 
         obj
     }
-    define_jsclass_with_symbol!(JsObject, Error, RangeError);
 }
+
+define_jsclass!(JsReferenceError, Error, ReferenceError);
 
 impl JsReferenceError {
     pub fn new(
-       mut ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -144,8 +153,9 @@ impl JsReferenceError {
 
         obj
     }
-    define_jsclass_with_symbol!(JsObject, Error, ReferenceError);
 }
+
+define_jsclass!(JsSyntaxError, Error, SyntaxError);
 
 impl JsSyntaxError {
     pub fn new(
@@ -178,12 +188,12 @@ impl JsSyntaxError {
 
         obj
     }
-    define_jsclass_with_symbol!(JsObject, Error, SyntaxError);
 }
 
+define_jsclass!(JsTypeError, Error, TypeError);
 impl JsTypeError {
     pub fn new(
-       mut ctx: GcPointer<Context>,
+        mut ctx: GcPointer<Context>,
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
@@ -212,7 +222,6 @@ impl JsTypeError {
 
         obj
     }
-    define_jsclass_with_symbol!(JsObject, Error, TypeError);
 }
 
 define_jsclass!(JsURIError, Error, URIError);

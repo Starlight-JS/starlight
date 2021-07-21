@@ -25,18 +25,19 @@ extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
 extern "C" fn sz() -> usize {
     size_of::<NumberObject>()
 }
-impl NumberObject {
-    define_jsclass_with_symbol!(
-        JsObject,
-        Object,
-        Object,
-        None,
-        None,
-        Some(deser),
-        Some(ser),
-        Some(sz)
-    );
 
+define_jsclass!(
+    NumberObject,
+    Object,
+    Object,
+    None,
+    None,
+    Some(deser),
+    Some(ser),
+    Some(sz)
+);
+
+impl NumberObject {
     pub fn new(ctx: GcPointer<Context>, value: f64) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             ctx,

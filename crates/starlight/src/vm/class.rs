@@ -2,7 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use super::{method_table::MethodTable, object::JsObject};
+use super::{
+    context::Context,
+    method_table::MethodTable,
+    object::{EnumerationMode, JsHint, JsObject},
+    property_descriptor::PropertyDescriptor,
+    slot::Slot,
+    symbol_table::Symbol,
+    value::JsValue,
+};
 use crate::gc::{
     cell::{GcPointer, Tracer},
     snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
@@ -91,79 +99,212 @@ pub struct Class {
 /// Define JS class. `$class` is type that will be passed to JS, $name` is class name, and `$sym` is internal class type.
 /// There's second macro arm that is used to pass additional methods to class.
 #[macro_export]
-macro_rules! define_jsclass_with_symbol {
-    ($class: ident,$name : ident,$sym: ident) => {
-        pub fn get_class() -> &'static $crate::vm::class::Class {
-            static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
-                name: stringify!($name),
-                ty: $crate::vm::class::JsClassType::$sym as _,
-                method_table: MethodTable {
-                    GetNonIndexedSlot: $class::GetNonIndexedSlotMethod,
-                    GetIndexedSlot: $class::GetIndexedSlotMethod,
-                    GetNonIndexedPropertySlot: $class::GetNonIndexedPropertySlotMethod,
-                    GetIndexedPropertySlot: $class::GetIndexedPropertySlotMethod,
-                    GetOwnNonIndexedPropertySlot: $class::GetOwnNonIndexedPropertySlotMethod,
-                    GetOwnIndexedPropertySlot: $class::GetOwnIndexedPropertySlotMethod,
-                    PutNonIndexedSlot: $class::PutNonIndexedSlotMethod,
-                    PutIndexedSlot: $class::PutIndexedSlotMethod,
-                    DeleteNonIndexed: $class::DeleteNonIndexedMethod,
-                    DeleteIndexed: $class::DeleteIndexedMethod,
-                    DefineOwnNonIndexedPropertySlot: $class::DefineOwnNonIndexedPropertySlotMethod,
-                    DefineOwnIndexedPropertySlot: $class::DefineOwnIndexedPropertySlotMethod,
-                    GetPropertyNames: $class::GetPropertyNamesMethod,
-                    GetOwnPropertyNames: $class::GetOwnPropertyNamesMethod,
-                    DefaultValue: $class::DefaultValueMethod,
-                },
-                drop: None,
-                trace: None,
-                serialize: None,
-                deserialize: None,
-                additional_size: None,
-            };
-            &CLASS
+macro_rules! define_jsclass {
+    ($class: ident,$sym: ident) => {
+        impl JsClassMethodTable for $class {}
+        impl $class {
+            pub fn get_class() -> &'static $crate::vm::class::Class {
+                static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
+                    name: stringify!($sym),
+                    ty: $crate::vm::class::JsClassType::$sym as _,
+                    method_table: js_method_table!($class),
+                    drop: None,
+                    trace: None,
+                    serialize: None,
+                    deserialize: None,
+                    additional_size: None,
+                };
+                &CLASS
+            }
+        }
+    };
+    ($class: ident, $name: ident ,$sym: ident) => {
+        impl JsClassMethodTable for $class {}
+        impl $class {
+            pub fn get_class() -> &'static $crate::vm::class::Class {
+                static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
+                    name: stringify!($name),
+                    ty: $crate::vm::class::JsClassType::$sym as _,
+                    method_table: js_method_table!($class),
+                    drop: None,
+                    trace: None,
+                    serialize: None,
+                    deserialize: None,
+                    additional_size: None,
+                };
+                &CLASS
+            }
         }
     };
     ($class: ident,$name : ident,$sym: ident,$fin: expr,$trace: expr,$deser: expr,$ser: expr,$size: expr) => {
-        pub fn get_class() -> &'static $crate::vm::class::Class {
-            static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
-                name: stringify!($name),
-                ty: $crate::vm::class::JsClassType::$sym as _,
-                method_table: MethodTable {
-                    GetNonIndexedSlot: $class::GetNonIndexedSlotMethod,
-                    GetIndexedSlot: $class::GetIndexedSlotMethod,
-                    GetNonIndexedPropertySlot: $class::GetNonIndexedPropertySlotMethod,
-                    GetIndexedPropertySlot: $class::GetIndexedPropertySlotMethod,
-                    GetOwnNonIndexedPropertySlot: $class::GetOwnNonIndexedPropertySlotMethod,
-                    GetOwnIndexedPropertySlot: $class::GetOwnIndexedPropertySlotMethod,
-                    PutNonIndexedSlot: $class::PutNonIndexedSlotMethod,
-                    PutIndexedSlot: $class::PutIndexedSlotMethod,
-                    DeleteNonIndexed: $class::DeleteNonIndexedMethod,
-                    DeleteIndexed: $class::DeleteIndexedMethod,
-                    DefineOwnNonIndexedPropertySlot: $class::DefineOwnNonIndexedPropertySlotMethod,
-                    DefineOwnIndexedPropertySlot: $class::DefineOwnIndexedPropertySlotMethod,
-                    GetPropertyNames: $class::GetPropertyNamesMethod,
-                    GetOwnPropertyNames: $class::GetOwnPropertyNamesMethod,
-                    DefaultValue: $class::DefaultValueMethod,
-                },
-                drop: $fin,
-                trace: $trace,
-                deserialize: $deser,
-                serialize: $ser,
-                additional_size: $size,
-            };
-            &CLASS
+        impl JsClassMethodTable for $class {}
+        impl $class {
+            pub fn get_class() -> &'static $crate::vm::class::Class {
+                static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
+                    name: stringify!($name),
+                    ty: $crate::vm::class::JsClassType::$sym as _,
+                    method_table: js_method_table!($class),
+                    drop: $fin,
+                    trace: $trace,
+                    deserialize: $deser,
+                    serialize: $ser,
+                    additional_size: $size,
+                };
+                &CLASS
+            }
         }
     };
 }
 
 /// Same as `define_jsclass_with_symbol!` except `$name` is used as `$symbol`.
-#[macro_export]
-macro_rules! define_jsclass {
-    ($class: ident,$name : ident) => {
-        define_jsclass_with_symbol!($class, $name, $name);
-    };
-}
 
 pub trait JsClass {
     fn class() -> &'static Class;
+}
+
+#[allow(non_snake_case)]
+pub trait JsClassMethodTable {
+    fn GetPropertyNamesMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        collector: &mut dyn FnMut(Symbol, u32),
+        mode: EnumerationMode,
+    ) {
+        JsObject::GetPropertyNamesMethod(obj, ctx, collector, mode)
+    }
+    fn DefaultValueMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        hint: JsHint,
+    ) -> Result<JsValue, JsValue> {
+        JsObject::DefaultValueMethod(obj, ctx, hint)
+    }
+    fn DefineOwnIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        JsObject::DefineOwnIndexedPropertySlotMethod(obj, ctx, index, desc, slot, throwable)
+    }
+    fn GetOwnIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        slot: &mut Slot,
+    ) -> bool {
+        JsObject::GetOwnIndexedPropertySlotMethod(obj, ctx, index, slot)
+    }
+    fn PutIndexedSlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        val: JsValue,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<(), JsValue> {
+        JsObject::PutIndexedSlotMethod(obj, ctx, index, val, slot, throwable)
+    }
+    fn PutNonIndexedSlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        val: JsValue,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<(), JsValue> {
+        JsObject::PutNonIndexedSlotMethod(obj, ctx, name, val, slot, throwable)
+    }
+    fn GetOwnPropertyNamesMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        collector: &mut dyn FnMut(Symbol, u32),
+        mode: EnumerationMode,
+    ) {
+        JsObject::GetOwnPropertyNamesMethod(obj, ctx, collector, mode)
+    }
+
+    fn DeleteNonIndexedMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        JsObject::DeleteNonIndexedMethod(obj, ctx, name, throwable)
+    }
+
+    fn DeleteIndexedMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        JsObject::DeleteIndexedMethod(obj, ctx, index, throwable)
+    }
+
+    fn GetNonIndexedSlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        JsObject::GetNonIndexedSlotMethod(obj, ctx, name, slot)
+    }
+
+    fn GetIndexedSlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        slot: &mut Slot,
+    ) -> Result<JsValue, JsValue> {
+        JsObject::GetIndexedSlotMethod(obj, ctx, index, slot)
+    }
+    fn GetNonIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        JsObject::GetNonIndexedPropertySlotMethod(obj, ctx, name, slot)
+    }
+
+    fn GetOwnNonIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        JsObject::GetOwnNonIndexedPropertySlotMethod(obj, ctx, name, slot)
+    }
+
+    fn GetNonIndexedPropertySlot(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        JsObject::GetNonIndexedPropertySlotMethod(obj, ctx, name, slot)
+    }
+
+    fn DefineOwnNonIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        desc: &PropertyDescriptor,
+        slot: &mut Slot,
+        throwable: bool,
+    ) -> Result<bool, JsValue> {
+        JsObject::DefineOwnNonIndexedPropertySlotMethod(obj, ctx, name, desc, slot, throwable)
+    }
+
+    fn GetIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        slot: &mut Slot,
+    ) -> bool {
+        JsObject::GetIndexedPropertySlotMethod(obj, ctx, index, slot)
+    }
 }

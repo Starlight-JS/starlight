@@ -1,7 +1,8 @@
 use std::mem::ManuallyDrop;
 
 use crate::{
-    define_jsclass_with_symbol,
+    constant::S_CONSTURCTOR,
+    define_jsclass,
     prelude::*,
     vm::{class::JsClass, context::Context, method_table::*, object::TypedJsObject},
     JsTryFrom,
@@ -20,18 +21,18 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<BooleanObject>()
 }
-impl BooleanObject {
-    define_jsclass_with_symbol!(
-        JsObject,
-        Boolean,
-        Object,
-        None,
-        None,
-        Some(deser),
-        Some(ser),
-        Some(fsz)
-    );
+define_jsclass!(
+    BooleanObject,
+    Boolean,
+    Object,
+    None,
+    None,
+    Some(deser),
+    Some(ser),
+    Some(fsz)
+);
 
+impl BooleanObject {
     pub fn new(ctx: GcPointer<Context>, val: bool) -> GcPointer<JsObject> {
         let proto = ctx.global_data().boolean_structure.unwrap();
         let mut obj = JsObject::new(ctx, &proto, Self::get_class(), ObjectTag::Ordinary);
@@ -74,18 +75,19 @@ pub fn boolean_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 }
 
 impl GcPointer<Context> {
-    pub(crate) fn init_boolean_in_global_object(mut self) {
+    pub(crate) fn init_boolean_in_global_object(mut self) -> Result<(), JsValue> {
         let ctor = self
             .global_data
             .boolean_prototype
             .unwrap()
-            .get(self, "constructor".intern())
+            .get(self, S_CONSTURCTOR.intern())
             .unwrap_or_else(|_| unreachable!());
-        self.global_object()
-            .put(self, "Boolean".intern(), JsValue::new(ctor), false)
-            .unwrap_or_else(|_| unreachable!());
+
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, Boolean, ctor)?;
+        Ok(())
     }
-    pub(crate) fn init_boolean_in_global_data(mut self) {
+    pub(crate) fn init_boolean_in_global_data(mut self) -> Result<(), JsValue> {
         let mut map = Structure::new_indexed(self, None, false);
         self.global_data.boolean_structure = Some(map);
         let obj_proto = self.global_data().get_object_prototype();
@@ -94,31 +96,16 @@ impl GcPointer<Context> {
         map.change_prototype_with_no_transition(proto);
 
         let mut ctor = JsNativeFunction::new(self, "Boolean".intern(), boolean_constructor, 1);
-        ctor.define_own_property(
-            self,
-            "prototype".intern(),
-            &*DataDescriptor::new(JsValue::new(proto), NONE),
-            false,
-        )
-        .unwrap_or_else(|_| unreachable!());
 
-        let to_string = JsNativeFunction::new(self, "toString".intern(), boolean_to_string, 0);
-        proto
-            .put(self, "toString".intern(), JsValue::new(to_string), false)
-            .unwrap_or_else(|_| unreachable!());
-        let value_of = JsNativeFunction::new(self, "valueOf".intern(), boolean_value_of, 0);
-        proto
-            .put(self, "valueOf".intern(), JsValue::new(value_of), false)
-            .unwrap_or_else(|_| unreachable!());
-        proto
-            .define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::new(ctor), W | C),
-                false,
-            )
-            .unwrap_or_else(|_| unreachable!());
+        def_native_property!(self, ctor, prototype, proto, NONE)?;
+
+        def_native_method!(self, proto, toString, boolean_to_string, 0)?;
+
+        def_native_method!(self, proto, valueOf, boolean_value_of, 0)?;
+
+        def_native_property!(self, proto, constructor, ctor, W | C)?;
 
         self.global_data.boolean_prototype = Some(proto);
+        Ok(())
     }
 }

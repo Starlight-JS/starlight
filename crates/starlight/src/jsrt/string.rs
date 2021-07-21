@@ -1,6 +1,7 @@
 use regress::Regex;
 
 use crate::{
+    constant::S_CONSTURCTOR,
     gc::cell::GcPointer,
     vm::{
         arguments::Arguments,
@@ -544,8 +545,8 @@ pub fn string_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 }
 
 impl GcPointer<Context> {
-    pub fn init_string_in_global_object(mut self) {
-        let name = "constructor".intern();
+    pub fn init_string_in_global_object(mut self) -> Result<(), JsValue> {
+        let name = S_CONSTURCTOR.intern();
         let constructor = self
             .global_data
             .string_prototype
@@ -556,9 +557,13 @@ impl GcPointer<Context> {
         self.global_object()
             .put(self, "String".intern(), constructor, false)
             .unwrap_or_else(|_| panic!());
+        Ok(())
     }
 
-    pub fn init_string_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
+    pub fn init_string_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
         self.global_data.string_structure = Some(Structure::new_indexed(self, None, true));
         let map = Structure::new_unique_with_proto(self, Some(obj_proto), false);
         let mut proto = JsStringObject::new_plain(self, &map);
@@ -569,92 +574,39 @@ impl GcPointer<Context> {
             .change_prototype_with_no_transition(proto);
         let mut ctor = JsNativeFunction::new(self, "String".intern(), string_constructor, 1);
 
-        let _ = ctor.define_own_property(
-            self,
-            "prototype".intern(),
-            &*DataDescriptor::new(JsValue::new(proto), NONE),
-            false,
-        );
+        def_native_property!(self, ctor, prototype, proto, NONE)?;
+        def_native_property!(self, proto, constructor, ctor, W | C)?;
+        def_native_method!(self, proto, toString, string_to_string, 0)?;
+        def_native_method!(self, proto, valueOf, string_value_of, 0)?;
+        def_native_method!(self, proto, ___splitFast, string_split, 0)?;
+        def_native_method!(self, proto, concat, string_concat, 0)?;
+        def_native_method!(self, proto, charAt, string_char_at, 1)?;
+        def_native_method!(self, proto, charCodeAt, string_char_code_at, 1)?;
+        def_native_method!(self, proto, toUpperCase, string_to_uppercase, 0)?;
+        def_native_method!(self, proto, toLowerCase, string_to_lowercase, 0)?;
+        def_native_method!(self, proto, indexOf, string_index_of, 2)?;
+        def_native_method!(self, proto, lastIndexOf, string_last_index_of, 2)?;
+        def_native_method!(self, proto, substr, string_substr, 2)?;
+        def_native_method!(self, proto, substring, string_substring, 2)?;
+        def_native_method!(self, proto, codePointAt, string_code_point_at, 1)?;
+        def_native_method!(self, proto, repeat, string_repeat, 1)?;
+        def_native_method!(self, proto, startsWith, string_starts_with, 1)?;
+        def_native_method!(self, proto, endsWith, string_ends_with, 1)?;
+        def_native_method!(self, proto, includes, string_includes, 1)?;
+        def_native_method!(self, proto, slice, string_slice, 1)?;
+        def_native_method!(self, ctor, ___replace, string_replace, 2)?;
+        def_native_method!(self, proto, trim, string_trim, 0)?;
+        def_native_method!(self, proto, trimStactx, string_trim_start, 0)?;
+        def_native_method!(self, proto, trimEnd, string_trim_end, 0)?;
+        def_native_method!(self, proto, trimLeft, string_trim_start, 0)?;
+        def_native_method!(self, proto, trimRight, string_trim_end, 0)?;
+        def_native_method!(self, proto, padStactx, string_pad_start, 2)?;
+        def_native_method!(self, proto, padEnd, string_pad_end, 2)?;
+        def_native_method!(self, proto, repeat, string_repeat, 1)?;
 
-        proto
-            .define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::new(ctor), W | C),
-                false,
-            )
-            .unwrap_or_else(|_| panic!());
-        let func = JsNativeFunction::new(self, "toString".intern(), string_to_string, 0);
-        proto
-            .put(
-                self,
-                "toString".intern(),
-                JsValue::encode_object_value(func),
-                false,
-            )
-            .unwrap_or_else(|_| panic!());
-        let func = JsNativeFunction::new(self, "valueOf".intern(), string_value_of, 0);
-        proto
-            .put(
-                self,
-                "valueOf".intern(),
-                JsValue::encode_object_value(func),
-                false,
-            )
-            .unwrap_or_else(|_| panic!());
-
-        let func = JsNativeFunction::new(self, "___splitFast".intern(), string_split, 0);
-        proto
-            .put(
-                self,
-                "___splitFast".intern(),
-                JsValue::encode_object_value(func),
-                false,
-            )
-            .unwrap_or_else(|_| panic!());
-
-        let func = JsNativeFunction::new(self, "concat".intern(), string_concat, 0);
-        proto
-            .put(
-                self,
-                "concat".intern(),
-                JsValue::encode_object_value(func),
-                false,
-            )
-            .unwrap_or_else(|_| panic!());
-
-        let mut init = || -> Result<(), JsValue> {
-            def_native_method!(self, proto, charAt, string_char_at, 1)?;
-            def_native_method!(self, proto, charCodeAt, string_char_code_at, 1)?;
-            def_native_method!(self, proto, toUpperCase, string_to_uppercase, 0)?;
-            def_native_method!(self, proto, toLowerCase, string_to_lowercase, 0)?;
-            def_native_method!(self, proto, indexOf, string_index_of, 2)?;
-            def_native_method!(self, proto, lastIndexOf, string_last_index_of, 2)?;
-            def_native_method!(self, proto, substr, string_substr, 2)?;
-            def_native_method!(self, proto, substring, string_substring, 2)?;
-            def_native_method!(self, proto, codePointAt, string_code_point_at, 1)?;
-            def_native_method!(self, proto, repeat, string_repeat, 1)?;
-            def_native_method!(self, proto, startsWith, string_starts_with, 1)?;
-            def_native_method!(self, proto, endsWith, string_ends_with, 1)?;
-            def_native_method!(self, proto, includes, string_includes, 1)?;
-            def_native_method!(self, proto, slice, string_slice, 1)?;
-            def_native_method!(self, ctor, ___replace, string_replace, 2)?;
-            def_native_method!(self, proto, trim, string_trim, 0)?;
-            def_native_method!(self, proto, trimStactx, string_trim_start, 0)?;
-            def_native_method!(self, proto, trimEnd, string_trim_end, 0)?;
-            def_native_method!(self, proto, trimLeft, string_trim_start, 0)?;
-            def_native_method!(self, proto, trimRight, string_trim_end, 0)?;
-            def_native_method!(self, proto, padStactx, string_pad_start, 2)?;
-            def_native_method!(self, proto, padEnd, string_pad_end, 2)?;
-            def_native_method!(self, proto, repeat, string_repeat, 1)?;
-            Ok(())
-        };
-
-        match init() {
-            Ok(_) => (),
-            _ => unreachable!(),
-        }
         self.global_data.string_prototype = Some(proto);
+
+        Ok(())
     }
 }
 

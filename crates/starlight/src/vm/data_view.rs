@@ -1,8 +1,8 @@
 use wtf_rs::endian::{byte_swap, Endianess};
 use wtf_rs::swap_byte_order::SwapByteOrder;
 
-use super::context::Context;
 use super::class::JsClass;
+use super::context::Context;
 use super::method_table::MethodTable;
 use super::object::TypedJsObject;
 use super::{array_buffer::JsArrayBuffer, object::JsObject};
@@ -14,6 +14,8 @@ use std::{
     mem::{size_of, MaybeUninit},
 };
 
+use crate::prelude::*;
+
 pub struct JsDataView {
     /// buffer is the underlying storage of the bytes for a DataView.
     buffer: TypedJsObject<JsArrayBuffer>,
@@ -22,6 +24,17 @@ pub struct JsDataView {
     /// length is the amount of bytes the DataView views inside the storage.
     length: usize,
 }
+
+define_jsclass!(
+    JsDataView,
+    DataView,
+    DataView,
+    None,
+    Some(trace_data_view),
+    None,
+    None,
+    Some(data_view_size)
+);
 
 impl JsDataView {
     pub fn get_buffer(&self) -> TypedJsObject<JsArrayBuffer> {
@@ -108,17 +121,6 @@ impl JsDataView {
         });
         obj
     }
-
-    define_jsclass_with_symbol!(
-        JsObject,
-        DataView,
-        DataView,
-        None,
-        Some(trace_data_view),
-        None,
-        None,
-        Some(data_view_size)
-    );
 }
 // TODO: Deserialize and serialize data view.
 #[allow(improper_ctypes_definitions)]
