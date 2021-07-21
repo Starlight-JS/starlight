@@ -1204,7 +1204,7 @@ impl GcPointer<JsObject> {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        if self.get_non_indexed_property_slot(ctx, name, slot){
+        if self.get_non_indexed_property_slot(ctx, name, slot) {
             if slot.attributes().is_accessor() {
                 return slot.accessor().setter().is_pointer()
                     && !slot.accessor().setter().is_empty();
