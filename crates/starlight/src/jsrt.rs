@@ -902,6 +902,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         date::date_to_iso_string as _,
         date::date_to_utc_string as _,
         date::date_to_date_string as _,
+        date::date_parse as _,
+        date::date_utc as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {
