@@ -1376,6 +1376,16 @@ impl GcPointer<Context> {
             )?;
             let fun = JsNativeFunction::new(ctx, "toString".intern(), date_to_string, 0);
             proto.put(self, "toString".intern(), JsValue::new(fun), false)?;
+            def_native_method!(ctx, proto, valueOf, date_value_of, 0)?;
+            def_native_method!(ctx, proto, setDate, date_set_date, 1)?;
+            def_native_method!(ctx, proto, setFullYear, date_set_full_year, 3)?;
+            def_native_method!(ctx, proto, setHours, date_set_hours, 4)?;
+            def_native_method!(ctx, proto, setMilliseconds, date_set_milliseconds, 1)?;
+            def_native_method!(ctx, proto, setMinutes, date_set_minutes, 3)?;
+            def_native_method!(ctx, proto, setMonth, date_set_month, 2)?;
+            def_native_method!(ctx, proto, setSeconds, date_set_seconds, 2)?;
+            def_native_method!(ctx, proto, setYear, date_set_year, 3)?;
+            def_native_method!(ctx, proto, setTime, date_set_time, 1)?;
             def_native_method!(ctx, ctor, now, date_now, 0)?;
             def_native_method!(ctx, ctor, parse, date_parse, 1)?;
             def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
