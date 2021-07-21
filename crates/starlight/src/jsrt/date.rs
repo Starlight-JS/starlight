@@ -106,6 +106,402 @@ define_jsclass!(
     Some(fsz)
 );
 impl Date {
+    /// `Date.prototype.toDateString()`
+    ///
+    /// The `toDateString()` method returns the date portion of a Date object in English.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.todatestring
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toDateString
+    pub fn to_date_string(self) -> String {
+        self.to_local()
+            .map(|date_time| date_time.format("%a %b %d %Y").to_string())
+            .unwrap_or_else(|| "Invalid Date".to_string())
+    }
+
+    /// `Date.prototype.toGMTString()`
+    ///
+    /// The `toGMTString()` method converts a date to a string, using Internet Greenwich Mean Time (GMT) conventions.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.togmtstring
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toGMTString
+    pub fn to_gmt_string(self) -> String {
+        self.to_utc_string()
+    }
+
+    /// `Date.prototype.toISOString()`
+    ///
+    /// The `toISOString()` method returns a string in simplified extended ISO format (ISO 8601).
+    ///
+    /// More information:
+    ///  - [ISO 8601][iso8601]
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [iso8601]: http://en.wikipedia.org/wiki/ISO_8601
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.toisostring
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
+    pub fn to_iso_string(self) -> String {
+        self.to_utc()
+            // RFC 3389 uses +0.00 for UTC, where JS expects Z, so we can't use the built-in chrono function.
+            .map(|f| f.format("%Y-%m-%dT%H:%M:%S.%3fZ").to_string())
+            .unwrap_or_else(|| "Invalid Date".to_string())
+    }
+
+    /// `Date.prototype.toJSON()`
+    ///
+    /// The `toJSON()` method returns a string representation of the `Date` object.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.tojson
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toJSON
+    pub fn to_json(self) -> String {
+        self.to_iso_string()
+    }
+
+    /// `Date.prototype.toTimeString()`
+    ///
+    /// The `toTimeString()` method returns the time portion of a Date object in human readable form in American
+    /// English.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.totimestring
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toTimeString
+    pub fn to_time_string(self) -> String {
+        self.to_local()
+            .map(|date_time| date_time.format("%H:%M:%S GMT%:z").to_string())
+            .unwrap_or_else(|| "Invalid Date".to_string())
+    }
+
+    /// `Date.prototype.toUTCString()`
+    ///
+    /// The `toUTCString()` method returns a string representing the specified Date object.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.toutcstring
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toUTCString
+    pub fn to_utc_string(self) -> String {
+        self.to_utc()
+            .map(|date_time| date_time.format("%a, %d %b %Y %H:%M:%S GMT").to_string())
+            .unwrap_or_else(|| "Invalid Date".to_string())
+    }
+
+    /// `Date.prototype.valueOf()`
+    ///
+    /// The `valueOf()` method returns the primitive value of a `Date` object.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.valueof
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/valueOf
+    pub fn value_of(&self) -> f64 {
+        self.get_time()
+    }
+
+    /// `Date.prototype.getDate()`
+    ///
+    /// The `getDate()` method returns the day of the month for the specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getdate
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getDate
+    pub fn get_date(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| dt.day() as f64)
+    }
+
+    /// `Date.prototype.getDay()`
+    ///
+    /// The `getDay()` method returns the day of the week for the specified date according to local time, where 0
+    /// represents Sunday.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getday
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getDay
+    pub fn get_day(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| {
+            let weekday = dt.weekday() as u32;
+            let weekday = (weekday + 1) % 7; // 0 represents Monday in Chrono
+            weekday as f64
+        })
+    }
+
+    /// `Date.prototype.getFullYear()`
+    ///
+    /// The `getFullYear()` method returns the year of the specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getfullyear
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getFullYear
+    pub fn get_full_year(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| dt.year() as f64)
+    }
+
+    /// `Date.prototype.getHours()`
+    ///
+    /// The `getHours()` method returns the hour for the specified date, according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.gethours
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getHours
+    pub fn get_hours(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| dt.hour() as f64)
+    }
+
+    /// `Date.prototype.getMilliseconds()`
+    ///
+    /// The `getMilliseconds()` method returns the milliseconds in the specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getmilliseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getMilliseconds
+    pub fn get_milliseconds(&self) -> f64 {
+        self.to_local()
+            .map_or(f64::NAN, |dt| dt.nanosecond() as f64 / NANOS_PER_MS as f64)
+    }
+
+    /// `Date.prototype.getMinutes()`
+    ///
+    /// The `getMinutes()` method returns the minutes in the specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getminutes
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getMinutes
+    pub fn get_minutes(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| dt.minute() as f64)
+    }
+
+    /// `Date.prototype.getMonth()`
+    ///
+    /// The `getMonth()` method returns the month in the specified date according to local time, as a zero-based value
+    /// (where zero indicates the first month of the year).
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getmonth
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getMonth
+    pub fn get_month(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| dt.month0() as f64)
+    }
+
+    /// `Date.prototype.getSeconds()`
+    ///
+    /// The `getSeconds()` method returns the seconds in the specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getSeconds
+    pub fn get_seconds(&self) -> f64 {
+        self.to_local().map_or(f64::NAN, |dt| dt.second() as f64)
+    }
+
+    /// `Date.prototype.getYear()`
+    ///
+    /// The getYear() method returns the year in the specified date according to local time. Because getYear() does not
+    /// return full years ("year 2000 problem"), it is no longer used and has been replaced by the getFullYear() method.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getyear
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getYear
+    pub fn get_year(&self) -> f64 {
+        self.to_local()
+            .map_or(f64::NAN, |dt| dt.year() as f64 - 1900f64)
+    }
+
+    /// `Date.prototype.getTime()`
+    ///
+    /// The `getTime()` method returns the number of milliseconds since the Unix Epoch.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.gettime
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTime
+    pub fn get_time(&self) -> f64 {
+        self.to_utc()
+            .map_or(f64::NAN, |dt| dt.timestamp_millis() as f64)
+    }
+
+    /// `Date.prototype.getTimeZoneOffset()`
+    ///
+    /// The getTimezoneOffset() method returns the time zone difference, in minutes, from current locale (host system
+    /// settings) to UTC.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.gettimezoneoffset
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTimezoneOffset
+    #[inline]
+    pub fn get_timezone_offset() -> f64 {
+        let offset_seconds = chrono::Local::now().offset().local_minus_utc() as f64;
+        offset_seconds / 60f64
+    }
+
+    /// `Date.prototype.getUTCDate()`
+    ///
+    /// The `getUTCDate()` method returns the day (date) of the month in the specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcdate
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCDate
+    pub fn get_utc_date(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| dt.day() as f64)
+    }
+
+    /// `Date.prototype.getUTCDay()`
+    ///
+    /// The `getUTCDay()` method returns the day of the week in the specified date according to universal time, where 0
+    /// represents Sunday.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcday
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCDay
+    pub fn get_utc_day(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| {
+            let weekday = dt.weekday() as u32;
+            let weekday = (weekday + 1) % 7; // 0 represents Monday in Chrono
+            weekday as f64
+        })
+    }
+
+    /// `Date.prototype.getUTCFullYear()`
+    ///
+    /// The `getUTCFullYear()` method returns the year in the specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcfullyear
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCFullYear
+    pub fn get_utc_full_year(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| dt.year() as f64)
+    }
+
+    /// `Date.prototype.getUTCHours()`
+    ///
+    /// The `getUTCHours()` method returns the hours in the specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutchours
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCHours
+    pub fn get_utc_hours(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| dt.hour() as f64)
+    }
+
+    /// `Date.prototype.getUTCMilliseconds()`
+    ///
+    /// The `getUTCMilliseconds()` method returns the milliseconds portion of the time object's value.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcmilliseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCMilliseconds
+    pub fn get_utc_milliseconds(&self) -> f64 {
+        self.to_utc()
+            .map_or(f64::NAN, |dt| dt.nanosecond() as f64 / NANOS_PER_MS as f64)
+    }
+
+    /// `Date.prototype.getUTCMinutes()`
+    ///
+    /// The `getUTCMinutes()` method returns the minutes in the specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcminutes
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCMinutes
+    pub fn get_utc_minutes(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| dt.minute() as f64)
+    }
+
+    /// `Date.prototype.getUTCMonth()`
+    ///
+    /// The `getUTCMonth()` returns the month of the specified date according to universal time, as a zero-based value
+    /// (where zero indicates the first month of the year).
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcmonth
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCMonth
+    pub fn get_utc_month(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| dt.month0() as f64)
+    }
+
+    /// `Date.prototype.getUTCSeconds()`
+    ///
+    /// The `getUTCSeconds()` method returns the seconds in the specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.getutcseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getUTCSeconds
+    pub fn get_utc_seconds(&self) -> f64 {
+        self.to_utc().map_or(f64::NAN, |dt| dt.second() as f64)
+    }
+
     /// Check if the time (number of miliseconds) is in the expected range.
     /// Returns None if the time is not in the range, otherwise returns the time itself in option.
     ///
@@ -373,6 +769,385 @@ impl Date {
         *object.data::<Self>() = ManuallyDrop::new(date);
         Ok(JsValue::new(object))
     }
+
+    /// `Date.prototype.setDate()`
+    ///
+    /// The `setDate()` method sets the day of the `Date` object relative to the beginning of the currently set
+    /// month.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setdate
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setDate
+    pub fn set_date(&mut self, day: Option<f64>) {
+        if let Some(day) = day {
+            self.set_components(false, None, None, Some(day), None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setFullYear()`
+    ///
+    /// The `setFullYear()` method sets the full year for a specified date according to local time. Returns new
+    /// timestamp.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setfullyear
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setFullYear
+    pub fn set_full_year(&mut self, year: Option<f64>, month: Option<f64>, day: Option<f64>) {
+        if let Some(year) = year {
+            self.set_components(false, Some(year), month, day, None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setHours()`
+    ///
+    /// The `setHours()` method sets the hours for a specified date according to local time, and returns the number
+    /// of milliseconds since January 1, 1970 00:00:00 UTC until the time represented by the updated `Date`
+    /// instance.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.sethours
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setHours
+    pub fn set_hours(
+        &mut self,
+        hour: Option<f64>,
+        minute: Option<f64>,
+        second: Option<f64>,
+        millisecond: Option<f64>,
+    ) {
+        if let Some(hour) = hour {
+            self.set_components(
+                false,
+                None,
+                None,
+                None,
+                Some(hour),
+                minute,
+                second,
+                millisecond,
+            )
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setMilliseconds()`
+    ///
+    /// The `setMilliseconds()` method sets the milliseconds for a specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setmilliseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setMilliseconds
+    pub fn set_milliseconds(&mut self, millisecond: Option<f64>) {
+        if let Some(millisecond) = millisecond {
+            self.set_components(false, None, None, None, None, None, None, Some(millisecond))
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setMinutes()`
+    ///
+    /// The `setMinutes()` method sets the minutes for a specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setminutes
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setMinutes
+    pub fn set_minutes(
+        &mut self,
+        minute: Option<f64>,
+        second: Option<f64>,
+        millisecond: Option<f64>,
+    ) {
+        if let Some(minute) = minute {
+            self.set_components(
+                false,
+                None,
+                None,
+                None,
+                None,
+                Some(minute),
+                second,
+                millisecond,
+            )
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setMonth()`
+    ///
+    /// The `setMonth()` method sets the month for a specified date according to the currently set year.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setmonth
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setMonth
+    pub fn set_month(&mut self, month: Option<f64>, day: Option<f64>) {
+        if let Some(month) = month {
+            self.set_components(false, None, Some(month), day, None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setSeconds()`
+    ///
+    /// The `setSeconds()` method sets the seconds for a specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setSeconds
+    pub fn set_seconds(&mut self, second: Option<f64>, millisecond: Option<f64>) {
+        if let Some(second) = second {
+            self.set_components(
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(second),
+                millisecond,
+            )
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setYear()`
+    ///
+    /// The `setYear()` method sets the year for a specified date according to local time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setyear
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setYear
+    pub fn set_year(&mut self, year: Option<f64>, month: Option<f64>, day: Option<f64>) {
+        if let Some(mut year) = year {
+            year += if (0f64..100f64).contains(&year) {
+                1900f64
+            } else {
+                0f64
+            };
+            self.set_components(false, Some(year), month, day, None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setTime()`
+    ///
+    /// The `setTime()` method sets the Date object to the time represented by a number of milliseconds since
+    /// January 1, 1970, 00:00:00 UTC.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.settime
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setTime
+    pub fn set_time(&mut self, time: Option<f64>) {
+        if let Some(time) = time {
+            let secs = (time / 1_000f64) as i64;
+            let nsecs = ((time % 1_000f64) * 1_000_000f64) as u32;
+            self.0 = ignore_ambiguity(Local.timestamp_opt(secs, nsecs)).map(|dt| dt.naive_utc());
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setUTCDate()`
+    ///
+    /// The `setUTCDate()` method sets the day of the month for a specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutcdate
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCDate
+    pub fn set_utc_date(&mut self, day: Option<f64>) {
+        if let Some(day) = day {
+            self.set_components(true, None, None, Some(day), None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setFullYear()`
+    ///
+    /// The `setFullYear()` method sets the full year for a specified date according to local time. Returns new
+    /// timestamp.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutcfullyear
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCFullYear
+    pub fn set_utc_full_year(&mut self, year: Option<f64>, month: Option<f64>, day: Option<f64>) {
+        if let Some(year) = year {
+            self.set_components(true, Some(year), month, day, None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setUTCHours()`
+    ///
+    /// The `setUTCHours()` method sets the hour for a specified date according to universal time, and returns the
+    /// number of milliseconds since  January 1, 1970 00:00:00 UTC until the time represented by the updated `Date`
+    /// instance.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutchours
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCHours
+    pub fn set_utc_hours(
+        &mut self,
+        hour: Option<f64>,
+        minute: Option<f64>,
+        second: Option<f64>,
+        millisecond: Option<f64>,
+    ) {
+        if let Some(hour) = hour {
+            self.set_components(
+                true,
+                None,
+                None,
+                None,
+                Some(hour),
+                minute,
+                second,
+                millisecond,
+            )
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setUTCMilliseconds()`
+    ///
+    /// The `setUTCMilliseconds()` method sets the milliseconds for a specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutcmilliseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCMilliseconds
+    pub fn set_utc_milliseconds(&mut self, millisecond: Option<f64>) {
+        if let Some(millisecond) = millisecond {
+            self.set_components(true, None, None, None, None, None, None, Some(millisecond))
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setUTCMinutes()`
+    ///
+    /// The `setUTCMinutes()` method sets the minutes for a specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutcminutes
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCMinutes
+    pub fn set_utc_minutes(
+        &mut self,
+        minute: Option<f64>,
+        second: Option<f64>,
+        millisecond: Option<f64>,
+    ) {
+        if let Some(minute) = minute {
+            self.set_components(
+                true,
+                None,
+                None,
+                None,
+                None,
+                Some(minute),
+                second,
+                millisecond,
+            )
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setUTCMonth()`
+    ///
+    /// The `setUTCMonth()` method sets the month for a specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutcmonth
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCMonth
+    pub fn set_utc_month(&mut self, month: Option<f64>, day: Option<f64>) {
+        if let Some(month) = month {
+            self.set_components(true, None, Some(month), day, None, None, None, None)
+        } else {
+            self.0 = None
+        }
+    }
+
+    /// `Date.prototype.setUTCSeconds()`
+    ///
+    /// The `setUTCSeconds()` method sets the seconds for a specified date according to universal time.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///  - [MDN documentation][mdn]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-date.prototype.setutcseconds
+    /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/setUTCSeconds
+    pub fn set_utc_seconds(&mut self, second: Option<f64>, millisecond: Option<f64>) {
+        if let Some(second) = second {
+            self.set_components(
+                true,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(second),
+                millisecond,
+            )
+        } else {
+            self.0 = None
+        }
+    }
 }
 impl JsClass for Date {
     fn class() -> &'static Class {
@@ -395,6 +1170,63 @@ pub fn date_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
         }
     }
 }
+
+pub fn date_parse(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    if args.size() == 0 {
+        return Ok(JsValue::encode_nan_value());
+    }
+    match DateTime::parse_from_rfc3339(&args.at(0).to_string(ctx)?) {
+        Ok(v) => Ok(JsValue::new(v.naive_utc().timestamp_millis() as f64)),
+        _ => Ok(JsValue::encode_nan_value()),
+    }
+}
+
+pub fn date_utc(context: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    let year = args
+        .try_at(0)
+        .map_or(Ok(f64::NAN), |value| value.to_number(context))?;
+    let month = args
+        .try_at(1)
+        .map_or(Ok(1f64), |value| value.to_number(context))?;
+    let day = args
+        .try_at(2)
+        .map_or(Ok(1f64), |value| value.to_number(context))?;
+    let hour = args
+        .try_at(3)
+        .map_or(Ok(0f64), |value| value.to_number(context))?;
+    let min = args
+        .try_at(4)
+        .map_or(Ok(0f64), |value| value.to_number(context))?;
+    let sec = args
+        .try_at(5)
+        .map_or(Ok(0f64), |value| value.to_number(context))?;
+    let milli = args
+        .try_at(6)
+        .map_or(Ok(0f64), |value| value.to_number(context))?;
+
+    if !check_normal_opt!(year, month, day, hour, min, sec, milli) {
+        return Ok(JsValue::encode_nan_value());
+    }
+
+    let year = year as i32;
+    let month = month as u32;
+    let day = day as u32;
+    let hour = hour as u32;
+    let min = min as u32;
+    let sec = sec as u32;
+    let milli = milli as u32;
+
+    let year = if (0..=99).contains(&year) {
+        1900 + year
+    } else {
+        year
+    };
+    NaiveDate::from_ymd_opt(year, month + 1, day)
+        .and_then(|f| f.and_hms_milli_opt(hour, min, sec, milli))
+        .and_then(|f| Date::time_clip(f.timestamp_millis() as f64))
+        .map_or(Ok(JsValue::new(f64::NAN)), |time| Ok(JsValue::new(time)))
+}
+
 /// The abstract operation `thisTimeValue` takes argument value.
 ///
 /// In following descriptions of functions that are properties of the Date prototype object, the phrase “this
@@ -422,6 +1254,98 @@ pub fn date_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     let date = TypedJsObject::<Date>::try_from(ctx, args.this)?;
     Ok(JsValue::new(JsString::new(ctx, (*date).to_string())))
 }
+
+macro_rules! getter_method {
+    ($n: ident $name:ident) => {
+        pub fn $n(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+            Ok(JsValue::js_from(
+                ctx,
+                this_time_value(args.this, ctx)?.$name(),
+            ))
+        }
+    };
+    ($n : ident Self::$name:ident) => {
+        pub fn $n(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
+            Ok(JsValue::js_from(ctx, Date::$name()))
+        }
+    };
+}
+
+macro_rules! setter_method {
+    ($new_name : ident $name:ident($($e:expr),* $(,)?)) => {
+        pub fn $new_name(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,JsValue> {
+            let mut result = this_time_value(args.this, ctx)?;
+            result.$name(
+                $(
+                    args
+                        .try_at($e)
+                        .and_then(|value| {
+                            value.to_numeric_number(ctx).map_or_else(
+                                |_| None,
+                                |value| {
+                                    if value == 0f64 || value.is_normal() {
+                                        Some(value)
+                                    } else {
+                                        None
+                                    }
+                                },
+                            )
+                        })
+                ),*
+            );
+
+            *TypedJsObject::<Date>::try_from(ctx,args.this)? = result;
+            //this.set_data(ObjectData::Date(result));
+            Ok(JsValue::from(result.get_time()))
+        }
+
+    };
+}
+
+setter_method!(date_set_date set_date(0));
+setter_method!(date_set_full_year set_full_year(0,1,2));
+setter_method!(date_set_hours set_hours(0,1,2,3));
+setter_method!(date_set_milliseconds set_milliseconds(0));
+setter_method!(date_set_minutes set_minutes(0,1,2));
+setter_method!(date_set_month set_month(0,1));
+setter_method!(date_set_seconds set_seconds(0,1));
+setter_method!(date_set_year set_year(0,1,2));
+setter_method!(date_set_time set_time(0));
+setter_method!(date_set_utc_date set_utc_date(0));
+setter_method!(date_set_utc_full_year set_utc_full_year(0,1,2));
+setter_method!(date_set_utc_hours set_utc_hours(0,1,2,3));
+setter_method!(date_set_utc_minutes set_utc_minutes(0,1,2));
+setter_method!(date_set_utc_month set_utc_month(0,1));
+setter_method!(date_set_utc_seconds set_utc_seconds(0,1));
+getter_method!(date_get_date get_date);
+getter_method!(date_get_day get_day);
+getter_method!(date_get_full_year get_full_year);
+getter_method!(date_get_hours get_hours);
+getter_method!(date_get_milliseconds get_milliseconds);
+getter_method!(date_get_minutes get_minutes);
+getter_method!(date_get_month get_month);
+getter_method!(date_get_seconds get_seconds);
+getter_method!(date_get_time get_time);
+getter_method!(date_get_year get_year);
+getter_method!(date_get_utc_date get_utc_date);
+getter_method!(date_get_utc_day get_utc_day);
+getter_method!(date_get_utc_full_year get_utc_full_year);
+getter_method!(date_get_utc_hours get_utc_hours);
+getter_method!(date_get_utc_minutes get_utc_minutes);
+getter_method!(date_get_utc_milliseconds get_utc_milliseconds);
+getter_method!(date_get_utc_month get_utc_month);
+getter_method!(date_get_utc_seconds get_utc_seconds);
+getter_method!(date_to_json to_json);
+getter_method!(date_to_time_string to_time_string);
+getter_method!(date_value_of value_of);
+getter_method!(date_to_gmt_string to_gmt_string);
+getter_method!(date_to_iso_string to_iso_string);
+getter_method!(date_to_utc_string to_utc_string);
+getter_method!(date_to_date_string to_date_string);
+
+pub fn date_now(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
+    Ok(JsValue::new(Utc::now().timestamp_millis() as f64))
+}
 impl GcPointer<Context> {
     pub(crate) fn init_date_in_global_object(mut self) -> Result<(), JsValue> {
         let mut ctx = self;
@@ -447,6 +1371,9 @@ impl GcPointer<Context> {
         def_native_property!(self, proto, constructor, ctor, W | C)?;
         def_native_method!(self, proto, toString, date_to_string, 0)?;
         def_native_property!(self, ctor, prototype, proto, NONE)?;
+        def_native_method!(ctx, ctor, now, date_now, 0)?;
+        def_native_method!(ctx, ctor, parse, date_parse, 1)?;
+        def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
         self.global_data.date_prototype = Some(proto);
 
         Ok(())

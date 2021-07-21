@@ -298,6 +298,15 @@ unsafe impl Trace for JsValue {
 }
 
 impl JsValue {
+    /// This is a more specialized version of `to_numeric`, including `BigInt`.
+    ///
+    /// This function is equivalent to `Number(value)` in JavaScript
+    ///
+    /// See: <https://tc39.es/ecma262/#sec-tonumeric>
+    pub fn to_numeric_number(self, ctx: GcPointer<Context>) -> Result<f64, JsValue> {
+        let primitive = self.to_primitive(ctx, JsHint::Number)?;
+        primitive.to_number(ctx)
+    }
     #[inline]
     pub unsafe fn fill(start: *mut Self, end: *mut Self, fill: JsValue) {
         let mut cur = start;
@@ -1480,5 +1489,26 @@ pub mod new_value {
             assert!(self.is_bool());
             self == Self::encode_bool_value(true)
         }
+    }
+}
+
+pub trait JsFrom<T> {
+    fn js_from(ctx: GcPointer<Context>, val: T) -> JsValue;
+}
+
+impl<T: Into<JsValue>> JsFrom<T> for JsValue {
+    fn js_from(_ctx: GcPointer<Context>, val: T) -> JsValue {
+        JsValue::new(val)
+    }
+}
+
+impl JsFrom<&str> for JsValue {
+    fn js_from(ctx: GcPointer<Context>, val: &str) -> JsValue {
+        JsValue::new(JsString::new(ctx, val))
+    }
+}
+impl JsFrom<String> for JsValue {
+    fn js_from(ctx: GcPointer<Context>, val: String) -> JsValue {
+        JsValue::new(JsString::new(ctx, val))
     }
 }

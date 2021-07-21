@@ -197,6 +197,7 @@ pub mod prelude {
         string::*,
         structure::*,
         symbol_table::*,
+        value::JsFrom,
         value::JsValue,
     };
     pub use super::Platform;
