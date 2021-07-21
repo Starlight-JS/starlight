@@ -113,38 +113,35 @@ impl Context {
 }
 impl GcPointer<Context> {
     pub fn init(&mut self) {
-        self.init_global_data();
-        self.init_global_object();
+        self.init_global_data().expect("Init Global Data Failed");
+        self.init_global_object()
+            .expect("Init Global Object Failed");
     }
 
-    pub fn init_global_object(&mut self) {
-        self.init_object_in_global_object();
-        self.init_func_in_global_object();
-        self.init_number_in_global_object();
-        self.init_array_in_global_object();
-        self.init_math_in_global_object();
-        self.init_error_in_global_object();
-        self.init_string_in_global_object();
-        self.init_builtin_in_global_object();
-        self.init_symbol_in_global_object();
-        self.init_regexp_in_global_object()
-            .unwrap_or_else(|_| unreachable!());
-        self.init_promise_in_global_object()
-            .ok()
-            .expect("init prom failed");
-        self.init_array_buffer_in_global_object()
-            .unwrap_or_else(|_| unreachable!());
-        self.init_data_view_in_global_object()
-            .unwrap_or_else(|_| unreachable!());
-        self.init_weak_ref_in_global_object();
-        self.init_date_in_global_object();
-        self.init_boolean_in_global_object();
+    pub fn init_global_object(&mut self) -> Result<(), JsValue> {
+        self.init_object_in_global_object()?;
+        self.init_func_in_global_object()?;
+        self.init_number_in_global_object()?;
+        self.init_array_in_global_object()?;
+        self.init_math_in_global_object()?;
+        self.init_error_in_global_object()?;
+        self.init_string_in_global_object()?;
+        self.init_builtin_in_global_object()?;
+        self.init_symbol_in_global_object()?;
+        self.init_regexp_in_global_object()?;
+        self.init_promise_in_global_object()?;
+        self.init_array_buffer_in_global_object()?;
+        self.init_data_view_in_global_object()?;
+        self.init_weak_ref_in_global_object()?;
+        self.init_date_in_global_object()?;
+        self.init_boolean_in_global_object()?;
         self.init_self_hosted();
         self.init_module_loader();
         self.init_internal_modules();
+        Ok(())
     }
 
-    pub fn init_global_data(mut self) {
+    pub fn init_global_data(mut self) -> Result<(), JsValue> {
         self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
         let s = Structure::new_unique_indexed(self, None, false);
         let mut proto = JsObject::new(self, &s, JsObject::get_class(), ObjectTag::Ordinary);
@@ -168,20 +165,21 @@ impl GcPointer<Context> {
         self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
 
         // Init global data structure
-        self.init_func_global_data(proto);
-        self.init_error_in_global_data(proto);
-        self.init_array_in_global_data(proto);
-        self.init_number_in_global_data(proto);
-        self.init_symbol_in_global_data(proto);
-        self.init_object_in_global_data(proto);
-        self.init_regexp_in_global_data(proto);
-        self.init_generator_in_global_data(proto);
-        self.init_array_buffer_in_global_data();
-        self.init_data_view_in_global_data();
-        self.init_string_in_global_data(proto);
-        self.init_weak_ref_in_global_data();
-        self.init_date_in_global_data();
-        self.init_boolean_in_global_data();
+        self.init_func_global_data(proto)?;
+        self.init_error_in_global_data(proto)?;
+        self.init_array_in_global_data(proto)?;
+        self.init_number_in_global_data(proto)?;
+        self.init_symbol_in_global_data(proto)?;
+        self.init_object_in_global_data(proto)?;
+        self.init_regexp_in_global_data(proto)?;
+        self.init_generator_in_global_data(proto)?;
+        self.init_array_buffer_in_global_data()?;
+        self.init_data_view_in_global_data()?;
+        self.init_string_in_global_data(proto)?;
+        self.init_weak_ref_in_global_data()?;
+        self.init_date_in_global_data()?;
+        self.init_boolean_in_global_data()?;
+        Ok(())
     }
 }
 

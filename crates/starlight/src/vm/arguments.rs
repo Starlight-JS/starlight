@@ -3,6 +3,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::mem::ManuallyDrop;
 
+use crate::prelude::*;
+
 use super::{
     environment::Environment,
     error::JsTypeError,
@@ -93,9 +95,11 @@ pub struct JsArguments {
     pub mapping: Box<[Symbol]>,
     pub env: GcPointer<Environment>,
 }
+
+define_jsclass!(JsArguments, Arguments);
+
 #[allow(non_snake_case)]
 impl JsArguments {
-    define_jsclass!(JsArguments, Arguments);
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
         ctx: GcPointer<Context>,
@@ -323,8 +327,6 @@ impl JsArguments {
             JsArguments::get_class(),
             ObjectTag::NormalArguments,
         );
-
-        //let s = Structure::new_unique_indexed(ctx, None, true);
 
         let args = JsArguments {
             mapping: vec![].into_boxed_slice(),

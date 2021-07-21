@@ -6,7 +6,8 @@ use std::{
 };
 
 use crate::{
-    define_jsclass_with_symbol,
+    constant::S_CONSTURCTOR,
+    define_jsclass,
     prelude::*,
     vm::{class::JsClass, context::Context, object::TypedJsObject},
     JsTryFrom,
@@ -94,18 +95,17 @@ extern "C" fn deser(object: &mut JsObject, deser: &mut Deserializer) {
     }
 }
 
+define_jsclass!(
+    Date,
+    Date,
+    Date,
+    None,
+    None,
+    Some(deser),
+    Some(ser),
+    Some(fsz)
+);
 impl Date {
-    define_jsclass_with_symbol!(
-        JsObject,
-        Date,
-        Date,
-        None,
-        None,
-        Some(deser),
-        Some(ser),
-        Some(fsz)
-    );
-
     /// Check if the time (number of miliseconds) is in the expected range.
     /// Returns None if the time is not in the range, otherwise returns the time itself in option.
     ///
@@ -423,46 +423,32 @@ pub fn date_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     Ok(JsValue::new(JsString::new(ctx, (*date).to_string())))
 }
 impl GcPointer<Context> {
-    pub(crate) fn init_date_in_global_object(mut self) {
+    pub(crate) fn init_date_in_global_object(mut self) -> Result<(), JsValue> {
         let mut ctx = self;
-        let mut init = || -> Result<(), JsValue> {
-            let mut proto = ctx.global_data().date_prototype.unwrap();
-            let ctor = proto.get(ctx, "constructor".intern())?;
-            self.global_object()
-                .put(ctx, "Date".intern(), ctor, false)?;
-            Ok(())
-        };
-        init().unwrap_or_else(|_| unreachable!());
+        let mut proto = ctx.global_data().date_prototype.unwrap();
+        let ctor = proto.get(ctx, S_CONSTURCTOR.intern())?;
+
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, Date, ctor)?;
+        Ok(())
     }
-    pub(crate) fn init_date_in_global_data(mut self) {
+    pub(crate) fn init_date_in_global_data(mut self) -> Result<(), JsValue> {
         let mut ctx = self;
-        let mut init = || -> Result<(), JsValue> {
-            let obj_proto = self.global_data().object_prototype.unwrap();
-            let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-            let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
-            *proto.data::<Date>() = ManuallyDrop::new(Date(None));
 
-            let date_map = Structure::new_indexed(ctx, Some(proto), false);
-            self.global_data.date_structure = Some(date_map);
-            let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
-            proto.define_own_property(
-                self,
-                "constructor".intern(),
-                &*DataDescriptor::new(JsValue::new(ctor), C | W),
-                false,
-            )?;
-            let fun = JsNativeFunction::new(ctx, "toString".intern(), date_to_string, 0);
-            proto.put(self, "toString".intern(), JsValue::new(fun), false)?;
-            ctor.define_own_property(
-                self,
-                "prototype".intern(),
-                &*DataDescriptor::new(JsValue::new(proto), NONE),
-                false,
-            )?;
-            self.global_data.date_prototype = Some(proto);
+        let obj_proto = self.global_data().object_prototype.unwrap();
+        let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
+        let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+        *proto.data::<Date>() = ManuallyDrop::new(Date(None));
 
-            Ok(())
-        };
-        init().unwrap_or_else(|_| unreachable!());
+        let date_map = Structure::new_indexed(ctx, Some(proto), false);
+        self.global_data.date_structure = Some(date_map);
+        let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
+
+        def_native_property!(self, proto, constructor, ctor, W | C)?;
+        def_native_method!(self, proto, toString, date_to_string, 0)?;
+        def_native_property!(self, ctor, prototype, proto, NONE)?;
+        self.global_data.date_prototype = Some(proto);
+
+        Ok(())
     }
 }

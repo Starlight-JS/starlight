@@ -19,7 +19,11 @@ use super::{
 };
 use super::{property_descriptor::PropertyDescriptor, slot::*, value::*};
 use crate::gc::cell::GcPointer;
+use crate::prelude::*;
 pub struct JsArray;
+
+define_jsclass!(JsArray, Array);
+
 #[allow(non_snake_case)]
 impl JsArray {
     pub fn from_slice(ctx: GcPointer<Context>, slice: &[JsValue]) -> GcPointer<JsObject> {
@@ -42,7 +46,7 @@ impl JsArray {
         arr.indexed.set_length(n);
         arr
     }
-    define_jsclass!(JsArray, Array);
+
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
         ctx: GcPointer<Context>,

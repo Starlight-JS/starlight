@@ -20,6 +20,7 @@ use super::{
     Context, Runtime,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
+use crate::prelude::*;
 use crate::{gc::cell::GcPointerBase, vm::promise::JsPromise};
 use crate::{
     gc::{
@@ -253,6 +254,8 @@ fn is_absent_descriptor(desc: &PropertyDescriptor) -> bool {
     }
     true
 }
+
+define_jsclass!(JsObject, Object);
 
 #[allow(non_snake_case)]
 impl JsObject {
@@ -871,7 +874,6 @@ impl JsObject {
         js_method_table!(JsObject)
     }*/
 
-    define_jsclass!(JsObject, Object);
     /// create new empty JS object instance.
     pub fn new_empty(ctx: GcPointer<Context>) -> GcPointer<Self> {
         let stack = ctx.shadowstack();

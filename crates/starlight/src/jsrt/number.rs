@@ -1,6 +1,7 @@
 use num::traits::float::FloatCore;
 
 use crate::{
+    constant::S_CONSTURCTOR,
     prelude::*,
     vm::{context::Context, number::NumberObject},
 };
@@ -515,21 +516,21 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
 }
 
 impl GcPointer<Context> {
-    pub(crate) fn init_number_in_global_object(mut self) {
+    pub(crate) fn init_number_in_global_object(mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.number_prototype.unwrap();
         let constructor = proto
-            .get_own_property(self, "constructor".intern())
+            .get_own_property(self, S_CONSTURCTOR.intern())
             .unwrap()
             .value();
-        let _ = self.global_object().define_own_property(
-            self,
-            "Number".intern(),
-            &*DataDescriptor::new(JsValue::new(constructor), W | C),
-            false,
-        );
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, Number, constructor, W | C)?;
+        Ok(())
     }
 
-    pub(crate) fn init_number_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_number_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
         let mut proto = NumberObject::new_plain(self, structure, 0.0);
 
@@ -540,65 +541,27 @@ impl GcPointer<Context> {
 
         let mut constructor = JsNativeFunction::new(self, "Number".intern(), number_constructor, 1);
 
-        let _ = constructor.define_own_property(
-            self,
-            "prototype".intern(),
-            &*DataDescriptor::new(JsValue::new(proto), NONE),
-            false,
-        );
+        def_native_property!(self, constructor, prototype, proto, NONE)?;
+        def_native_property!(self, constructor, MAX_VALUE, f64::MAX)?;
+        def_native_property!(self, constructor, MIN_VALUE, f64::MIN)?;
+        def_native_property!(self, constructor, NaN, f64::NAN)?;
+        def_native_property!(self, constructor, NEGATIVE_INFINITY, f64::NEG_INFINITY)?;
+        def_native_property!(self, constructor, POSITIVE_INFINITY, f64::INFINITY)?;
+        def_native_property!(self, constructor, EPSILON, f64::EPSILON)?;
+        def_native_property!(self, constructor, MAX_SAFE_INTEGER, 9007199254740991.0)?;
+        def_native_method!(self, constructor, isNaN, number_is_nan, 0)?;
+        def_native_method!(self, constructor, isFinite, number_is_finite, 0)?;
+        def_native_method!(self, constructor, isInteger, number_is_integer, 0)?;
 
-        let _ = constructor.put(self, "MAX_VALUE".intern(), JsValue::new(f64::MAX), false);
-        let _ = constructor.put(self, "MIN_VALUE".intern(), JsValue::new(f64::MIN), false);
-        let _ = constructor.put(self, "NaN".intern(), JsValue::new(f64::NAN), false);
-        let _ = constructor.put(
-            self,
-            "NEGATIVE_INFINITY".intern(),
-            JsValue::new(f64::NEG_INFINITY),
-            false,
-        );
-        let _ = constructor.put(
-            self,
-            "POSITIVE_INFINITY".intern(),
-            JsValue::new(f64::INFINITY),
-            false,
-        );
-
-        let _ = constructor.put(self, "EPSILON".intern(), JsValue::new(f64::EPSILON), false);
-        let _ = constructor.put(
-            self,
-            "MAX_SAFE_INTEGER".intern(),
-            JsValue::new(9007199254740991.0),
-            false,
-        );
-        let is_nan = JsNativeFunction::new(self, "isNaN".intern(), number_is_nan, 0);
-        let _ = constructor.put(self, "isNaN".intern(), JsValue::new(is_nan), false);
-        let is_finite = JsNativeFunction::new(self, "isFinite".intern(), number_is_finite, 0);
-        let _ = constructor.put(self, "isFinite".intern(), JsValue::new(is_finite), false);
-        let is_int = JsNativeFunction::new(self, "isInteger".intern(), number_is_integer, 0);
-        let _ = constructor.put(self, "isInteger".intern(), JsValue::new(is_int), false);
-
-        {
-            let _ = proto.put(
-                self,
-                "constructor".intern(),
-                JsValue::new(constructor),
-                false,
-            );
-            let f = JsNativeFunction::new(self, "toString".intern(), number_to_string, 1);
-            let _ = proto.put(self, "toString".intern(), JsValue::new(f), false);
-
-            let f = JsNativeFunction::new(self, "valueOf".intern(), number_value_of, 0);
-            let _ = proto.put(self, "valueOf".intern(), JsValue::new(f), false);
-
-            let f = JsNativeFunction::new(self, "toPrecision".intern(), number_to_precisiion, 1);
-            let _ = proto.put(self, "toPrecision".intern(), JsValue::new(f), false);
-            let f = JsNativeFunction::new(self, "toFixed".intern(), number_to_fixed, 1);
-            let _ = proto.put(self, "toFixed".intern(), JsValue::new(f), false);
-
-            let f = JsNativeFunction::new(self, "clz".intern(), number_clz, 1);
-            let _ = proto.put(self, "clz".intern(), JsValue::new(f), false);
-        }
+        def_native_property!(self, proto, constructor, constructor)?;
+        def_native_method!(self, proto, toString, number_to_string, 1)?;
+        def_native_method!(self, proto, valueOf, number_value_of, 0)?;
+        def_native_method!(self, proto, toPrecision, number_to_precisiion, 1)?;
+        def_native_method!(self, proto, toFixed, number_to_fixed, 1)?;
+        def_native_method!(self, proto, clz, number_clz, 1)?;
 
         self.global_data.number_prototype = Some(proto);
+
+        Ok(())
     }
 }

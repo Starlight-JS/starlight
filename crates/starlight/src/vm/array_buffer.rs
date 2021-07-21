@@ -54,18 +54,21 @@ extern "C" fn array_buffer_deserialize(x: &mut JsObject, deser: &mut Deserialize
 extern "C" fn array_buffer_size() -> usize {
     size_of::<JsArrayBuffer>()
 }
+
+define_jsclass!(
+    JsArrayBuffer,
+    ArrayBuffer,
+    ArrayBuffer,
+    Some(drop_array_buffer),
+    None,
+    Some(array_buffer_deserialize),
+    Some(array_buffer_serialize),
+    Some(array_buffer_size)
+);
+
 impl JsArrayBuffer {
     pub const BYTE_LENGTH_OFFSET: usize = 0;
-    define_jsclass_with_symbol!(
-        JsObject,
-        ArrayBuffer,
-        ArrayBuffer,
-        Some(drop_array_buffer),
-        None,
-        Some(array_buffer_deserialize),
-        Some(array_buffer_serialize),
-        Some(array_buffer_size)
-    );
+
     pub fn get_data_block(&self) -> *mut u8 {
         self.data
     }

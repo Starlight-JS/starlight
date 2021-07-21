@@ -12,11 +12,13 @@ use super::{
     value::*,
     Context,
 };
+
 use crate::gc::snapshot::deserializer::Deserializable;
 use crate::gc::{
     cell::{GcCell, GcPointer, Trace},
     snapshot::serializer::{Serializable, SnapshotSerializer},
 };
+use crate::prelude::*;
 use std::mem::size_of;
 
 #[repr(C)]
@@ -61,6 +63,8 @@ pub struct JsStringObject {
     pub value: GcPointer<JsString>,
 }
 
+define_jsclass!(JsStringObject,String);
+
 #[allow(non_snake_case)]
 impl JsStringObject {
     pub fn new(ctx: GcPointer<Context>, s: GcPointer<JsString>) -> GcPointer<JsObject> {
@@ -85,7 +89,6 @@ impl JsStringObject {
         }
         obj
     }
-    define_jsclass!(JsStringObject, String);
     pub fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
         ctx: GcPointer<Context>,

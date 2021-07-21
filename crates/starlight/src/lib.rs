@@ -159,7 +159,7 @@ pub mod prelude {
         arguments::Arguments,
         array::JsArray,
         attributes::*,
-        class::Class,
+        class::{Class, JsClassMethodTable},
         error::*,
         function::*,
         method_table::MethodTable,
@@ -172,6 +172,8 @@ pub mod prelude {
         value::JsValue,
     };
     pub use super::Platform;
+    pub use crate::constant::*;
+    pub use crate::js_method_table;
 }
 
 pub trait JsTryFrom<T>: Sized {

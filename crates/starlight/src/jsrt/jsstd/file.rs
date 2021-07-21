@@ -1,4 +1,4 @@
-use crate::define_jsclass_with_symbol;
+use crate::define_jsclass;
 use crate::prelude::*;
 use crate::vm::context::Context;
 use crate::{gc::cell::GcPointer, vm::object::JsObject};
@@ -322,15 +322,13 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<FileObject>()
 }
-impl FileObject {
-    define_jsclass_with_symbol!(
-        JsObject,
-        File,
-        Object,
-        Some(drop_file_fn),
-        None,
-        Some(deser),
-        Some(ser),
-        Some(fsz)
-    );
-}
+define_jsclass!(
+    FileObject,
+    File,
+    Object,
+    Some(drop_file_fn),
+    None,
+    Some(deser),
+    Some(ser),
+    Some(fsz)
+);

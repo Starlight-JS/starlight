@@ -1,7 +1,8 @@
 use std::intrinsics::unlikely;
 use std::mem::ManuallyDrop;
 
-use crate::define_jsclass_with_symbol;
+use crate::define_jsclass;
+use crate::js_method_table;
 use crate::prelude::*;
 use crate::vm::class::JsClass;
 use crate::vm::context::Context;
@@ -28,18 +29,16 @@ extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<JsWeakRef>().value.trace(tracer);
 }
 
-impl JsWeakRef {
-    define_jsclass_with_symbol!(
-        JsObject,
-        WeakRef,
-        Object,
-        None,
-        Some(trace),
-        Some(deser),
-        Some(ser),
-        Some(fsz)
-    );
-}
+define_jsclass!(
+    JsWeakRef,
+    WeakRef,
+    Object,
+    None,
+    Some(trace),
+    Some(deser),
+    Some(ser),
+    Some(fsz)
+);
 
 pub fn weak_ref_constructor(
     mut ctx: GcPointer<Context>,

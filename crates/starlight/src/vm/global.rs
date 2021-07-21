@@ -1,6 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+use crate::prelude::*;
 use std::{collections::HashMap, mem::ManuallyDrop};
 
 use super::{
@@ -34,6 +35,8 @@ unsafe impl Trace for JsGlobal {
     }
 }
 
+define_jsclass!(JsGlobal, global);
+
 #[allow(non_snake_case)]
 impl JsGlobal {
     pub fn new(mut ctx: GcPointer<Context>) -> GcPointer<JsObject> {
@@ -53,7 +56,6 @@ impl JsGlobal {
         js_object
     }
 
-    define_jsclass!(JsGlobal, global);
     pub fn lookup_constant(&self, name: Symbol) -> Option<JsValue> {
         let _ctx = self.ctx;
         if name == "Infinity".intern() {
