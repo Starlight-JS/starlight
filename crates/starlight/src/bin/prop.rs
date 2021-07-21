@@ -18,9 +18,11 @@ fn main() {
     let content = read_to_string("examples/hello-world.js").unwrap();
     let res = ctx.eval_internal(None, false, &content, false);
 
-    let text = match res {
-        Ok(val) => val.to_string(ctx).unwrap_or_else(|_| String::new()),
-        Err(e) => format!(
+    match res {
+        Ok(val) => {
+            val.to_string(ctx).unwrap_or_else(|_| String::new());
+        }
+        Err(e) => println!(
             "Uncaught {}",
             e.to_string(ctx).unwrap_or_else(|_| String::new())
         ),

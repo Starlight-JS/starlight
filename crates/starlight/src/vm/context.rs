@@ -152,7 +152,7 @@ impl GcPointer<Context> {
         self.global_data.object_prototype = Some(proto);
         self.global_data.function_struct = Some(Structure::new_indexed(self, None, false));
         self.global_data.normal_arguments_structure =
-            Some(Structure::new_indexed(self, None, false));
+            Some(Structure::new_indexed(self, Some(proto), false));
         self.global_data
             .empty_object_struct
             .as_mut()
