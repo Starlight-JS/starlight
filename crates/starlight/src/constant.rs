@@ -144,3 +144,7 @@ pub const S_INIT_PROPERTY: &str = "<init_property>";
 // Promise
 
 pub const S_PROMISE: &str = "Promise";
+
+// Number
+
+pub const MAX_SAFE_INTEGER: f64 = 9007199254740991.0;

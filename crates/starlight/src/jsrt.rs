@@ -135,7 +135,7 @@ impl GcPointer<Context> {
         );
         eval("builtins/Object.js", include_str!("builtins/Object.js"))
     }
-    pub(crate) fn init_func_in_global_object(mut self) {
+    pub(crate) fn init_func_in_global_object(mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.func_prototype.unwrap();
         let name = S_FUNCTION.intern();
         let constrcutor = proto
@@ -143,6 +143,7 @@ impl GcPointer<Context> {
             .unwrap()
             .value();
         let _ = self.global_object().put(self, name, constrcutor, false);
+        Ok(())
     }
     pub(crate) fn init_func_global_data(
         mut self,
@@ -417,7 +418,10 @@ impl GcPointer<Context> {
         Ok(())
     }
 
-    pub(crate) fn init_error_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_error_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
         self.global_data.error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
@@ -512,6 +516,8 @@ impl GcPointer<Context> {
                 .change_prototype_with_no_transition(sub_proto);
             self.global_data.range_error = Some(sub_proto);
         }
+
+        Ok(())
     }
 }
 
@@ -896,6 +902,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         date::date_to_iso_string as _,
         date::date_to_utc_string as _,
         date::date_to_date_string as _,
+        date::date_parse as _,
+        date::date_utc as _,
     ];
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {

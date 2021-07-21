@@ -8,6 +8,7 @@ use super::Context;
 use crate::gc::cell::{GcCell, GcPointer, Trace, Tracer};
 use crate::gc::snapshot::deserializer::{Deserializable, Deserializer};
 use crate::gc::snapshot::serializer::SnapshotSerializer;
+use crate::prelude::*;
 use crate::vm::object::JsObject;
 use dashmap::DashMap;
 use std::mem::ManuallyDrop;
@@ -277,17 +278,17 @@ extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<JsSymbolObject>().sym.trace(tracer);
 }
 
+define_jsclass!(
+    JsSymbolObject,
+    Symbol,
+    Symbol,
+    None,
+    Some(trace),
+    Some(deser),
+    Some(ser),
+    Some(fsz)
+);
 impl JsSymbolObject {
-    define_jsclass_with_symbol!(
-        JsObject,
-        Symbol,
-        Symbol,
-        None,
-        Some(trace),
-        Some(deser),
-        Some(ser),
-        Some(fsz)
-    );
     pub fn symbol(&self) -> GcPointer<JsSymbol> {
         self.sym
     }

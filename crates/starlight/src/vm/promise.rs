@@ -11,6 +11,7 @@ use crate::gc::snapshot::deserializer::Deserializer;
 use crate::gc::snapshot::serializer::SnapshotSerializer;
 use crate::jsrt::get_length;
 use crate::prelude::Symbol;
+use crate::prelude::*;
 use crate::vm::array::JsArray;
 use crate::vm::function::JsClosureFunction;
 use crate::vm::structure::Structure;
@@ -32,6 +33,17 @@ pub struct JsPromise {
     // resolution for this Promise
     resolution: Option<Result<JsValue, JsValue>>,
 }
+
+define_jsclass!(
+    JsPromise,
+    Promise,
+    Object,
+    Some(drop_promise_fn),
+    Some(prom_trace),
+    Some(deser),
+    Some(ser),
+    Some(prom_size)
+);
 
 #[allow(non_snake_case)]
 impl JsPromise {
@@ -402,17 +414,6 @@ impl JsPromise {
 
         Ok(sub_prom)
     }
-
-    define_jsclass_with_symbol!(
-        JsObject,
-        Promise,
-        Object,
-        Some(drop_promise_fn),
-        Some(prom_trace),
-        Some(deser),
-        Some(ser),
-        Some(prom_size)
-    );
 }
 
 fn array_util_get_length(
