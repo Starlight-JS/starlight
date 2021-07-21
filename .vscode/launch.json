@@ -4,7 +4,7 @@
         "type": "lldb",
         "request": "launch",
         "name": "Launch",
-        "program": "${workspaceFolder}/target/debug/sl",
+        "program": "${workspaceFolder}/target/debug/prop",
         "args": ["examples/hello-world.js"],
         "cwd": "${workspaceFolder}"
     }

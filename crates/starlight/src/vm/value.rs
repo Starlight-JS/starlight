@@ -1315,6 +1315,9 @@ pub mod new_value {
 
         pub const VALUE_EMPTY: i64 = 0x0;
         pub const VALUE_DELETED: i64 = 0x4;
+
+        pub const UNDEFINED: new_value::JsValue = Self::encode_undefined_value();
+
         #[inline]
         pub fn encode_empty_value() -> Self {
             Self(EncodedValueDescriptor {
@@ -1329,14 +1332,14 @@ pub mod new_value {
         }
 
         #[inline]
-        pub fn encode_undefined_value() -> Self {
+        pub const fn encode_undefined_value() -> Self {
             Self(EncodedValueDescriptor {
                 as_int64: Self::VALUE_UNDEFINED as _,
             })
         }
 
         #[inline]
-        pub fn encode_null_value() -> Self {
+        pub const fn encode_null_value() -> Self {
             Self(EncodedValueDescriptor {
                 as_int64: Self::VALUE_NULL as _,
             })
