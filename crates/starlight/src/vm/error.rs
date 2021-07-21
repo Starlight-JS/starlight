@@ -223,3 +223,36 @@ impl JsTypeError {
         obj
     }
 }
+
+define_jsclass!(JsURIError, Error, URIError);
+impl JsURIError {
+    pub fn new(
+        mut ctx: GcPointer<Context>,
+        s: GcPointer<JsString>,
+        structure: Option<GcPointer<Structure>>,
+    ) -> GcPointer<JsObject> {
+        let stack = ctx.shadowstack();
+        letroot!(
+            shape = stack,
+            structure.unwrap_or_else(|| ctx.global_data().uri_error_structure.unwrap())
+        );
+        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let stack = ctx.stacktrace();
+        let str = JsString::new(ctx, stack);
+        let _ = obj.define_own_property(
+            ctx,
+            "stack".intern(),
+            &*DataDescriptor::new(JsValue::new(str), W | C),
+            false,
+        );
+        if !s.as_str().is_empty() {
+            let _ = obj.define_own_property(
+                ctx,
+                "message".intern(),
+                &*DataDescriptor::new(JsValue::encode_object_value(s), W | C),
+                false,
+            );
+        }
+        obj
+    }
+}
