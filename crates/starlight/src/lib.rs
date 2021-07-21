@@ -39,6 +39,33 @@ macro_rules! def_native_method {
         let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
         $obj.put($vm, name, JsValue::new(m), true)
     }};
+    ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr, $attr: expr) => {{
+        let name = stringify!($name).intern();
+        let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
+        $obj.define_own_property(
+            $vm,
+            name,
+            &*DataDescriptor::new(JsValue::from(m), $attr),
+            false,
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! def_native_property {
+    ($vm: expr, $obj: expr, $name: ident, $prop: expr) => {{
+        let name = stringify!($name).intern();
+        $obj.put($vm, name, JsValue::new($prop), false)
+    }};
+    ($vm: expr, $obj: expr, $name: ident, $prop: expr, $attr: expr) => {{
+        let name = stringify!($name).intern();
+        $obj.define_own_property(
+            $vm,
+            name,
+            &*DataDescriptor::new(JsValue::new($prop), $attr),
+            false,
+        )
+    }};
 }
 
 #[macro_export]
@@ -68,6 +95,7 @@ pub mod heap;
 pub mod jsrt;
 pub mod options;
 //pub mod tracingjit;
+mod constant;
 pub mod vm;
 pub struct Platform;
 use std::sync::atomic::Ordering;

@@ -118,14 +118,14 @@ impl GcPointer<Context> {
     }
 
     pub fn init_global_object(&mut self) {
-        self.init_object_in_global_object();
+        self.init_object_in_global_object().unwrap();
         self.init_func_in_global_object();
         self.init_number_in_global_object();
-        self.init_array_in_global_object();
+        self.init_array_in_global_object().unwrap();
         self.init_math_in_global_object();
-        self.init_error_in_global_object();
+        self.init_error_in_global_object().unwrap();
         self.init_string_in_global_object();
-        self.init_builtin_in_global_object();
+        self.init_builtin_in_global_object().unwrap();
         self.init_symbol_in_global_object();
         self.init_regexp_in_global_object()
             .unwrap_or_else(|_| unreachable!());
@@ -136,7 +136,7 @@ impl GcPointer<Context> {
             .unwrap_or_else(|_| unreachable!());
         self.init_data_view_in_global_object()
             .unwrap_or_else(|_| unreachable!());
-        self.init_weak_ref_in_global_object();
+        self.init_weak_ref_in_global_object().unwrap();
         self.init_date_in_global_object();
         self.init_boolean_in_global_object();
         self.init_self_hosted();
@@ -168,18 +168,18 @@ impl GcPointer<Context> {
         self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
 
         // Init global data structure
-        self.init_func_global_data(proto);
+        self.init_func_global_data(proto).unwrap();
         self.init_error_in_global_data(proto);
-        self.init_array_in_global_data(proto);
+        self.init_array_in_global_data(proto).unwrap();
         self.init_number_in_global_data(proto);
         self.init_symbol_in_global_data(proto);
-        self.init_object_in_global_data(proto);
+        self.init_object_in_global_data(proto).unwrap();
         self.init_regexp_in_global_data(proto);
         self.init_generator_in_global_data(proto);
         self.init_array_buffer_in_global_data();
         self.init_data_view_in_global_data();
         self.init_string_in_global_data(proto);
-        self.init_weak_ref_in_global_data();
+        self.init_weak_ref_in_global_data().unwrap();
         self.init_date_in_global_data();
         self.init_boolean_in_global_data();
     }
