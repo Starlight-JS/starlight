@@ -55,7 +55,6 @@ impl GcPointer<Context> {
         let mut global_object = self.global_object();
 
         // Property
-
         def_native_property!(self, global_object, undefined, JsValue::UNDEFINED)?;
 
         let nan = JsValue::encode_nan_value();
@@ -285,6 +284,7 @@ impl GcPointer<Context> {
         self.init_syntax_error_in_global_object()?;
         self.init_reference_error_in_global_object()?;
         self.init_range_error_in_global_object()?;
+        self.init_uri_error_in_global_object()?;
         Ok(())
     }
 
@@ -321,7 +321,7 @@ impl GcPointer<Context> {
         let s = JsString::new(self, S_EVAL_ERROR);
         let e = JsString::new(self, "");
 
-        def_native_property!(self, sub_proto, name, s, W | C)?;
+        def_native_property!(self, sub_proto, name, s, C)?;
         def_native_property!(self, sub_proto, message, e, W | C)?;
 
         def_native_method!(self, sub_proto, toString, error_to_string, 0, W | C)?;
@@ -343,7 +343,7 @@ impl GcPointer<Context> {
         let s = JsString::new(self, S_TYPE_ERROR);
         let e = JsString::new(self, "");
 
-        def_native_property!(self, sub_proto, name, s, W | C)?;
+        def_native_property!(self, sub_proto, name, s, C)?;
         def_native_property!(self, sub_proto, message, e, W | C)?;
         def_native_method!(self, sub_proto, toString, error_to_string, 0, W | C)?;
 
@@ -363,7 +363,7 @@ impl GcPointer<Context> {
         let s = JsString::new(self, S_SYNTAX_ERROR);
         let e = JsString::new(self, "");
 
-        def_native_property!(self, sub_proto, name, s, W | C)?;
+        def_native_property!(self, sub_proto, name, s, C)?;
 
         def_native_property!(self, sub_proto, message, e, W | C)?;
 
@@ -386,7 +386,7 @@ impl GcPointer<Context> {
         let s = JsString::new(self, S_REFERENCE_ERROR);
         let e = JsString::new(self, "");
 
-        def_native_property!(self, sub_proto, name, s, W | C)?;
+        def_native_property!(self, sub_proto, name, s, C)?;
         def_native_property!(self, sub_proto, message, e, W | C)?;
 
         def_native_method!(self, sub_proto, toString, error_to_string, 0, W | C)?;
@@ -408,7 +408,7 @@ impl GcPointer<Context> {
         let s = JsString::new(self, S_RANGE_ERROR);
         let e = JsString::new(self, "");
 
-        def_native_property!(self, sub_proto, name, s, W | C)?;
+        def_native_property!(self, sub_proto, name, s, C)?;
         def_native_property!(self, sub_proto, message, e, W | C)?;
         def_native_method!(self, sub_proto, toString, error_to_string, 0, W | C)?;
 
@@ -417,7 +417,30 @@ impl GcPointer<Context> {
         Ok(())
     }
 
-    pub(crate) fn init_error_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_uri_error_in_global_object(mut self) -> Result<(), JsValue> {
+        let mut sub_proto = self.global_data.uri_error.unwrap();
+        let sym = S_URI_ERROR.intern();
+        let mut sub_ctor = JsNativeFunction::new(self, sym, uri_error_constructor, 1);
+
+        def_native_property!(self, sub_ctor, prototype, sub_proto, NONE)?;
+        def_native_property!(self, sub_proto, constructor, sub_ctor, W | C)?;
+
+        let s = JsString::new(self, S_URI_ERROR);
+        let e = JsString::new(self, "");
+
+        def_native_property!(self, sub_proto, name, s, C)?;
+        def_native_property!(self, sub_proto, message, e, W | C)?;
+        def_native_method!(self, sub_proto, toString, error_to_string, 0, W | C)?;
+
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, URIError, sub_proto, W | C)?;
+        Ok(())
+    }
+
+    pub(crate) fn init_error_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
         self.global_data.error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.eval_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.range_error_structure = Some(Structure::new_indexed(self, None, false));
@@ -425,6 +448,8 @@ impl GcPointer<Context> {
             Some(Structure::new_indexed(self, None, false));
         self.global_data.type_error_structure = Some(Structure::new_indexed(self, None, false));
         self.global_data.syntax_error_structure = Some(Structure::new_indexed(self, None, false));
+        self.global_data.uri_error_structure = Some(Structure::new_indexed(self, None, false));
+
         let structure = Structure::new_unique_with_proto(self, Some(obj_proto), false);
         let mut proto = JsObject::new(self, &structure, JsError::get_class(), ObjectTag::Ordinary);
         self.global_data.error = Some(proto);
@@ -512,6 +537,24 @@ impl GcPointer<Context> {
                 .change_prototype_with_no_transition(sub_proto);
             self.global_data.range_error = Some(sub_proto);
         }
+
+        {
+            let structure = Structure::new_unique_with_proto(self, Some(proto), false);
+            let mut sub_proto = JsObject::new(
+                self,
+                &structure,
+                JsURIError::get_class(),
+                ObjectTag::Ordinary,
+            );
+
+            self.global_data
+                .uri_error_structure
+                .unwrap()
+                .change_prototype_with_no_transition(sub_proto);
+            self.global_data.uri_error = Some(sub_proto);
+        }
+
+        Ok(())
     }
 }
 
@@ -668,6 +711,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         JsReferenceError::get_class() as *const _ as usize,
         JsRangeError::get_class() as *const _ as usize,
         JsEvalError::get_class() as *const _ as usize,
+        JsURIError::get_class() as *const _ as usize,
         JsGlobal::get_class() as *const _ as usize,
         function::function_bind as usize,
         function::function_prototype as usize,
@@ -711,6 +755,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         error::reference_error_constructor as usize,
         error::syntax_error_constructor as usize,
         error::type_error_constructor as usize,
+        error::uri_error_constructor as usize,
         print as usize,
         global::is_finite as _,
         global::is_nan as _,

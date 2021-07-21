@@ -1,8 +1,7 @@
 use std::fs::read_to_string;
 
 use starlight::{
-    prelude::{Arguments, GcPointer, JsValue, Options},
-    vm::context::Context,
+    prelude::{Options},
     Platform,
 };
 

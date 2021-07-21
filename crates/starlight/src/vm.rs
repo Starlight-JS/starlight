@@ -42,6 +42,7 @@ pub mod array_buffer;
 pub mod array_storage;
 pub mod attributes;
 pub mod bigint;
+pub mod builder;
 pub mod builtins;
 pub mod code_block;
 pub mod context;
@@ -383,6 +384,7 @@ pub struct GlobalData {
     pub(crate) symbol_prototype: Option<GcPointer<JsObject>>,
     pub(crate) error: Option<GcPointer<JsObject>>,
     pub(crate) type_error: Option<GcPointer<JsObject>>,
+    pub(crate) uri_error: Option<GcPointer<JsObject>>,
     pub(crate) reference_error: Option<GcPointer<JsObject>>,
     pub(crate) range_error: Option<GcPointer<JsObject>>,
     pub(crate) syntax_error: Option<GcPointer<JsObject>>,

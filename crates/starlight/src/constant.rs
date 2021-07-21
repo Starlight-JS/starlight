@@ -89,6 +89,8 @@ pub const S_REFERENCE_ERROR: &str = "ReferenceError";
 
 pub const S_RANGE_ERROR: &str = "RangeError";
 
+pub const S_URI_ERROR: &str = "URIError";
+
 // Object
 
 pub const S_OBJECT: &str = "Object";

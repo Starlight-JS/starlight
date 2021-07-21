@@ -277,6 +277,7 @@ impl<'a> Deserializer<'a> {
             symbol_prototype: self.read_opt_gc(),
             error: self.read_opt_gc(),
             type_error: self.read_opt_gc(),
+            uri_error: self.read_opt_gc(),
             reference_error: self.read_opt_gc(),
             range_error: self.read_opt_gc(),
             syntax_error: self.read_opt_gc(),
