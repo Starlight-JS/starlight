@@ -1,4 +1,6 @@
-use crate::{define_jsclass_with_symbol, prelude::*, vm::context::Context};
+use crate::constant::S_CONSTURCTOR;
+use crate::js_method_table;
+use crate::{define_jsclass, prelude::*, vm::context::Context};
 use regress::Regex;
 use std::{
     intrinsics::unlikely,
@@ -106,24 +108,23 @@ extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
 extern "C" fn fsz() -> usize {
     size_of::<RegExp>()
 }
-impl RegExp {
-    define_jsclass_with_symbol!(
-        JsObject,
-        RegExp,
-        Object,
-        Some(drop_regexp_fn),
-        None,
-        Some(deser),
-        Some(ser),
-        Some(fsz)
-    );
-}
+
+define_jsclass!(
+    RegExp,
+    RegExp,
+    Object,
+    Some(drop_regexp_fn),
+    None,
+    Some(deser),
+    Some(ser),
+    Some(fsz)
+);
 
 impl GcPointer<Context> {
     pub(crate) fn init_regexp_in_global_object(mut self) -> Result<(), JsValue> {
         let mut proto = self.global_data.regexp_prototype.unwrap();
         let constructor = proto
-            .get_own_property(self, "constructor".intern())
+            .get_own_property(self, S_CONSTURCTOR.intern())
             .unwrap()
             .value();
         self.global_object()
@@ -138,41 +139,36 @@ impl GcPointer<Context> {
         Ok(())
     }
 
-    pub(crate) fn init_regexp_in_global_data(mut self, obj_proto: GcPointer<JsObject>) {
+    pub(crate) fn init_regexp_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
         self.global_data.regexp_structure = Some(Structure::new_indexed(self, None, false));
         let proto_map = self
             .global_data
             .regexp_structure
             .unwrap()
             .change_prototype_with_no_transition(obj_proto);
-        let mut init = || -> Result<(), JsValue> {
-            let mut proto =
-                JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
 
-            let mut constructor =
-                JsNativeFunction::new(self, "RegExp".intern(), regexp_constructor, 2);
+        let mut proto = JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
 
-            constructor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
+        let mut constructor = JsNativeFunction::new(self, "RegExp".intern(), regexp_constructor, 2);
 
-            proto.put(
-                self,
-                "constructor".intern(),
-                JsValue::new(constructor),
-                false,
-            )?;
-            def_native_method!(self, constructor, ___splitFast, regexp_split_fast, 3)?;
-            def_native_method!(self, proto, exec, regexp_exec, 1)?;
-            def_native_method!(self, proto, test, regexp_test, 1)?;
-            def_native_method!(self, proto, toString, regexp_to_string, 0)?;
+        constructor.put(self, "prototype".intern(), JsValue::new(proto), false)?;
 
-            self.global_data.regexp_prototype = Some(proto);
-            Ok(())
-        };
+        proto.put(
+            self,
+            S_CONSTURCTOR.intern(),
+            JsValue::new(constructor),
+            false,
+        )?;
+        def_native_method!(self, constructor, ___splitFast, regexp_split_fast, 3)?;
+        def_native_method!(self, proto, exec, regexp_exec, 1)?;
+        def_native_method!(self, proto, test, regexp_test, 1)?;
+        def_native_method!(self, proto, toString, regexp_to_string, 0)?;
 
-        match init() {
-            Err(_) => unreachable!(),
-            _ => (),
-        }
+        self.global_data.regexp_prototype = Some(proto);
+        Ok(())
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::{
+    constant::S_CONSTURCTOR,
     prelude::*,
     vm::{context::Context, object::TypedJsObject},
     JsTryFrom,
@@ -37,69 +38,45 @@ macro_rules! def_symbols {
 }
 
 impl GcPointer<Context> {
-    pub(crate) fn init_symbol_in_global_object(mut self) {
-        let mut init = || -> Result<(), JsValue> {
-            let name = "constructor".intern();
-            let constructor = self
-                .global_data
-                .symbol_prototype
-                .unwrap()
-                .get_own_property(self, name)
-                .unwrap()
-                .value();
-            self.global_object()
-                .put(self, "Symbol".intern(), JsValue::new(constructor), false)?;
-            Ok(())
-        };
-        match init() {
-            Ok(_) => (),
-            Err(_) => unreachable!(),
-        }
+    pub(crate) fn init_symbol_in_global_object(mut self) -> Result<(), JsValue> {
+        let name = S_CONSTURCTOR.intern();
+        let constructor = self
+            .global_data
+            .symbol_prototype
+            .unwrap()
+            .get_own_property(self, name)
+            .unwrap()
+            .value();
+        self.global_object()
+            .put(self, "Symbol".intern(), JsValue::new(constructor), false)?;
+        Ok(())
     }
 
-    pub(crate) fn init_symbol_in_global_data(mut self, proto: GcPointer<JsObject>) {
-        let mut init = || -> Result<(), JsValue> {
-            self.global_data.symbol_structure = Some(Structure::new_indexed(self, None, false));
-            let structure = Structure::new_indexed(self, Some(proto), false);
-            let mut sym_proto =
-                JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
-            self.global_data
-                .symbol_structure
-                .unwrap()
-                .change_prototype_with_no_transition(sym_proto);
-            self.global_data.symbol_prototype = Some(sym_proto);
-            def_native_method!(self, sym_proto, toString, symbol_to_string, 0)?;
-            def_native_method!(self, sym_proto, valueOf, symbol_value_of, 0)?;
+    pub(crate) fn init_symbol_in_global_data(
+        mut self,
+        proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
+        self.global_data.symbol_structure = Some(Structure::new_indexed(self, None, false));
+        let structure = Structure::new_indexed(self, Some(proto), false);
+        let mut sym_proto =
+            JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        self.global_data
+            .symbol_structure
+            .unwrap()
+            .change_prototype_with_no_transition(sym_proto);
+        self.global_data.symbol_prototype = Some(sym_proto);
+        def_native_method!(self, sym_proto, toString, symbol_to_string, 0)?;
+        def_native_method!(self, sym_proto, valueOf, symbol_value_of, 0)?;
 
-            let mut ctor = JsNativeFunction::new(self, "Symbol".intern(), symbol_ctor, 1);
+        let mut ctor = JsNativeFunction::new(self, "Symbol".intern(), symbol_ctor, 1);
 
-            def_native_method!(self, ctor, for, symbol_for, 1)?;
-            def_native_method!(self, ctor, keyFor, symbol_key_for, 1)?;
-            builtin_symbols!(self, ctor, def_symbols);
+        def_native_method!(self, ctor, for, symbol_for, 1)?;
+        def_native_method!(self, ctor, keyFor, symbol_key_for, 1)?;
+        builtin_symbols!(self, ctor, def_symbols);
+        def_native_property!(self, ctor, prototype, sym_proto, NONE)?;
+        def_native_property!(self, sym_proto, constructor, ctor, W | C)?;
 
-            let name = "prototype".intern();
-            ctor.define_own_property(
-                self,
-                name,
-                &*DataDescriptor::new(JsValue::from(sym_proto), NONE),
-                false,
-            )?;
-
-            let name = "constructor".intern();
-            sym_proto.define_own_property(
-                self,
-                name,
-                &*DataDescriptor::new(JsValue::from(ctor), W | C),
-                false,
-            )?;
-
-            Ok(())
-        };
-
-        match init() {
-            Ok(_) => (),
-            Err(_) => unreachable!(),
-        }
+        Ok(())
     }
 }
 

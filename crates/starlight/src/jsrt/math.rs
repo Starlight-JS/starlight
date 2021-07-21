@@ -117,44 +117,29 @@ pub fn math_sqrt(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::new(args.at(0).to_number(ctx)?.sqrt()))
 }
 impl GcPointer<Context> {
-    pub(crate) fn init_math_in_global_object(mut self) {
-        let mut init = || -> Result<(), JsValue> {
-            let mut math = JsObject::new_empty(self);
-            /* let f = JsNativeFunction::new(self, "trunc".intern(), math_trunc, 1);
-            math.put(self, "trunc".intern(), JsValue::new(f), false)?;
-            let f = JsNativeFunction::new(self, "floor".intern(), math_floor, 1);
-            math.put(self, "floor".intern(), JsValue::new(f), false)?;*/
-            def_native_method!(self, math, trunc, math_trunc, 1)?;
-            def_native_method!(self, math, floor, math_floor, 1)?;
-            def_native_method!(self, math, log, math_log, 2)?;
-            def_native_method!(self, math, sin, math_sin, 1)?;
-            def_native_method!(self, math, cos, math_cos, 1)?;
-            def_native_method!(self, math, ceil, math_ceil, 1)?;
-            def_native_method!(self, math, exp, math_exp, 1)?;
-            def_native_method!(self, math, abs, math_abs, 1)?;
-            def_native_method!(self, math, random, math_random, 0)?;
-            def_native_method!(self, math, sqrt, math_sqrt, 1)?;
-            math.put(
-                self,
-                "PI".intern(),
-                JsValue::new(std::f64::consts::PI),
-                false,
-            )?;
-            self.global_object()
-                .put(self, "Math".intern(), JsValue::new(math), false)?;
-            let source = include_str!("../builtins/Math.js");
+    pub(crate) fn init_math_in_global_object(mut self) -> Result<(), JsValue> {
+        let mut math = JsObject::new_empty(self);
 
-            self.eval_internal(Some("../builtins/Math.js"), false, source, true)?;
+        def_native_method!(self, math, trunc, math_trunc, 1)?;
+        def_native_method!(self, math, floor, math_floor, 1)?;
+        def_native_method!(self, math, log, math_log, 2)?;
+        def_native_method!(self, math, sin, math_sin, 1)?;
+        def_native_method!(self, math, cos, math_cos, 1)?;
+        def_native_method!(self, math, ceil, math_ceil, 1)?;
+        def_native_method!(self, math, exp, math_exp, 1)?;
+        def_native_method!(self, math, abs, math_abs, 1)?;
+        def_native_method!(self, math, random, math_random, 0)?;
+        def_native_method!(self, math, sqrt, math_sqrt, 1)?;
 
-            Ok(())
-        };
+        def_native_property!(self, math, PI, std::f64::consts::PI)?;
 
-        match init() {
-            Ok(_) => (),
-            Err(e) => {
-                eprintln!("{}", e.to_string(self).unwrap_or_else(|_| panic!()));
-                unreachable!();
-            }
-        }
+        let mut global_object = self.global_object();
+
+        def_native_property!(self, global_object, Math, math)?;
+
+        let source = include_str!("../builtins/Math.js");
+        self.eval_internal(Some("../builtins/Math.js"), false, source, true)?;
+
+        Ok(())
     }
 }
