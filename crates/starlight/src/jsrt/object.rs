@@ -137,7 +137,10 @@ pub fn object_define_property(
     ));
 }
 
-pub fn object_has_own_property(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_has_own_property(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if args.size() == 0 {
         return Ok(JsValue::new(false));
     }
@@ -196,7 +199,7 @@ pub fn object_get_own_property_descriptor(
                     )?;
                 } else {
                     let getter = property_descriptor.getter();
-                    let setter =  property_descriptor.setter();
+                    let setter = property_descriptor.setter();
 
                     res.define_own_property(
                         ctx,
@@ -222,7 +225,10 @@ pub fn object_get_own_property_descriptor(
     }
 }
 
-pub fn object_property_is_enumerable(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn object_property_is_enumerable(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     if args.size() < 1 {
         return Ok(JsValue::encode_bool_value(false));
     }
