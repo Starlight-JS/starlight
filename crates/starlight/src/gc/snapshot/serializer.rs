@@ -48,43 +48,45 @@ impl SnapshotSerializer {
     }
     pub(crate) fn build_reference_map(&mut self, vm: &mut VirtualMachine) {
         let mut indexx = 0;
-        VM_NATIVE_REFERENCES
-            .iter()
-            .enumerate()
-            .for_each(|(_index, reference)| {
-                /*match self.reference_map.insert(*reference, indexx) {
-                    Some(p) => {
-                        backtrace::resolve(*reference as *mut _, |sym| {
-                            if let Some(name) = sym.name() {
-                                panic!(
-                                    "duplicate reference #{}: {:x} '{}'",
-                                    _index,
-                                    *reference,
-                                    name.as_str().unwrap()
-                                );
-                            } else {
-                                panic!("duplicate reference #{}: {:x}", _index, *reference);
-                            }
-                        });
-                        panic!("duplicate {:x} at {}({})", *reference, _index, p);
-                    }
-                    _ => (),
-                }*/
-                self.reference_map.push(*reference);
-                indexx += 1;
-            });
+        unsafe {
+            VM_NATIVE_REFERENCES
+                .iter()
+                .enumerate()
+                .for_each(|(_index, reference)| {
+                    /*match self.reference_map.insert(*reference, indexx) {
+                        Some(p) => {
+                            backtrace::resolve(*reference as *mut _, |sym| {
+                                if let Some(name) = sym.name() {
+                                    panic!(
+                                        "duplicate reference #{}: {:x} '{}'",
+                                        _index,
+                                        *reference,
+                                        name.as_str().unwrap()
+                                    );
+                                } else {
+                                    panic!("duplicate reference #{}: {:x}", _index, *reference);
+                                }
+                            });
+                            panic!("duplicate {:x} at {}({})", *reference, _index, p);
+                        }
+                        _ => (),
+                    }*/
+                    self.reference_map.push(*reference);
+                    indexx += 1;
+                });
 
-        if let Some(references) = vm.external_references {
-            for (_index, reference) in references.iter().enumerate() {
-                /* let result = self.reference_map.insert(*reference, indexx);
-                indexx += 1;
-                match result {
-                    Some(_) => {
-                        panic!("Reference 0x{:x}", reference);
-                    }
-                    _ => (),
-                }*/
-                self.reference_map.push(*reference);
+            if let Some(references) = vm.external_references {
+                for (_index, reference) in references.iter().enumerate() {
+                    /* let result = self.reference_map.insert(*reference, indexx);
+                    indexx += 1;
+                    match result {
+                        Some(_) => {
+                            panic!("Reference 0x{:x}", reference);
+                        }
+                        _ => (),
+                    }*/
+                    self.reference_map.push(*reference);
+                }
             }
         }
     }
@@ -902,6 +904,12 @@ impl Serializable for GlobalData {
         self.date_structure.serialize(serializer);
         self.boolean_structure.serialize(serializer);
         self.date_prototype.serialize(serializer);
+
+        serializer.write_u32(self.custom_structures.len() as u32);
+        self.custom_structures.iter().for_each(|(name, structure)| {
+            name.serialize(serializer);
+            structure.serialize(serializer);
+        });
     }
 }
 

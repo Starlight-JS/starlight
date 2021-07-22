@@ -14,6 +14,7 @@ use super::{
 use super::{value::*, Context};
 use crate::gc::cell::GcPointer;
 use crate::jsrt::get_length;
+use crate::vm::class::JsClass;
 pub unsafe fn reflect_apply(
     ctx: GcPointer<Context>,
     frame: &mut CallFrame,
@@ -33,7 +34,7 @@ pub unsafe fn reflect_apply(
         )));
     }
     letroot!(args = gcstack, args.get_jsobject());
-    if args.class() as *const _ != JsArray::get_class() as *const _ {
+    if args.class as *const _ != JsArray::class() as *const _ {
         let msg = JsString::new(ctx, "not a callable object");
         return Err(JsValue::encode_object_value(JsTypeError::new(
             ctx, msg, None,

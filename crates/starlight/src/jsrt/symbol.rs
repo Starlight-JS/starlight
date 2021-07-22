@@ -58,8 +58,7 @@ impl GcPointer<Context> {
     ) -> Result<(), JsValue> {
         self.global_data.symbol_structure = Some(Structure::new_indexed(self, None, false));
         let structure = Structure::new_indexed(self, Some(proto), false);
-        let mut sym_proto =
-            JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut sym_proto = JsObject::new(self, &structure, JsObject::class(), ObjectTag::Ordinary);
         self.global_data
             .symbol_structure
             .unwrap()

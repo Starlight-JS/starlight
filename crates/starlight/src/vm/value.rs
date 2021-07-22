@@ -630,7 +630,7 @@ impl JsValue {
                 self.get_object().downcast_unchecked::<JsObject>()
             });
 
-            match (obj.class().method_table.DefaultValue)(&mut obj, ctx, JsHint::Number) {
+            match (obj.class.method_table.DefaultValue)(&mut obj, ctx, JsHint::Number) {
                 Ok(val) => val.to_number(ctx),
                 Err(e) => Err(e),
             }

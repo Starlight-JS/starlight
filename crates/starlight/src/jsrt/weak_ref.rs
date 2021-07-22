@@ -29,16 +29,19 @@ extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<JsWeakRef>().value.trace(tracer);
 }
 
-define_jsclass!(
-    JsWeakRef,
-    WeakRef,
-    Object,
-    None,
-    Some(trace),
-    Some(deser),
-    Some(ser),
-    Some(fsz)
-);
+impl JsClass for JsWeakRef {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            JsWeakRef,
+            WeakRef,
+            None,
+            Some(trace),
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
+    }
+}
 
 pub fn weak_ref_constructor(
     mut ctx: GcPointer<Context>,
@@ -52,7 +55,7 @@ pub fn weak_ref_constructor(
     }
     let target = target.get_jsobject();
     let map = ctx.global_data().weak_ref_structure.unwrap();
-    let mut weak_ref = JsObject::new(ctx, &map, JsWeakRef::get_class(), ObjectTag::Ordinary);
+    let mut weak_ref = JsObject::new(ctx, &map, JsWeakRef::class(), ObjectTag::Ordinary);
     *weak_ref.data::<JsWeakRef>() = ManuallyDrop::new(JsWeakRef {
         value: ctx.heap().make_weak(target),
     });
@@ -67,11 +70,5 @@ pub fn weak_ref_prototype_deref(
     match weak_ref.value.upgrade() {
         Some(value) => Ok(JsValue::new(value)),
         None => Ok(JsValue::encode_undefined_value()),
-    }
-}
-
-impl JsClass for JsWeakRef {
-    fn class() -> &'static Class {
-        Self::get_class()
     }
 }

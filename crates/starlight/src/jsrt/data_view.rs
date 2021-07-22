@@ -15,7 +15,7 @@ pub fn data_view_prototype_buffer(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.buffer called on a non DataView object",
         )));
@@ -27,7 +27,7 @@ pub fn data_view_prototype_byte_offset(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.byteOffset called on a non DataView object",
         )));
@@ -39,7 +39,7 @@ pub fn data_view_prototype_byte_length(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.byteLength called on a non DataView object",
         )));
@@ -52,7 +52,7 @@ pub fn data_view_prototype_get<T: SwapByteOrder + Into<JsValue> + Copy>(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.get<T> called on a non DataView object",
         )));
@@ -145,7 +145,7 @@ pub fn data_view_constructor(
     }
 
     let buffer = args.at(0).to_object(ctx).ok().and_then(|object| {
-        if object.is_class(JsArrayBuffer::get_class()) {
+        if object.is_class(JsArrayBuffer::class()) {
             Some(object)
         } else {
             None
@@ -200,7 +200,7 @@ impl GcPointer<Context> {
             .data_view_structure
             .unwrap()
             .change_prototype_transition(self, Some(obj_proto));
-        let mut proto = JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &proto_map, JsObject::class(), ObjectTag::Ordinary);
         self.global_data
             .data_view_structure
             .unwrap()
@@ -227,49 +227,16 @@ impl GcPointer<Context> {
         def_native_method!(self, proto, setFloat64, data_view_prototype_set::<f64>, 3)?;
         def_native_method!(self, proto, setFloat32, data_view_prototype_set::<f32>, 3)?;
 
-        let byte_length = JsNativeFunction::new(
-            self,
-            "byteLength".intern(),
-            data_view_prototype_byte_length,
-            0,
-        );
-        proto.define_own_property(
-            self,
-            "byteLength".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_length),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
-        let byte_offset = JsNativeFunction::new(
-            self,
-            "byteOffset".intern(),
-            data_view_prototype_byte_offset,
-            0,
-        );
-        proto.define_own_property(
-            self,
-            "byteOffset".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_offset),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
+        let byte_length =
+            JsNativeFunction::new(self, "byteLength", data_view_prototype_byte_length, 0);
+        def_native_getter!(self, proto, byteLength, byte_length, NONE)?;
+
+        let byte_offset =
+            JsNativeFunction::new(self, "byteOffset", data_view_prototype_byte_offset, 0);
+        def_native_getter!(self, proto, byteOffset, byte_offset, NONE)?;
+
         let buffer = JsNativeFunction::new(self, "buffer".intern(), data_view_prototype_buffer, 0);
-        proto.define_own_property(
-            self,
-            "buffer".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(buffer),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
+        def_native_getter!(self, proto, buffer, buffer, NONE)?;
 
         self.global_data.data_view_prototype = Some(proto);
         Ok(())

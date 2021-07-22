@@ -55,16 +55,19 @@ extern "C" fn array_buffer_size() -> usize {
     size_of::<JsArrayBuffer>()
 }
 
-define_jsclass!(
-    JsArrayBuffer,
-    ArrayBuffer,
-    ArrayBuffer,
-    Some(drop_array_buffer),
-    None,
-    Some(array_buffer_deserialize),
-    Some(array_buffer_serialize),
-    Some(array_buffer_size)
-);
+impl JsClass for JsArrayBuffer {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            JsArrayBuffer,
+            ArrayBuffer,
+            Some(drop_array_buffer),
+            None,
+            Some(array_buffer_deserialize),
+            Some(array_buffer_serialize),
+            Some(array_buffer_size)
+        )
+    }
+}
 
 impl JsArrayBuffer {
     pub const BYTE_LENGTH_OFFSET: usize = 0;
@@ -75,7 +78,7 @@ impl JsArrayBuffer {
 
     pub fn new(ctx: GcPointer<Context>) -> GcPointer<JsObject> {
         let structure = ctx.global_data().array_buffer_structure.unwrap();
-        let mut this = JsObject::new(ctx, &structure, Self::get_class(), ObjectTag::ArrayBuffer);
+        let mut this = JsObject::new(ctx, &structure, Self::class(), ObjectTag::ArrayBuffer);
         *this.data::<Self>() = ManuallyDrop::new(Self {
             data: null_mut(),
             attached: false,
@@ -105,12 +108,6 @@ impl JsArrayBuffer {
                 count,
             )
         }
-    }
-}
-
-impl JsClass for JsArrayBuffer {
-    fn class() -> &'static Class {
-        Self::get_class()
     }
 }
 

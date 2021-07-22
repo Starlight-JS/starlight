@@ -64,12 +64,7 @@ pub fn std_file_open(mut ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
         .get(ctx, "@@File".intern().private())?
         .to_object(ctx)?;
     let structure = Structure::new_indexed(ctx, Some(proto), false);
-    let mut obj = JsObject::new(
-        ctx,
-        &structure,
-        FileObject::get_class(),
-        ObjectTag::Ordinary,
-    );
+    let mut obj = JsObject::new(ctx, &structure, FileObject::class(), ObjectTag::Ordinary);
     *obj.data::<FileObject>() = ManuallyDrop::new(FileObject { file: Some(file) });
     Ok(JsValue::new(obj))
 }
@@ -78,7 +73,7 @@ pub fn std_file_open(mut ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
 /// and returns count of bytes written.
 pub fn std_file_write(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if unlikely(!this.is_class(FileObject::get_class())) {
+    if unlikely(!this.is_class(FileObject::class())) {
         return Err(JsValue::new(
             ctx.new_type_error("std.File.prototype.write requires file object"),
         ));
@@ -119,7 +114,7 @@ pub fn std_file_write(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
 /// std.File.prototype.writeAll takes array-like object or string to write to file.
 pub fn std_file_write_all(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if unlikely(!this.is_class(FileObject::get_class())) {
+    if unlikely(!this.is_class(FileObject::class())) {
         return Err(JsValue::new(
             ctx.new_type_error("std.File.prototype.write requires file object"),
         ));
@@ -161,7 +156,7 @@ pub fn std_file_write_all(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 /// std.File.prototype.read simply reads file contents to string.
 pub fn std_file_read(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if this.is_class(FileObject::get_class()) {
+    if this.is_class(FileObject::class()) {
         let mut buffer = String::new();
         let file = match this.data::<FileObject>().file {
             Some(ref mut file) => file,
@@ -187,7 +182,7 @@ pub fn std_file_read(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
 /// std.File.prototype.readBytes: returns array of bytes that was read from file
 pub fn std_file_read_bytes(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if this.is_class(FileObject::get_class()) {
+    if this.is_class(FileObject::class()) {
         let mut buffer = Vec::new();
         let file = match this.data::<FileObject>().file {
             Some(ref mut file) => file,
@@ -222,7 +217,7 @@ pub fn std_file_read_bytes_to_end(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if this.is_class(FileObject::get_class()) {
+    if this.is_class(FileObject::class()) {
         let mut buffer = Vec::new();
         let file = match this.data::<FileObject>().file {
             Some(ref mut file) => file,
@@ -258,7 +253,7 @@ pub fn std_file_read_bytes_exact(
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
     let count = args.at(0).to_uint32(ctx)?;
-    if this.is_class(FileObject::get_class()) {
+    if this.is_class(FileObject::class()) {
         let mut buffer = vec![0u8; count as usize];
         let file = match this.data::<FileObject>().file {
             Some(ref mut file) => file,
@@ -289,7 +284,7 @@ pub fn std_file_read_bytes_exact(
 
 pub fn std_file_close(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if this.is_class(FileObject::get_class()) {
+    if this.is_class(FileObject::class()) {
         let file = match this.data::<FileObject>().file.take() {
             Some(file) => file,
             None => return Err(JsValue::new(JsString::new(ctx, "File already closed"))),
@@ -322,13 +317,17 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<FileObject>()
 }
-define_jsclass!(
-    FileObject,
-    File,
-    Object,
-    Some(drop_file_fn),
-    None,
-    Some(deser),
-    Some(ser),
-    Some(fsz)
-);
+
+impl JsClass for FileObject {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            FileObject,
+            File,
+            Some(drop_file_fn),
+            None,
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
+    }
+}

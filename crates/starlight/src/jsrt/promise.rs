@@ -1,6 +1,7 @@
 use crate::gc::cell::GcPointer;
 use crate::prelude::JsArray;
 use crate::vm::arguments::Arguments;
+use crate::vm::class::JsClass;
 use crate::vm::context::Context;
 use crate::vm::promise::{JsPromise, TrackingMode};
 use crate::vm::string::JsString;
@@ -34,7 +35,7 @@ fn with_prom<
     } else {
         let mut this_obj = this.get_jsobject();
 
-        if !this_obj.is_class(JsPromise::get_class()) {
+        if !this_obj.is_class(JsPromise::class()) {
             Err(JsValue::encode_object_value(JsString::new(
                 ctx,
                 "method not called on a Promise",
@@ -191,7 +192,7 @@ pub fn promise_static_reject(
 pub fn promise_static_race(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
-        || !args.at(0).get_jsobject().is_class(JsArray::get_class())
+        || !args.at(0).get_jsobject().is_class(JsArray::class())
     {
         return Err(JsValue::encode_object_value(JsString::new(
             ctx,
@@ -205,7 +206,7 @@ pub fn promise_static_race(ctx: GcPointer<Context>, args: &Arguments) -> Result<
 pub fn promise_static_all(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
-        || !args.at(0).get_jsobject().is_class(JsArray::get_class())
+        || !args.at(0).get_jsobject().is_class(JsArray::class())
     {
         return Err(JsValue::encode_object_value(JsString::new(
             ctx,
@@ -222,7 +223,7 @@ pub fn promise_static_all_settled(
 ) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
-        || !args.at(0).get_jsobject().is_class(JsArray::get_class())
+        || !args.at(0).get_jsobject().is_class(JsArray::class())
     {
         return Err(JsValue::encode_object_value(JsString::new(
             ctx,
@@ -236,7 +237,7 @@ pub fn promise_static_all_settled(
 pub fn promise_static_any(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 1
         || !args.at(0).is_jsobject()
-        || !args.at(0).get_jsobject().is_class(JsArray::get_class())
+        || !args.at(0).get_jsobject().is_class(JsArray::class())
     {
         return Err(JsValue::encode_object_value(JsString::new(
             ctx,

@@ -114,9 +114,6 @@ impl JsObject {
     pub fn direct_mut(&mut self, n: usize) -> &mut JsValue {
         self.slots.at_mut(n as _)
     }
-    pub fn class(&self) -> &'static Class {
-        self.class
-    }
 
     pub fn is_class(&self, cls: &Class) -> bool {
         std::ptr::eq(self.class, cls)
@@ -139,14 +136,23 @@ impl JsObject {
 
         &mut *self.data::<JsFunction>()
     }
+
+    pub fn as_data<T>(&mut self) -> &mut T
+    where
+        T: JsClass,
+    {
+        assert!(self.is_class(T::class()));
+        &mut *self.data::<T>()
+    }
+
     pub fn as_promise(&self) -> &JsPromise {
         assert_eq!(self.tag, ObjectTag::Ordinary);
-        assert!(self.is_class(JsPromise::get_class()));
+        assert!(self.is_class(JsPromise::class()));
         &*self.data::<JsPromise>()
     }
     pub fn as_promise_mut(&mut self) -> &mut JsPromise {
         assert_eq!(self.tag, ObjectTag::Ordinary);
-        assert!(self.is_class(JsPromise::get_class()));
+        assert!(self.is_class(JsPromise::class()));
         &mut *self.data::<JsPromise>()
     }
     pub fn as_string_object(&self) -> &JsStringObject {
@@ -200,7 +206,7 @@ impl GcCell for JsObject {
         (Self::deserialize as _, Self::allocate as _)
     }
     fn compute_size(&self) -> usize {
-        object_size_with_tag(self.tag, self.class)
+        object_size_with_additional(self.class)
     }
 }
 impl Drop for JsObject {
@@ -221,20 +227,13 @@ impl Drop for JsObject {
     }
 }
 
-pub fn object_size_with_tag(tag: ObjectTag, cls: &Class) -> usize {
-    let size = size_of::<JsObject>()
+pub fn object_size_with_additional(cls: &Class) -> usize {
+    size_of::<JsObject>()
         + if let Some(sz) = cls.additional_size {
             sz()
         } else {
             0
-        };
-    match tag {
-        ObjectTag::Global => size + size_of::<JsGlobal>(),
-        ObjectTag::Function => size + size_of::<JsFunction>(),
-        ObjectTag::NormalArguments => size + size_of::<JsArguments>(),
-        ObjectTag::String => size + size_of::<JsStringObject>(),
-        _ => size,
-    }
+        }
 }
 
 fn is_absent_descriptor(desc: &PropertyDescriptor) -> bool {
@@ -255,7 +254,11 @@ fn is_absent_descriptor(desc: &PropertyDescriptor) -> bool {
     true
 }
 
-define_jsclass!(JsObject, Object);
+impl JsClass for JsObject {
+    fn class() -> &'static Class {
+        define_jsclass!(JsObject, Object)
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsObject {
@@ -881,7 +884,7 @@ impl JsObject {
             structure = stack,
             ctx.global_data().empty_object_struct.unwrap()
         );
-        Self::new(ctx, &structure, Self::get_class(), ObjectTag::Ordinary)
+        Self::new(ctx, &structure, Self::class(), ObjectTag::Ordinary)
     }
     /// Create new JS object instance with provided class, structure and tag.
     pub fn new(
@@ -1604,15 +1607,9 @@ mod tests {
     }
 }
 
-impl JsClass for JsObject {
-    fn class() -> &'static Class {
-        Self::get_class()
-    }
-}
-
 impl JsClass for () {
     fn class() -> &'static Class {
-        JsObject::get_class()
+        JsObject::class()
     }
 }
 

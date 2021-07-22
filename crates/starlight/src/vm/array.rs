@@ -22,7 +22,11 @@ use crate::gc::cell::GcPointer;
 use crate::prelude::*;
 pub struct JsArray;
 
-define_jsclass!(JsArray, Array);
+impl JsClass for JsArray {
+    fn class() -> &'static Class {
+        define_jsclass!(JsArray, Array)
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsArray {
@@ -40,7 +44,7 @@ impl JsArray {
         let mut arr = JsObject::new(
             ctx,
             &ctx.global_data().array_structure.unwrap(),
-            Self::get_class(),
+            Self::class(),
             ObjectTag::Array,
         );
         arr.indexed.set_length(n);
@@ -318,11 +322,5 @@ impl GcPointer<JsObject> {
         self.indexed.set_length(len);
 
         Ok(true)
-    }
-}
-
-impl JsClass for JsArray {
-    fn class() -> &'static super::class::Class {
-        Self::get_class()
     }
 }

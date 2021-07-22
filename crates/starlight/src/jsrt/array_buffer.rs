@@ -33,7 +33,7 @@ pub fn array_buffer_byte_length(
 ) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(this = stack, args.this.to_object(ctx)?);
-    if !this.is_class(JsArrayBuffer::get_class()) {
+    if !this.is_class(JsArrayBuffer::class()) {
         return Err(JsValue::new(
             ctx.new_type_error("ArrayBuffer.prototype.byteLength is not generic"),
         ));
@@ -46,7 +46,7 @@ pub fn array_buffer_byte_length(
 pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(this = stack, args.this.to_object(ctx)?);
-    if !this.is_class(JsArrayBuffer::get_class()) {
+    if !this.is_class(JsArrayBuffer::class()) {
         return Err(JsValue::new(
             ctx.new_type_error("ArrayBuffer.prototype.slice is not generic"),
         ));
@@ -127,7 +127,7 @@ impl GcPointer<Context> {
         let mut proto = JsObject::new(
             self,
             &proto_map,
-            JsArrayBuffer::get_class(),
+            JsArrayBuffer::class(),
             ObjectTag::ArrayBuffer,
         );
 

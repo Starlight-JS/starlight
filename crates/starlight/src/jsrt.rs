@@ -6,11 +6,11 @@ use crate::{
     gc::cell::{GcPointer, WeakRef, WeakSlot},
     vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
-        array_storage::ArrayStorage, attributes::*, code_block::CodeBlock, context::Context,
-        data_view::JsDataView, environment::Environment, error::*, function::*, global::JsGlobal,
-        indexed_elements::IndexedElements, interpreter::SpreadValue, number::*, object::*,
-        property_descriptor::*, string::*, structure::*, structure_chain::StructureChain,
-        symbol_table::*, value::*, ModuleKind,
+        array_storage::ArrayStorage, attributes::*, class::JsClass, code_block::CodeBlock,
+        context::Context, data_view::JsDataView, environment::Environment, error::*, function::*,
+        global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::*,
+        object::*, property_descriptor::*, string::*, structure::*,
+        structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind,
     },
 };
 use std::{collections::HashMap, rc::Rc};
@@ -215,7 +215,7 @@ impl GcPointer<Context> {
             .weak_ref_structure
             .unwrap()
             .change_prototype_transition(self, Some(obj_proto));
-        let mut proto = JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &proto_map, JsObject::class(), ObjectTag::Ordinary);
         self.global_data
             .weak_ref_structure
             .unwrap()
@@ -253,7 +253,7 @@ impl GcPointer<Context> {
         let structure = Structure::new_indexed(self, None, true);
         self.global_data.array_structure = Some(structure);
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &structure, JsObject::class(), ObjectTag::Ordinary);
         self.global_data
             .array_structure
             .unwrap()
@@ -293,7 +293,7 @@ impl GcPointer<Context> {
         let mut proto = self.global_data.error.unwrap();
         let e = S_ERROR.intern();
         let mut ctor = JsNativeFunction::new(self, e, error_constructor, 1);
-        proto.class = JsError::get_class();
+        proto.class = JsError::class();
 
         let s = JsString::new(self, S_ERROR);
         let e = JsString::new(self, "");
@@ -452,17 +452,13 @@ impl GcPointer<Context> {
         self.global_data.uri_error_structure = Some(Structure::new_indexed(self, None, false));
 
         let structure = Structure::new_unique_with_proto(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, &structure, JsError::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &structure, JsError::class(), ObjectTag::Ordinary);
         self.global_data.error = Some(proto);
 
         {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
-            let mut sub_proto = JsObject::new(
-                self,
-                &structure,
-                JsEvalError::get_class(),
-                ObjectTag::Ordinary,
-            );
+            let mut sub_proto =
+                JsObject::new(self, &structure, JsEvalError::class(), ObjectTag::Ordinary);
 
             self.global_data
                 .eval_error_structure
@@ -473,12 +469,8 @@ impl GcPointer<Context> {
 
         {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
-            let mut sub_proto = JsObject::new(
-                self,
-                &structure,
-                JsTypeError::get_class(),
-                ObjectTag::Ordinary,
-            );
+            let mut sub_proto =
+                JsObject::new(self, &structure, JsTypeError::class(), ObjectTag::Ordinary);
 
             keep_on_stack!(&structure, &mut sub_proto);
 
@@ -493,7 +485,7 @@ impl GcPointer<Context> {
             let mut sub_proto = JsObject::new(
                 self,
                 &structure,
-                JsSyntaxError::get_class(),
+                JsSyntaxError::class(),
                 ObjectTag::Ordinary,
             );
 
@@ -511,7 +503,7 @@ impl GcPointer<Context> {
             let mut sub_proto = JsObject::new(
                 self,
                 &structure,
-                JsReferenceError::get_class(),
+                JsReferenceError::class(),
                 ObjectTag::Ordinary,
             );
 
@@ -528,7 +520,7 @@ impl GcPointer<Context> {
             let mut sub_proto = JsObject::new(
                 self,
                 &structure,
-                JsReferenceError::get_class(),
+                JsReferenceError::class(),
                 ObjectTag::Ordinary,
             );
 
@@ -541,12 +533,8 @@ impl GcPointer<Context> {
 
         {
             let structure = Structure::new_unique_with_proto(self, Some(proto), false);
-            let mut sub_proto = JsObject::new(
-                self,
-                &structure,
-                JsURIError::get_class(),
-                ObjectTag::Ordinary,
-            );
+            let mut sub_proto =
+                JsObject::new(self, &structure, JsURIError::class(), ObjectTag::Ordinary);
 
             self.global_data
                 .uri_error_structure
@@ -649,7 +637,7 @@ impl GcPointer<Context> {
 use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
-pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
+pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
     let mut refs = vec![
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
@@ -702,18 +690,18 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         IndexedElements::allocate as _,
         CodeBlock::deserialize as _,
         CodeBlock::allocate as _,
-        JsArguments::get_class() as *const _ as usize,
-        JsObject::get_class() as *const _ as usize,
-        JsArray::get_class() as *const _ as usize,
-        JsFunction::get_class() as *const _ as usize,
-        JsError::get_class() as *const _ as usize,
-        JsTypeError::get_class() as *const _ as usize,
-        JsSyntaxError::get_class() as *const _ as usize,
-        JsReferenceError::get_class() as *const _ as usize,
-        JsRangeError::get_class() as *const _ as usize,
-        JsEvalError::get_class() as *const _ as usize,
-        JsURIError::get_class() as *const _ as usize,
-        JsGlobal::get_class() as *const _ as usize,
+        JsArguments::class() as *const _ as usize,
+        JsObject::class() as *const _ as usize,
+        JsArray::class() as *const _ as usize,
+        JsFunction::class() as *const _ as usize,
+        JsError::class() as *const _ as usize,
+        JsTypeError::class() as *const _ as usize,
+        JsSyntaxError::class() as *const _ as usize,
+        JsReferenceError::class() as *const _ as usize,
+        JsRangeError::class() as *const _ as usize,
+        JsEvalError::class() as *const _ as usize,
+        JsURIError::class() as *const _ as usize,
+        JsGlobal::class() as *const _ as usize,
         function::function_bind as usize,
         function::function_prototype as usize,
         function::function_to_string as usize,
@@ -793,8 +781,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         string::string_to_uppercase as _,
         string::string_includes as _,
         string::string_slice as _,
-        JsStringObject::get_class() as *const _ as usize,
-        NumberObject::get_class() as *const _ as usize,
+        JsStringObject::class() as *const _ as usize,
+        NumberObject::class() as *const _ as usize,
         Environment::deserialize as _,
         Environment::allocate as _,
         number::number_constructor as _,
@@ -866,8 +854,8 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         array_buffer::array_buffer_constructor as _,
         array_buffer::array_buffer_byte_length as _,
         array_buffer::array_buffer_slice as _,
-        JsArrayBuffer::get_class() as *const _ as usize,
-        JsDataView::get_class() as *const _ as usize,
+        JsArrayBuffer::class() as *const _ as usize,
+        JsDataView::class() as *const _ as usize,
         data_view::data_view_constructor as _,
         data_view::data_view_prototype_buffer as _,
         data_view::data_view_prototype_byte_length as _,
@@ -888,7 +876,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         data_view::data_view_prototype_set::<i32> as _,
         data_view::data_view_prototype_set::<f32> as _,
         data_view::data_view_prototype_set::<f64> as _,
-        weak_ref::JsWeakRef::get_class() as *const _ as _,
+        weak_ref::JsWeakRef::class() as *const _ as _,
         weak_ref::weak_ref_constructor as _,
         weak_ref::weak_ref_prototype_deref as _,
         WeakSlot::deserialize as _,
@@ -896,10 +884,10 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         boolean::boolean_constructor as _,
         boolean::boolean_to_string as _,
         boolean::boolean_value_of as _,
-        boolean::BooleanObject::get_class() as *const _ as _,
+        boolean::BooleanObject::class() as *const _ as _,
         date::date_constructor as _,
         date::date_to_string as _,
-        date::Date::get_class() as *const _ as _,
+        date::Date::class() as *const _ as _,
         date::date_now as _,
         date::date_set_date as _,
         date::date_set_full_year as _,
@@ -951,13 +939,11 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         refs.push(ffi::ffi_function_call as _);
         refs.push(ffi::ffi_library_open as _);
     }
-    // refs.sort_unstable();
-    // refs.dedup();
-    Box::leak(refs.into_boxed_slice())
+    refs
 });
 
 pub fn get_length(ctx: GcPointer<Context>, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
-    if std::ptr::eq(val.class(), JsArray::get_class()) {
+    if std::ptr::eq(val.class, JsArray::class()) {
         return Ok(val.indexed.length());
     }
     let len = val.get(ctx, S_LENGTH.intern())?;

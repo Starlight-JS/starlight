@@ -718,7 +718,7 @@ impl FFIFunction {
         let mut object = JsObject::new(
             vm,
             &structure,
-            FFIFunction::get_class(),
+            FFIFunction::class(),
             ObjectTag::Ordinary,
         );
         unsafe {

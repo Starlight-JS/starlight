@@ -26,7 +26,7 @@ use crate::{
         global::JsGlobal,
         indexed_elements::{IndexedElements, SparseArrayMap},
         interpreter::SpreadValue,
-        object::{object_size_with_tag, JsObject, ObjectTag},
+        object::{object_size_with_additional, JsObject, ObjectTag},
         property_descriptor::{Accessor, StoredSlot},
         string::{JsString, JsStringObject},
         structure::{
@@ -268,8 +268,13 @@ impl<'a> Deserializer<'a> {
     pub unsafe fn read_opt_gc<T: GcCell + ?Sized>(&mut self) -> Option<GcPointer<T>> {
         Option::<GcPointer<T>>::deserialize_inplace(self)
     }
+
+    pub unsafe fn read_gc<T: GcCell + ?Sized>(&mut self) -> GcPointer<T> {
+        GcPointer::<T>::deserialize_inplace(self)
+    }
+
     unsafe fn deserialize_global_data(&mut self) -> GlobalData {
-        GlobalData {
+        let mut global_data = GlobalData {
             normal_arguments_structure: self.read_opt_gc(),
             empty_object_struct: self.read_opt_gc(),
             function_struct: self.read_opt_gc(),
@@ -318,7 +323,16 @@ impl<'a> Deserializer<'a> {
             date_structure: self.read_opt_gc(),
             boolean_structure: self.read_opt_gc(),
             date_prototype: self.read_opt_gc(),
+            custom_structures: HashMap::new(),
+        };
+        let custom_structures_num = self.get_u32();
+
+        for _ in 0..custom_structures_num {
+            let name = Symbol::deserialize_inplace(self);
+            let structure = self.read_gc();
+            global_data.register_structure(name, structure);
         }
+        global_data
     }
     /// Deserialize JS runtime from snapshot buffer. If snapshot has external references that is not part of the VM i.e some native function
     /// was used in snapshot it should be there too.
@@ -944,12 +958,12 @@ impl Deserializable for JsObject {
     }
 
     unsafe fn allocate(vm: &mut VirtualMachine, deser: &mut Deserializer) -> *mut GcPointerBase {
-        let tag = transmute(deser.get_u32() as u8);
+        let tag: ObjectTag = transmute(deser.get_u32() as u8);
         let class: &'static Class = transmute(deser.get_reference());
         deser.pc -= 8;
         vm.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
-            object_size_with_tag(tag, class),
+            object_size_with_additional(class),
             TypeId::of::<Self>(),
         )
     }

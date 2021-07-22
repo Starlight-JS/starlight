@@ -8,6 +8,7 @@ use super::{
     native_iterator::*, object::*, slot::*, string::JsString, symbol_table::*, value::*,
 };
 use crate::letroot;
+use crate::vm::class::JsClass;
 use crate::vm::context::Context;
 use crate::{
     bytecode::opcodes::Opcode,
@@ -648,7 +649,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                                 }
                             }
                             &GetByIdMode::ArrayLength => {
-                                if obj.is_class(JsArray::get_class()) {
+                                if obj.is_class(JsArray::class()) {
                                     frame.push(JsValue::new(obj.indexed.length()));
                                     continue;
                                 }
@@ -667,7 +668,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                         is_try: bool,
                     ) -> Result<(), JsValue> {
                         let mut slot = Slot::new();
-                        if name == length_id() && obj.is_class(JsArray::get_class()) {
+                        if name == length_id() && obj.is_class(JsArray::class()) {
                             *unwrap_unchecked(frame.code_block)
                                 .feedback
                                 .get_unchecked_mut(fdbk as usize) = TypeFeedBack::PropertyCache {
@@ -890,7 +891,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                 letroot!(funcc = gcstack, func.get_jsobject());
                 let map = func_object.func_construct_map(ctx)?;
                 let func = func_object.as_function_mut();
-                let object = JsObject::new(ctx, &map, JsObject::get_class(), ObjectTag::Ordinary);
+                let object = JsObject::new(ctx, &map, JsObject::class(), ObjectTag::Ordinary);
                 letroot!(
                     args_ = gcstack,
                     Arguments::new(JsValue::new(object), &mut args)
@@ -1396,7 +1397,7 @@ impl SpreadValue {
             .as_function_mut()
             .call(ctx, &mut args, JsValue::encode_undefined_value())
             .and_then(|x| {
-                assert!(x.is_jsobject() && x.get_jsobject().is_class(JsArray::get_class()));
+                assert!(x.is_jsobject() && x.get_jsobject().is_class(JsArray::class()));
                 let mut array = TypedJsObject::<JsArray>::new(x);
                 let mut vec = vec![];
                 for i in 0..crate::jsrt::get_length(ctx, &mut array.object())? {

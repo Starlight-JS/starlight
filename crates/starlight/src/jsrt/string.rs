@@ -1,23 +1,6 @@
 use regress::Regex;
 
-use crate::{
-    constant::S_CONSTURCTOR,
-    gc::cell::GcPointer,
-    vm::{
-        arguments::Arguments,
-        array::JsArray,
-        attributes::*,
-        context::Context,
-        error::{JsRangeError, JsTypeError},
-        function::JsNativeFunction,
-        object::JsObject,
-        property_descriptor::DataDescriptor,
-        string::{JsString, JsStringObject},
-        structure::Structure,
-        symbol_table::{Internable, Symbol},
-        value::*,
-    },
-};
+use crate::{constant::S_CONSTURCTOR, gc::cell::GcPointer, vm::{arguments::Arguments, array::JsArray, attributes::*, class::JsClass, context::Context, error::{JsRangeError, JsTypeError}, function::JsNativeFunction, object::JsObject, property_descriptor::DataDescriptor, string::{JsString, JsStringObject}, structure::Structure, symbol_table::{Internable, Symbol}, value::*}};
 use std::{
     char::{decode_utf16, from_u32},
     cmp::{max, min},
@@ -290,7 +273,7 @@ pub fn string_to_uppercase(ctx: GcPointer<Context>, args: &Arguments) -> Result<
 pub fn string_starts_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
-    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::class())) {
         let msg = JsString::new(
             ctx,
             "First argument to String.prototype.endsWith must not be a regular expression",
@@ -324,7 +307,7 @@ pub fn string_starts_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 pub fn string_ends_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
-    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::class())) {
         let msg = JsString::new(
             ctx,
             "First argument to String.prototype.startsWith must not be a regular expression",
@@ -358,7 +341,7 @@ pub fn string_ends_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 pub fn string_includes(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
-    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::get_class())) {
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::class())) {
         let msg = JsString::new(
             ctx,
             "First argument to String.prototype.startsWith must not be a regular expression",
@@ -667,7 +650,7 @@ fn get_regex_string(_ctx: GcPointer<Context>, val: JsValue) -> Result<(String, S
     }
     if val.is_jsobject() {
         let obj = val.get_jsobject();
-        if obj.is_class(RegExp::get_class()) {
+        if obj.is_class(RegExp::class()) {
             return Ok((
                 obj.data::<RegExp>().original_source.to_string(),
                 obj.data::<RegExp>().original_flags.to_string(),

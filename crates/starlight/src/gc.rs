@@ -822,11 +822,7 @@ impl Heap {
     #[inline]
     pub fn allocate<T: GcCell>(&mut self, value: T) -> GcPointer<T> {
         let size = value.compute_size();
-        let memory = self.allocate_raw(
-            vtable_of(&value) as _,
-            size + size_of::<GcPointerBase>(),
-            TypeId::of::<T>(),
-        );
+        let memory = self.allocate_raw(vtable_of(&value) as _, size, TypeId::of::<T>());
         unsafe {
             (*memory).data::<T>().write(value);
             GcPointer {

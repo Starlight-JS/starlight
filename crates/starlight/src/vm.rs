@@ -1,7 +1,9 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use self::{attributes::*, context::Context, object::JsObject, structure::Structure};
+use self::{
+    attributes::*, context::Context, object::JsObject, structure::Structure, symbol_table::Symbol,
+};
 use crate::{
     bytecompiler::{ByteCompiler, CompileError},
     gc::default_heap,
@@ -438,6 +440,7 @@ pub struct GlobalData {
     pub(crate) date_structure: Option<GcPointer<Structure>>,
     pub(crate) date_prototype: Option<GcPointer<JsObject>>,
     pub(crate) boolean_structure: Option<GcPointer<Structure>>,
+    pub(crate) custom_structures: HashMap<Symbol, GcPointer<Structure>>,
 }
 
 impl GlobalData {
@@ -447,6 +450,18 @@ impl GlobalData {
 
     pub fn get_object_prototype(&self) -> GcPointer<JsObject> {
         unwrap_unchecked(self.object_prototype)
+    }
+
+    pub fn register_structure(&mut self, name: Symbol, structure: GcPointer<Structure>) {
+        self.custom_structures.insert(name, structure);
+    }
+
+    pub fn get_structure(&self, name: Symbol) -> Option<GcPointer<Structure>> {
+        let structure = self.custom_structures.get(&name);
+        match structure {
+            Some(s) => Some(*s),
+            None => None,
+        }
     }
 }
 

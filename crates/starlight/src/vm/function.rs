@@ -34,7 +34,11 @@ pub enum FuncType {
     Generator(JsGeneratorFunction),
 }
 
-define_jsclass!(JsFunction, Function);
+impl JsClass for JsFunction {
+    fn class() -> &'static Class {
+        define_jsclass!(JsFunction, Function)
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsFunction {
@@ -160,7 +164,7 @@ impl JsFunction {
             structure = stack,
             structure.unwrap_or_else(|| Structure::new_unique_indexed(ctx, None, false))
         );
-        let obj = JsObject::new(ctx, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let obj = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
         args.ctor_call = true;
         args.this = JsValue::encode_object_value(obj);
         self.call(ctx, args, this_fn)
@@ -205,7 +209,7 @@ impl JsFunction {
               FuncType::User(ref x) => {
                   let structure = Structure::new_indexed(ctx, Some(env), false);
                   let scope =
-                      JsObject::new(ctx, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+                      JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
                   ctx.perform_ctx_call(x, JsValue::encode_object_value(x.scope.clone()), args)
               }
               FuncType::Bound(ref mut x) => {
@@ -227,7 +231,7 @@ impl JsFunction {
         let mut obj = JsObject::new(
             ctx,
             &ctx.global_data().get_function_struct(),
-            JsFunction::get_class(),
+            JsFunction::class(),
             ObjectTag::Function,
         );
 
@@ -246,7 +250,7 @@ impl JsFunction {
         ty: FuncType,
         _strict: bool,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(ctx, structure, JsFunction::get_class(), ObjectTag::Function);
+        let mut obj = JsObject::new(ctx, structure, JsFunction::class(), ObjectTag::Function);
 
         obj.set_callable(true);
 
@@ -432,7 +436,12 @@ pub struct JsNativeFunction {
 }
 
 impl JsNativeFunction {
-    pub fn new(ctx: GcPointer<Context>, name: Symbol, f: JsAPI, n: u32) -> GcPointer<JsObject> {
+    pub fn new<T: Into<Symbol>>(
+        ctx: GcPointer<Context>,
+        name: T,
+        f: JsAPI,
+        n: u32,
+    ) -> GcPointer<JsObject> {
         let ctx = ctx;
         let mut func = JsFunction::new(ctx, FuncType::Native(JsNativeFunction { func: f }), false);
         let l = "length".intern();
@@ -444,7 +453,7 @@ impl JsNativeFunction {
             false,
         );
         let n = "name".intern();
-        let k = ctx.description(name);
+        let k = ctx.description(name.into());
         let name = JsValue::encode_object_value(JsString::new(ctx, &k));
         let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
 
@@ -772,16 +781,19 @@ extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<GeneratorData>().func_state.trace(tracer);
 }
 
-define_jsclass!(
-    JsGeneratorFunction,
-    Generator,
-    Object,
-    Some(drop_generator),
-    Some(generator_trace),
-    Some(generator_deser),
-    Some(generator_ser),
-    Some(generator_size)
-);
+impl JsClass for JsGeneratorFunction {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            JsGeneratorFunction,
+            Generator,
+            Some(drop_generator),
+            Some(generator_trace),
+            Some(generator_deser),
+            Some(generator_ser),
+            Some(generator_size)
+        )
+    }
+}
 
 impl JsGeneratorFunction {
     pub fn new(mut ctx: GcPointer<Context>, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
@@ -841,7 +853,7 @@ impl JsGeneratorFunction {
         let mut state = ctx.stack.pop_frame().expect("Empty call stack");
         let state = unsafe { HeapCallFrame::save(&mut state) };
         let proto = ctx.global_data().generator_structure.unwrap();
-        let mut generator = JsObject::new(ctx, &proto, Self::get_class(), ObjectTag::Ordinary);
+        let mut generator = JsObject::new(ctx, &proto, Self::class(), ObjectTag::Ordinary);
         *generator.data::<GeneratorData>() = ManuallyDrop::new(GeneratorData {
             state: GeneratorState::Suspended,
             func_state: AsyncFunctionState {
@@ -903,7 +915,7 @@ pub(crate) fn js_generator_next(
     pdone: &mut u32,
 ) -> Result<JsValue, JsValue> {
     let object = this.to_object(ctx)?;
-    if unlikely(!object.is_class(JsGeneratorFunction::get_class())) {
+    if unlikely(!object.is_class(JsGeneratorFunction::class())) {
         return Err(JsValue::new(ctx.new_type_error("not a generator")));
     }
     *pdone = 1;
