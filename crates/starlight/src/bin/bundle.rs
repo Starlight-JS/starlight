@@ -75,6 +75,9 @@ static const uint8_t snapshot[{}] = {{
     "#,
         snapshot.buffer.len()
     ));
+    unsafe {
+        vm.dispose();
+    }
     if opts.output_c {
         std::fs::write(format!("{}.c", opts.output.display()), c_src).unwrap();
     } else {
