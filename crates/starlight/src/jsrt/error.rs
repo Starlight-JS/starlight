@@ -70,6 +70,17 @@ pub fn range_error_constructor(
     )))
 }
 
+pub fn uri_error_constructor(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
+    let message = args.at(0).to_string(ctx)?;
+    let msg = JsString::new(ctx, message);
+    Ok(JsValue::encode_object_value(JsURIError::new(
+        ctx, msg, None,
+    )))
+}
+
 /// section 15.11.4.4 Error.prototype.toString()
 pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;

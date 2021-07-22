@@ -864,6 +864,7 @@ impl Serializable for GlobalData {
         self.symbol_prototype.serialize(serializer);
         self.error.serialize(serializer);
         self.type_error.serialize(serializer);
+        self.uri_error.serialize(serializer);
         self.reference_error.serialize(serializer);
         self.range_error.serialize(serializer);
         self.syntax_error.serialize(serializer);

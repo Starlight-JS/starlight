@@ -1,6 +1,13 @@
 use std::fs::read_to_string;
 
+<<<<<<< HEAD
 use starlight::{prelude::Options, Platform};
+=======
+use starlight::{
+    prelude::{Options},
+    Platform,
+};
+>>>>>>> 0f74711ac64be8d31edf8cd0be7251064569679f
 
 fn main() {
     Platform::initialize();
