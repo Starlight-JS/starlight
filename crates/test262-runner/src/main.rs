@@ -379,7 +379,7 @@ enum Phase {
     Parse,
     Early,
     Resolution,
-    VirtualMachine,
+    Runtime,
 }
 
 /// Locale information structure.

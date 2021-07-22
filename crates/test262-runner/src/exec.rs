@@ -216,7 +216,7 @@ impl Test {
                 || matches!(
                     self.expected_outcome,
                     Outcome::Negative {
-                        phase: Phase::VirtualMachine,
+                        phase: Phase::Runtime,
                         error_type: _,
                     }
                 )) {
@@ -273,7 +273,7 @@ impl Test {
                     error_type: _,
                 } => todo!("check module resolution errors"),
                 Outcome::Negative {
-                    phase: Phase::VirtualMachine,
+                    phase: Phase::Runtime,
                     ref error_type,
                 } => {
                     if let Err(e) = parse(&self.content.as_ref(), strict) {
