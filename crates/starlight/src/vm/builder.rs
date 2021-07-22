@@ -23,6 +23,12 @@ pub struct ClassBuilder {
     pub context: GcPointer<Context>,
 }
 
+pub trait Builtin {
+    fn init(mut _ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        todo!();
+    }
+}
+
 pub trait ClassConstructor {
     fn constructor(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<Self, JsValue>
     where
@@ -31,6 +37,7 @@ pub trait ClassConstructor {
         panic!("You should implement your constructor method");
     }
     fn raw_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue>;
+    fn init(builder: &mut ClassBuilder) -> Result<(), JsValue>;
 }
 
 default impl<T: JsClass> ClassConstructor for T {

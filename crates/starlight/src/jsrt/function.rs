@@ -1,18 +1,23 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+use crate::vm::attributes::*;
+use crate::vm::property_descriptor::DataDescriptor;
 use crate::{
     bytecompiler::*,
+    constant::S_FUNCTION,
     gc::cell::GcPointer,
     letroot,
     vm::context::Context,
     vm::{
         arguments::Arguments,
         array_storage::ArrayStorage,
+        builder::Builtin,
         error::JsTypeError,
         function::*,
         slot::*,
         string::JsString,
+        structure::Structure,
         symbol_table::{Internable, Symbol},
         value::JsValue,
     },
@@ -172,4 +177,40 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
     Err(JsValue::encode_object_value(JsTypeError::new(
         ctx, msg, None,
     )))
+}
+
+impl Builtin for JsFunction {
+    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        let obj_proto = ctx.global_data.object_prototype.unwrap();
+        let structure = Structure::new_unique_indexed(ctx, Some(obj_proto), false);
+        let name = S_FUNCTION.intern();
+
+        let mut prototype =
+            JsNativeFunction::new_with_struct(ctx, &structure, name, function_prototype, 1);
+        ctx.global_data
+            .function_struct
+            .unwrap()
+            .change_prototype_with_no_transition(prototype);
+        ctx.global_data.func_prototype = Some(prototype);
+
+        let structure = prototype
+            .structure()
+            .change_prototype_transition(ctx, Some(obj_proto));
+        (*prototype).structure = structure;
+
+        ctx.global_data.function_struct.unwrap().prototype = Some(prototype);
+
+        let mut constructor = JsNativeFunction::new(ctx, name, function_prototype, 1);
+
+        def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
+        def_native_property!(ctx, prototype, constructor, constructor, W | C)?;
+
+        def_native_method!(ctx, prototype, bind, function_bind, 0, W | C)?;
+        def_native_method!(ctx, prototype, apply, function_apply, 0, W | C)?;
+        def_native_method!(ctx, prototype, call, function_call, 0, W | C)?;
+        def_native_method!(ctx, prototype, toString, function_to_string, 0, W | C)?;
+
+        ctx.global_object().put(ctx, name, constructor, false)?;
+        Ok(())
+    }
 }

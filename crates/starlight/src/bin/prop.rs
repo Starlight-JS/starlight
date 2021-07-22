@@ -5,18 +5,24 @@ use starlight::{prelude::Options, Platform};
 fn main() {
     Platform::initialize();
     let mut runtime = Platform::new_runtime(Options::default(), None);
-    let ctx = runtime.new_context();
+    let mut ctx = runtime.new_context();
 
-    let content = read_to_string("examples/hello-world.js").unwrap();
-    let res = ctx.eval_internal(None, false, &content, false);
+    let prototype = ctx
+        .global_object()
+        .get(ctx, "Object")
+        .unwrap()
+        .to_object(ctx)
+        .unwrap()
+        .get(ctx, "prototype")
+        .unwrap();
+    let func = prototype
+        .to_object(ctx)
+        .unwrap()
+        .get(ctx, "hasOwnProperty")
+        .unwrap()
+        .to_object(ctx)
+        .unwrap()
+        .as_function_mut();
 
-    match res {
-        Ok(val) => {
-            val.to_string(ctx).unwrap_or_else(|_| String::new());
-        }
-        Err(e) => println!(
-            "Uncaught {}",
-            e.to_string(ctx).unwrap_or_else(|_| String::new())
-        ),
-    };
+    ctx.eval("print(Object.prototype.hasOwnProperty)").unwrap();
 }

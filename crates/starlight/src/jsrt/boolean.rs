@@ -1,10 +1,11 @@
 use std::mem::ManuallyDrop;
 
 use crate::{
-    constant::S_CONSTURCTOR,
     define_jsclass,
     prelude::*,
-    vm::{class::Class, context::Context, method_table::*, object::TypedJsObject},
+    vm::{
+        builder::Builtin, class::Class, context::Context, method_table::*, object::TypedJsObject,
+    },
     JsTryFrom,
 };
 pub struct BooleanObject {
@@ -72,38 +73,29 @@ pub fn boolean_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     Ok(JsValue::new(this_boolean_value(args.this, ctx)?))
 }
 
-impl GcPointer<Context> {
-    pub(crate) fn init_boolean_in_global_object(mut self) -> Result<(), JsValue> {
-        let ctor = self
-            .global_data
-            .boolean_prototype
-            .unwrap()
-            .get(self, S_CONSTURCTOR.intern())
-            .unwrap_or_else(|_| unreachable!());
-
-        let mut global_object = self.global_object();
-        def_native_property!(self, global_object, Boolean, ctor)?;
-        Ok(())
-    }
-    pub(crate) fn init_boolean_in_global_data(mut self) -> Result<(), JsValue> {
-        let mut map = Structure::new_indexed(self, None, false);
-        self.global_data.boolean_structure = Some(map);
-        let obj_proto = self.global_data().get_object_prototype();
-        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, &structure, JsObject::class(), ObjectTag::Ordinary);
+impl Builtin for BooleanObject {
+    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        let mut map = Structure::new_indexed(ctx, None, false);
+        ctx.global_data.boolean_structure = Some(map);
+        let obj_proto = ctx.global_data().get_object_prototype();
+        let structure = Structure::new_unique_indexed(ctx, Some(obj_proto), false);
+        let mut proto = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
         map.change_prototype_with_no_transition(proto);
 
-        let mut ctor = JsNativeFunction::new(self, "Boolean".intern(), boolean_constructor, 1);
+        let mut ctor = JsNativeFunction::new(ctx, "Boolean".intern(), boolean_constructor, 1);
 
-        def_native_property!(self, ctor, prototype, proto, NONE)?;
+        def_native_property!(ctx, ctor, prototype, proto, NONE)?;
 
-        def_native_method!(self, proto, toString, boolean_to_string, 0)?;
+        def_native_method!(ctx, proto, toString, boolean_to_string, 0)?;
 
-        def_native_method!(self, proto, valueOf, boolean_value_of, 0)?;
+        def_native_method!(ctx, proto, valueOf, boolean_value_of, 0)?;
 
-        def_native_property!(self, proto, constructor, ctor, W | C)?;
+        def_native_property!(ctx, proto, constructor, ctor, W | C)?;
 
-        self.global_data.boolean_prototype = Some(proto);
+        ctx.global_data.boolean_prototype = Some(proto);
+
+        let mut global_object = ctx.global_object();
+        def_native_property!(ctx, global_object, Boolean, ctor)?;
         Ok(())
     }
 }
