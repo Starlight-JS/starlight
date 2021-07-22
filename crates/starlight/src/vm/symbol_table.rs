@@ -229,6 +229,17 @@ impl Internable for usize {
     }
 }
 
+impl From<String> for Symbol {
+    fn from(s: String) -> Self {
+        s.intern()
+    }
+}
+impl From<&str> for Symbol {
+    fn from(s: &str) -> Self {
+        s.intern()
+    }
+}
+
 pub struct JsSymbol {
     pub(crate) sym: Symbol,
 }

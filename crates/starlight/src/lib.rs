@@ -1,6 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+#![allow(incomplete_features)]
 #![feature(
     core_intrinsics,
     llvm_asm,
@@ -9,7 +10,8 @@
     const_raw_ptr_deref,
     stmt_expr_attributes,
     const_type_id,
-    pattern
+    pattern,
+    specialization
 )]
 #![allow(
     unused_unsafe,
@@ -39,8 +41,23 @@ macro_rules! def_native_method {
         let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
         $obj.put($vm, name, JsValue::new(m), true)
     }};
+    ($vm: expr,$obj: expr,$name: expr,$func: expr,$argc: expr) => {{
+        let name = $name;
+        let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
+        $obj.put($vm, name, JsValue::new(m), true)
+    }};
     ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr, $attr: expr) => {{
         let name = stringify!($name).intern();
+        let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
+        $obj.define_own_property(
+            $vm,
+            name,
+            &*DataDescriptor::new(JsValue::from(m), $attr),
+            false,
+        )
+    }};
+    ($vm: expr,$obj: expr,$name: expr,$func: expr,$argc: expr, $attr: expr) => {{
+        let name = $name;
         let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
         $obj.define_own_property(
             $vm,
@@ -57,6 +74,9 @@ macro_rules! def_native_property {
         let name = stringify!($name).intern();
         $obj.put($vm, name, JsValue::new($prop), false)
     }};
+    ($vm: expr, $obj: expr, $name: expr, $prop: expr) => {{
+        $obj.put($vm, $name, JsValue::new($prop), false)
+    }};
     ($vm: expr, $obj: expr, $name: ident, $prop: expr, $attr: expr) => {{
         let name = stringify!($name).intern();
         $obj.define_own_property(
@@ -66,14 +86,76 @@ macro_rules! def_native_property {
             false,
         )
     }};
+    ($vm: expr, $obj: expr, $name: expr, $prop: expr, $attr: expr) => {{
+        $obj.define_own_property(
+            $vm,
+            $name,
+            &*DataDescriptor::new(JsValue::new($prop), $attr),
+            false,
+        )
+    }};
 }
 
 #[macro_export]
 macro_rules! def_native_accessor {
-    ($vm: expr,$obj: expr,$name: ident,$get: expr,$name_set: ident,$set: expr) => {{
+    ($vm: expr,$obj: expr,$name: ident,$getter: expr,$setter: expr, $attr:expr) => {{
         let name = stringify!($name).intern();
-        let m = $crate::vm::function::JsNativeFunction::new($vm, name, $func, $argc);
-        $obj.put($vm, name, JsValue::new(m), true)
+        $obj.define_own_property(
+            $vm,
+            name,
+            &*AccessorDescriptor::new(JsValue::new($getter), JsValue::new($setter), $attr),
+            false,
+        )
+    }};
+    ($vm: expr,$obj: expr,$name: expr,$getter: expr,$setter: expr, $attr:expr) => {{
+        $obj.define_own_property(
+            $vm,
+            $name,
+            &*AccessorDescriptor::new(JsValue::new($getter), JsValue::new($setter), $attr),
+            false,
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! def_native_getter {
+    ($vm: expr,$obj: expr,$name: ident,$getter: expr, $attr:expr) => {{
+        let name = stringify!($name).intern();
+        $obj.define_own_property(
+            $vm,
+            name,
+            &*AccessorDescriptor::new(JsValue::new($getter), JsValue::UNDEFINED, $attr),
+            false,
+        )
+    }};
+    ($vm: expr,$obj: expr,$name: expr,$getter: expr, $attr:expr) => {{
+        $obj.define_own_property(
+            $vm,
+            $name,
+            &*AccessorDescriptor::new(JsValue::new($getter), JsValue::UNDEFINED, $attr),
+            false,
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! def_native_setter {
+    ($vm: expr,$obj: expr,$name: ident,$setter: expr, $attr:expr) => {{
+        let name = stringify!($name).intern();
+        $obj.define_own_property(
+            $vm,
+            name,
+            &*AccessorDescriptor::new(JsValue::UNDEFINED, JsValue::new($setter), $attr),
+            false,
+        )
+    }};
+    ($vm: expr,$obj: expr,$name: expr,$setter: expr, $attr:expr) => {{
+        $obj.define_own_property(
+            $vm,
+            $name,
+            &*AccessorDescriptor::new(JsValue::UNDEFINED, JsValue::new($setter), $attr),
+            false,
+        )
     }};
 }
 

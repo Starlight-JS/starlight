@@ -1,4 +1,4 @@
-use crate::{gc::cell::GcCell, vm::Lrc};
+use crate::{gc::cell::GcCell, jsrt::VM_NATIVE_REFERENCES, vm::Lrc};
 use std::{collections::HashMap, ptr::null};
 use swc_common::{errors::Handler, input::StringInput, FileName, SourceMap};
 use swc_ecmascript::parser::{Parser, Syntax};
@@ -18,6 +18,7 @@ use crate::{
 };
 
 use super::{
+    builder::{ClassBuilder, ClassConstructor},
     class::JsClass,
     error::{JsRangeError, JsReferenceError, JsTypeError},
     function::JsNativeFunction,
@@ -115,14 +116,44 @@ impl Context {
 impl GcPointer<Context> {
     pub fn register_class<T>(mut self) -> Result<(), JsValue>
     where
-        T: JsClass,
+        T: ClassConstructor + JsClass,
     {
-        T::init(self)?;
+        let name = T::class().name;
+        let obj_proto = self.global_data().get_object_prototype();
+        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
+        let mut proto = JsObject::new(self, &structure, T::class(), ObjectTag::Ordinary);
+
+        let structure = Structure::new_indexed(self, Some(proto), false);
+        let mut constructor = JsNativeFunction::new(self, name.intern(), T::raw_constructor, 1);
+
+        def_native_property!(self, constructor, prototype, proto)?;
+        def_native_property!(self, proto, constructor, constructor)?;
+
+        let mut builder = ClassBuilder {
+            constructor,
+            prototype: proto,
+            structure,
+            context: self,
+        };
+        T::init(&mut builder)?;
+        self.register_structure(name.intern(), structure);
+
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, name.intern(), constructor)?;
+
+        unsafe {
+            VM_NATIVE_REFERENCES.push(T::class() as *const _ as _);
+            VM_NATIVE_REFERENCES.push(T::raw_constructor as _);
+        }
         Ok(())
     }
 
     pub fn register_structure(&mut self, name: Symbol, structure: GcPointer<Structure>) {
         self.global_data.register_structure(name, structure);
+    }
+
+    pub fn get_structure(&mut self, name: Symbol) -> Option<GcPointer<Structure>> {
+        self.global_data.get_structure(name)
     }
 
     pub fn init(&mut self) {

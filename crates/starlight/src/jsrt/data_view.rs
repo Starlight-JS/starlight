@@ -227,49 +227,16 @@ impl GcPointer<Context> {
         def_native_method!(self, proto, setFloat64, data_view_prototype_set::<f64>, 3)?;
         def_native_method!(self, proto, setFloat32, data_view_prototype_set::<f32>, 3)?;
 
-        let byte_length = JsNativeFunction::new(
-            self,
-            "byteLength".intern(),
-            data_view_prototype_byte_length,
-            0,
-        );
-        proto.define_own_property(
-            self,
-            "byteLength".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_length),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
-        let byte_offset = JsNativeFunction::new(
-            self,
-            "byteOffset".intern(),
-            data_view_prototype_byte_offset,
-            0,
-        );
-        proto.define_own_property(
-            self,
-            "byteOffset".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(byte_offset),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
+        let byte_length =
+            JsNativeFunction::new(self, "byteLength", data_view_prototype_byte_length, 0);
+        def_native_getter!(self, proto, byteLength, byte_length, NONE)?;
+
+        let byte_offset =
+            JsNativeFunction::new(self, "byteOffset", data_view_prototype_byte_offset, 0);
+        def_native_getter!(self, proto, byteOffset, byte_offset, NONE)?;
+
         let buffer = JsNativeFunction::new(self, "buffer".intern(), data_view_prototype_buffer, 0);
-        proto.define_own_property(
-            self,
-            "buffer".intern(),
-            &*AccessorDescriptor::new(
-                JsValue::new(buffer),
-                JsValue::encode_undefined_value(),
-                NONE,
-            ),
-            false,
-        )?;
+        def_native_getter!(self, proto, buffer, buffer, NONE)?;
 
         self.global_data.data_view_prototype = Some(proto);
         Ok(())

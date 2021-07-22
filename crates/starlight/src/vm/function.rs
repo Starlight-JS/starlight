@@ -436,7 +436,12 @@ pub struct JsNativeFunction {
 }
 
 impl JsNativeFunction {
-    pub fn new(ctx: GcPointer<Context>, name: Symbol, f: JsAPI, n: u32) -> GcPointer<JsObject> {
+    pub fn new<T: Into<Symbol>>(
+        ctx: GcPointer<Context>,
+        name: T,
+        f: JsAPI,
+        n: u32,
+    ) -> GcPointer<JsObject> {
         let ctx = ctx;
         let mut func = JsFunction::new(ctx, FuncType::Native(JsNativeFunction { func: f }), false);
         let l = "length".intern();
@@ -448,7 +453,7 @@ impl JsNativeFunction {
             false,
         );
         let n = "name".intern();
-        let k = ctx.description(name);
+        let k = ctx.description(name.into());
         let name = JsValue::encode_object_value(JsString::new(ctx, &k));
         let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
 
