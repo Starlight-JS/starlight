@@ -100,7 +100,6 @@ impl JsClass for Date {
         define_jsclass!(
             Date,
             Date,
-            Date,
             None,
             None,
             Some(deser),

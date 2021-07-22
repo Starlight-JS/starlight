@@ -323,7 +323,6 @@ impl JsClass for FileObject {
         define_jsclass!(
             FileObject,
             File,
-            Object,
             Some(drop_file_fn),
             None,
             Some(deser),

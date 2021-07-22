@@ -60,7 +60,6 @@ impl JsClass for JsArrayBuffer {
         define_jsclass!(
             JsArrayBuffer,
             ArrayBuffer,
-            ArrayBuffer,
             Some(drop_array_buffer),
             None,
             Some(array_buffer_deserialize),

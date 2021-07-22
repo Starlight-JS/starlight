@@ -202,6 +202,7 @@ pub mod prelude {
     };
     pub use super::Platform;
     pub use crate::constant::*;
+    pub use crate::define_additional_size;
     pub use crate::js_method_table;
 }
 

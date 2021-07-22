@@ -39,7 +39,6 @@ impl JsClass for JsPromise {
         define_jsclass!(
             JsPromise,
             Promise,
-            Object,
             Some(drop_promise_fn),
             Some(prom_trace),
             Some(deser),

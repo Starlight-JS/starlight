@@ -30,7 +30,6 @@ impl JsClass for JsDataView {
         define_jsclass!(
             JsDataView,
             DataView,
-            DataView,
             None,
             Some(trace_data_view),
             None,

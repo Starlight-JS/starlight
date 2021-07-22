@@ -27,7 +27,6 @@ impl JsClass for BooleanObject {
         define_jsclass!(
             BooleanObject,
             Boolean,
-            Object,
             None,
             None,
             Some(deser),

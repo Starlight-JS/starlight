@@ -637,7 +637,7 @@ impl GcPointer<Context> {
 use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
-pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
+pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
     let mut refs = vec![
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
@@ -939,9 +939,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<&'static [usize]> = Lazy::new(|| {
         refs.push(ffi::ffi_function_call as _);
         refs.push(ffi::ffi_library_open as _);
     }
-    // refs.sort_unstable();
-    // refs.dedup();
-    Box::leak(refs.into_boxed_slice())
+    refs
 });
 
 pub fn get_length(ctx: GcPointer<Context>, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {

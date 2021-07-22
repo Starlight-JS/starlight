@@ -17,7 +17,19 @@ use crate::{
     },
 };
 
-use super::{GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef, class::JsClass, error::{JsRangeError, JsReferenceError, JsTypeError}, function::JsNativeFunction, global::JsGlobal, interpreter::{frame::CallFrame, stack::Stack}, object::{JsObject, ObjectTag}, string::JsString, structure::Structure, symbol_table::{self, Internable, JsSymbol, Symbol}, value::JsValue};
+use super::{
+    class::JsClass,
+    error::{JsRangeError, JsReferenceError, JsTypeError},
+    function::JsNativeFunction,
+    global::JsGlobal,
+    interpreter::{frame::CallFrame, stack::Stack},
+    object::{JsObject, ObjectTag},
+    string::JsString,
+    structure::Structure,
+    symbol_table::{self, Internable, JsSymbol, Symbol},
+    value::JsValue,
+    GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef,
+};
 
 use crate::gc::snapshot::deserializer::Deserializable;
 
@@ -101,6 +113,18 @@ impl Context {
     }
 }
 impl GcPointer<Context> {
+    pub fn register_class<T>(mut self) -> Result<(), JsValue>
+    where
+        T: JsClass,
+    {
+        T::init(self)?;
+        Ok(())
+    }
+
+    pub fn register_structure(&mut self, name: Symbol, structure: GcPointer<Structure>) {
+        self.global_data.register_structure(name, structure);
+    }
+
     pub fn init(&mut self) {
         self.init_global_data().expect("Init Global Data Failed");
         self.init_global_object()

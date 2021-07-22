@@ -283,7 +283,6 @@ impl JsClass for JsSymbolObject {
         define_jsclass!(
             JsSymbolObject,
             Symbol,
-            Symbol,
             None,
             Some(trace),
             Some(deser),

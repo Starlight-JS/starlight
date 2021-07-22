@@ -136,6 +136,15 @@ impl JsObject {
 
         &mut *self.data::<JsFunction>()
     }
+
+    pub fn as_data<T>(&mut self) -> &mut T
+    where
+        T: JsClass,
+    {
+        assert!(self.is_class(T::class()));
+        &mut *self.data::<T>()
+    }
+
     pub fn as_promise(&self) -> &JsPromise {
         assert_eq!(self.tag, ObjectTag::Ordinary);
         assert!(self.is_class(JsPromise::class()));
@@ -197,7 +206,7 @@ impl GcCell for JsObject {
         (Self::deserialize as _, Self::allocate as _)
     }
     fn compute_size(&self) -> usize {
-        object_size_with_tag(self.tag, self.class)
+        object_size_with_additional(self.class)
     }
 }
 impl Drop for JsObject {
@@ -218,20 +227,13 @@ impl Drop for JsObject {
     }
 }
 
-pub fn object_size_with_tag(tag: ObjectTag, cls: &Class) -> usize {
-    let size = size_of::<JsObject>()
+pub fn object_size_with_additional(cls: &Class) -> usize {
+    size_of::<JsObject>()
         + if let Some(sz) = cls.additional_size {
             sz()
         } else {
             0
-        };
-    match tag {
-        ObjectTag::Global => size + size_of::<JsGlobal>(),
-        ObjectTag::Function => size + size_of::<JsFunction>(),
-        ObjectTag::NormalArguments => size + size_of::<JsArguments>(),
-        ObjectTag::String => size + size_of::<JsStringObject>(),
-        _ => size,
-    }
+        }
 }
 
 fn is_absent_descriptor(desc: &PropertyDescriptor) -> bool {

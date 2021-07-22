@@ -114,7 +114,6 @@ impl JsClass for RegExp {
         define_jsclass!(
             RegExp,
             RegExp,
-            Object,
             Some(drop_regexp_fn),
             None,
             Some(deser),

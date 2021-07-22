@@ -781,7 +781,6 @@ impl JsClass for JsGeneratorFunction {
         define_jsclass!(
             JsGeneratorFunction,
             Generator,
-            Object,
             Some(drop_generator),
             Some(generator_trace),
             Some(generator_deser),

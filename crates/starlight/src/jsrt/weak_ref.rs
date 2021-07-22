@@ -34,7 +34,6 @@ impl JsClass for JsWeakRef {
         define_jsclass!(
             JsWeakRef,
             WeakRef,
-            Object,
             None,
             Some(trace),
             Some(deser),

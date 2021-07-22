@@ -31,7 +31,6 @@ impl JsClass for NumberObject {
         define_jsclass!(
             NumberObject,
             Object,
-            Object,
             None,
             None,
             Some(deser),

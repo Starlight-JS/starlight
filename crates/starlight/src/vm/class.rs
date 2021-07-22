@@ -2,7 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use super::{context::Context, method_table::MethodTable, object::{EnumerationMode, JsHint, JsObject}, property_descriptor::PropertyDescriptor, slot::Slot, symbol_table::Symbol, value::JsValue};
+use super::{
+    context::Context,
+    method_table::MethodTable,
+    object::{EnumerationMode, JsHint, JsObject},
+    property_descriptor::PropertyDescriptor,
+    slot::Slot,
+    symbol_table::Symbol,
+    value::JsValue,
+};
 use crate::gc::{
     cell::{GcPointer, Tracer},
     snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
@@ -27,6 +35,7 @@ pub struct Class {
 #[macro_export]
 macro_rules! define_jsclass {
     ($class: ident, $name: ident) => {{
+        define_additional_size!($class);
         static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
             name: stringify!($name),
             method_table: js_method_table!($class),
@@ -34,14 +43,13 @@ macro_rules! define_jsclass {
             trace: None,
             serialize: None,
             deserialize: None,
-            additional_size: None,
+            additional_size: Some(additional_size),
         };
         &CLASS
     }};
-    ($class: ident,$name : ident,$sym: ident,$fin: expr,$trace: expr,$deser: expr,$ser: expr,$size: expr) => {{
+    ($class: ident,$name : ident ,$fin: expr,$trace: expr,$deser: expr,$ser: expr,$size: expr) => {{
         static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
             name: stringify!($name),
-            // ty: $crate::vm::class::JsClassType::$sym as _,
             method_table: js_method_table!($class),
             drop: $fin,
             trace: $trace,
@@ -53,9 +61,21 @@ macro_rules! define_jsclass {
     }};
 }
 
+#[macro_export]
+macro_rules! define_additional_size {
+    ($class:ident) => {
+        extern "C" fn additional_size() -> usize {
+            std::mem::size_of::<$class>()
+        }
+    };
+}
+
 #[allow(non_snake_case)]
 pub trait JsClass {
     fn class() -> &'static Class;
+    fn init(_ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        Ok(())
+    }
     fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,
         ctx: GcPointer<Context>,
