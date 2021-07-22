@@ -19,6 +19,7 @@ use crate::{
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
+    ptr::drop_in_place,
     u32, u8, usize,
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
@@ -159,6 +160,16 @@ pub struct VirtualMachine {
 }
 
 impl VirtualMachine {
+    /// Frees all the memory allocated for the VM instance.     
+    ///
+    /// # Safety
+    /// Unsafe to call if instance of VM is still used somewhere, should be called only when you're sure VM is not used anywhere.
+    ///
+    ///
+    pub unsafe fn dispose(&mut self) {
+        drop_in_place(self);
+    }
+
     /// initialize a VirtualMachine with an async scheduler
     /// the async scheduler is used to asynchronously run jobs with the VirtualMachine
     /// this can be used for things like Promises, setImmediate, async functions
@@ -181,9 +192,9 @@ impl VirtualMachine {
     /// }));
     /// ```
     pub fn with_async_scheduler(
-        mut self: Box<Self>,
+        mut self: VirtualMachineRef,
         scheduler: Box<dyn Fn(Box<dyn FnOnce(GcPointer<Context>)>)>,
-    ) -> Box<Self> {
+    ) -> VirtualMachineRef {
         self.sched_async_func = Some(scheduler);
         self
     }

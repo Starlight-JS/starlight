@@ -33,8 +33,8 @@ pub mod _win {
         }
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
-            let offset = BLOCK_SIZE - (self.start as usize + size_of::<VirtualMachine>()) % BLOCK_SIZE;
-            unsafe { self.start.add(offset) as *mut u8 }
+            let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
+            unsafe { self.start.add(offset).add(BLOCK_SIZE) as *mut u8 }
         }
 
         pub fn start(&self) -> *mut u8 {
@@ -103,8 +103,9 @@ pub mod _unix {
         }
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
-            let offset = BLOCK_SIZE - (self.start as usize + size_of::<VirtualMachine>()) % BLOCK_SIZE;
-            unsafe { self.start.add(offset) as *mut u8 }
+            assert!(size_of::<VirtualMachine>() <= BLOCK_SIZE);
+            let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
+            unsafe { self.start.add(offset).add(BLOCK_SIZE) as *mut u8 }
         }
 
         pub fn start(&self) -> *mut u8 {

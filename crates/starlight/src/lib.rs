@@ -9,6 +9,7 @@
     const_raw_ptr_deref,
     stmt_expr_attributes,
     const_type_id,
+    arbitrary_self_types,
     pattern
 )]
 #![allow(
