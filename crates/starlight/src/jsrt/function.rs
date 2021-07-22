@@ -191,15 +191,16 @@ impl Builtin for JsFunction {
             .function_struct
             .unwrap()
             .change_prototype_with_no_transition(prototype);
+        ctx.global_data
+            .function_struct
+            .unwrap()
+            .change_prototype_with_no_transition(prototype);
         ctx.global_data.func_prototype = Some(prototype);
 
         let structure = prototype
             .structure()
             .change_prototype_transition(ctx, Some(obj_proto));
         (*prototype).structure = structure;
-
-        ctx.global_data.function_struct.unwrap().prototype = Some(prototype);
-
         let mut constructor = JsNativeFunction::new(ctx, name, function_prototype, 1);
 
         def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
@@ -211,6 +212,7 @@ impl Builtin for JsFunction {
         def_native_method!(ctx, prototype, toString, function_to_string, 0, W | C)?;
 
         ctx.global_object().put(ctx, name, constructor, false)?;
+
         Ok(())
     }
 }

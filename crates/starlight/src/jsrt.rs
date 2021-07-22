@@ -38,6 +38,7 @@ pub mod weak_ref;
 pub(crate) fn print(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     for i in 0..args.size() {
         let value = args.at(i);
+        println!("{:?}", value);
         let string = value.to_string(ctx)?;
         print!("{}", string);
     }

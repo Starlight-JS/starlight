@@ -1,6 +1,9 @@
 use std::fs::read_to_string;
 
-use starlight::{prelude::Options, Platform};
+use starlight::{
+    prelude::{JsHint, Options},
+    Platform,
+};
 
 fn main() {
     Platform::initialize();
@@ -19,10 +22,8 @@ fn main() {
         .to_object(ctx)
         .unwrap()
         .get(ctx, "hasOwnProperty")
-        .unwrap()
-        .to_object(ctx)
-        .unwrap()
-        .as_function_mut();
+        .unwrap();
+    println!("{:?}", &func);
 
     ctx.eval("print(Object.prototype.hasOwnProperty)").unwrap();
 }
