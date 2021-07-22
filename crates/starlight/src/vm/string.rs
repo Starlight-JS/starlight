@@ -62,7 +62,11 @@ pub struct JsStringObject {
     pub value: GcPointer<JsString>,
 }
 
-define_jsclass!(JsStringObject, String);
+impl JsClass for JsStringObject {
+    fn class() -> &'static Class {
+        define_jsclass!(JsStringObject, String)
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsStringObject {
@@ -70,7 +74,7 @@ impl JsStringObject {
         let obj = JsObject::new(
             ctx,
             &ctx.global_data().string_structure.unwrap(),
-            Self::get_class(),
+            Self::class(),
             ObjectTag::String,
         );
         unsafe {
@@ -80,7 +84,7 @@ impl JsStringObject {
     }
 
     pub fn new_plain(ctx: GcPointer<Context>, map: &GcPointer<Structure>) -> GcPointer<JsObject> {
-        let obj = JsObject::new(ctx, map, Self::get_class(), ObjectTag::String);
+        let obj = JsObject::new(ctx, map, Self::class(), ObjectTag::String);
         unsafe {
             (obj.data::<Self>() as *mut _ as *mut Self).write(Self {
                 value: JsString::new(ctx, ""),

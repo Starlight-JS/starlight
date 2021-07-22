@@ -109,16 +109,20 @@ extern "C" fn fsz() -> usize {
     size_of::<RegExp>()
 }
 
-define_jsclass!(
-    RegExp,
-    RegExp,
-    Object,
-    Some(drop_regexp_fn),
-    None,
-    Some(deser),
-    Some(ser),
-    Some(fsz)
-);
+impl JsClass for RegExp {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            RegExp,
+            RegExp,
+            Object,
+            Some(drop_regexp_fn),
+            None,
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
+    }
+}
 
 impl GcPointer<Context> {
     pub(crate) fn init_regexp_in_global_object(mut self) -> Result<(), JsValue> {
@@ -150,7 +154,7 @@ impl GcPointer<Context> {
             .unwrap()
             .change_prototype_with_no_transition(obj_proto);
 
-        let mut proto = JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &proto_map, JsObject::class(), ObjectTag::Ordinary);
 
         let mut constructor = JsNativeFunction::new(self, "RegExp".intern(), regexp_constructor, 2);
 
@@ -180,7 +184,7 @@ pub fn regexp_split_fast(ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
     }
     let re = args.at(0).get_jsobject();
     let regexp = re.data::<RegExp>();
-    if unlikely(!re.is_class(RegExp::get_class())) {
+    if unlikely(!re.is_class(RegExp::class())) {
         return Err(JsValue::new(ctx.new_type_error(
             "Regex.@@splitFast requires regexp object as first argument",
         )));
@@ -232,7 +236,7 @@ pub fn regexp_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         ),
         arg if arg.is_jsobject() => {
             let obj = arg.get_jsobject();
-            if obj.is_class(RegExp::get_class()) {
+            if obj.is_class(RegExp::class()) {
                 (
                     obj.data::<RegExp>().original_source.clone(),
                     obj.data::<RegExp>().original_flags.clone(),
@@ -312,7 +316,7 @@ pub fn regexp_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         original_source: regex_body,
         original_flags: regex_flags,
     };
-    let mut this = JsObject::new(ctx, &structure, RegExp::get_class(), ObjectTag::Regex);
+    let mut this = JsObject::new(ctx, &structure, RegExp::class(), ObjectTag::Regex);
     *this.data::<RegExp>() = ManuallyDrop::new(regexp);
     let f = JsString::new(ctx, soctxed_flags);
     this.put(ctx, "flags".intern(), JsValue::new(f), false)?;
@@ -332,7 +336,7 @@ pub fn regexp_test(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
     let mut last_index = this.get(ctx, "lastIndex".intern())?.to_int32(ctx)? as usize;
 
     let arg_str = args.at(0).to_string(ctx)?;
-    if this.is_class(RegExp::get_class()) {
+    if this.is_class(RegExp::class()) {
         let result = if let Some(m) = this
             .data::<RegExp>()
             .matcher
@@ -372,7 +376,7 @@ pub fn regexp_exec(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
     let mut this = args.this.get_jsobject();
     let mut last_index = this.get(ctx, "lastIndex".intern())?.to_int32(ctx)? as usize;
     let mut obj = this;
-    if unlikely(!this.is_class(RegExp::get_class())) {
+    if unlikely(!this.is_class(RegExp::class())) {
         return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
         )));
@@ -427,7 +431,7 @@ pub fn regexp_exec(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
 }
 
 fn to_regexp(val: JsValue) -> Option<GcPointer<JsObject>> {
-    if val.is_jsobject() && val.get_jsobject().is_class(RegExp::get_class()) {
+    if val.is_jsobject() && val.get_jsobject().is_class(RegExp::class()) {
         return Some(val.get_jsobject());
     }
     None

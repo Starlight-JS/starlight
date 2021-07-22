@@ -8,7 +8,7 @@ use crate::{
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
+        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
             return Ok(JsValue::new(
                 NumberObject::to_ref(&obj.get_jsobject()).get(),
             ));
@@ -24,7 +24,7 @@ pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
 pub fn number_clz(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let x = if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
+        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
             NumberObject::to_ref(&obj.get_jsobject()).get() as u32
         } else {
             return Err(JsValue::new(ctx.new_type_error(
@@ -69,7 +69,7 @@ pub fn number_is_finite(_ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
 fn this_number_val(ctx: GcPointer<Context>, obj: JsValue) -> Result<f64, JsValue> {
     let num;
     if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
+        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
             num = NumberObject::to_ref(&obj.get_jsobject()).get();
         } else {
             return Err(JsValue::new(ctx.new_type_error(
@@ -217,7 +217,7 @@ pub fn number_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     let obj = args.this;
     let num;
     if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::get_class()) {
+        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
             num = NumberObject::to_ref(&obj.get_jsobject()).get();
         } else {
             return Err(JsValue::new(ctx.new_type_error(

@@ -6,6 +6,7 @@ use crate::{
         arguments::Arguments,
         array::*,
         attributes::*,
+        class::JsClass,
         context::Context,
         error::JsTypeError,
         object::{JsObject, ObjectTag, *},
@@ -51,7 +52,7 @@ pub fn object_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     }
     let obj = this_binding.to_object(ctx)?;
 
-    let s = format!("[object {}]", obj.class().name);
+    let s = format!("[object {}]", obj.class.name);
     Ok(JsValue::encode_object_value(JsString::new(ctx, s)))
 }
 
@@ -73,7 +74,7 @@ pub fn object_create(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
                 structure = stack,
                 Structure::new_unique_indexed(ctx, *prototype, false)
             );
-            let res = JsObject::new(ctx, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+            let res = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
             if !args.at(1).is_undefined() {
                 let mut res_val = JsValue::new(res);
                 let mut args_ = [res_val, properties];

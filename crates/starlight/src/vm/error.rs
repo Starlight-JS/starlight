@@ -17,7 +17,12 @@ pub struct JsSyntaxError;
 pub struct JsTypeError;
 pub struct JsURIError;
 
-define_jsclass!(JsError, Error);
+impl JsClass for JsError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsError, Error)
+    }
+}
+
 impl JsError {
     pub fn new(
         mut ctx: GcPointer<Context>,
@@ -29,7 +34,7 @@ impl JsError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(
@@ -51,7 +56,12 @@ impl JsError {
     }
 }
 
-define_jsclass!(JsEvalError, Error, EvalError);
+impl JsClass for JsEvalError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsEvalError, Error)
+    }
+}
+
 impl JsEvalError {
     pub fn new(
         mut ctx: GcPointer<Context>,
@@ -63,7 +73,7 @@ impl JsEvalError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().eval_error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(
@@ -85,7 +95,11 @@ impl JsEvalError {
     }
 }
 
-define_jsclass!(JsRangeError, Error, RangeError);
+impl JsClass for JsRangeError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsRangeError, Error)
+    }
+}
 
 impl JsRangeError {
     pub fn new(
@@ -98,7 +112,7 @@ impl JsRangeError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().range_error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(
@@ -120,7 +134,11 @@ impl JsRangeError {
     }
 }
 
-define_jsclass!(JsReferenceError, Error, ReferenceError);
+impl JsClass for JsReferenceError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsReferenceError, Error)
+    }
+}
 
 impl JsReferenceError {
     pub fn new(
@@ -133,7 +151,7 @@ impl JsReferenceError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().reference_error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(
@@ -155,7 +173,11 @@ impl JsReferenceError {
     }
 }
 
-define_jsclass!(JsSyntaxError, Error, SyntaxError);
+impl JsClass for JsSyntaxError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsSyntaxError, Error)
+    }
+}
 
 impl JsSyntaxError {
     pub fn new(
@@ -168,7 +190,7 @@ impl JsSyntaxError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().syntax_error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(
@@ -190,7 +212,11 @@ impl JsSyntaxError {
     }
 }
 
-define_jsclass!(JsTypeError, Error, TypeError);
+impl JsClass for JsTypeError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsTypeError, Error)
+    }
+}
 impl JsTypeError {
     pub fn new(
         mut ctx: GcPointer<Context>,
@@ -202,7 +228,7 @@ impl JsTypeError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().type_error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(
@@ -224,7 +250,12 @@ impl JsTypeError {
     }
 }
 
-define_jsclass!(JsURIError, Error, URIError);
+impl JsClass for JsURIError {
+    fn class() -> &'static Class {
+        define_jsclass!(JsURIError, Error)
+    }
+}
+
 impl JsURIError {
     pub fn new(
         mut ctx: GcPointer<Context>,
@@ -236,7 +267,7 @@ impl JsURIError {
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().uri_error_structure.unwrap())
         );
-        let mut obj = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Ordinary);
         let stack = ctx.stacktrace();
         let str = JsString::new(ctx, stack);
         let _ = obj.define_own_property(

@@ -4,7 +4,7 @@ use crate::{
     constant::S_CONSTURCTOR,
     define_jsclass,
     prelude::*,
-    vm::{class::JsClass, context::Context, method_table::*, object::TypedJsObject},
+    vm::{class::Class, context::Context, method_table::*, object::TypedJsObject},
     JsTryFrom,
 };
 pub struct BooleanObject {
@@ -21,21 +21,26 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<BooleanObject>()
 }
-define_jsclass!(
-    BooleanObject,
-    Boolean,
-    Object,
-    None,
-    None,
-    Some(deser),
-    Some(ser),
-    Some(fsz)
-);
+
+impl JsClass for BooleanObject {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            BooleanObject,
+            Boolean,
+            Object,
+            None,
+            None,
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
+    }
+}
 
 impl BooleanObject {
     pub fn new(ctx: GcPointer<Context>, val: bool) -> GcPointer<JsObject> {
         let proto = ctx.global_data().boolean_structure.unwrap();
-        let mut obj = JsObject::new(ctx, &proto, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &proto, Self::class(), ObjectTag::Ordinary);
         *obj.data::<Self>() = ManuallyDrop::new(Self { data: val });
         obj
     }
@@ -47,12 +52,6 @@ fn this_boolean_value(val: JsValue, ctx: GcPointer<Context>) -> Result<bool, JsV
     }
     let obj = TypedJsObject::<BooleanObject>::try_from(ctx, val)?;
     Ok(obj.data)
-}
-
-impl JsClass for BooleanObject {
-    fn class() -> &'static Class {
-        Self::get_class()
-    }
 }
 
 pub fn boolean_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -92,7 +91,7 @@ impl GcPointer<Context> {
         self.global_data.boolean_structure = Some(map);
         let obj_proto = self.global_data().get_object_prototype();
         let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
-        let mut proto = JsObject::new(self, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &structure, JsObject::class(), ObjectTag::Ordinary);
         map.change_prototype_with_no_transition(proto);
 
         let mut ctor = JsNativeFunction::new(self, "Boolean".intern(), boolean_constructor, 1);

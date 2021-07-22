@@ -684,7 +684,7 @@ pub unsafe fn eval(
                 letroot!(funcc = gcstack, func.get_jsobject());
                 let map = func_object.func_construct_map(rt)?;
                 let func = func_object.as_function_mut();
-                let object = JsObject::new(rt, &map, JsObject::get_class(), ObjectTag::Ordinary);
+                let object = JsObject::new(rt, &map, JsObject::class(), ObjectTag::Ordinary);
                 letroot!(
                     args_ = gcstack,
                     Arguments::new(JsValue::new(object), &mut args)

@@ -17,18 +17,7 @@ use crate::{
     },
 };
 
-use super::{
-    error::{JsRangeError, JsReferenceError, JsTypeError},
-    function::JsNativeFunction,
-    global::JsGlobal,
-    interpreter::{frame::CallFrame, stack::Stack},
-    object::{JsObject, ObjectTag},
-    string::JsString,
-    structure::Structure,
-    symbol_table::{self, Internable, JsSymbol, Symbol},
-    value::JsValue,
-    GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef,
-};
+use super::{GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef, class::JsClass, error::{JsRangeError, JsReferenceError, JsTypeError}, function::JsNativeFunction, global::JsGlobal, interpreter::{frame::CallFrame, stack::Stack}, object::{JsObject, ObjectTag}, string::JsString, structure::Structure, symbol_table::{self, Internable, JsSymbol, Symbol}, value::JsValue};
 
 use crate::gc::snapshot::deserializer::Deserializable;
 
@@ -144,7 +133,7 @@ impl GcPointer<Context> {
     pub fn init_global_data(mut self) -> Result<(), JsValue> {
         self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
         let s = Structure::new_unique_indexed(self, None, false);
-        let mut proto = JsObject::new(self, &s, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &s, JsObject::class(), ObjectTag::Ordinary);
 
         self.global_data.object_prototype = Some(proto);
         self.global_data.function_struct = Some(Structure::new_indexed(self, None, false));

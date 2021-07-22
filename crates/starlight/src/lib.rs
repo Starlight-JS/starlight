@@ -187,7 +187,7 @@ pub mod prelude {
         arguments::Arguments,
         array::JsArray,
         attributes::*,
-        class::{Class, JsClassMethodTable},
+        class::{Class, JsClass},
         error::*,
         function::*,
         method_table::MethodTable,

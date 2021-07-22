@@ -96,7 +96,11 @@ pub struct JsArguments {
     pub env: GcPointer<Environment>,
 }
 
-define_jsclass!(JsArguments, Arguments);
+impl JsClass for JsArguments {
+    fn class() -> &'static Class {
+        define_jsclass!(JsArguments, Arguments)
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsArguments {
@@ -207,7 +211,7 @@ impl JsArguments {
         let mut obj = JsObject::new(
             ctx,
             &struct_,
-            JsArguments::get_class(),
+            JsArguments::class(),
             ObjectTag::NormalArguments,
         );
 

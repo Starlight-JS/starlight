@@ -15,7 +15,7 @@ pub fn data_view_prototype_buffer(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.buffer called on a non DataView object",
         )));
@@ -27,7 +27,7 @@ pub fn data_view_prototype_byte_offset(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.byteOffset called on a non DataView object",
         )));
@@ -39,7 +39,7 @@ pub fn data_view_prototype_byte_length(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.byteLength called on a non DataView object",
         )));
@@ -52,7 +52,7 @@ pub fn data_view_prototype_get<T: SwapByteOrder + Into<JsValue> + Copy>(
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
     let this = args.this.to_object(ctx)?;
-    if !this.is_class(JsDataView::get_class()) {
+    if !this.is_class(JsDataView::class()) {
         return Err(JsValue::new(ctx.new_type_error(
             "DataView.prototype.get<T> called on a non DataView object",
         )));
@@ -145,7 +145,7 @@ pub fn data_view_constructor(
     }
 
     let buffer = args.at(0).to_object(ctx).ok().and_then(|object| {
-        if object.is_class(JsArrayBuffer::get_class()) {
+        if object.is_class(JsArrayBuffer::class()) {
             Some(object)
         } else {
             None
@@ -200,7 +200,7 @@ impl GcPointer<Context> {
             .data_view_structure
             .unwrap()
             .change_prototype_transition(self, Some(obj_proto));
-        let mut proto = JsObject::new(self, &proto_map, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(self, &proto_map, JsObject::class(), ObjectTag::Ordinary);
         self.global_data
             .data_view_structure
             .unwrap()

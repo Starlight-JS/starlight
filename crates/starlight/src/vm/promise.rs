@@ -34,16 +34,20 @@ pub struct JsPromise {
     resolution: Option<Result<JsValue, JsValue>>,
 }
 
-define_jsclass!(
-    JsPromise,
-    Promise,
-    Object,
-    Some(drop_promise_fn),
-    Some(prom_trace),
-    Some(deser),
-    Some(ser),
-    Some(prom_size)
-);
+impl JsClass for JsPromise {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            JsPromise,
+            Promise,
+            Object,
+            Some(drop_promise_fn),
+            Some(prom_trace),
+            Some(deser),
+            Some(ser),
+            Some(prom_size)
+        )
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsPromise {
@@ -107,7 +111,7 @@ impl JsPromise {
             .to_object(ctx)?;
 
         let structure = Structure::new_indexed(ctx, Some(proto), false);
-        let mut obj = JsObject::new(ctx, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &structure, JsPromise::class(), ObjectTag::Ordinary);
 
         *obj.data::<JsPromise>() = ManuallyDrop::new(JsPromise {
             subs: vec![],
@@ -153,7 +157,7 @@ impl JsPromise {
         // todo add handler to every promise with index, resolve that index in vec, check followup action based on mode
 
         let structure = Structure::new_indexed(ctx, Some(proto), false);
-        let mut obj = JsObject::new(ctx, &structure, JsPromise::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &structure, JsPromise::class(), ObjectTag::Ordinary);
 
         *obj.data::<JsPromise>() = ManuallyDrop::new(JsPromise {
             subs: vec![],
@@ -294,9 +298,7 @@ impl JsPromise {
                 // as per spec this is not done for reject operations
                 let resolution_value = resolution.ok().unwrap();
                 if resolution_value.is_jsobject()
-                    && resolution_value
-                        .get_jsobject()
-                        .is_class(JsPromise::get_class())
+                    && resolution_value.get_jsobject().is_class(JsPromise::class())
                 {
                     // resolved with a promise
                     let mut resolution_object = resolution_value.get_jsobject();

@@ -35,7 +35,7 @@ pub fn initialize_ffi(ctx: GcPointer<Context>) {
     let structure =
         Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
     let mut init = || -> Result<(), JsValue> {
-        let mut proto = JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut proto = JsObject::new(rt, &structure, JsObject::class(), ObjectTag::Ordinary);
         let func = JsNativeFunction::new(rt, "open".intern(), ffi_library_open, 1);
         proto.define_own_property(
             rt,
@@ -51,7 +51,7 @@ pub fn initialize_ffi(ctx: GcPointer<Context>) {
         )?;
         let func_s =
             Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
-        let mut fproto = JsObject::new(rt, &func_s, JsObject::get_class(), ObjectTag::Ordinary);
+        let mut fproto = JsObject::new(rt, &func_s, JsObject::class(), ObjectTag::Ordinary);
         let func = JsNativeFunction::new(rt, "attach".intern(), ffi_function_attach, 1);
         fproto.define_own_property(
             rt,
@@ -711,7 +711,7 @@ impl FFIFunction {
         let mut object = JsObject::new(
             rt,
             &structure,
-            FFIFunction::get_class(),
+            FFIFunction::class(),
             ObjectTag::Ordinary,
         );
         unsafe {
@@ -813,7 +813,7 @@ pub fn ffi_library_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     let lib = FFILibrary::from_pointers(rt, &rnames)?;
     let proto = rt.global_object().get(rt, "FFI".intern())?.get_jsobject();
     let structure = Structure::new_indexed(rt, Some(proto), false);
-    let mut obj = JsObject::new(rt, &structure, FFILibrary::get_class(), ObjectTag::Ordinary);
+    let mut obj = JsObject::new(rt, &structure, FFILibrary::class(), ObjectTag::Ordinary);
     unsafe {
         (obj.data::<FFILibrary>() as *mut ManuallyDrop<FFILibrary> as *mut FFILibrary).write(lib);
     }
@@ -830,7 +830,7 @@ pub fn ffi_function_attach(ctx: GcPointer<Context>, args: &Arguments) -> Result<
                 return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
             }
             let val = val.get_jsobject();
-            if !val.is_class(FFILibrary::get_class()) {
+            if !val.is_class(FFILibrary::class()) {
                 let msg = JsString::new(rt, "function_attach requires library object");
                 return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
             }
@@ -874,7 +874,7 @@ pub fn ffi_function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
             return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
         }
         let val = val.get_jsobject();
-        if !val.is_class(FFIFunction::get_class()) {
+        if !val.is_class(FFIFunction::class()) {
             let msg = JsString::new(rt, "CALL requires FFIFunction object");
             return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
         }

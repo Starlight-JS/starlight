@@ -5,11 +5,7 @@ use crate::prelude::*;
 use std::{collections::HashMap, mem::ManuallyDrop};
 
 use super::{
-    attributes::*,
-    object::{EnumerationMode},
-    property_descriptor::*,
-    slot::*,
-    value::JsValue,
+    attributes::*, object::EnumerationMode, property_descriptor::*, slot::*, value::JsValue,
     Context,
 };
 use super::{method_table::*, symbol_table::Internable};
@@ -35,7 +31,11 @@ unsafe impl Trace for JsGlobal {
     }
 }
 
-define_jsclass!(JsGlobal, global);
+impl JsClass for JsGlobal {
+    fn class() -> &'static Class {
+        define_jsclass!(JsGlobal, global)
+    }
+}
 
 #[allow(non_snake_case)]
 impl JsGlobal {
@@ -45,7 +45,7 @@ impl JsGlobal {
             shape = stack,
             Structure::new_unique_with_proto(ctx, None, false)
         );
-        let js_object = JsObject::new(ctx, &shape, Self::get_class(), ObjectTag::Global);
+        let js_object = JsObject::new(ctx, &shape, Self::class(), ObjectTag::Global);
         {
             *js_object.data::<JsGlobal>() = ManuallyDrop::new(Self {
                 sym_map: Default::default(),

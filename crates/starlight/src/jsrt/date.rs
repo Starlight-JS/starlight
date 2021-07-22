@@ -95,16 +95,21 @@ extern "C" fn deser(object: &mut JsObject, deser: &mut Deserializer) {
     }
 }
 
-define_jsclass!(
-    Date,
-    Date,
-    Date,
-    None,
-    None,
-    Some(deser),
-    Some(ser),
-    Some(fsz)
-);
+impl JsClass for Date {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            Date,
+            Date,
+            Date,
+            None,
+            None,
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
+    }
+}
+
 impl Date {
     /// `Date.prototype.toDateString()`
     ///
@@ -1149,18 +1154,12 @@ impl Date {
         }
     }
 }
-impl JsClass for Date {
-    fn class() -> &'static Class {
-        Self::get_class()
-    }
-}
-
 pub fn date_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
         return Ok(Date::make_date_string(ctx));
     } else {
         let structure = ctx.global_data().date_structure.unwrap();
-        let mut object = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+        let mut object = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
         if args.size() == 0 {
             return Ok(Date::make_date_now(ctx, object));
         } else if args.size() == 1 {
@@ -1244,7 +1243,7 @@ pub fn date_utc(context: GcPointer<Context>, args: &Arguments) -> Result<JsValue
 fn this_time_value(value: JsValue, ctx: GcPointer<Context>) -> Result<Date, JsValue> {
     if value.is_jsobject() {
         let object = value.get_jsobject();
-        if object.is_class(Date::get_class()) {
+        if object.is_class(Date::class()) {
             return Ok(**object.data::<Date>());
         }
     }
@@ -1361,7 +1360,7 @@ impl GcPointer<Context> {
         let mut init = || -> Result<(), JsValue> {
             /*let obj_proto = self.global_data().object_prototype.unwrap();
             let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-            let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+            let mut proto = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
             *proto.data::<Date>() = ManuallyDrop::new(Date(None));
 
             let date_map = Structure::new_indexed(ctx, Some(proto), false);
@@ -1389,7 +1388,7 @@ impl GcPointer<Context> {
 
             let obj_proto = self.global_data().object_prototype.unwrap();
             let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-            let mut proto = JsObject::new(ctx, &structure, Date::get_class(), ObjectTag::Ordinary);
+            let mut proto = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
             *proto.data::<Date>() = ManuallyDrop::new(Date(None));
 
             let date_map = Structure::new_indexed(ctx, Some(proto), false);

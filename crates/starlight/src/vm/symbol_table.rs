@@ -278,16 +278,20 @@ extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
     obj.data::<JsSymbolObject>().sym.trace(tracer);
 }
 
-define_jsclass!(
-    JsSymbolObject,
-    Symbol,
-    Symbol,
-    None,
-    Some(trace),
-    Some(deser),
-    Some(ser),
-    Some(fsz)
-);
+impl JsClass for JsSymbolObject {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            JsSymbolObject,
+            Symbol,
+            Symbol,
+            None,
+            Some(trace),
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
+    }
+}
 impl JsSymbolObject {
     pub fn symbol(&self) -> GcPointer<JsSymbol> {
         self.sym
@@ -295,14 +299,8 @@ impl JsSymbolObject {
 
     pub fn new(ctx: GcPointer<Context>, sym: GcPointer<JsSymbol>) -> GcPointer<JsObject> {
         let map = ctx.global_data().symbol_structure.unwrap();
-        let mut obj = JsObject::new(ctx, &map, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &map, Self::class(), ObjectTag::Ordinary);
         *obj.data::<Self>() = ManuallyDrop::new(Self { sym });
         obj
-    }
-}
-
-impl JsClass for JsSymbolObject {
-    fn class() -> &'static Class {
-        Self::get_class()
     }
 }

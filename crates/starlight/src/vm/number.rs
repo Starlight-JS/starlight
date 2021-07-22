@@ -26,23 +26,27 @@ extern "C" fn sz() -> usize {
     size_of::<NumberObject>()
 }
 
-define_jsclass!(
-    NumberObject,
-    Object,
-    Object,
-    None,
-    None,
-    Some(deser),
-    Some(ser),
-    Some(sz)
-);
+impl JsClass for NumberObject {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            NumberObject,
+            Object,
+            Object,
+            None,
+            None,
+            Some(deser),
+            Some(ser),
+            Some(sz)
+        )
+    }
+}
 
 impl NumberObject {
     pub fn new(ctx: GcPointer<Context>, value: f64) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             ctx,
             &ctx.global_data().number_structure.unwrap(),
-            Self::get_class(),
+            Self::class(),
             ObjectTag::Number,
         );
         *obj.data::<Self>() = ManuallyDrop::new(Self { value });
@@ -53,7 +57,7 @@ impl NumberObject {
         structure: GcPointer<Structure>,
         value: f64,
     ) -> GcPointer<JsObject> {
-        let mut obj = JsObject::new(ctx, &structure, Self::get_class(), ObjectTag::Number);
+        let mut obj = JsObject::new(ctx, &structure, Self::class(), ObjectTag::Number);
         *obj.data::<Self>() = ManuallyDrop::new(Self { value });
         obj
     }

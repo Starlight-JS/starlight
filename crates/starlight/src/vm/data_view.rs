@@ -25,16 +25,20 @@ pub struct JsDataView {
     length: usize,
 }
 
-define_jsclass!(
-    JsDataView,
-    DataView,
-    DataView,
-    None,
-    Some(trace_data_view),
-    None,
-    None,
-    Some(data_view_size)
-);
+impl JsClass for JsDataView {
+    fn class() -> &'static Class {
+        define_jsclass!(
+            JsDataView,
+            DataView,
+            DataView,
+            None,
+            Some(trace_data_view),
+            None,
+            None,
+            Some(data_view_size)
+        )
+    }
+}
 
 impl JsDataView {
     pub fn get_buffer(&self) -> TypedJsObject<JsArrayBuffer> {
@@ -113,7 +117,7 @@ impl JsDataView {
         length: usize,
     ) -> GcPointer<JsObject> {
         let map = ctx.global_data().data_view_structure.unwrap();
-        let mut obj = JsObject::new(ctx, &map, Self::get_class(), ObjectTag::Ordinary);
+        let mut obj = JsObject::new(ctx, &map, Self::class(), ObjectTag::Ordinary);
         *obj.data::<Self>() = ManuallyDrop::new(Self {
             buffer,
             offset,
@@ -130,10 +134,4 @@ extern "C" fn trace_data_view(tracer: &mut dyn Tracer, obj: &mut JsObject) {
 
 extern "C" fn data_view_size() -> usize {
     size_of::<JsDataView>()
-}
-
-impl JsClass for JsDataView {
-    fn class() -> &'static super::class::Class {
-        Self::get_class()
-    }
 }
