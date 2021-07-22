@@ -175,6 +175,7 @@ impl BlockAllocator {
             mmap: map,
         };
         debug_assert!(this.data as usize % BLOCK_SIZE == 0);
+        this.mmap.commit(this.mmap.start(), BLOCK_SIZE);
         this
     }
 
