@@ -480,7 +480,7 @@ impl ByteCompiler {
         //self.finish(&mut self.vm);
         /*#[cfg(feature = "perf")]
         {
-            self.rt.perf.get_perf(crate::vm::perf::Perf::INVALID);
+            self.vm.perf.get_perf(crate::vm::perf::Perf::INVALID);
         }*/
         Ok(())
     }

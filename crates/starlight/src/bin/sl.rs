@@ -19,7 +19,7 @@ fn main() {
     let options = Options::from_args();
 
     let mut deserialized = false;
-    let mut rt = if Path::new(SNAPSHOT_FILENAME).exists() {
+    let mut vm = if Path::new(SNAPSHOT_FILENAME).exists() {
         let mut src = std::fs::read(SNAPSHOT_FILENAME);
         match src {
             Ok(ref mut src) => {
@@ -27,7 +27,7 @@ fn main() {
                 bytes.copy_from_slice(&src[0..8]);
                 let heap = default_heap(&options);
                 if u64::from_ne_bytes(bytes) != BIN_ID {
-                    Runtime::with_heap(heap, options, None)
+                    VirtualMachine::with_heap(heap, options, None)
                 } else {
                     let snapshot = &src[8..];
                     deserialized = true;
@@ -37,39 +37,39 @@ fn main() {
             }
             Err(_) => {
                 let heap = default_heap(&options);
-                Runtime::with_heap(heap, options, None)
+                VirtualMachine::with_heap(heap, options, None)
             }
         }
     } else {
         let heap = default_heap(&options);
-        Runtime::with_heap(heap, options, None)
+        VirtualMachine::with_heap(heap, options, None)
     };
 
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
-    if rt.options().enable_ffi {
-        rt.add_ffi();
+    if vm.options().enable_ffi {
+        vm.add_ffi();
     }
 
     let mut ctx = if !deserialized {
-        Context::new(&mut rt)
+        Context::new(&mut vm)
     } else {
-        rt.context(0)
+        vm.context(0)
     };
 
     if !deserialized {
-        let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
+        let snapshot = Snapshot::take(false, &mut vm, |_, _| {});
         let mut buf = Vec::<u8>::with_capacity(8 + snapshot.buffer.len());
         buf.extend(&BIN_ID.to_ne_bytes());
         buf.extend(snapshot.buffer.iter());
         std::fs::write(SNAPSHOT_FILENAME, &buf).unwrap();
     }
 
-    let gcstack = rt.shadowstack();
+    let gcstack = vm.shadowstack();
 
-    let string = std::fs::read_to_string(&rt.options().file);
+    let string = std::fs::read_to_string(&vm.options().file);
     match string {
         Ok(source) => {
-            let name = rt.options().file.as_os_str().to_str().unwrap().to_string();
+            let name = vm.options().file.as_os_str().to_str().unwrap().to_string();
             letroot!(
                 function = gcstack,
                 match ctx.compile_module(&name, "<script>", &source,) {
@@ -127,6 +127,8 @@ fn main() {
         }
     }
 
-    drop(rt);
+    unsafe {
+        vm.dispose();
+    }
     std::process::exit(0);
 }

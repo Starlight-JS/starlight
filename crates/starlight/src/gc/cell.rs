@@ -252,10 +252,10 @@ impl Deserializable for WeakSlot {
         unreachable!()
     }
     unsafe fn allocate(
-        rt: &mut crate::vm::Runtime,
+        vm: &mut crate::vm::VirtualMachine,
         deser: &mut crate::prelude::Deserializer,
     ) -> *mut GcPointerBase {
-        rt.gc.allocate_raw(
+        vm.gc.allocate_raw(
             vtable_of_type::<Self>() as _,
             size_of::<Self>(),
             TypeId::of::<Self>(),

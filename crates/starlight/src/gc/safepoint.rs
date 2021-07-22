@@ -10,7 +10,7 @@ use core::{
 };
 use parking_lot::{lock_api::RawMutex, Condvar, Mutex, RawMutex as Lock};
 
-use crate::vm::RuntimeRef;
+use crate::vm::VirtualMachineRef;
 
 /// Used to bring all threads attached to it to a safepoint such
 /// that e.g. a garbage collection can be performed.
@@ -261,7 +261,7 @@ pub struct Mutator {
     state: Atomic<MutatorState>,
     state_change: Condvar,
     state_mutex: Mutex<()>,
-    rt: RuntimeRef,
+    vm: VirtualMachineRef,
     main_thread: bool,
 }
 
@@ -273,8 +273,8 @@ impl Mutator {
     #[cold]
     fn safepoint_slowpath(&self) {
         if self.main_thread {
-            let mut rt = self.rt;
-            rt.gc.gc();
+            let mut vm = self.vm;
+            vm.gc.gc();
         } else {
             let expected = MutatorState::SafepointRequested;
             assert!(self
@@ -286,7 +286,7 @@ impl Mutator {
                     Ordering::Relaxed,
                 )
                 .is_ok());
-            self.rt.safepoint.wait_in_safepoint();
+            self.vm.safepoint.wait_in_safepoint();
         }
     }
 
@@ -321,9 +321,9 @@ impl Mutator {
     }
     fn park_slowpath(&self) {
         if self.main_thread {
-            let mut rt = self.rt;
+            let mut vm = self.vm;
             loop {
-                rt.gc.gc();
+                vm.gc.gc();
                 if self
                     .state
                     .compare_exchange(
@@ -347,7 +347,7 @@ impl Mutator {
                     Ordering::Relaxed
                 )
                 .is_ok());
-            self.rt.safepoint.notify_park();
+            self.vm.safepoint.notify_park();
         }
     }
     fn unpark_slowpath(&self) {
@@ -361,8 +361,8 @@ impl Mutator {
                     Ordering::Relaxed,
                 )
                 .is_ok());
-            let mut rt = self.rt;
-            rt.gc.gc();
+            let mut vm = self.vm;
+            vm.gc.gc();
         } else {
             loop {
                 if self
@@ -375,7 +375,7 @@ impl Mutator {
                     )
                     .is_err()
                 {
-                    self.rt.safepoint.wait_in_unpark();
+                    self.vm.safepoint.wait_in_unpark();
                 } else {
                     return;
                 }

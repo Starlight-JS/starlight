@@ -39,4 +39,7 @@ fn main() {
     let mut ctx = runtime.new_context();
     println!("Init context cost: {:?}", start.elapsed());
     ctx.eval("print('hello,world');print=null").unwrap();
+    unsafe {
+        runtime.dispose();
+    }
 }

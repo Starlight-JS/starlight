@@ -1,4 +1,4 @@
-use crate::vm::RuntimeRef;
+use crate::vm::VirtualMachineRef;
 
 use super::{block_directory::BlockDirectory, subspace::Subspace, weak_set::WeakSet};
 
@@ -67,7 +67,7 @@ impl MarkedBlockHandle {
 #[allow(dead_code)]
 pub struct MarkedBlockFooter {
     handle: &'static mut MarkedBlockHandle,
-    vm: RuntimeRef,
+    vm: VirtualMachineRef,
     subspace: *mut Subspace,
 
     // The actual mark count can be computed by doing: biasedMarkCount - markCountBias. Note

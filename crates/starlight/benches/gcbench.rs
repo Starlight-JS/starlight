@@ -8,27 +8,27 @@ use starlight::{
         cell::{GcCell, GcPointer, Trace, Tracer},
         snapshot::serializer::{Serializable, SnapshotSerializer},
     },
-    vm::{array_storage::ArrayStorage, value::JsValue, Runtime},
+    vm::{array_storage::ArrayStorage, value::JsValue, VirtualMachine},
     Platform,
 };
 use wtf_rs::keep_on_stack;
 pub fn criterion_benchmark(c: &mut Criterion) {
     Platform::initialize();
-    let rrt = Runtime::new(Options::default(), None);
+    let rrt = VirtualMachine::new(Options::default(), None);
     let stack = rrt.shadowstack();
-    let mut rt = rrt;
-    let ctx = rt.new_context();
+    let mut vm = rrt;
+    let ctx = vm.new_context();
 
-    let mut _temp_tree = Some(make_tree(&mut rt, STRETCH_TREE_DEPTH as i32));
+    let mut _temp_tree = Some(make_tree(&mut vm, STRETCH_TREE_DEPTH as i32));
     _temp_tree = None;
     letroot!(
         long_lived = stack,
-        rt.heap().allocate(Node::new(None, None))
+        vm.heap().allocate(Node::new(None, None))
     );
     long_lived.j = 0xdead;
     long_lived.i = 0xdead;
     keep_on_stack!(&long_lived);
-    populate(&mut rt, LONG_LIVED_TREE_DEPTH as _, &mut long_lived);
+    populate(&mut vm, LONG_LIVED_TREE_DEPTH as _, &mut long_lived);
     let arr = ArrayStorage::with_size(ctx, ARRAY_SIZE as _, ARRAY_SIZE as _);
 
     letroot!(array = stack, arr);
@@ -45,9 +45,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             |b| {
                 /*b.iter_batched(, routine, size)|| {
 
-                        let mut temp_tree = rt.allocate(Node::new(None, None));
+                        let mut temp_tree = vm.allocate(Node::new(None, None));
                         keep_on_stack!(&mut temp_tree);
-                        populate(&mut rt, depth as _, temp_tree);
+                        populate(&mut vm, depth as _, temp_tree);
                     }
 
                 });*/
@@ -55,10 +55,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 b.iter_batched(
                     || {},
                     |_data| {
-                        letroot!(temp_tree = stack, rt.heap().allocate(Node::new(None, None)));
+                        letroot!(temp_tree = stack, vm.heap().allocate(Node::new(None, None)));
                         keep_on_stack!(&mut temp_tree);
-                        populate(&mut rt, depth as _, &mut temp_tree);
-                        rt.heap().collect_if_necessary();
+                        populate(&mut vm, depth as _, &mut temp_tree);
+                        vm.heap().collect_if_necessary();
                     },
                     BatchSize::NumIterations(num_iters(depth) as _),
                 )
@@ -71,9 +71,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 b.iter_batched(
                     || {},
                     |_data| {
-                        letroot!(temp_tree = stack, make_tree(&mut rt, depth as _));
+                        letroot!(temp_tree = stack, make_tree(&mut vm, depth as _));
                         keep_on_stack!(&temp_tree);
-                        rt.heap().collect_if_necessary();
+                        vm.heap().collect_if_necessary();
                     },
                     BatchSize::NumIterations(num_iters(depth) as _),
                 );
@@ -115,7 +115,7 @@ const fn num_iters(i: usize) -> usize {
     2 * tree_size(STRETCH_TREE_DEPTH) / tree_size(i)
 }
 
-fn populate(gc: &mut Runtime, mut idepth: i32, this_node: &mut GcPointer<Node>) {
+fn populate(gc: &mut VirtualMachine, mut idepth: i32, this_node: &mut GcPointer<Node>) {
     gc.heap().collect_if_necessary();
 
     if idepth <= 0 {
@@ -129,7 +129,7 @@ fn populate(gc: &mut Runtime, mut idepth: i32, this_node: &mut GcPointer<Node>) 
     populate(gc, idepth, this_node.right.as_mut().unwrap());
 }
 
-fn make_tree(gc: &mut Runtime, idepth: i32) -> GcPointer<Node> {
+fn make_tree(gc: &mut VirtualMachine, idepth: i32) -> GcPointer<Node> {
     if idepth <= 0 {
         return gc.heap().allocate(Node::new(None, None));
     }

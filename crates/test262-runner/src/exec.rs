@@ -7,7 +7,8 @@ use super::{
 
 use colored::Colorize;
 use starlight::prelude::GcPointer;
-use starlight::vm::{context::Context, parse, Runtime};
+use starlight::vm::VirtualMachineRef;
+use starlight::vm::{context::Context, parse};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
@@ -16,7 +17,7 @@ impl TestSuite {
         &self,
         harness: &Harness,
         verbose: u8,
-        rt: &mut Box<Runtime>,
+        vm: VirtualMachineRef,
     ) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
@@ -26,14 +27,14 @@ impl TestSuite {
         let suites: Vec<_> = self
             .suites
             .iter()
-            .map(|suite| suite.run(harness, verbose, rt))
+            .map(|suite| suite.run(harness, verbose, vm))
             .collect();
 
         // TODO: in parallel
         let tests: Vec<_> = self
             .tests
             .iter()
-            .map(|test| test.run(harness, verbose, rt))
+            .map(|test| test.run(harness, verbose, vm))
             .flatten()
             .collect();
 
@@ -88,7 +89,7 @@ impl TestSuite {
         }
     }
     /// Runs the test suite.
-    pub(crate) fn run(&self, harness: &Harness, verbose: u8, rt: &mut Box<Runtime>) -> SuiteResult {
+    pub(crate) fn run(&self, harness: &Harness, verbose: u8, vm: VirtualMachineRef) -> SuiteResult {
         if verbose != 0 {
             println!("Suite {}:", self.name);
         }
@@ -96,13 +97,13 @@ impl TestSuite {
         let suites: Vec<_> = self
             .suites
             .iter()
-            .map(|suite| suite.run(harness, verbose, rt))
+            .map(|suite| suite.run(harness, verbose, vm))
             .collect();
 
         let tests: Vec<_> = self
             .tests
             .iter()
-            .map(|test| test.run(harness, verbose, rt))
+            .map(|test| test.run(harness, verbose, vm))
             .flatten()
             .collect();
 
@@ -164,15 +165,15 @@ impl Test {
         &self,
         harness: &Harness,
         verbose: u8,
-        rt: &mut Box<Runtime>,
+        vm: VirtualMachineRef,
     ) -> Vec<TestResult> {
         let mut results = Vec::new();
         if self.flags.contains(TestFlags::STRICT) {
-            results.push(self.run_once(harness, true, verbose, rt));
+            results.push(self.run_once(harness, true, verbose, vm));
         }
 
         if self.flags.contains(TestFlags::NO_STRICT) || self.flags.contains(TestFlags::RAW) {
-            results.push(self.run_once(harness, false, verbose, rt));
+            results.push(self.run_once(harness, false, verbose, vm));
         }
 
         results
@@ -184,7 +185,7 @@ impl Test {
         harness: &Harness,
         strict: bool,
         verbose: u8,
-        rt: &mut Box<Runtime>,
+        mut vm: VirtualMachineRef,
     ) -> TestResult {
         if verbose >= 1 {
             eprintln!(
@@ -219,7 +220,7 @@ impl Test {
                         error_type: _,
                     }
                 )) {
-            let ctx = rt.new_context();
+            let ctx = vm.new_context();
             let res = panic::catch_unwind(AssertUnwindSafe(|| match self.expected_outcome {
                 Outcome::Positive => {
                     // TODO: implement async and add `harness/doneprintHandle.js` to the includes.
@@ -307,7 +308,7 @@ impl Test {
                     }
                 }
             }));
-            rt.remove_context(ctx);
+            vm.remove_context(ctx);
             let result = res
                 .map(|(res, text)| {
                     if res {
@@ -365,8 +366,8 @@ impl Test {
         context: GcPointer<Context>,
     ) -> Result<(), String> {
         // TODO: in parallel.
-        /*let mut context = Runtime::new(
-            RuntimeParams::default().with_dump_bytecode(false),
+        /*let mut context = VirtualMachine::new(
+            VirtualMachineParams::default().with_dump_bytecode(false),
             GcParams::default()
                 .with_parallel_marking(false)
                 .with_conservative_marking(false),

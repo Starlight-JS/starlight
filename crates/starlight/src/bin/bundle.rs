@@ -1,4 +1,8 @@
-use starlight::{Platform, gc::snapshot::Snapshot, vm::{context::Context, Runtime}};
+use starlight::{
+    gc::snapshot::Snapshot,
+    vm::{context::Context, VirtualMachine},
+    Platform,
+};
 use std::path::PathBuf;
 use structopt::*;
 
@@ -22,9 +26,9 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut rt = Runtime::new(starlight::options::Options::default(), None);
-    let ctx = Context::new(&mut rt);
-    rt.heap().defer();
+    let mut vm = VirtualMachine::new(starlight::options::Options::default(), None);
+    let ctx = Context::new(&mut vm);
+    vm.heap().defer();
     let func = ctx
         .compile(
             opts.input.as_os_str().to_str().unwrap(),
@@ -32,12 +36,14 @@ fn main() {
             &string,
             false,
         )
-        .unwrap_or_else(|error| {eprintln!("Failed to compile JS file: {:?}", error);
-        std::process::exit(1);});
-    let snapshot = Snapshot::take(false, &mut rt, |ser, _rt| {
+        .unwrap_or_else(|error| {
+            eprintln!("Failed to compile JS file: {:?}", error);
+            std::process::exit(1);
+        });
+    let snapshot = Snapshot::take(false, &mut vm, |ser, _rt| {
         ser.write_gcpointer(func.get_object())
     });
-    rt.heap().undefer();
+    vm.heap().undefer();
     let mut c_src = String::with_capacity(snapshot.buffer.len() + 128);
     c_src.push_str(&format!(
         r#"
@@ -69,6 +75,9 @@ static const uint8_t snapshot[{}] = {{
     "#,
         snapshot.buffer.len()
     ));
+    unsafe {
+        vm.dispose();
+    }
     if opts.output_c {
         std::fs::write(format!("{}.c", opts.output.display()), c_src).unwrap();
     } else {
