@@ -958,7 +958,7 @@ impl Deserializable for JsObject {
     }
 
     unsafe fn allocate(vm: &mut VirtualMachine, deser: &mut Deserializer) -> *mut GcPointerBase {
-        let tag = transmute(deser.get_u32() as u8);
+        let tag: ObjectTag = transmute(deser.get_u32() as u8);
         let class: &'static Class = transmute(deser.get_reference());
         deser.pc -= 8;
         vm.heap().allocate_raw(
