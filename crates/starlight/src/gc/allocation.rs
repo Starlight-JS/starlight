@@ -170,6 +170,9 @@ impl Drop for Space {
 }
 
 impl Space {
+    pub(crate) fn vm_space(&self) -> *mut u8 {
+        unsafe { (*self.block_allocator).space_for_vm() }
+    }
     unsafe fn allocator_for_slow<'a>(&'a mut self, size: usize) -> Option<*mut LocalAllocator> {
         let index = size_class_to_index(size);
         let size_class = self.size_class_for_size_step[index];

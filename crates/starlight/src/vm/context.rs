@@ -27,7 +27,7 @@ use super::{
     structure::Structure,
     symbol_table::{self, Internable, JsSymbol, Symbol},
     value::JsValue,
-    GlobalData, ModuleKind, MyEmiter, Runtime, RuntimeRef,
+    GlobalData, ModuleKind, MyEmiter, VirtualMachine, VirtualMachineRef,
 };
 
 use crate::gc::snapshot::deserializer::Deserializable;
@@ -37,7 +37,7 @@ pub struct Context {
     pub(crate) global_data: GlobalData,
     pub(crate) global_object: Option<GcPointer<JsObject>>,
     pub(crate) stack: Stack,
-    pub(crate) vm: RuntimeRef,
+    pub(crate) vm: VirtualMachineRef,
     pub(crate) stacktrace: String,
     pub(crate) module_loader: Option<GcPointer<JsObject>>,
     pub(crate) modules: HashMap<String, ModuleKind>,
@@ -55,7 +55,7 @@ impl Context {
     pub fn global_data(&self) -> &GlobalData {
         &self.global_data
     }
-    pub fn vm(&self) -> RuntimeRef {
+    pub fn vm(&self) -> VirtualMachineRef {
         self.vm
     }
     // proxy heap
@@ -76,7 +76,7 @@ impl Context {
         Self {
             global_data: GlobalData::default(),
             global_object: None,
-            vm: RuntimeRef(null::<*mut Runtime>() as *mut Runtime),
+            vm: VirtualMachineRef(null::<*mut VirtualMachine>() as *mut VirtualMachine),
             stack: Stack::new(),
             stacktrace: String::new(),
             module_loader: None,
@@ -85,11 +85,11 @@ impl Context {
         }
     }
 
-    pub fn new_empty(vm: &mut Runtime) -> GcPointer<Context> {
+    pub fn new_empty(vm: &mut VirtualMachine) -> GcPointer<Context> {
         let mut context = Self {
             global_data: GlobalData::default(),
             global_object: None,
-            vm: RuntimeRef(vm),
+            vm: VirtualMachineRef(vm),
             stack: Stack::new(),
             stacktrace: String::new(),
             module_loader: None,
@@ -100,7 +100,7 @@ impl Context {
         ctx
     }
 
-    pub fn new(vm: &mut Runtime) -> GcPointer<Context> {
+    pub fn new(vm: &mut VirtualMachine) -> GcPointer<Context> {
         vm.gc.defer();
         let mut ctx = Context::new_empty(vm);
         ctx.global_object = Some(JsGlobal::new(ctx));
@@ -547,7 +547,7 @@ impl GcPointer<Context> {
             scheduler(Box::new(job));
             Ok(())
         } else {
-            Err(JsValue::encode_object_value(JsString::new(self, "In order to use async you have to init the RuntimeOptions with with_async_scheduler()")))
+            Err(JsValue::encode_object_value(JsString::new(self, "In order to use async you have to init the VirtualMachineOptions with with_async_scheduler()")))
         }
     }
 

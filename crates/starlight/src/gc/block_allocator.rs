@@ -3,7 +3,9 @@ use crate::gc::Address;
 #[cfg(windows)]
 pub mod _win {
     use super::*;
+    use crate::vm::VirtualMachine;
     use core::{ptr::null_mut, usize};
+    use std::mem::size_of;
 
     use winapi::um::{
         memoryapi::{VirtualAlloc, VirtualFree},
@@ -31,7 +33,7 @@ pub mod _win {
         }
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
-            let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
+            let offset = BLOCK_SIZE - (self.start as usize + size_of::<VirtualMachine>()) % BLOCK_SIZE;
             unsafe { self.start.add(offset) as *mut u8 }
         }
 
@@ -67,6 +69,9 @@ pub mod _win {
 
 #[cfg(unix)]
 pub mod _unix {
+    use crate::vm::VirtualMachine;
+    use std::mem::size_of;
+
     use super::*;
     pub struct Mmap {
         start: *mut u8,
@@ -98,7 +103,7 @@ pub mod _unix {
         }
         /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
         pub fn aligned(&self) -> *mut u8 {
-            let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
+            let offset = BLOCK_SIZE - (self.start as usize + size_of::<VirtualMachine>()) % BLOCK_SIZE;
             unsafe { self.start.add(offset) as *mut u8 }
         }
 
@@ -236,5 +241,9 @@ impl BlockAllocator {
         let nblocks = ((self.data_bound as usize) - (self.data as usize)) / BLOCK_SIZE;
 
         nblocks + self.free_blocks.len()
+    }
+
+    pub fn space_for_vm(&self) -> *mut u8 {
+        self.mmap.start()
     }
 }

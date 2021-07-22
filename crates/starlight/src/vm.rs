@@ -107,7 +107,7 @@ impl Serializable for ModuleKind {
 }
 
 impl Deserializable for ModuleKind {
-    unsafe fn allocate(_ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(_ctx: &mut VirtualMachine, _deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 
@@ -128,7 +128,7 @@ impl Deserializable for ModuleKind {
 }
 
 /// JavaScript runtime instance.
-pub struct Runtime {
+pub struct VirtualMachine {
     pub(crate) gc: Heap,
     pub(crate) external_references: Option<&'static [usize]>,
     pub(crate) options: Options,
@@ -146,7 +146,7 @@ pub struct Runtime {
     #[cfg(feature = "perf")]
     pub(crate) perf: perf::Perf,
     #[allow(dead_code)]
-    /// String that contains all the source code passed to [Runtime::eval] and [Runtime::evalm]
+    /// String that contains all the source code passed to [VirtualMachine::eval] and [VirtualMachine::evalm]
     pub(crate) eval_history: String,
     pub(crate) persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
     pub(crate) sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(GcPointer<Context>)>)>>,
@@ -157,9 +157,9 @@ pub struct Runtime {
     pub(crate) context_snapshot: Rc<Box<[u8]>>,
 }
 
-impl Runtime {
-    /// initialize a Runtime with an async scheduler
-    /// the async scheduler is used to asynchronously run jobs with the Runtime
+impl VirtualMachine {
+    /// initialize a VirtualMachine with an async scheduler
+    /// the async scheduler is used to asynchronously run jobs with the VirtualMachine
     /// this can be used for things like Promises, setImmediate, async functions
     /// # Example
     /// ```rust
@@ -173,7 +173,7 @@ impl Runtime {
     ///     // EventLoop.add_local_void(move || {
     ///     //     RtThreadLocal.with(|rc| {
     ///     //         let sl_rt = &mut *rc.borrow_mut();
-    ///     //         job(rt);
+    ///     //         job(vm);
     ///     //     });
     ///     // });
     ///     println!("sched async job...");
@@ -210,25 +210,29 @@ impl Runtime {
         gc: Heap,
         options: Options,
         external_references: Option<&'static [usize]>,
-    ) -> Self {
-        Self {
-            gc,
-            options,
-            safepoint: GlobalSafepoint::new(),
-            external_references,
-            shadowstack: ShadowStack::new(),
-            #[cfg(feature = "perf")]
-            perf: perf::Perf::new(),
-            eval_history: String::new(),
-            persistent_roots: Default::default(),
-            sched_async_func: None,
-            codegen_plugins: HashMap::new(),
-            contexts: vec![],
-            context_snapshot: Rc::new(Box::new([])),
+    ) -> VM {
+        let space = gc.vm_space().cast::<Self>();
+        unsafe {
+            space.write(Self {
+                gc,
+                options,
+                safepoint: GlobalSafepoint::new(),
+                external_references,
+                shadowstack: ShadowStack::new(),
+                #[cfg(feature = "perf")]
+                perf: perf::Perf::new(),
+                eval_history: String::new(),
+                persistent_roots: Default::default(),
+                sched_async_func: None,
+                codegen_plugins: HashMap::new(),
+                contexts: vec![],
+                context_snapshot: Rc::new(Box::new([])),
+            });
+            VirtualMachineRef(space)
         }
     }
 
-    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> Box<Self> {
+    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> VM {
         Self::with_heap(default_heap(&options), options, external_references)
     }
 
@@ -242,46 +246,50 @@ impl Runtime {
         gc: Heap,
         options: Options,
         external_references: Option<&'static [usize]>,
-    ) -> Box<Self> {
-        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
-        let vm = &mut *this as *mut Runtime;
+    ) -> VM {
+        let mut this = VirtualMachine::new_raw(gc, options, external_references);
+        this.register_gc_constraints();
+        /*let vm = this;
         this.gc.add_constraint(SimpleMarkingConstraint::new(
             "Mark VM roots",
             move |visitor| {
-                let rt = unsafe { &mut *vm };
-                // rt.shadowstack.trace(visitor);
-                rt.contexts.iter_mut().for_each(|ctx| {
+                let vm = unsafe { &mut *vm };
+                // vm.shadowstack.trace(visitor);
+                vm.contexts.iter_mut().for_each(|ctx| {
                     ctx.trace(visitor);
                 });
-                let pr = &mut *rt.persistent_roots.borrow_mut();
+                let pr = &mut *vm.persistent_roots.borrow_mut();
+                pr.iter_mut().for_each(|entry| {
+                    entry.1.trace(visitor);
+                });
+            },
+        ));*/
+        this
+    }
+
+    fn register_gc_constraints(&mut self) {
+        let vm = unsafe { &mut *(self as *mut Self) };
+        self.gc.add_constraint(SimpleMarkingConstraint::new(
+            "Mark VM roots",
+            move |visitor| {
+                let vm = unsafe { &mut *vm };
+                // vm.shadowstack.trace(visitor);
+                vm.contexts.iter_mut().for_each(|ctx| ctx.trace(visitor));
+                let pr = &mut *vm.persistent_roots.borrow_mut();
                 pr.iter_mut().for_each(|entry| {
                     entry.1.trace(visitor);
                 });
             },
         ));
-        this
     }
 
     pub(crate) fn new_empty(
         gc: Heap,
         options: Options,
         external_references: Option<&'static [usize]>,
-    ) -> Box<Self> {
-        let mut this = Box::new(Runtime::new_raw(gc, options, external_references));
-        let vm = &mut *this as *mut Runtime;
-        this.gc.add_constraint(SimpleMarkingConstraint::new(
-            "Mark VM roots",
-            move |visitor| {
-                let rt = unsafe { &mut *vm };
-                // rt.shadowstack.trace(visitor);
-                rt.contexts.iter_mut().for_each(|ctx| ctx.trace(visitor));
-                let pr = &mut *rt.persistent_roots.borrow_mut();
-                pr.iter_mut().for_each(|entry| {
-                    entry.1.trace(visitor);
-                });
-            },
-        ));
-
+    ) -> VM {
+        let mut this = VirtualMachine::new_raw(gc, options, external_references);
+        this.register_gc_constraints();
         this
     }
 
@@ -430,16 +438,16 @@ impl GlobalData {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct RuntimeRef(pub(crate) *mut Runtime);
+pub struct VirtualMachineRef(pub(crate) *mut VirtualMachine);
 
-impl Deref for RuntimeRef {
-    type Target = Runtime;
+impl Deref for VirtualMachineRef {
+    type Target = VirtualMachine;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.0 }
     }
 }
 
-impl DerefMut for RuntimeRef {
+impl DerefMut for VirtualMachineRef {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.0 }
     }
@@ -485,7 +493,7 @@ impl std::fmt::Write for OutBuf {
     }
 }
 
-impl Drop for Runtime {
+impl Drop for VirtualMachine {
     fn drop(&mut self) {
         #[cfg(feature = "perf")]
         {
@@ -534,7 +542,7 @@ pub mod tests {
     use crate::options::Options;
     use crate::vm::symbol_table::Internable;
     use crate::vm::value::JsValue;
-    use crate::vm::{arguments, context::Context, Runtime};
+    use crate::vm::{arguments, context::Context, VirtualMachine};
     use crate::Platform;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -649,10 +657,10 @@ pub mod tests {
         Platform::initialize();
         let options: Options = Options::default().with_codegen_plugins(true);
         let heap = default_heap(&options);
-        let mut rt = Runtime::with_heap(heap, options, None);
-        let mut ctx = Context::new(&mut rt);
+        let mut vm = VirtualMachine::with_heap(heap, options, None);
+        let mut ctx = Context::new(&mut vm);
 
-        let result = rt.register_codegen_plugin(
+        let result = vm.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
                 |compiler: &mut ByteCompiler,
@@ -675,10 +683,10 @@ pub mod tests {
         Platform::initialize();
         let options: Options = Options::default();
         let heap = default_heap(&options);
-        let mut rt = Runtime::with_heap(heap, options, None);
-        let mut ctx = Context::new(&mut rt);
+        let mut vm = VirtualMachine::with_heap(heap, options, None);
+        let mut ctx = Context::new(&mut vm);
 
-        let result = rt.register_codegen_plugin(
+        let result = vm.register_codegen_plugin(
             "MyOwnAddFn",
             Box::new(
                 |compiler: &mut ByteCompiler,
@@ -697,3 +705,5 @@ pub mod tests {
         //
     }
 }
+
+pub type VM = VirtualMachineRef;

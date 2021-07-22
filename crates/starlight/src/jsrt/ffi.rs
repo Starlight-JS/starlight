@@ -31,50 +31,50 @@ pub type TypePointer = *mut ffi_type;
 pub type RawPointer = *mut c_void;
 
 pub fn initialize_ffi(ctx: GcPointer<Context>) {
-    rt.heap().defer();
+    vm.heap().defer();
     let structure =
-        Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
+        Structure::new_indexed(vm, Some(vm.global_data.object_prototype.unwrap()), false);
     let mut init = || -> Result<(), JsValue> {
-        let mut proto = JsObject::new(rt, &structure, JsObject::get_class(), ObjectTag::Ordinary);
-        let func = JsNativeFunction::new(rt, "open".intern(), ffi_library_open, 1);
+        let mut proto = JsObject::new(vm, &structure, JsObject::get_class(), ObjectTag::Ordinary);
+        let func = JsNativeFunction::new(vm, "open".intern(), ffi_library_open, 1);
         proto.define_own_property(
-            rt,
+            vm,
             "open".intern(),
             &*DataDescriptor::new(JsValue::new(func), NONE),
             false,
         )?;
-        rt.global_object().define_own_property(
-            rt,
+        vm.global_object().define_own_property(
+            vm,
             "FFI".intern(),
             &*DataDescriptor::new(JsValue::new(proto), E),
             false,
         )?;
         let func_s =
-            Structure::new_indexed(rt, Some(rt.global_data.object_prototype.unwrap()), false);
-        let mut fproto = JsObject::new(rt, &func_s, JsObject::get_class(), ObjectTag::Ordinary);
-        let func = JsNativeFunction::new(rt, "attach".intern(), ffi_function_attach, 1);
+            Structure::new_indexed(vm, Some(vm.global_data.object_prototype.unwrap()), false);
+        let mut fproto = JsObject::new(vm, &func_s, JsObject::get_class(), ObjectTag::Ordinary);
+        let func = JsNativeFunction::new(vm, "attach".intern(), ffi_function_attach, 1);
         fproto.define_own_property(
-            rt,
+            vm,
             "attach".intern(),
             &*DataDescriptor::new(JsValue::new(func), E),
             false,
         )?;
-        let func = JsNativeFunction::new(rt, "call".intern(), ffi_function_call, 1);
+        let func = JsNativeFunction::new(vm, "call".intern(), ffi_function_call, 1);
         fproto.define_own_property(
-            rt,
+            vm,
             "call".intern(),
             &*DataDescriptor::new(JsValue::new(func), E),
             false,
         )?;
 
-        rt.global_object().define_own_property(
-            rt,
+        vm.global_object().define_own_property(
+            vm,
             "CFunction".intern(),
             &*DataDescriptor::new(JsValue::new(fproto), E),
             false,
         )?;
 
-        rt.eval_internal(None, false, include_str!("../builtins/FFI.js"), true)?;
+        vm.eval_internal(None, false, include_str!("../builtins/FFI.js"), true)?;
         Ok(())
     };
 
@@ -84,7 +84,7 @@ pub fn initialize_ffi(ctx: GcPointer<Context>) {
             unreachable!()
         }
     }
-    rt.heap().undefer();
+    vm.heap().undefer();
 }
 /// A wrapper around a C pointer.
 #[derive(Clone, Copy)]
@@ -157,7 +157,7 @@ extern "C" fn drop_ffi_fn(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<FFIFunction>()) }
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer, _: &mut VirtualMachine) {
     unreachable!("Cannot deserialize FFI function");
 }
 
@@ -189,7 +189,7 @@ extern "C" fn drop_ffi_lib(obj: &mut JsObject) {
     unsafe { ManuallyDrop::drop(obj.data::<FFILibrary>()) }
 }
 
-extern "C" fn deser_lib(_: &mut JsObject, _: &mut Deserializer, _: &mut Runtime) {
+extern "C" fn deser_lib(_: &mut JsObject, _: &mut Deserializer, _: &mut VirtualMachine) {
     unreachable!("Cannot deserialize FFI library");
 }
 
@@ -287,9 +287,9 @@ macro_rules! match_ffi_type {
 }
 
 macro_rules! ffi_type_error {
-    ($rt: expr,$type: expr) => {
+    ($vm: expr,$type: expr) => {
         return Err(JsValue::new(JsString::new(
-            $rt,
+            $vm,
             format!("Invalid FFI type: {}", $type),
         )));
     };
@@ -314,7 +314,7 @@ pub fn type_size(ctx: GcPointer<Context>, id: i64) -> Result<JsValue, JsValue> {
             TYPE_U32 => types::uint32.size,
             TYPE_U64 => types::uint64.size,
             TYPE_SIZE_T => mem::size_of::<usize>(),
-            _ => ffi_type_error!(rt, id),
+            _ => ffi_type_error!(vm, id),
         }
     };
 
@@ -340,7 +340,7 @@ pub fn type_alignment(ctx: GcPointer<Context>, id: i64) -> Result<JsValue, JsVal
             TYPE_U32 => types::uint32.alignment,
             TYPE_U64 => types::uint64.alignment,
             TYPE_SIZE_T => mem::align_of::<usize>() as u16,
-            _ => ffi_type_error!(rt, id),
+            _ => ffi_type_error!(vm, id),
         }
     };
 
@@ -384,26 +384,26 @@ impl Argument {
                 } else if val.is_jsstring() {
                      return Ok(Argument::Pointer(val.get_jsstring().as_str().as_ptr() as *mut _));
                 } else {
-                    let val_str = val.to_string(rt);
+                    let val_str = val.to_string(vm);
                     let val_str = if let Ok(val_str) = val_str {
                         val_str
                     } else {
                         "<unknown>".to_owned()
                     };
-                    return Err(JsValue::new(JsString::new(rt,format!("Cannot passs value '{}' as pointer",val_str))));
+                    return Err(JsValue::new(JsString::new(vm,format!("Cannot passs value '{}' as pointer",val_str))));
                 }
             }
             void => return Ok(Argument::Void)
-            float => return Ok(Argument::F32(val.to_number(rt)? as f32))
-            double => return Ok(Argument::F64(val.to_number(rt)?))
-            sint8 => return Ok(Argument::I8(val.to_int32(rt)? as _))
-            sint16 => return Ok(Argument::I16(val.to_int32(rt)? as _))
-            sint32 => return Ok(Argument::I32(val.to_int32(rt)? as _))
-            sint64 => return Ok(Argument::I64(val.to_int32(rt)? as _))
-            uint8 => return Ok(Argument::U8(val.to_uint32(rt)? as _))
-            uint16 => return Ok(Argument::U16(val.to_uint32(rt)? as _))
-            uint32 => return Ok(Argument::U32(val.to_uint32(rt)? as _))
-            uint64 => return Ok(Argument::U64(val.to_uint32(rt)? as _))
+            float => return Ok(Argument::F32(val.to_number(vm)? as f32))
+            double => return Ok(Argument::F64(val.to_number(vm)?))
+            sint8 => return Ok(Argument::I8(val.to_int32(vm)? as _))
+            sint16 => return Ok(Argument::I16(val.to_int32(vm)? as _))
+            sint32 => return Ok(Argument::I32(val.to_int32(vm)? as _))
+            sint64 => return Ok(Argument::I64(val.to_int32(vm)? as _))
+            uint8 => return Ok(Argument::U8(val.to_uint32(vm)? as _))
+            uint16 => return Ok(Argument::U16(val.to_uint32(vm)? as _))
+            uint32 => return Ok(Argument::U32(val.to_uint32(vm)? as _))
+            uint64 => return Ok(Argument::U64(val.to_uint32(vm)? as _))
 
         );
     }
@@ -433,7 +433,7 @@ impl Argument {
 }
 /// Returns an FFI type for an integer pointer.
 unsafe fn ffi_type_for(pointer: JsValue, ctx: GcPointer<Context>) -> Result<TypePointer, JsValue> {
-    let int = pointer.to_int32(rt)?;
+    let int = pointer.to_int32(vm)?;
     let typ = match int as i64 {
         TYPE_VOID => ffi_type!(void),
         TYPE_POINTER | TYPE_STRING | TYPE_BYTE_ARRAY => ffi_type!(pointer),
@@ -458,7 +458,7 @@ unsafe fn ffi_type_for(pointer: JsValue, ctx: GcPointer<Context>) -> Result<Type
                 _ => ffi_type!(uint16),
             }
         }
-        _ => ffi_type_error!(rt, int),
+        _ => ffi_type_error!(vm, int),
     };
 
     Ok(typ as TypePointer)
@@ -467,14 +467,17 @@ unsafe fn ffi_type_for(pointer: JsValue, ctx: GcPointer<Context>) -> Result<Type
 impl FFILibrary {
     /// Opens a library using one or more possible names, stored as pointers to
     /// heap allocated objects.
-    pub fn from_pointers(ctx: GcPointer<Context>, search_for: &[JsValue]) -> Result<FFILibrary, JsValue> {
+    pub fn from_pointers(
+        ctx: GcPointer<Context>,
+        search_for: &[JsValue],
+    ) -> Result<FFILibrary, JsValue> {
         let mut names = Vec::with_capacity(search_for.len());
 
         for name in search_for {
-            names.push(name.to_string(rt)?);
+            names.push(name.to_string(vm)?);
         }
 
-        Self::open(&names).map_err(|err| JsValue::new(JsString::new(rt, err)))
+        Self::open(&names).map_err(|err| JsValue::new(JsString::new(vm, err)))
     }
 
     /// Opens a library using one or more possible names.
@@ -535,8 +538,12 @@ impl Pointer {
 
     /// Reads the value of this pointer into a particular type, based on the
     /// integer specified in `kind`.
-    pub unsafe fn read_as(self, ctx: GcPointer<Context>, kind: JsValue) -> Result<JsValue, JsValue> {
-        let int = kind.to_int32(rt)? as i64;
+    pub unsafe fn read_as(
+        self,
+        ctx: GcPointer<Context>,
+        kind: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let int = kind.to_int32(vm)? as i64;
         let pointer = match int {
             TYPE_POINTER => {
                 todo!()
@@ -544,7 +551,7 @@ impl Pointer {
             TYPE_STRING => {
                 let string = self.read_cstr().to_string_lossy().into_owned();
 
-                JsValue::new(JsString::new(rt, string))
+                JsValue::new(JsString::new(vm, string))
             }
             TYPE_BYTE_ARRAY => {
                 todo!()
@@ -566,7 +573,7 @@ impl Pointer {
                 8 => self.read_unsigned_integer::<c_uchar>(),
                 _ => unreachable!(),
             },
-            _ => ffi_type_error!(rt, int),
+            _ => ffi_type_error!(vm, int),
         };
 
         Ok(pointer)
@@ -579,11 +586,11 @@ impl Pointer {
         kind: JsValue,
         value: JsValue,
     ) -> Result<(), JsValue> {
-        let int = kind.to_int32(rt)? as i64;
+        let int = kind.to_int32(vm)? as i64;
 
         match int {
             TYPE_STRING => {
-                let string = value.to_string(rt)?;
+                let string = value.to_string(vm)?;
 
                 ptr::copy(
                     string.as_ptr() as *mut c_char,
@@ -595,18 +602,18 @@ impl Pointer {
                 todo!("byte array");
             }
             TYPE_POINTER => todo!(),
-            TYPE_DOUBLE => self.write(value.to_number(rt)?),
-            TYPE_FLOAT => self.write(value.to_number(rt)? as f32),
-            TYPE_I8 => self.write(value.to_int32(rt)? as i8),
-            TYPE_I16 => self.write(value.to_int32(rt)? as i16),
-            TYPE_I32 => self.write(value.to_int32(rt)?),
-            TYPE_I64 => self.write(value.to_int32(rt)? as i64),
-            TYPE_U8 => self.write(value.to_uint32(rt)? as u8),
-            TYPE_U16 => self.write(value.to_uint32(rt)? as u16),
-            TYPE_U32 => self.write(value.to_uint32(rt)?),
-            TYPE_U64 => self.write(value.to_uint32(rt)? as u64),
-            TYPE_SIZE_T => self.write(value.to_uint32(rt)? as usize),
-            _ => ffi_type_error!(rt, int),
+            TYPE_DOUBLE => self.write(value.to_number(vm)?),
+            TYPE_FLOAT => self.write(value.to_number(vm)? as f32),
+            TYPE_I8 => self.write(value.to_int32(vm)? as i8),
+            TYPE_I16 => self.write(value.to_int32(vm)? as i16),
+            TYPE_I32 => self.write(value.to_int32(vm)?),
+            TYPE_I64 => self.write(value.to_int32(vm)? as i64),
+            TYPE_U8 => self.write(value.to_uint32(vm)? as u8),
+            TYPE_U16 => self.write(value.to_uint32(vm)? as u16),
+            TYPE_U32 => self.write(value.to_uint32(vm)?),
+            TYPE_U64 => self.write(value.to_uint32(vm)? as u64),
+            TYPE_SIZE_T => self.write(value.to_uint32(vm)? as usize),
+            _ => ffi_type_error!(vm, int),
         };
 
         Ok(())
@@ -663,15 +670,15 @@ impl FFIFunction {
     ) -> Result<GcPointer<JsObject>, JsValue> {
         let func_ptr = library
             .get(name)
-            .map_err(|x| JsValue::new(JsString::new(rt, x)))?;
-        let ffi_rtype = ffi_type_for(return_type, rt)?;
+            .map_err(|x| JsValue::new(JsString::new(vm, x)))?;
+        let ffi_rtype = ffi_type_for(return_type, vm)?;
         let mut ffi_arg_types = Vec::with_capacity(arguments.len());
 
         for ptr in arguments {
-            ffi_arg_types.push(ffi_type_for(*ptr, rt)?);
+            ffi_arg_types.push(ffi_type_for(*ptr, vm)?);
         }
 
-        Self::create(rt, func_ptr, ffi_arg_types, ffi_rtype).map_err(|e| e)
+        Self::create(vm, func_ptr, ffi_arg_types, ffi_rtype).map_err(|e| e)
     }
 
     /// Creates a new prepared function.
@@ -704,12 +711,12 @@ impl FFIFunction {
                 }
                 FFIError::Abi => "The ABI is invalid or unsupported".to_string(),
             })
-            .map_err(|x| JsValue::new(JsString::new(rt, x)))?;
+            .map_err(|x| JsValue::new(JsString::new(vm, x)))?;
 
-        let ffi_object = rt.global_object().get(rt, "CFunction".intern())?;
-        let structure = Structure::new_indexed(rt, Some(ffi_object.get_jsobject()), false);
+        let ffi_object = vm.global_object().get(vm, "CFunction".intern())?;
+        let structure = Structure::new_indexed(vm, Some(ffi_object.get_jsobject()), false);
         let mut object = JsObject::new(
-            rt,
+            vm,
             &structure,
             FFIFunction::get_class(),
             ObjectTag::Ordinary,
@@ -721,10 +728,14 @@ impl FFIFunction {
     }
 
     /// Calls the function with the given arguments.
-    pub unsafe fn call(&self, ctx: GcPointer<Context>, arg_ptrs: &[JsValue]) -> Result<JsValue, JsValue> {
+    pub unsafe fn call(
+        &self,
+        ctx: GcPointer<Context>,
+        arg_ptrs: &[JsValue],
+    ) -> Result<JsValue, JsValue> {
         if arg_ptrs.len() != self.arguments.len() {
             return Err(JsValue::new(JsString::new(
-                rt,
+                vm,
                 format!(
                     "Invalid number of arguments, expected {} but got {}",
                     self.arguments.len(),
@@ -736,7 +747,7 @@ impl FFIFunction {
         let mut arguments = Vec::with_capacity(arg_ptrs.len());
 
         for (index, arg) in arg_ptrs.iter().enumerate() {
-            arguments.push(Argument::wrap(self.arguments[index], *arg, rt)?);
+            arguments.push(Argument::wrap(self.arguments[index], *arg, vm)?);
         }
 
         // libffi expects an array of _pointers_ to the arguments to pass,
@@ -795,25 +806,25 @@ pub fn ffi_library_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     let names = args.at(0);
     if !names.is_jsobject() {
         let msg = JsString::new(
-            rt,
+            vm,
             "library_open requires array-like object of library names",
         );
-        return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+        return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
     }
-    let stack = rt.shadowstack();
+    let stack = vm.shadowstack();
 
     letroot!(rnames = stack, vec![]);
     letroot!(names = stack, names.get_jsobject());
-    let len = super::get_length(rt, &mut names)?;
+    let len = super::get_length(vm, &mut names)?;
 
     for i in 0..len {
-        rnames.push(names.get(rt, Symbol::Index(i))?);
+        rnames.push(names.get(vm, Symbol::Index(i))?);
     }
 
-    let lib = FFILibrary::from_pointers(rt, &rnames)?;
-    let proto = rt.global_object().get(rt, "FFI".intern())?.get_jsobject();
-    let structure = Structure::new_indexed(rt, Some(proto), false);
-    let mut obj = JsObject::new(rt, &structure, FFILibrary::get_class(), ObjectTag::Ordinary);
+    let lib = FFILibrary::from_pointers(vm, &rnames)?;
+    let proto = vm.global_object().get(vm, "FFI".intern())?.get_jsobject();
+    let structure = Structure::new_indexed(vm, Some(proto), false);
+    let mut obj = JsObject::new(vm, &structure, FFILibrary::get_class(), ObjectTag::Ordinary);
     unsafe {
         (obj.data::<FFILibrary>() as *mut ManuallyDrop<FFILibrary> as *mut FFILibrary).write(lib);
     }
@@ -821,62 +832,62 @@ pub fn ffi_library_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 }
 
 pub fn ffi_function_attach(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = rt.shadowstack();
+    let stack = vm.shadowstack();
     let func = unsafe {
         let lib = {
             let val = args.at(0);
             if !val.is_jsobject() {
-                let msg = JsString::new(rt, "function_attach requires library object");
-                return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+                let msg = JsString::new(vm, "function_attach requires library object");
+                return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
             }
             let val = val.get_jsobject();
             if !val.is_class(FFILibrary::get_class()) {
-                let msg = JsString::new(rt, "function_attach requires library object");
-                return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+                let msg = JsString::new(vm, "function_attach requires library object");
+                return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
             }
             val
         };
 
-        let name = { args.at(1).to_string(rt)? };
+        let name = { args.at(1).to_string(vm)? };
         letroot!(rnames = stack, vec![]);
         let args_ = {
             let names = args.at(2);
             if !names.is_jsobject() {
                 let msg = JsString::new(
-                    rt,
+                    vm,
                     "function_attach requires array-like object of arguments",
                 );
-                return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+                return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
             }
 
             letroot!(names = stack, names.get_jsobject());
-            let len = super::get_length(rt, &mut names)?;
+            let len = super::get_length(vm, &mut names)?;
 
             for i in 0..len {
-                rnames.push(names.get(rt, Symbol::Index(i))?);
+                rnames.push(names.get(vm, Symbol::Index(i))?);
             }
             rnames
         };
 
-        FFIFunction::attach(rt, lib.data::<FFILibrary>(), &name, &args_, args.at(3))?
+        FFIFunction::attach(vm, lib.data::<FFILibrary>(), &name, &args_, args.at(3))?
     };
 
     Ok(JsValue::new(func))
 }
 
 pub fn ffi_function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = rt.shadowstack();
-    rt.heap().defer();
+    let stack = vm.shadowstack();
+    vm.heap().defer();
     let func = unsafe {
         let val = args.this;
         if !val.is_jsobject() {
-            let msg = JsString::new(rt, "call requires function object");
-            return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+            let msg = JsString::new(vm, "call requires function object");
+            return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
         }
         let val = val.get_jsobject();
         if !val.is_class(FFIFunction::get_class()) {
-            let msg = JsString::new(rt, "CALL requires FFIFunction object");
-            return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+            let msg = JsString::new(vm, "CALL requires FFIFunction object");
+            return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
         }
         val
     };
@@ -885,23 +896,23 @@ pub fn ffi_function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
     let args = {
         let names = args.at(0);
         if !names.is_jsobject() {
-            let msg = JsString::new(rt, "function call requires array-like object of arguments");
-            return Err(JsValue::new(JsTypeError::new(rt, msg, None)));
+            let msg = JsString::new(vm, "function call requires array-like object of arguments");
+            return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
         }
 
         letroot!(names = stack, names.get_jsobject());
-        let len = super::get_length(rt, &mut names)?;
+        let len = super::get_length(vm, &mut names)?;
 
         for i in 0..len {
-            rnames.push(names.get(rt, Symbol::Index(i))?);
+            rnames.push(names.get(vm, Symbol::Index(i))?);
         }
         rnames
     };
     letroot!(res = stack, unsafe {
-        func.data::<FFIFunction>().call(rt, &args)
+        func.data::<FFIFunction>().call(vm, &args)
     });
 
-    rt.heap().undefer();
+    vm.heap().undefer();
     // can't just do `*res` since it is internally Pin<&mut Result<JsValue,JsValue>>`
     match &*res {
         Ok(val) => Ok(*val),

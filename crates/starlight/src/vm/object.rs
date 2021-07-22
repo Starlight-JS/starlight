@@ -17,7 +17,7 @@ use super::{
     structure::Structure,
     symbol_table::{Internable, Symbol},
     value::JsValue,
-    Context, Runtime,
+    Context, VirtualMachine,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::prelude::*;
@@ -1523,15 +1523,15 @@ mod tests {
     fn test_put() {
         Platform::initialize();
         let options = Options::default();
-        let mut rt = Runtime::new(options, None);
-        let mut ctx = Context::new(&mut rt);
-        let stack = rt.shadowstack();
+        let mut vm = VirtualMachine::new(options, None);
+        let mut ctx = Context::new(&mut vm);
+        let stack = vm.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(ctx));
 
         let result = object.put(ctx, "key".intern(), JsValue::new(42.4242), false);
         assert!(result.is_ok());
-        rt.heap().gc();
+        vm.heap().gc();
         match object.get(ctx, "key".intern()) {
             Ok(val) => {
                 assert!(val.is_number());
@@ -1547,9 +1547,9 @@ mod tests {
     fn test_indexed() {
         Platform::initialize();
         let options = Options::default();
-        let mut rt = Runtime::new(options, None);
-        let mut ctx = Context::new(&mut rt);
-        let stack = rt.shadowstack();
+        let mut vm = VirtualMachine::new(options, None);
+        let mut ctx = Context::new(&mut vm);
+        let stack = vm.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(ctx));
         for i in 0..10000u32 {
@@ -1557,7 +1557,7 @@ mod tests {
             assert!(result.is_ok());
         }
 
-        rt.heap().gc();
+        vm.heap().gc();
         for i in 0..10000u32 {
             let result = object.get(ctx, Symbol::Index(i));
             match result {
@@ -1578,7 +1578,7 @@ mod tests {
             false,
         );
         assert!(result.is_ok());
-        rt.heap().gc();
+        vm.heap().gc();
         for i in 0..10000u32 {
             let result = object.get(ctx, Symbol::Index(i));
             match result {
@@ -1858,7 +1858,7 @@ impl<T: JsClass> Deserializable for TypedJsObject<T> {
     }
 
     unsafe fn allocate(
-        _ctx: &mut Runtime,
+        _ctx: &mut VirtualMachine,
         _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
     ) -> *mut crate::gc::cell::GcPointerBase {
         unreachable!()

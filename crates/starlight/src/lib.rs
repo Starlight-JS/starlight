@@ -31,7 +31,7 @@
 
 use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
 use std::sync::atomic::AtomicBool;
-use vm::{arguments::Arguments, object::JsObject, value::JsValue, Runtime};
+use vm::{arguments::Arguments, object::JsObject, value::JsValue, VirtualMachineRef};
 #[macro_export]
 macro_rules! def_native_method {
     ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr) => {{
@@ -111,9 +111,9 @@ impl Platform {
     pub fn new_runtime(
         options: Options,
         external_references: Option<&'static [usize]>,
-    ) -> Box<Runtime> {
+    ) -> VirtualMachineRef {
         Self::initialize();
-        vm::Runtime::new(options, external_references)
+        vm::VirtualMachine::new(options, external_references)
     }
 }
 
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
 
     let options = Options::default();
     let gc = gc::default_heap(&options);
-    let mut rt = Deserializer::deserialize(
+    let mut vm = Deserializer::deserialize(
         false,
         std::slice::from_raw_parts(array, size),
         options,
@@ -141,8 +141,8 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
             function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));
         },
     );
-    let mut ctx = Context::new(&mut rt);
-    let stack = rt.shadowstack();
+    let mut ctx = Context::new(&mut vm);
+    let stack = vm.shadowstack();
 
     letroot!(function = stack, function.expect("No function"));
     letroot!(funcc = stack, *function);
@@ -159,7 +159,7 @@ pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
     {
         Ok(x) => {
             if x.is_number() {
-                drop(rt);
+                drop(vm);
                 std::process::exit(x.get_number().floor() as i32);
             }
         }
@@ -182,7 +182,7 @@ pub mod prelude {
     };
     pub use super::letroot;
     pub use super::options::Options;
-    pub use super::vm::Runtime;
+    pub use super::vm::VirtualMachine;
     pub use super::vm::{
         arguments::Arguments,
         array::JsArray,

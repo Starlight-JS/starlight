@@ -99,7 +99,7 @@ impl SymbolID {
 
     pub const PUBLIC_START: SymbolID = Self(128);
 }
-/// Runtime symbol type.
+/// VirtualMachine symbol type.
 ///
 ///
 /// This type is used as property names and inside JsSymbol.

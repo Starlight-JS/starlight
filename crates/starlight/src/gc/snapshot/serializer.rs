@@ -27,7 +27,7 @@ use crate::{
         GlobalData,
     },
 };
-use crate::{jsrt::VM_NATIVE_REFERENCES, vm::Runtime};
+use crate::{jsrt::VM_NATIVE_REFERENCES, vm::VirtualMachine};
 use std::{collections::HashMap, io::Write, u8};
 
 pub struct SnapshotSerializer {
@@ -46,7 +46,7 @@ impl SnapshotSerializer {
             symbol_map: HashMap::new(),
         }
     }
-    pub(crate) fn build_reference_map(&mut self, rt: &mut Runtime) {
+    pub(crate) fn build_reference_map(&mut self, vm: &mut VirtualMachine) {
         let mut indexx = 0;
         VM_NATIVE_REFERENCES
             .iter()
@@ -74,7 +74,7 @@ impl SnapshotSerializer {
                 indexx += 1;
             });
 
-        if let Some(references) = rt.external_references {
+        if let Some(references) = vm.external_references {
             for (_index, reference) in references.iter().enumerate() {
                 /* let result = self.reference_map.insert(*reference, indexx);
                 indexx += 1;
@@ -111,8 +111,8 @@ impl SnapshotSerializer {
         self.output[patch_at + 2] = count[2];
         self.output[patch_at + 3] = count[3];
     }
-    pub(crate) fn build_heap_reference_map(&mut self, rt: &mut Runtime) {
-        let gc = rt.heap();
+    pub(crate) fn build_heap_reference_map(&mut self, vm: &mut VirtualMachine) {
+        let gc = vm.heap();
 
         /*Heap::walk(gc.mi_heap, |object, _| {
             //let ix = self.reference_map.len() as u32;
@@ -128,10 +128,10 @@ impl SnapshotSerializer {
 
     pub(crate) fn build_heap_reference_map_in_context(
         &mut self,
-        rt: &mut Runtime,
+        vm: &mut VirtualMachine,
         ctx: GcPointer<Context>,
     ) {
-        let gc = rt.heap();
+        let gc = vm.heap();
         let callback = &mut |object| {
             self.reference_map.push(object as _);
             true
@@ -149,8 +149,12 @@ impl SnapshotSerializer {
         });
     }
 
-    pub(crate) fn serialize_context(&mut self, rt: &mut Runtime, mut context: GcPointer<Context>) {
-        let gc = rt.heap();
+    pub(crate) fn serialize_context(
+        &mut self,
+        vm: &mut VirtualMachine,
+        mut context: GcPointer<Context>,
+    ) {
+        let gc = vm.heap();
         let patch_at = self.output.len();
         self.write_u32(0);
         let mut count: u32 = 0;
@@ -220,8 +224,8 @@ impl SnapshotSerializer {
         context.serialize(self);
     }
 
-    pub(crate) fn serialize(&mut self, rt: &mut Runtime) {
-        let gc = rt.heap();
+    pub(crate) fn serialize(&mut self, vm: &mut VirtualMachine) {
+        let gc = vm.heap();
         let patch_at = self.output.len();
         self.write_u32(0);
         let mut count: u32 = 0;
@@ -275,7 +279,7 @@ impl SnapshotSerializer {
         self.output[patch_at + 1] = buf[1];
         self.output[patch_at + 2] = buf[2];
         self.output[patch_at + 3] = buf[3];
-        rt.serialize(self);
+        vm.serialize(self);
     }
 
     pub fn get_gcpointer<T: GcCell + ?Sized>(&self, at: GcPointer<T>) -> u32 {
@@ -900,7 +904,7 @@ impl Serializable for GlobalData {
     }
 }
 
-impl Serializable for Runtime {
+impl Serializable for VirtualMachine {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         let ctx_num = self.contexts.len();
         serializer.write_u32(ctx_num as u32);

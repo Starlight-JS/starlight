@@ -15,7 +15,7 @@ use once_cell::sync::Lazy;
 use results::{analyze_results, compare_results, write_json};
 use serde::{Deserialize, Serialize};
 use starlight::prelude::Options;
-use starlight::{vm::Runtime, Platform};
+use starlight::{vm::VirtualMachine, Platform};
 
 use std::time::Instant;
 use std::{
@@ -178,8 +178,8 @@ enum Cli {
 
         // show failed tests num
         #[structopt(short)]
-        num: u32
-    }
+        num: u32,
+    },
 }
 
 /// All the harness include files.
@@ -379,7 +379,7 @@ enum Phase {
     Parse,
     Early,
     Resolution,
-    Runtime,
+    VirtualMachine,
 }
 
 /// Locale information structure.
@@ -414,10 +414,7 @@ fn main() {
             markdown,
             detail,
         } => compare_results(base.as_path(), new.as_path(), markdown, detail),
-        Cli::Analyze {
-            base,
-            num
-        } => analyze_results(base.as_path(),num),
+        Cli::Analyze { base, num } => analyze_results(base.as_path(), num),
     }
 }
 
@@ -462,7 +459,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
 
     let results = if suite.to_string_lossy().ends_with(".js") {
         let options = Options::default();
-        let mut rt = Runtime::new(options, None);
+        let vm = VirtualMachine::new(options, None);
         let test = read_test(&test262_path.join(suite)).expect("could not get the test to run");
 
         if verbose != 0 {
@@ -473,7 +470,7 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
             suites: Vec::new(),
             tests: vec![test],
         };
-        suite.run_main(&harness, verbose, &mut rt)
+        suite.run_main(&harness, verbose, vm)
     } else {
         let suite =
             read_suite(&test262_path.join(suite)).expect("could not get the list of tests to run");
@@ -482,8 +479,8 @@ fn run_test_suite(verbose: u8, test262_path: &Path, suite: &Path, output: Option
             println!("Test suite loaded, starting tests...");
         }
         let options = Options::default();
-        let mut rt = Runtime::new(options, None);
-        suite.run_main(&harness, verbose, &mut rt)
+        let vm = VirtualMachine::new(options, None);
+        suite.run_main(&harness, verbose, vm)
     };
     show_result(&results);
     write_json(results, output, verbose)

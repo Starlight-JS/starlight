@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::vm::{context::Context, Runtime};
+use crate::vm::{context::Context, VirtualMachine};
 
 use self::serializer::SnapshotSerializer;
 
@@ -18,8 +18,8 @@ pub struct Snapshot {
 impl Snapshot {
     pub fn take(
         log: bool,
-        runtime: &mut Runtime,
-        callback: impl FnOnce(&mut SnapshotSerializer, &mut Runtime),
+        runtime: &mut VirtualMachine,
+        callback: impl FnOnce(&mut SnapshotSerializer, &mut VirtualMachine),
     ) -> Self {
         let mut serializer = serializer::SnapshotSerializer::new(log);
         let ids_patch = serializer.output.len();
@@ -43,7 +43,7 @@ impl Snapshot {
 
     pub fn take_context(
         log: bool,
-        runtime: &mut Runtime,
+        runtime: &mut VirtualMachine,
         mut context: GcPointer<Context>,
         callback: impl FnOnce(&mut SnapshotSerializer, &mut Context),
     ) -> Self {

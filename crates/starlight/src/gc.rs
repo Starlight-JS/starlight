@@ -16,7 +16,7 @@
 #![allow(dead_code, unused_variables)]
 use crate::options::Options;
 use crate::vm::context::Context;
-use crate::vm::Runtime;
+use crate::vm::VirtualMachine;
 use crate::{
     gc::cell::*,
     gc::snapshot::{
@@ -191,7 +191,7 @@ impl Deserializable for FreeObject {
         unreachable!()
     }
 
-    unsafe fn allocate(rt: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(vm: &mut VirtualMachine, _deser: &mut Deserializer) -> *mut GcPointerBase {
         unreachable!()
     }
 }
@@ -547,6 +547,9 @@ pub struct Heap {
 }
 
 impl Heap {
+    pub(crate) fn vm_space(&self) -> *mut u8 {
+        self.space.vm_space()
+    }
     pub fn new(opts: &Options) -> Self {
         Self {
             allocation_color: DEFINETELY_WHITE,

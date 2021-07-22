@@ -80,7 +80,7 @@ impl<T: TypedArrayType> GcPointer<TypedArrayStorage<T>> {
         self.size = new_size;
     }
 
-    pub fn ensure_capacity(&mut self, rt: &mut Heap, capacity: u32) {
+    pub fn ensure_capacity(&mut self, vm: &mut Heap, capacity: u32) {
         assert!(
             capacity <= u32::MAX as u32,
             "capacity overflows 32-bit storage"
@@ -90,21 +90,21 @@ impl<T: TypedArrayType> GcPointer<TypedArrayStorage<T>> {
             return;
         }
 
-        unsafe { self.reallocate_to_larger(rt, capacity, 0, 0, self.size()) }
+        unsafe { self.reallocate_to_larger(vm, capacity, 0, 0, self.size()) }
     }
-    pub fn resize(&mut self, rt: &mut Heap, new_size: u32) {
-        self.shift(rt, 0, 0, new_size)
+    pub fn resize(&mut self, vm: &mut Heap, new_size: u32) {
+        self.shift(vm, 0, 0, new_size)
     }
 
     #[cold]
-    pub fn push_back_slowpath(&mut self, rt: &mut Heap, value: T) {
+    pub fn push_back_slowpath(&mut self, vm: &mut Heap, value: T) {
         let size = self.size();
 
-        self.resize(rt, self.size() + 1);
+        self.resize(vm, self.size() + 1);
         *self.at_mut(size) = value;
     }
 
-    pub fn push_back(&mut self, rt: &mut Heap, value: T) {
+    pub fn push_back(&mut self, vm: &mut Heap, value: T) {
         let currsz = self.size();
         if currsz < self.capacity() {
             unsafe {
@@ -113,7 +113,7 @@ impl<T: TypedArrayType> GcPointer<TypedArrayStorage<T>> {
             }
             return;
         }
-        self.push_back_slowpath(rt, value)
+        self.push_back_slowpath(vm, value)
     }
 
     pub fn pop_back(&mut self, _rt: &mut Heap) -> T {
@@ -127,7 +127,7 @@ impl<T: TypedArrayType> GcPointer<TypedArrayStorage<T>> {
         }
     }
 
-    pub fn shift(&mut self, rt: &mut Heap, from_first: u32, to_first: u32, to_last: u32) {
+    pub fn shift(&mut self, vm: &mut Heap, from_first: u32, to_first: u32, to_last: u32) {
         assert!(to_first <= to_last, "First must be before last");
         assert!(from_first <= self.size, "from_first must be before size");
         unsafe {
@@ -163,13 +163,13 @@ impl<T: TypedArrayType> GcPointer<TypedArrayStorage<T>> {
             } else {
                 capacity = TypedArrayStorage::<T>::max_elements() as u32;
             }
-            self.reallocate_to_larger(rt, capacity, from_first, to_first, to_last)
+            self.reallocate_to_larger(vm, capacity, from_first, to_first, to_last)
         }
     }
 
     pub unsafe fn reallocate_to_larger(
         &mut self,
-        rt: &mut Heap,
+        vm: &mut Heap,
         capacity: u32,
         from_first: u32,
         to_first: u32,
@@ -177,7 +177,7 @@ impl<T: TypedArrayType> GcPointer<TypedArrayStorage<T>> {
     ) {
         assert!(capacity > self.capacity());
 
-        let mut arr_res = TypedArrayStorage::<T>::new(rt, capacity);
+        let mut arr_res = TypedArrayStorage::<T>::new(vm, capacity);
         let copy_size = std::cmp::min(self.size() - from_first, to_last - to_first);
 
         {
@@ -223,13 +223,13 @@ impl<T: TypedArrayType> TypedArrayStorage<T> {
         self.size == 0
     }
     pub fn with_size(ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
-        let stack = rt.shadowstack();
-        crate::letroot!(this = stack, Self::new(rt.heap(), capacity));
-        this.resize_within_capacity(rt.heap(), size);
+        let stack = vm.shadowstack();
+        crate::letroot!(this = stack, Self::new(vm.heap(), capacity));
+        this.resize_within_capacity(vm.heap(), size);
         *this
     }
-    pub fn new(rt: &mut Heap, capacity: u32) -> GcPointer<Self> {
-        let cell = rt.allocate(Self {
+    pub fn new(vm: &mut Heap, capacity: u32) -> GcPointer<Self> {
+        let cell = vm.allocate(Self {
             capacity,
             size: 0,
             data: [],
@@ -291,7 +291,7 @@ impl<T: TypedArrayType> Deserializable for TypedArrayStorage<T> {
     unsafe fn allocate(ctx: GcPointer<Context>, deser: &mut Deserializer) -> *mut GcPointerBase {
         let cap = u32::deserialize_inplace(deser);
         deser.pc -= 4;
-        rt.heap().allocate_raw(
+        vm.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
             cap as usize * size_of::<T>() + size_of::<Self>() + 16,
             TypeId::of::<Self>(),
@@ -308,7 +308,7 @@ impl<T: TypedArrayType> Deserializable for TypedArrayStorage<T> {
 
         for _ in 0..size {
             let item = T::deserialize_inplace(deser);
-            arr.push_back((&mut *deser.rt).heap(), item);
+            arr.push_back((&mut *deser.vm).heap(), item);
         }
         assert_eq!(
             arr.size, size,
@@ -403,33 +403,33 @@ mod tests {
     use super::*;
     #[test]
     fn test_ser_deser() {
-        let mut rt = Platform::new_runtime(RuntimeParams::default(), GcParams::default(), None);
+        let mut vm = Platform::new_runtime(VirtualMachineParams::default(), GcParams::default(), None);
 
-        let mut my_typed_array = TypedArrayStorage::<u32>::new(rt.heap(), 100);
-        my_typed_array.push_back(rt.heap(), 42);
+        let mut my_typed_array = TypedArrayStorage::<u32>::new(vm.heap(), 100);
+        my_typed_array.push_back(vm.heap(), 42);
 
         assert_eq!(*my_typed_array.at(0), 42);
-        rt.global_object()
+        vm.global_object()
             .put(
-                &mut rt,
+                &mut vm,
                 "myTypedArray".intern(),
                 JsValue::encode_object_value(my_typed_array),
                 false,
             )
             .unwrap_or_else(|_| unreachable!());
 
-        let snapshot = Snapshot::take(false, &mut rt, |_, _| {});
+        let snapshot = Snapshot::take(false, &mut vm, |_, _| {});
 
-        let mut rt = Deserializer::deserialize(
+        let mut vm = Deserializer::deserialize(
             false,
             &snapshot.buffer,
-            RuntimeParams::default(),
+            VirtualMachineParams::default(),
             Heap::new(MiGC::new(GcParams::default())),
             None,
             |_, _| {},
         );
 
-        let my_typed_array = rt.get_global("myTypedArray").unwrap();
+        let my_typed_array = vm.get_global("myTypedArray").unwrap();
         let object = my_typed_array
             .get_object()
             .downcast::<TypedArrayStorage<u32>>()

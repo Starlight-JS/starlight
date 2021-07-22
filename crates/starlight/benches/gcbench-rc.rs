@@ -78,9 +78,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             |b| {
                 /*b.iter_batched(, routine, size)|| {
 
-                        let mut temp_tree = rt.allocate(Node::new(None, None));
+                        let mut temp_tree = vm.allocate(Node::new(None, None));
                         keep_on_stack!(&mut temp_tree);
-                        populate(&mut rt, depth as _, temp_tree);
+                        populate(&mut vm, depth as _, temp_tree);
                     }
 
                 });*/

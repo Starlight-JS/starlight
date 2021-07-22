@@ -101,7 +101,7 @@ impl Deserializable for Environment {
         at.cast::<Self>().write(Self::deserialize_inplace(deser))
     }
 
-    unsafe fn allocate(ctx: &mut Runtime, _deser: &mut Deserializer) -> *mut GcPointerBase {
+    unsafe fn allocate(ctx: &mut VirtualMachine, _deser: &mut Deserializer) -> *mut GcPointerBase {
         ctx.heap().allocate_raw(
             vtable_of_type::<Self>() as _,
             size_of::<Self>(),
