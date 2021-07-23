@@ -126,9 +126,9 @@ fn main() {
             std::process::exit(1);
         }
     }
-
     unsafe {
         vm.dispose();
     }
+
     std::process::exit(0);
 }

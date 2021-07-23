@@ -3,4 +3,4 @@
     path = test262
 [submodule "octane"]
 	path = octane
-	url = git@github.com:chromium/octane.git
+	url = https://github.com/chromium/octane

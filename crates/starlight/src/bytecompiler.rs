@@ -1935,6 +1935,7 @@ impl ByteCompiler {
                         AssignOp::BitXorAssign => Opcode::OP_XOR,
                         AssignOp::ModAssign => Opcode::OP_REM,
                         AssignOp::RShiftAssign => Opcode::OP_SHR,
+                        AssignOp::LShiftAssign => Opcode::OP_SHL,
                         x => {
                             return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));
                         }
