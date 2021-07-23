@@ -241,7 +241,6 @@ impl JsFunction {
             construct_struct: None,
             ty,
         });
-
         obj
     }
     pub fn new_with_struct(
@@ -444,6 +443,8 @@ impl JsNativeFunction {
     ) -> GcPointer<JsObject> {
         let ctx = ctx;
         let mut func = JsFunction::new(ctx, FuncType::Native(JsNativeFunction { func: f }), false);
+        let k = ctx.description(name.into());
+
         let l = "length".intern();
 
         let _ = func.define_own_property(
@@ -453,10 +454,8 @@ impl JsNativeFunction {
             false,
         );
         let n = "name".intern();
-        let k = ctx.description(name.into());
         let name = JsValue::encode_object_value(JsString::new(ctx, &k));
         let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
-
         func
     }
     #[allow(clippy::many_single_char_names)]
