@@ -78,10 +78,12 @@ jobs:
         run: sccache --start-server
       - name: Build
         run: cargo build --release
-
+      - name: Print sccache stats
+        run: sccache --show-stats
+      - name: Stop sccache server
+        run: sccache --stop-server || true
       - name: Build asset
         run: |
-          strip mdr*
           7z a starlight-nightly.zip target/release/sl*
       - name: Set tag
         if: ${{ matrix.os == 'ubuntu-latest' }}
