@@ -1,3 +1,5 @@
+use core::f64;
+
 use crate::{
     prelude::*,
     vm::{builder::Builtin, context::Context},
@@ -106,8 +108,7 @@ pub fn math_trunc(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, 
 pub fn math_log(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         let num = args.at(0).to_number(ctx)?;
-        let y = args.at(1).to_number(ctx)?;
-        Ok(JsValue::new(num.log(y)))
+        Ok(JsValue::new(num.ln()))
     } else {
         Ok(JsValue::encode_nan_value())
     }
@@ -118,6 +119,12 @@ pub fn math_random(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValu
 }
 pub fn math_sqrt(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).to_number(ctx)?.sqrt()))
+}
+
+pub fn math_pow(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    let left = args.at(0).to_number(ctx)?;
+    let right = args.at(1).to_number(ctx)?;
+    Ok(JsValue::new(left.powf(right)))
 }
 
 pub struct Math;
@@ -136,6 +143,8 @@ impl Builtin for Math {
         def_native_method!(ctx, math, abs, math_abs, 1)?;
         def_native_method!(ctx, math, random, math_random, 0)?;
         def_native_method!(ctx, math, sqrt, math_sqrt, 1)?;
+        def_native_method!(ctx, math, pow, math_pow, 2)?;
+        def_native_property!(ctx, math, E, f64::consts::E)?;
 
         def_native_property!(ctx, math, PI, std::f64::consts::PI)?;
 

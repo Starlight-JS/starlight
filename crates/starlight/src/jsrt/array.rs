@@ -4,7 +4,16 @@
 use std::intrinsics::unlikely;
 
 use super::object::object_to_string;
-use crate::{constant::S_CONSTURCTOR, gc::cell::GcPointer, jsrt::{array, get_length}, vm::{arguments::*, array::*, attributes::*, builder::Builtin, class::JsClass, context::Context, error::*, function::JsNativeFunction, object::*, property_descriptor::DataDescriptor, string::*, structure::Structure, symbol_table::*, value::*}};
+use crate::{
+    constant::S_CONSTURCTOR,
+    gc::cell::GcPointer,
+    jsrt::{array, get_length},
+    vm::{
+        arguments::*, array::*, attributes::*, builder::Builtin, class::JsClass, context::Context,
+        error::*, function::JsNativeFunction, object::*, property_descriptor::DataDescriptor,
+        string::*, structure::Structure, symbol_table::*, value::*,
+    },
+};
 pub fn array_ctor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let size = args.size();
     if size == 0 {
@@ -423,6 +432,26 @@ pub fn array_map(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
     Ok(JsValue::new(*result))
 }
 
+pub fn array_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    let stack = ctx.shadowstack();
+    letroot!(array = stack, args.this.to_object(ctx)?);
+    let length = super::get_length(ctx, &mut array)?;
+
+    let target = args.at(0);
+
+    for i in 0..length {
+        if !array.has_own_property(ctx, Symbol::Index(i)) {
+            continue;
+        }
+
+        let elem = array.get(ctx, Symbol::Index(i))?;
+        if elem == target {
+            return Ok(JsValue::new(i));
+        }
+    }
+    Ok(JsValue::new(-1))
+}
+
 pub fn array_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let stack = ctx.shadowstack();
     letroot!(obj = stack, args.this.to_object(ctx)?);
@@ -550,9 +579,13 @@ impl Builtin for JsArray {
         def_native_method!(ctx, prototype, push, array_push, 1, W | C | E)?;
         def_native_method!(ctx, prototype, pop, array_pop, 1, W | C | E)?;
         def_native_method!(ctx, prototype, reduce, array_reduce, 1, W | C | E)?;
+        def_native_method!(ctx, prototype, concat, array_concat, 1, W | C | E)?;
+        def_native_method!(ctx, prototype, forEach, array_for_each, 1, W | C | E)?;
+        def_native_method!(ctx, prototype, filter, array_filter, 1, W | C | E)?;
+        def_native_method!(ctx, prototype, map, array_map, 1, W | C | E)?;
         def_native_method!(ctx, prototype, slice, array_slice, 1, W | C | E)?;
         def_native_method!(ctx, prototype, shift, array::array_shift, 0)?;
-        def_native_method!(ctx, prototype, concat, array_concat, 1, W | C | E)?;
+        def_native_method!(ctx, prototype, indexOf, array_index_of, 1, W | C | E)?;
         ctx.global_data.array_prototype = Some(prototype);
 
         let mut global_object = ctx.global_object();
