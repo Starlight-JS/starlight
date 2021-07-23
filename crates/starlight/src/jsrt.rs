@@ -272,6 +272,7 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         math::math_sqrt as _,
         math::math_random as _,
         math::math_pow as _,
+        math::math_round as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
         HashValueZero::deserialize as _,

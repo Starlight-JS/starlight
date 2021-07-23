@@ -127,6 +127,11 @@ pub fn math_pow(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, Js
     Ok(JsValue::new(left.powf(right)))
 }
 
+pub fn math_round(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    let left = args.at(0).to_number(ctx)?;
+    Ok(JsValue::new(left.round()))
+}
+
 pub struct Math;
 
 impl Builtin for Math {
@@ -144,6 +149,7 @@ impl Builtin for Math {
         def_native_method!(ctx, math, random, math_random, 0)?;
         def_native_method!(ctx, math, sqrt, math_sqrt, 1)?;
         def_native_method!(ctx, math, pow, math_pow, 2)?;
+        def_native_method!(ctx, math, round, math_round, 1)?;
         def_native_property!(ctx, math, E, f64::consts::E)?;
 
         def_native_property!(ctx, math, PI, std::f64::consts::PI)?;

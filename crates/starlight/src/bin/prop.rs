@@ -1,6 +1,9 @@
 use std::fs::read_to_string;
 
-use starlight::{prelude::Options, Platform};
+use starlight::{
+    prelude::{JsValue, Options},
+    Platform,
+};
 
 fn main() {
     Platform::initialize();

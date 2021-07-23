@@ -546,10 +546,9 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
             Opcode::OP_SHL => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
                 let left = lhs.to_int32(ctx)?;
                 let right = rhs.to_uint32(ctx)?;
-                frame.push(JsValue::new((left << (right & 0x1f)) as f64));
+                frame.push(JsValue::new((left << (right)) as f64));
             }
             Opcode::OP_SHR => {
                 let lhs = frame.pop();
