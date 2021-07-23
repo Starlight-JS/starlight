@@ -1,7 +1,7 @@
 use crate::{
     prelude::*,
     vm::{
-        array_buffer::JsArrayBuffer, context::Context, object::TypedJsObject,
+        array_buffer::JsArrayBuffer, builder::Builtin, context::Context, object::TypedJsObject,
         structure_builder::StructureBuilder,
     },
 };
@@ -95,25 +95,8 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     Ok(JsValue::new(new_buf))
 }
 
-impl GcPointer<Context> {
-    pub(crate) fn init_array_buffer_in_global_object(mut self) -> Result<(), JsValue> {
-        let mut proto = self.global_data.array_buffer_prototype.unwrap();
-        let constructor = proto
-            .get_own_property(self, S_CONSTURCTOR.intern())
-            .unwrap()
-            .value();
-        self.global_object().put(
-            self,
-            "ArrayBuffer".intern(),
-            JsValue::new(constructor),
-            false,
-        )?;
-        Ok(())
-    }
-
-    pub(crate) fn init_array_buffer_in_global_data(mut self) -> Result<(), JsValue> {
-        // Do not care about GC since no GC is possible when initializing runtime.
-
+impl Builtin for JsArrayBuffer {
+    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut builder = StructureBuilder::new(None);
         assert_eq!(
             builder
@@ -121,32 +104,39 @@ impl GcPointer<Context> {
                 .offset,
             0
         );
-        let mut structure = builder.build(self, false, false);
+        let mut structure = builder.build(ctx, false, false);
         let proto_map = structure
-            .change_prototype_transition(self, Some(self.global_data().object_prototype.unwrap()));
-        let mut proto = JsObject::new(
-            self,
+            .change_prototype_transition(ctx, Some(ctx.global_data().object_prototype.unwrap()));
+        let mut prototype = JsObject::new(
+            ctx,
             &proto_map,
             JsArrayBuffer::class(),
             ObjectTag::ArrayBuffer,
         );
 
-        structure.change_prototype_with_no_transition(proto);
-        *proto.data::<JsArrayBuffer>() = std::mem::ManuallyDrop::new(JsArrayBuffer {
+        structure.change_prototype_with_no_transition(prototype);
+        *prototype.data::<JsArrayBuffer>() = std::mem::ManuallyDrop::new(JsArrayBuffer {
             data: std::ptr::null_mut(),
 
             attached: false,
         });
 
-        self.global_data.array_buffer_prototype = Some(proto);
-        self.global_data.array_buffer_structure = Some(structure);
+        ctx.global_data.array_buffer_prototype = Some(prototype);
+        ctx.global_data.array_buffer_structure = Some(structure);
 
-        let mut ctor =
-            JsNativeFunction::new(self, "ArrayBuffer".intern(), array_buffer_constructor, 1);
+        let mut constructor =
+            JsNativeFunction::new(ctx, "ArrayBuffer".intern(), array_buffer_constructor, 1);
 
-        def_native_property!(self, ctor, prototype, proto)?;
-        def_native_property!(self, proto, constructor, ctor)?;
-        def_native_method!(self, proto, slice, array_buffer_slice, 2)?;
+        def_native_property!(ctx, constructor, prototype, prototype)?;
+        def_native_property!(ctx, prototype, constructor, constructor)?;
+        def_native_method!(ctx, prototype, slice, array_buffer_slice, 2)?;
+
+        ctx.global_object().put(
+            ctx,
+            "ArrayBuffer".intern(),
+            JsValue::new(constructor),
+            false,
+        )?;
         Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use crate::{gc::cell::GcCell, jsrt::VM_NATIVE_REFERENCES, vm::Lrc};
+use crate::{define_op_builtins, gc::cell::GcCell, jsrt::VM_NATIVE_REFERENCES, vm::Lrc};
 use std::{collections::HashMap, ptr::null};
 use swc_common::{errors::Handler, input::StringInput, FileName, SourceMap};
 use swc_ecmascript::parser::{Parser, Syntax};
@@ -12,25 +12,44 @@ use crate::{
     },
     jsrt,
     vm::{
-        arguments::Arguments, environment::Environment, error::JsSyntaxError,
-        function::JsVMFunction, init_es_config, BufferedError,
+        arguments::{Arguments, JsArguments},
+        environment::Environment,
+        error::JsSyntaxError,
+        function::JsVMFunction,
+        init_es_config, BufferedError,
     },
 };
 
 use super::{
-    builder::{ClassBuilder, ClassConstructor},
+    array::JsArray,
+    array_buffer::JsArrayBuffer,
+    builder::{Builtin, ClassBuilder, ClassConstructor},
     class::JsClass,
+    data_view::JsDataView,
+    error::JsError,
     error::{JsRangeError, JsReferenceError, JsTypeError},
     function::JsNativeFunction,
+    function::{JsFunction, JsGeneratorFunction},
     global::JsGlobal,
     interpreter::{frame::CallFrame, stack::Stack},
+    number::NumberObject,
     object::{JsObject, ObjectTag},
+    promise::JsPromise,
     string::JsString,
+    string::JsStringObject,
     structure::Structure,
+    symbol_table::JsSymbolObject,
     symbol_table::{self, Internable, JsSymbol, Symbol},
     value::JsValue,
     GlobalData, ModuleKind, MyEmiter, VirtualMachine, VirtualMachineRef,
 };
+
+use crate::jsrt::boolean::BooleanObject;
+use crate::jsrt::date::Date;
+use crate::jsrt::math::Math;
+use crate::jsrt::regexp::RegExp;
+use crate::jsrt::weak_ref::JsWeakRef;
+use crate::jsrt::SelfHost;
 
 use crate::gc::snapshot::deserializer::Deserializable;
 
@@ -106,7 +125,7 @@ impl Context {
         vm.gc.defer();
         let mut ctx = Context::new_empty(vm);
         ctx.global_object = Some(JsGlobal::new(ctx));
-        ctx.init();
+        ctx.init().expect("Context init failed");
         vm.contexts.push(ctx);
         vm.gc.undefer();
         vm.gc.collect_if_necessary();
@@ -148,6 +167,14 @@ impl GcPointer<Context> {
         Ok(())
     }
 
+    pub fn register_builtin<T>(mut self) -> Result<(), JsValue>
+    where
+        T: Builtin,
+    {
+        T::init(self)?;
+        Ok(())
+    }
+
     pub fn register_structure(&mut self, name: Symbol, structure: GcPointer<Structure>) {
         self.global_data.register_structure(name, structure);
     }
@@ -156,73 +183,16 @@ impl GcPointer<Context> {
         self.global_data.get_structure(name)
     }
 
-    pub fn init(&mut self) {
-        self.init_global_data().expect("Init Global Data Failed");
-        self.init_global_object()
-            .expect("Init Global Object Failed");
-    }
+    pub fn init(&mut self) -> Result<(), JsValue> {
+        macro_rules! define_register_builtin {
+            ($class: ident) => {
+                self.register_builtin::<$class>()?;
+            };
+        }
+        define_op_builtins!(define_register_builtin);
 
-    pub fn init_global_object(&mut self) -> Result<(), JsValue> {
-        self.init_object_in_global_object()?;
-        self.init_func_in_global_object()?;
-        self.init_number_in_global_object()?;
-        self.init_array_in_global_object()?;
-        self.init_math_in_global_object()?;
-        self.init_error_in_global_object()?;
-        self.init_string_in_global_object()?;
-        self.init_builtin_in_global_object()?;
-        self.init_symbol_in_global_object()?;
-        self.init_regexp_in_global_object()?;
-        self.init_promise_in_global_object()?;
-        self.init_array_buffer_in_global_object()?;
-        self.init_data_view_in_global_object()?;
-        self.init_weak_ref_in_global_object()?;
-        self.init_date_in_global_object()?;
-        self.init_boolean_in_global_object()?;
-        self.init_self_hosted();
         self.init_module_loader();
         self.init_internal_modules();
-        Ok(())
-    }
-
-    pub fn init_global_data(mut self) -> Result<(), JsValue> {
-        self.global_data.empty_object_struct = Some(Structure::new_indexed(self, None, false));
-        let s = Structure::new_unique_indexed(self, None, false);
-        let mut proto = JsObject::new(self, &s, JsObject::class(), ObjectTag::Ordinary);
-
-        self.global_data.object_prototype = Some(proto);
-        self.global_data.function_struct = Some(Structure::new_indexed(self, None, false));
-        self.global_data.normal_arguments_structure =
-            Some(Structure::new_indexed(self, Some(proto), false));
-        self.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
-
-        self.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(proto);
-
-        self.global_data.number_structure = Some(Structure::new_indexed(self, None, false));
-
-        // Init global data structure
-        self.init_func_global_data(proto)?;
-        self.init_error_in_global_data(proto)?;
-        self.init_array_in_global_data(proto)?;
-        self.init_number_in_global_data(proto)?;
-        self.init_symbol_in_global_data(proto)?;
-        self.init_object_in_global_data(proto)?;
-        self.init_regexp_in_global_data(proto)?;
-        self.init_generator_in_global_data(proto)?;
-        self.init_array_buffer_in_global_data()?;
-        self.init_data_view_in_global_data()?;
-        self.init_string_in_global_data(proto)?;
-        self.init_weak_ref_in_global_data()?;
-        self.init_date_in_global_data()?;
-        self.init_boolean_in_global_data()?;
         Ok(())
     }
 }

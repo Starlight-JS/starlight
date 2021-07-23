@@ -3,7 +3,6 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use super::{
-    builder::ClassBuilder,
     context::Context,
     method_table::MethodTable,
     object::{EnumerationMode, JsHint, JsObject},
@@ -74,10 +73,6 @@ macro_rules! define_additional_size {
 #[allow(non_snake_case)]
 pub trait JsClass {
     fn class() -> &'static Class;
-
-    fn init(_builder: &mut ClassBuilder) -> Result<(), JsValue> {
-        Ok(())
-    }
 
     fn GetPropertyNamesMethod(
         obj: &mut GcPointer<JsObject>,

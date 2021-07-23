@@ -1189,16 +1189,16 @@ impl GcPointer<JsObject> {
             }
         }
     }
-    pub fn put(
+    pub fn put<K: Into<Symbol>, V: Into<JsValue>>(
         &mut self,
         ctx: GcPointer<Context>,
-        name: Symbol,
-        val: JsValue,
+        name: K,
+        val: V,
         throwable: bool,
     ) -> Result<(), JsValue> {
         let mut slot = Slot::new();
 
-        self.put_slot(ctx, name, val, &mut slot, throwable)
+        self.put_slot(ctx, name.into(), val.into(), &mut slot, throwable)
     }
 
     pub fn can_put_non_indexed(
@@ -1250,9 +1250,13 @@ impl GcPointer<JsObject> {
             self.get_own_non_indexed_property_slot(ctx, name, slot)
         }
     }
-    pub fn get(&mut self, ctx: GcPointer<Context>, name: Symbol) -> Result<JsValue, JsValue> {
+    pub fn get<K: Into<Symbol>>(
+        &mut self,
+        ctx: GcPointer<Context>,
+        name: K,
+    ) -> Result<JsValue, JsValue> {
         let mut slot = Slot::new();
-        self.get_slot(ctx, name, &mut slot)
+        self.get_slot(ctx, name.into(), &mut slot)
     }
     pub fn get_slot(
         &mut self,
