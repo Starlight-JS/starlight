@@ -668,8 +668,8 @@ pub fn define_lazy_property(
 #[macro_export]
 macro_rules! define_op_builtins {
     ($op: ident) => {
-        $op!(JsObject);
         $op!(JsFunction);
+        $op!(JsObject);
         $op!(JsArguments);
         $op!(NumberObject);
         $op!(JsArray);

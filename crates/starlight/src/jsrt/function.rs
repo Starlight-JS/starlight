@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::vm::attributes::*;
+use crate::vm::class::JsClass;
+use crate::vm::object::{JsObject, ObjectTag};
 use crate::vm::property_descriptor::DataDescriptor;
 use crate::{
     bytecompiler::*,
@@ -181,20 +183,24 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
 
 impl Builtin for JsFunction {
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        ctx.global_data.function_struct = Some(Structure::new_indexed(ctx, None, false));
+
+        let structure = Structure::new_unique_indexed(ctx, None, false);
+        let mut prototype = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
+        ctx.global_data.object_prototype = Some(prototype);
+
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         let structure = Structure::new_unique_indexed(ctx, Some(obj_proto), false);
         let name = S_FUNCTION.intern();
 
         let mut prototype =
             JsNativeFunction::new_with_struct(ctx, &structure, name, function_prototype, 1);
+
         ctx.global_data
             .function_struct
             .unwrap()
             .change_prototype_with_no_transition(prototype);
-        ctx.global_data
-            .function_struct
-            .unwrap()
-            .change_prototype_with_no_transition(prototype);
+
         ctx.global_data.func_prototype = Some(prototype);
 
         let structure = prototype

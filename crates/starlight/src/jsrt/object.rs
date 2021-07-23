@@ -394,23 +394,15 @@ pub fn object_is_extensible(ctx: GcPointer<Context>, args: &Arguments) -> Result
 
 impl Builtin for JsObject {
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let structure = Structure::new_unique_indexed(ctx, None, false);
-        let mut prototype = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
-        ctx.global_data.object_prototype = Some(prototype);
+        let mut prototype = ctx.global_data.object_prototype.unwrap();
 
         ctx.global_data.empty_object_struct = Some(Structure::new_indexed(ctx, None, false));
-        ctx.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(prototype);
-        ctx.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(prototype);
 
-        ctx.global_data.function_struct = Some(Structure::new_indexed(ctx, None, false));
+        ctx.global_data
+            .empty_object_struct
+            .as_mut()
+            .unwrap()
+            .change_prototype_with_no_transition(prototype);
 
         let name = S_OBJECT.intern();
         let mut constructor = JsNativeFunction::new(ctx, name, object_constructor, 1);
@@ -499,17 +491,6 @@ impl Builtin for JsObject {
 
         let mut global_object = ctx.global_object();
         def_native_property!(ctx, global_object, Object, constructor, W | C)?;
-
-        constructor
-            .get(ctx, "prototype")
-            .unwrap()
-            .to_object(ctx)
-            .unwrap()
-            .get(ctx, "hasOwnProperty")
-            .unwrap()
-            .to_object(ctx)
-            .unwrap()
-            .as_function_mut();
 
         def_native_property!(ctx, global_object, globalThis, global_object)?;
 
