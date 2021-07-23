@@ -1,12 +1,10 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::vm::symbol_table::Internable;
 use crate::{
     gc::cell::GcPointer,
-    jsrt::{self, global},
     prelude::JsString,
-    vm::{arguments::Arguments, builder::Builtin, context::Context, global::JsGlobal, value::*},
+    vm::{arguments::Arguments, context::Context, value::*},
 };
 use num::traits::*;
 use std::io::Write;
@@ -212,38 +210,4 @@ pub fn read_line(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
     std::io::stdin().read_line(&mut buf).unwrap();
 
     Ok(JsValue::new(JsString::new(ctx, buf)))
-}
-
-impl Builtin for JsGlobal {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let mut global_object = ctx.global_object();
-
-        // Property
-        def_native_property!(ctx, global_object, undefined, JsValue::UNDEFINED)?;
-
-        let nan = JsValue::encode_nan_value();
-        def_native_property!(ctx, global_object, NaN, nan)?;
-        def_native_property!(ctx, global_object, Infinity, std::f64::INFINITY)?;
-
-        // Method
-        def_native_method!(ctx, global_object, print, jsrt::print, 0)?;
-        def_native_method!(ctx, global_object, isFinite, global::is_finite, 1)?;
-        def_native_method!(ctx, global_object, isNaN, global::is_nan, 1)?;
-        def_native_method!(ctx, global_object, parseInt, global::parse_int, 1)?;
-        def_native_method!(ctx, global_object, readLine, global::read_line, 1)?;
-        def_native_method!(ctx, global_object, parseFloat, global::parse_float, 1)?;
-        def_native_method!(ctx, global_object, gc, global::gc, 0)?;
-        def_native_method!(ctx, global_object, ___trunc, global::___trunc, 1)?;
-        def_native_method!(ctx, global_object, ___isCallable, global::___is_callable, 1)?;
-        def_native_method!(
-            ctx,
-            global_object,
-            ___isConstructor,
-            global::___is_constructor,
-            1
-        )?;
-        def_native_method!(ctx, global_object, toString, global::to_string, 1)?;
-
-        Ok(())
-    }
 }

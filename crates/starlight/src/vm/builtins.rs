@@ -89,4 +89,4 @@ pub unsafe fn to_object(
 pub type Builtin =
     unsafe fn(GcPointer<Context>, &mut CallFrame, &mut *mut u8, u32, u8) -> Result<(), JsValue>;
 
-pub static BUILTIN_FUNCS: [Builtin; 1] = [reflect_apply];
+pub static BUILTINS: [Builtin; 1] = [reflect_apply];

@@ -1304,7 +1304,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                 ip = ip.add(4);
                 let effect = ip.cast::<u32>().read();
                 ip = ip.add(4);
-                super::builtins::BUILTIN_FUNCS[builtin_id as usize](
+                super::builtins::BUILTINS[builtin_id as usize](
                     ctx,
                     frame,
                     &mut ip,

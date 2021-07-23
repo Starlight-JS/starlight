@@ -1,17 +1,14 @@
 use std::intrinsics::unlikely;
 
 use crate::{
-    constant::S_OBJECT,
     gc::cell::GcPointer,
     vm::{
         arguments::Arguments,
         array::*,
         attributes::*,
-        builder::Builtin,
         class::JsClass,
         context::Context,
         error::JsTypeError,
-        function::JsNativeFunction,
         object::{JsObject, ObjectTag, *},
         property_descriptor::DataDescriptor,
         string::JsString,
@@ -390,110 +387,4 @@ pub fn object_is_extensible(ctx: GcPointer<Context>, args: &Arguments) -> Result
     Err(JsValue::new(ctx.new_type_error(
         "Object.isExtensible requires object argument",
     )))
-}
-
-impl Builtin for JsObject {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let mut prototype = ctx.global_data.object_prototype.unwrap();
-
-        ctx.global_data.empty_object_struct = Some(Structure::new_indexed(ctx, None, false));
-
-        ctx.global_data
-            .empty_object_struct
-            .as_mut()
-            .unwrap()
-            .change_prototype_with_no_transition(prototype);
-
-        let name = S_OBJECT.intern();
-        let mut constructor = JsNativeFunction::new(ctx, name, object_constructor, 1);
-        ctx.global_data.object_constructor = Some(constructor);
-
-        def_native_method!(
-            ctx,
-            constructor,
-            defineProperty,
-            object_define_property,
-            3,
-            NONE
-        )?;
-
-        def_native_method!(ctx, constructor, seal, object_seal, 1, NONE)?;
-
-        def_native_method!(ctx, constructor, freeze, object_freeze, 1, NONE)?;
-
-        def_native_method!(ctx, constructor, isSealed, object_is_sealed, 1, NONE)?;
-
-        def_native_method!(ctx, constructor, isFrozen, object_is_frozen, 1, NONE)?;
-
-        def_native_method!(
-            ctx,
-            constructor,
-            isExtensible,
-            object_is_extensible,
-            1,
-            NONE
-        )?;
-
-        def_native_method!(
-            ctx,
-            constructor,
-            getPrototypeOf,
-            object_get_prototype_of,
-            1,
-            NONE
-        )?;
-
-        def_native_method!(
-            ctx,
-            constructor,
-            preventExtensions,
-            object_prevent_extensions,
-            1,
-            NONE
-        )?;
-
-        def_native_method!(ctx, constructor, keys, object_keys, 1, NONE)?;
-
-        def_native_method!(
-            ctx,
-            constructor,
-            getOwnPropertyDescriptor,
-            object_get_own_property_descriptor,
-            2,
-            NONE
-        )?;
-
-        def_native_method!(ctx, constructor, create, object_create, 3, NONE)?;
-
-        def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
-
-        def_native_property!(ctx, prototype, constructor, constructor, W | C)?;
-
-        def_native_method!(ctx, prototype, toString, object_to_string, 0, W | C)?;
-
-        def_native_method!(
-            ctx,
-            prototype,
-            hasOwnProperty,
-            object_has_own_property,
-            1,
-            W | C
-        )?;
-
-        def_native_method!(
-            ctx,
-            prototype,
-            propertyIsEnumerable,
-            object_property_is_enumerable,
-            1,
-            W | C
-        )?;
-
-        let mut global_object = ctx.global_object();
-        def_native_property!(ctx, global_object, Object, constructor, W | C)?;
-
-        def_native_property!(ctx, global_object, globalThis, global_object)?;
-
-        Ok(())
-    }
 }

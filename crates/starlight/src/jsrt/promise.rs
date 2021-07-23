@@ -1,15 +1,10 @@
-use crate::constant::S_PROMISE;
 use crate::gc::cell::GcPointer;
 use crate::prelude::JsArray;
 use crate::vm::arguments::Arguments;
-use crate::vm::builder::Builtin;
 use crate::vm::class::JsClass;
 use crate::vm::context::Context;
-use crate::vm::function::JsNativeFunction;
-use crate::vm::object::JsObject;
 use crate::vm::promise::{JsPromise, TrackingMode};
 use crate::vm::string::JsString;
-use crate::vm::symbol_table::Internable;
 use crate::vm::value::JsValue;
 
 pub fn promise_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -251,34 +246,4 @@ pub fn promise_static_any(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     }
 
     JsPromise::new_tracking(ctx, TrackingMode::Any, args.at(0))
-}
-
-impl Builtin for JsPromise {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        // copied from file
-        let mut constructor =
-            JsNativeFunction::new(ctx, S_PROMISE.intern(), promise_constructor, 1);
-        let mut global_object = ctx.global_object();
-        let mut prototype = JsObject::new_empty(ctx);
-
-        // members / proto
-        def_native_method!(ctx, prototype, then, promise_then, 2)?;
-        def_native_method!(ctx, prototype, catch, promise_catch, 1)?;
-        def_native_method!(ctx, prototype, finally, promise_finally, 1)?;
-        def_native_method!(ctx, prototype, resolve, promise_resolve, 1)?;
-        def_native_method!(ctx, prototype, reject, promise_reject, 1)?;
-        // statics
-        def_native_method!(ctx, constructor, all, promise_static_all, 1)?;
-        def_native_method!(ctx, constructor, allSettled, promise_static_all_settled, 1)?;
-        def_native_method!(ctx, constructor, any, promise_static_any, 1)?;
-        def_native_method!(ctx, constructor, race, promise_static_race, 1)?;
-        def_native_method!(ctx, constructor, reject, promise_static_reject, 1)?;
-        def_native_method!(ctx, constructor, resolve, promise_static_resolve, 1)?;
-
-        def_native_property!(ctx, constructor, prototype, prototype)?;
-        def_native_property!(ctx, prototype, constructor, constructor)?;
-        def_native_property!(ctx, global_object, Promise, constructor)?;
-
-        Ok(())
-    }
 }
