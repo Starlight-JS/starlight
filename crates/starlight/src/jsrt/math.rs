@@ -1,4 +1,7 @@
-use crate::{prelude::*, vm::context::Context};
+use crate::{
+    prelude::*,
+    vm::{builder::Builtin, context::Context},
+};
 pub fn math_abs(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if args.size() != 0 {
         if args.at(0).is_int32() {
@@ -116,29 +119,32 @@ pub fn math_random(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValu
 pub fn math_sqrt(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(args.at(0).to_number(ctx)?.sqrt()))
 }
-impl GcPointer<Context> {
-    pub(crate) fn init_math_in_global_object(mut self) -> Result<(), JsValue> {
-        let mut math = JsObject::new_empty(self);
 
-        def_native_method!(self, math, trunc, math_trunc, 1)?;
-        def_native_method!(self, math, floor, math_floor, 1)?;
-        def_native_method!(self, math, log, math_log, 2)?;
-        def_native_method!(self, math, sin, math_sin, 1)?;
-        def_native_method!(self, math, cos, math_cos, 1)?;
-        def_native_method!(self, math, ceil, math_ceil, 1)?;
-        def_native_method!(self, math, exp, math_exp, 1)?;
-        def_native_method!(self, math, abs, math_abs, 1)?;
-        def_native_method!(self, math, random, math_random, 0)?;
-        def_native_method!(self, math, sqrt, math_sqrt, 1)?;
+pub struct Math;
 
-        def_native_property!(self, math, PI, std::f64::consts::PI)?;
+impl Builtin for Math {
+    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        let mut math = JsObject::new_empty(ctx);
 
-        let mut global_object = self.global_object();
+        def_native_method!(ctx, math, trunc, math_trunc, 1)?;
+        def_native_method!(ctx, math, floor, math_floor, 1)?;
+        def_native_method!(ctx, math, log, math_log, 2)?;
+        def_native_method!(ctx, math, sin, math_sin, 1)?;
+        def_native_method!(ctx, math, cos, math_cos, 1)?;
+        def_native_method!(ctx, math, ceil, math_ceil, 1)?;
+        def_native_method!(ctx, math, exp, math_exp, 1)?;
+        def_native_method!(ctx, math, abs, math_abs, 1)?;
+        def_native_method!(ctx, math, random, math_random, 0)?;
+        def_native_method!(ctx, math, sqrt, math_sqrt, 1)?;
 
-        def_native_property!(self, global_object, Math, math)?;
+        def_native_property!(ctx, math, PI, std::f64::consts::PI)?;
+
+        let mut global_object = ctx.global_object();
+
+        def_native_property!(ctx, global_object, Math, math)?;
 
         let source = include_str!("../builtins/Math.js");
-        self.eval_internal(Some("../builtins/Math.js"), false, source, true)?;
+        ctx.eval_internal(Some("../builtins/Math.js"), false, source, true)?;
 
         Ok(())
     }

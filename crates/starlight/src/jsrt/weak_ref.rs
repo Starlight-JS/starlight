@@ -3,7 +3,9 @@ use std::mem::ManuallyDrop;
 
 use crate::define_jsclass;
 use crate::js_method_table;
+use crate::jsrt::weak_ref;
 use crate::prelude::*;
+use crate::vm::builder::Builtin;
 use crate::vm::class::JsClass;
 use crate::vm::context::Context;
 use crate::vm::object::TypedJsObject;
@@ -70,5 +72,37 @@ pub fn weak_ref_prototype_deref(
     match weak_ref.value.upgrade() {
         Some(value) => Ok(JsValue::new(value)),
         None => Ok(JsValue::encode_undefined_value()),
+    }
+}
+
+impl Builtin for JsWeakRef {
+    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        let obj_proto = ctx.global_data().object_prototype.unwrap();
+        ctx.global_data.weak_ref_structure = Some(Structure::new_indexed(ctx, None, false));
+        let proto_map = ctx
+            .global_data
+            .weak_ref_structure
+            .unwrap()
+            .change_prototype_transition(ctx, Some(obj_proto));
+        let mut prototype = JsObject::new(ctx, &proto_map, JsObject::class(), ObjectTag::Ordinary);
+        ctx.global_data
+            .weak_ref_structure
+            .unwrap()
+            .change_prototype_with_no_transition(prototype);
+
+        let mut constructor =
+            JsNativeFunction::new(ctx, S_WEAK_REF.intern(), weak_ref::weak_ref_constructor, 1);
+
+        def_native_property!(ctx, prototype, constructor, constructor)?;
+        def_native_property!(ctx, constructor, prototype, prototype)?;
+
+        def_native_method!(ctx, prototype, deref, weak_ref::weak_ref_prototype_deref, 0)?;
+
+        ctx.global_data.weak_ref_prototype = Some(prototype);
+
+        let mut global_object = ctx.global_object();
+
+        def_native_property!(ctx, global_object, WeakRef, constructor)?;
+        Ok(())
     }
 }

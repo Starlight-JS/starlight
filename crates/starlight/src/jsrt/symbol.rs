@@ -1,7 +1,6 @@
 use crate::{
-    constant::S_CONSTURCTOR,
     prelude::*,
-    vm::{context::Context, object::TypedJsObject},
+    vm::{builder::Builtin, context::Context, object::TypedJsObject},
     JsTryFrom,
 };
 use std::intrinsics::unlikely;
@@ -37,43 +36,30 @@ macro_rules! def_symbols {
     }
 }
 
-impl GcPointer<Context> {
-    pub(crate) fn init_symbol_in_global_object(mut self) -> Result<(), JsValue> {
-        let name = S_CONSTURCTOR.intern();
-        let constructor = self
-            .global_data
-            .symbol_prototype
-            .unwrap()
-            .get_own_property(self, name)
-            .unwrap()
-            .value();
-        self.global_object()
-            .put(self, "Symbol".intern(), JsValue::new(constructor), false)?;
-        Ok(())
-    }
-
-    pub(crate) fn init_symbol_in_global_data(
-        mut self,
-        proto: GcPointer<JsObject>,
-    ) -> Result<(), JsValue> {
-        self.global_data.symbol_structure = Some(Structure::new_indexed(self, None, false));
-        let structure = Structure::new_indexed(self, Some(proto), false);
-        let mut sym_proto = JsObject::new(self, &structure, JsObject::class(), ObjectTag::Ordinary);
-        self.global_data
+impl Builtin for JsSymbolObject {
+    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        let obj_proto = ctx.global_data.object_prototype.unwrap();
+        ctx.global_data.symbol_structure = Some(Structure::new_indexed(ctx, None, false));
+        let structure = Structure::new_indexed(ctx, Some(obj_proto), false);
+        let mut prototype = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
+        ctx.global_data
             .symbol_structure
             .unwrap()
-            .change_prototype_with_no_transition(sym_proto);
-        self.global_data.symbol_prototype = Some(sym_proto);
-        def_native_method!(self, sym_proto, toString, symbol_to_string, 0)?;
-        def_native_method!(self, sym_proto, valueOf, symbol_value_of, 0)?;
+            .change_prototype_with_no_transition(prototype);
+        ctx.global_data.symbol_prototype = Some(prototype);
+        def_native_method!(ctx, prototype, toString, symbol_to_string, 0)?;
+        def_native_method!(ctx, prototype, valueOf, symbol_value_of, 0)?;
 
-        let mut ctor = JsNativeFunction::new(self, "Symbol".intern(), symbol_ctor, 1);
+        let mut constructor = JsNativeFunction::new(ctx, "Symbol".intern(), symbol_ctor, 1);
 
-        def_native_method!(self, ctor, for, symbol_for, 1)?;
-        def_native_method!(self, ctor, keyFor, symbol_key_for, 1)?;
-        builtin_symbols!(self, ctor, def_symbols);
-        def_native_property!(self, ctor, prototype, sym_proto, NONE)?;
-        def_native_property!(self, sym_proto, constructor, ctor, W | C)?;
+        def_native_method!(ctx, constructor, for, symbol_for, 1)?;
+        def_native_method!(ctx, constructor, keyFor, symbol_key_for, 1)?;
+        builtin_symbols!(ctx, constructor, def_symbols);
+        def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
+        def_native_property!(ctx, prototype, constructor, constructor, W | C)?;
+
+        ctx.global_object()
+            .put(ctx, "Symbol".intern(), JsValue::new(constructor), false)?;
 
         Ok(())
     }
