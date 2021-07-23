@@ -7,8 +7,9 @@ on:
 
 jobs:
   nightly:
+    runs-on: ${{ matrix.os }}
     name: Deploy nightly
-strategy:
+    strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [nightly]
