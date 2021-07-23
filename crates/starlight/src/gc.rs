@@ -869,7 +869,5 @@ impl Heap {
 }
 
 impl Drop for Heap {
-    fn drop(&mut self) {
-        self.space.sweep();
-    }
+    fn drop(&mut self) {}
 }

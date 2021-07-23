@@ -1,5 +1,5 @@
-use super::{block::*, constants::*};
-use crate::gc::Address;
+use super::{block::*, constants::*, mem::align_usize};
+use crate::{gc::Address, vm::VirtualMachine};
 #[cfg(windows)]
 pub mod _win {
     use super::*;
@@ -146,6 +146,7 @@ pub use _unix::*;
 #[cfg(windows)]
 pub use _win::*;
 use core::sync::atomic::Ordering;
+use std::mem::align_of;
 
 pub struct BlockAllocator {
     #[cfg(feature = "threaded")]
@@ -246,6 +247,6 @@ impl BlockAllocator {
     }
 
     pub fn space_for_vm(&self) -> *mut u8 {
-        self.mmap.start()
+        align_usize(self.mmap.start() as _, align_of::<VirtualMachine>()) as _
     }
 }
