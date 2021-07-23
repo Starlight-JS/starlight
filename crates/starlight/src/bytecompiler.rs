@@ -131,6 +131,8 @@ pub struct ByteCompiler {
     pub variable_freelist: Vec<u32>,
 
     pub info: Option<Vec<(Range<usize>, FileLocation)>>,
+
+    pub is_try: bool,
 }
 
 impl ByteCompiler {
@@ -378,7 +380,11 @@ impl ByteCompiler {
             Access::Global(x) => {
                 let name = self.get_sym(x);
                 self.emit(Opcode::OP_GLOBALTHIS, &[], false);
-                self.emit(Opcode::OP_TRY_GET_BY_ID, &[name], true);
+                if self.is_try {
+                    self.emit(Opcode::OP_TRY_GET_BY_ID, &[name], true);
+                } else {
+                    self.emit(Opcode::OP_GET_BY_ID, &[name], true);
+                }
             }
             Access::ById(name) => {
                 let name = self.get_sym(name);
@@ -511,6 +517,7 @@ impl ByteCompiler {
             name_map: HashMap::new(),
             top_level: false,
             scope,
+            is_try: true,
         };
         let mut p = 0;
         for x in params_.iter() {
@@ -607,6 +614,7 @@ impl ByteCompiler {
             name_map: HashMap::new(),
             top_level: false,
             scope,
+            is_try: true,
         };
         let mut p = 0;
         for x in function.params.iter() {
@@ -755,6 +763,7 @@ impl ByteCompiler {
             val_map: Default::default(),
             name_map: Default::default(),
             fmap: Default::default(),
+            is_try: true,
         };
         code.var_count = 1;
         code.param_count = 1;
@@ -918,6 +927,7 @@ impl ByteCompiler {
             val_map: Default::default(),
             name_map: Default::default(),
             fmap: Default::default(),
+            is_try: true,
         };
 
         let is_strict = match p.body.get(0) {
@@ -962,6 +972,7 @@ impl ByteCompiler {
             val_map: Default::default(),
             name_map: Default::default(),
             fmap: Default::default(),
+            is_try: true,
         };
 
         let is_strict = match p.body.get(0) {
@@ -1336,21 +1347,6 @@ impl ByteCompiler {
 
                 //                self.emit(Opcode::OP_POP_ENV, &[], false);
             }
-            Stmt::While(while_stmt) => {
-                let head = self.code.code.len();
-                let d = self.scope.borrow().depth;
-                self.push_lci(head as _, d);
-                self.expr(ctx, &while_stmt.test, true, false)?;
-                let jend = self.cjmp(false);
-                self.stmt(ctx, &while_stmt.body)?;
-
-                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
-                    c(self);
-                }
-                self.goto(head);
-                jend(self);
-                self.pop_lci();
-            }
             Stmt::If(if_stmt) => {
                 self.expr(ctx, &if_stmt.test, true, false)?;
                 let jelse = self.cjmp(false);
@@ -1422,7 +1418,36 @@ impl ByteCompiler {
                     None => {}
                 }
             }
+            Stmt::While(while_stmt) => {
+                let head = self.code.code.len();
+                let d = self.scope.borrow().depth;
+                self.push_lci(head as _, d);
+                self.expr(ctx, &while_stmt.test, true, false)?;
+                let jend = self.cjmp(false);
+                self.stmt(ctx, &while_stmt.body)?;
 
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
+                self.goto(head);
+                jend(self);
+                self.pop_lci();
+            }
+            Stmt::DoWhile(do_while_stmt) => {
+                let body = self.code.code.len();
+                let d = self.scope.borrow().depth;
+                self.push_lci(body as _, d);
+                self.stmt(ctx, &do_while_stmt.body)?;
+
+                while let Some(c) = self.lci.last_mut().unwrap().continues.pop() {
+                    c(self);
+                }
+                self.expr(ctx, &do_while_stmt.test, true, false)?;
+                let jend = self.cjmp(false);
+                self.goto(body);
+                jend(self);
+                self.pop_lci();
+            }
             x => {
                 return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));
             }
@@ -1573,8 +1598,11 @@ impl ByteCompiler {
                         let mut args = [JsValue::new(exp), JsValue::new(flags)];
                         let args = Arguments::new(JsValue::encode_undefined_value(), &mut args);
                         let regexp =
-                            crate::jsrt::regexp::regexp_constructor(ctx, &args).map_err(|_| {
-                                CompileError::NotYetImpl("Regexp constructor error".to_string())
+                            crate::jsrt::regexp::regexp_constructor(ctx, &args).map_err(|e| {
+                                CompileError::NotYetImpl(format!(
+                                    "Regexp constructor error {}",
+                                    e.to_string(ctx).unwrap()
+                                ))
                             })?;
                         let val = self.get_val2(regexp);
                         self.emit(Opcode::OP_PUSH_LITERAL, &[val], false);
@@ -1776,7 +1804,19 @@ impl ByteCompiler {
                     }
                     return Ok(());
                 }
+
+                let mut is_type_of = false;
+                if let UnaryOp::TypeOf = unary.op {
+                    is_type_of = true;
+                    self.is_try = false;
+                }
+
                 self.expr(ctx, &unary.arg, true, false)?;
+
+                if is_type_of {
+                    self.is_try = true;
+                }
+
                 match unary.op {
                     UnaryOp::Minus => self.emit(Opcode::OP_NEG, &[], false),
                     UnaryOp::Plus => self.emit(Opcode::OP_POS, &[], false),
@@ -1817,6 +1857,9 @@ impl ByteCompiler {
                     }
                     self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.emit(op, &[0], false);
+                    if op == Opcode::OP_SUB {
+                        self.emit(Opcode::OP_NEG, &[], false);
+                    }
                     let acc = self.compile_access(ctx, &update.arg, false)?;
                     self.access_set(acc)?;
                     //self.emit_store_expr(&update.arg);
@@ -1891,7 +1934,8 @@ impl ByteCompiler {
                         AssignOp::BitOrAssign => Opcode::OP_OR,
                         AssignOp::BitXorAssign => Opcode::OP_XOR,
                         AssignOp::ModAssign => Opcode::OP_REM,
-
+                        AssignOp::RShiftAssign => Opcode::OP_SHR,
+                        AssignOp::LShiftAssign => Opcode::OP_SHL,
                         x => {
                             return Err(CompileError::NotYetImpl(format!("NYI: {:?}", x)));
                         }
@@ -2024,6 +2068,7 @@ impl ByteCompiler {
                         depth: self.scope.borrow().depth + 1,
                         variables: HashMap::new(),
                     })),
+                    is_try: true,
                 };
                 code.strict = is_strict;
                 let mut params = vec![];

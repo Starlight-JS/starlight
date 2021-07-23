@@ -1,3 +1,6 @@
 [submodule "test262"]
     url = https://github.com/tc39/test262
     path = test262
+[submodule "octane"]
+	path = octane
+	url = https://github.com/chromium/octane

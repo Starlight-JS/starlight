@@ -38,7 +38,6 @@ pub mod weak_ref;
 pub(crate) fn print(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     for i in 0..args.size() {
         let value = args.at(i);
-        println!("{:?}", value);
         let string = value.to_string(ctx)?;
         print!("{}", string);
     }
@@ -203,6 +202,7 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         array::array_map as _,
         array::array_shift as _,
         array::array_slice as _,
+        array::array_index_of as _,
         error::error_constructor as usize,
         error::error_to_string as usize,
         error::eval_error_constructor as usize,
@@ -271,6 +271,7 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         math::math_abs as _,
         math::math_sqrt as _,
         math::math_random as _,
+        math::math_pow as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
         HashValueZero::deserialize as _,
