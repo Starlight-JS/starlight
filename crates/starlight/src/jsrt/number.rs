@@ -1,8 +1,9 @@
 use num::traits::float::FloatCore;
 
 use crate::{
+    constant::S_CONSTURCTOR,
     prelude::*,
-    vm::{builder::Builtin, context::Context, number::NumberObject},
+    vm::{context::Context, number::NumberObject},
 };
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
@@ -514,43 +515,52 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-impl Builtin for NumberObject {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let obj_proto = ctx.global_data.object_prototype.unwrap();
-        ctx.global_data.number_structure = Some(Structure::new_indexed(ctx, None, false));
+impl GcPointer<Context> {
+    pub(crate) fn init_number_in_global_object(mut self) -> Result<(), JsValue> {
+        let mut proto = self.global_data.number_prototype.unwrap();
+        let constructor = proto
+            .get_own_property(self, S_CONSTURCTOR.intern())
+            .unwrap()
+            .value();
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, Number, constructor, W | C)?;
+        Ok(())
+    }
 
-        let structure = Structure::new_unique_indexed(ctx, Some(obj_proto), false);
-        let mut prototype = NumberObject::new_plain(ctx, structure, 0.0);
-        ctx.global_data
+    pub(crate) fn init_number_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
+        let structure = Structure::new_unique_indexed(self, Some(obj_proto), false);
+        let mut proto = NumberObject::new_plain(self, structure, 0.0);
+
+        self.global_data
             .number_structure
             .unwrap()
-            .change_prototype_with_no_transition(prototype);
+            .change_prototype_with_no_transition(proto);
 
-        let mut constructor = JsNativeFunction::new(ctx, "Number".intern(), number_constructor, 1);
+        let mut constructor = JsNativeFunction::new(self, "Number".intern(), number_constructor, 1);
 
-        def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
-        def_native_property!(ctx, constructor, MAX_VALUE, f64::MAX)?;
-        def_native_property!(ctx, constructor, MIN_VALUE, f64::MIN)?;
-        def_native_property!(ctx, constructor, NaN, f64::NAN)?;
-        def_native_property!(ctx, constructor, NEGATIVE_INFINITY, f64::NEG_INFINITY)?;
-        def_native_property!(ctx, constructor, POSITIVE_INFINITY, f64::INFINITY)?;
-        def_native_property!(ctx, constructor, EPSILON, f64::EPSILON)?;
-        def_native_property!(ctx, constructor, MAX_SAFE_INTEGER, 9007199254740991.0)?;
-        def_native_method!(ctx, constructor, isNaN, number_is_nan, 0)?;
-        def_native_method!(ctx, constructor, isFinite, number_is_finite, 0)?;
-        def_native_method!(ctx, constructor, isInteger, number_is_integer, 0)?;
+        def_native_property!(self, constructor, prototype, proto, NONE)?;
+        def_native_property!(self, constructor, MAX_VALUE, f64::MAX)?;
+        def_native_property!(self, constructor, MIN_VALUE, f64::MIN)?;
+        def_native_property!(self, constructor, NaN, f64::NAN)?;
+        def_native_property!(self, constructor, NEGATIVE_INFINITY, f64::NEG_INFINITY)?;
+        def_native_property!(self, constructor, POSITIVE_INFINITY, f64::INFINITY)?;
+        def_native_property!(self, constructor, EPSILON, f64::EPSILON)?;
+        def_native_property!(self, constructor, MAX_SAFE_INTEGER, 9007199254740991.0)?;
+        def_native_method!(self, constructor, isNaN, number_is_nan, 0)?;
+        def_native_method!(self, constructor, isFinite, number_is_finite, 0)?;
+        def_native_method!(self, constructor, isInteger, number_is_integer, 0)?;
 
-        def_native_property!(ctx, prototype, constructor, constructor)?;
-        def_native_method!(ctx, prototype, toString, number_to_string, 1)?;
-        def_native_method!(ctx, prototype, valueOf, number_value_of, 0)?;
-        def_native_method!(ctx, prototype, toPrecision, number_to_precisiion, 1)?;
-        def_native_method!(ctx, prototype, toFixed, number_to_fixed, 1)?;
-        def_native_method!(ctx, prototype, clz, number_clz, 1)?;
+        def_native_property!(self, proto, constructor, constructor)?;
+        def_native_method!(self, proto, toString, number_to_string, 1)?;
+        def_native_method!(self, proto, valueOf, number_value_of, 0)?;
+        def_native_method!(self, proto, toPrecision, number_to_precisiion, 1)?;
+        def_native_method!(self, proto, toFixed, number_to_fixed, 1)?;
+        def_native_method!(self, proto, clz, number_clz, 1)?;
 
-        ctx.global_data.number_prototype = Some(prototype);
-
-        let mut global_object = ctx.global_object();
-        def_native_property!(ctx, global_object, Number, constructor, W | C)?;
+        self.global_data.number_prototype = Some(proto);
 
         Ok(())
     }

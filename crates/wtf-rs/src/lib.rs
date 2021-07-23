@@ -1,7 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-#![feature(backtrace)]
 pub mod endian;
 pub mod pure_nan;
 pub mod segmented_vec;
@@ -59,9 +58,7 @@ pub fn unwrap_unchecked<T: Sized>(value: Option<T>) -> T {
         #[cfg(not(debug_assertions))]
         None => unsafe { std::hint::unreachable_unchecked() },
         #[cfg(debug_assertions)]
-        None => {
-            unreachable!();
-        }
+        None => unreachable!(),
     }
 }
 

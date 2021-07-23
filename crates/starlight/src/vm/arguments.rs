@@ -6,7 +6,6 @@ use std::mem::ManuallyDrop;
 use crate::prelude::*;
 
 use super::{
-    builder::Builtin,
     environment::Environment,
     error::JsTypeError,
     method_table::*,
@@ -100,15 +99,6 @@ pub struct JsArguments {
 impl JsClass for JsArguments {
     fn class() -> &'static Class {
         define_jsclass!(JsArguments, Arguments)
-    }
-}
-
-impl Builtin for JsArguments {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let obj_proto = ctx.global_data.object_prototype.unwrap();
-        ctx.global_data.normal_arguments_structure =
-            Some(Structure::new_indexed(ctx, Some(obj_proto), false));
-        Ok(())
     }
 }
 

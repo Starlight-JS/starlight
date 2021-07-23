@@ -458,7 +458,10 @@ impl GlobalData {
 
     pub fn get_structure(&self, name: Symbol) -> Option<GcPointer<Structure>> {
         let structure = self.custom_structures.get(&name);
-        structure.copied()
+        match structure {
+            Some(s) => Some(*s),
+            None => None,
+        }
     }
 }
 

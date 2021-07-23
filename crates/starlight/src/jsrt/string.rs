@@ -1,23 +1,6 @@
 use regress::Regex;
 
-use crate::{
-    gc::cell::GcPointer,
-    vm::{
-        arguments::Arguments,
-        array::JsArray,
-        attributes::*,
-        builder::Builtin,
-        class::JsClass,
-        context::Context,
-        error::{JsRangeError, JsTypeError},
-        function::JsNativeFunction,
-        property_descriptor::DataDescriptor,
-        string::{JsString, JsStringObject},
-        structure::Structure,
-        symbol_table::{Internable, Symbol},
-        value::*,
-    },
-};
+use crate::{constant::S_CONSTURCTOR, gc::cell::GcPointer, vm::{arguments::Arguments, array::JsArray, attributes::*, class::JsClass, context::Context, error::{JsRangeError, JsTypeError}, function::JsNativeFunction, object::JsObject, property_descriptor::DataDescriptor, string::{JsString, JsStringObject}, structure::Structure, symbol_table::{Internable, Symbol}, value::*}};
 use std::{
     char::{decode_utf16, from_u32},
     cmp::{max, min},
@@ -544,51 +527,68 @@ pub fn string_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     }
 }
 
-impl Builtin for JsStringObject {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let obj_proto = ctx.global_data.object_prototype.unwrap();
-        ctx.global_data.string_structure = Some(Structure::new_indexed(ctx, None, true));
-        let map = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-        let mut proto = JsStringObject::new_plain(ctx, &map);
+impl GcPointer<Context> {
+    pub fn init_string_in_global_object(mut self) -> Result<(), JsValue> {
+        let name = S_CONSTURCTOR.intern();
+        let constructor = self
+            .global_data
+            .string_prototype
+            .unwrap()
+            .get_own_property(self, name)
+            .unwrap()
+            .value();
+        self.global_object()
+            .put(self, "String".intern(), constructor, false)
+            .unwrap_or_else(|_| panic!());
+        Ok(())
+    }
 
-        ctx.global_data
+    pub fn init_string_in_global_data(
+        mut self,
+        obj_proto: GcPointer<JsObject>,
+    ) -> Result<(), JsValue> {
+        self.global_data.string_structure = Some(Structure::new_indexed(self, None, true));
+        let map = Structure::new_unique_with_proto(self, Some(obj_proto), false);
+        let mut proto = JsStringObject::new_plain(self, &map);
+
+        self.global_data
             .string_structure
             .unwrap()
             .change_prototype_with_no_transition(proto);
-        let mut constructor = JsNativeFunction::new(ctx, "String".intern(), string_constructor, 1);
+        let mut ctor = JsNativeFunction::new(self, "String".intern(), string_constructor, 1);
 
-        def_native_property!(ctx, constructor, prototype, proto, NONE)?;
-        def_native_property!(ctx, proto, constructor, constructor, W | C)?;
-        def_native_method!(ctx, proto, toString, string_to_string, 0)?;
-        def_native_method!(ctx, proto, valueOf, string_value_of, 0)?;
-        def_native_method!(ctx, proto, ___splitFast, string_split, 0)?;
-        def_native_method!(ctx, proto, concat, string_concat, 0)?;
-        def_native_method!(ctx, proto, charAt, string_char_at, 1)?;
-        def_native_method!(ctx, proto, charCodeAt, string_char_code_at, 1)?;
-        def_native_method!(ctx, proto, toUpperCase, string_to_uppercase, 0)?;
-        def_native_method!(ctx, proto, toLowerCase, string_to_lowercase, 0)?;
-        def_native_method!(ctx, proto, indexOf, string_index_of, 2)?;
-        def_native_method!(ctx, proto, lastIndexOf, string_last_index_of, 2)?;
-        def_native_method!(ctx, proto, substr, string_substr, 2)?;
-        def_native_method!(ctx, proto, substring, string_substring, 2)?;
-        def_native_method!(ctx, proto, codePointAt, string_code_point_at, 1)?;
-        def_native_method!(ctx, proto, repeat, string_repeat, 1)?;
-        def_native_method!(ctx, proto, startsWith, string_starts_with, 1)?;
-        def_native_method!(ctx, proto, endsWith, string_ends_with, 1)?;
-        def_native_method!(ctx, proto, includes, string_includes, 1)?;
-        def_native_method!(ctx, proto, slice, string_slice, 1)?;
-        def_native_method!(ctx, constructor, ___replace, string_replace, 2)?;
-        def_native_method!(ctx, proto, trim, string_trim, 0)?;
-        def_native_method!(ctx, proto, trimStactx, string_trim_start, 0)?;
-        def_native_method!(ctx, proto, trimEnd, string_trim_end, 0)?;
-        def_native_method!(ctx, proto, trimLeft, string_trim_start, 0)?;
-        def_native_method!(ctx, proto, trimRight, string_trim_end, 0)?;
-        def_native_method!(ctx, proto, padStactx, string_pad_start, 2)?;
-        def_native_method!(ctx, proto, padEnd, string_pad_end, 2)?;
-        def_native_method!(ctx, proto, repeat, string_repeat, 1)?;
+        def_native_property!(self, ctor, prototype, proto, NONE)?;
+        def_native_property!(self, proto, constructor, ctor, W | C)?;
+        def_native_method!(self, proto, toString, string_to_string, 0)?;
+        def_native_method!(self, proto, valueOf, string_value_of, 0)?;
+        def_native_method!(self, proto, ___splitFast, string_split, 0)?;
+        def_native_method!(self, proto, concat, string_concat, 0)?;
+        def_native_method!(self, proto, charAt, string_char_at, 1)?;
+        def_native_method!(self, proto, charCodeAt, string_char_code_at, 1)?;
+        def_native_method!(self, proto, toUpperCase, string_to_uppercase, 0)?;
+        def_native_method!(self, proto, toLowerCase, string_to_lowercase, 0)?;
+        def_native_method!(self, proto, indexOf, string_index_of, 2)?;
+        def_native_method!(self, proto, lastIndexOf, string_last_index_of, 2)?;
+        def_native_method!(self, proto, substr, string_substr, 2)?;
+        def_native_method!(self, proto, substring, string_substring, 2)?;
+        def_native_method!(self, proto, codePointAt, string_code_point_at, 1)?;
+        def_native_method!(self, proto, repeat, string_repeat, 1)?;
+        def_native_method!(self, proto, startsWith, string_starts_with, 1)?;
+        def_native_method!(self, proto, endsWith, string_ends_with, 1)?;
+        def_native_method!(self, proto, includes, string_includes, 1)?;
+        def_native_method!(self, proto, slice, string_slice, 1)?;
+        def_native_method!(self, ctor, ___replace, string_replace, 2)?;
+        def_native_method!(self, proto, trim, string_trim, 0)?;
+        def_native_method!(self, proto, trimStactx, string_trim_start, 0)?;
+        def_native_method!(self, proto, trimEnd, string_trim_end, 0)?;
+        def_native_method!(self, proto, trimLeft, string_trim_start, 0)?;
+        def_native_method!(self, proto, trimRight, string_trim_end, 0)?;
+        def_native_method!(self, proto, padStactx, string_pad_start, 2)?;
+        def_native_method!(self, proto, padEnd, string_pad_end, 2)?;
+        def_native_method!(self, proto, repeat, string_repeat, 1)?;
 
-        ctx.global_data.string_prototype = Some(proto);
-        ctx.global_object().put(ctx, "String", constructor, false)?;
+        self.global_data.string_prototype = Some(proto);
+
         Ok(())
     }
 }

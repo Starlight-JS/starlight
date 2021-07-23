@@ -26,10 +26,6 @@ impl ClassConstructor for Person {
             age: args.at(0).get_int32(),
         })
     }
-    fn init(builder: &mut ClassBuilder) -> Result<(), JsValue> {
-        builder.method("sayHello", Person::say_hello, 0)?;
-        Ok(())
-    }
 }
 
 impl Person {
@@ -44,6 +40,11 @@ impl Person {
 impl JsClass for Person {
     fn class() -> &'static starlight::prelude::Class {
         define_jsclass!(Person, Person)
+    }
+
+    fn init(builder: &mut ClassBuilder) -> Result<(), JsValue> {
+        builder.method("sayHello", Person::say_hello, 0)?;
+        Ok(())
     }
 }
 

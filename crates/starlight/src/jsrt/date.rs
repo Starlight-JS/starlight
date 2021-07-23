@@ -6,9 +6,10 @@ use std::{
 };
 
 use crate::{
+    constant::S_CONSTURCTOR,
     define_jsclass,
     prelude::*,
-    vm::{builder::Builtin, class::JsClass, context::Context, object::TypedJsObject},
+    vm::{class::JsClass, context::Context, object::TypedJsObject},
     JsTryFrom,
 };
 
@@ -96,7 +97,15 @@ extern "C" fn deser(object: &mut JsObject, deser: &mut Deserializer) {
 
 impl JsClass for Date {
     fn class() -> &'static Class {
-        define_jsclass!(Date, Date, None, None, Some(deser), Some(ser), Some(fsz))
+        define_jsclass!(
+            Date,
+            Date,
+            None,
+            None,
+            Some(deser),
+            Some(ser),
+            Some(fsz)
+        )
     }
 }
 
@@ -1335,75 +1344,108 @@ getter_method!(date_to_date_string to_date_string);
 pub fn date_now(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(JsValue::new(Utc::now().timestamp_millis() as f64))
 }
+impl GcPointer<Context> {
+    pub(crate) fn init_date_in_global_object(mut self) -> Result<(), JsValue> {
+        let mut ctx = self;
+        let mut proto = ctx.global_data().date_prototype.unwrap();
+        let ctor = proto.get(ctx, S_CONSTURCTOR.intern())?;
 
-impl Builtin for Date {
-    fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
-        let obj_proto = ctx.global_data().object_prototype.unwrap();
-        let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-        let mut prototype = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
-        *prototype.data::<Date>() = ManuallyDrop::new(Date(None));
-
-        let date_map = Structure::new_indexed(ctx, Some(prototype), false);
-        ctx.global_data.date_structure = Some(date_map);
-        let mut constructor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
-
-        def_native_property!(ctx, prototype, constructor, constructor, W | C)?;
-        def_native_method!(ctx, prototype, toString, date_to_string, 0)?;
-        def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
-        def_native_method!(ctx, constructor, now, date_now, 0)?;
-        def_native_method!(ctx, constructor, parse, date_parse, 1)?;
-        def_native_method!(ctx, constructor, UTC, date_utc, 6)?;
-        def_native_method!(ctx, prototype, valueOf, date_value_of, 0)?;
-        def_native_method!(ctx, prototype, setDate, date_set_date, 1)?;
-        def_native_method!(ctx, prototype, setFullYear, date_set_full_year, 3)?;
-        def_native_method!(ctx, prototype, setHours, date_set_hours, 4)?;
-        def_native_method!(ctx, prototype, setMilliseconds, date_set_milliseconds, 1)?;
-        def_native_method!(ctx, prototype, setMinutes, date_set_minutes, 3)?;
-        def_native_method!(ctx, prototype, setMonth, date_set_month, 2)?;
-        def_native_method!(ctx, prototype, setSeconds, date_set_seconds, 2)?;
-        def_native_method!(ctx, prototype, setYear, date_set_year, 3)?;
-        def_native_method!(ctx, prototype, setTime, date_set_time, 1)?;
-        def_native_method!(ctx, prototype, setUTCDate, date_set_utc_date, 1)?;
-        def_native_method!(ctx, prototype, setUTCFullYear, date_set_utc_full_year, 3)?;
-        def_native_method!(ctx, prototype, setUTCHours, date_set_utc_hours, 4)?;
-        def_native_method!(ctx, prototype, setUTCMinutes, date_set_utc_minutes, 3)?;
-        def_native_method!(ctx, prototype, setUTCMonth, date_set_utc_month, 2)?;
-        def_native_method!(ctx, prototype, setUTCSeconds, date_set_utc_seconds, 2)?;
-
-        def_native_method!(ctx, prototype, getDate, date_get_date, 0)?;
-        def_native_method!(ctx, prototype, getDay, date_get_day, 0)?;
-        def_native_method!(ctx, prototype, getFullYear, date_get_full_year, 0)?;
-        def_native_method!(ctx, prototype, getHours, date_get_hours, 0)?;
-        def_native_method!(ctx, prototype, getMilliseconds, date_get_milliseconds, 0)?;
-        def_native_method!(ctx, prototype, getMinutes, date_get_minutes, 0)?;
-        def_native_method!(ctx, prototype, getMonth, date_get_month, 0)?;
-        def_native_method!(ctx, prototype, getSeconds, date_get_seconds, 0)?;
-        def_native_method!(ctx, prototype, getTime, date_get_time, 0)?;
-        def_native_method!(ctx, prototype, getYear, date_get_year, 0)?;
-        def_native_method!(ctx, prototype, getUTCDate, date_get_utc_date, 0)?;
-        def_native_method!(ctx, prototype, getUTCDay, date_get_utc_day, 0)?;
-        def_native_method!(ctx, prototype, getUTCFullYear, date_get_utc_full_year, 0)?;
-        def_native_method!(ctx, prototype, getUTCHours, date_get_utc_hours, 0)?;
-        def_native_method!(ctx, prototype, getUTCMinutes, date_get_utc_minutes, 0)?;
-        def_native_method!(
-            ctx,
-            prototype,
-            getUTCMilliseconds,
-            date_get_utc_milliseconds,
-            0
-        )?;
-        def_native_method!(ctx, prototype, getUTCMonth, date_get_utc_month, 0)?;
-        def_native_method!(ctx, prototype, getUTCSeconds, date_get_utc_seconds, 0)?;
-        def_native_method!(ctx, prototype, toJSON, date_to_json, 0)?;
-        def_native_method!(ctx, prototype, toTimeString, date_to_time_string, 0)?;
-        def_native_method!(ctx, prototype, toGMTString, date_to_gmt_string, 0)?;
-        def_native_method!(ctx, prototype, toISOString, date_to_iso_string, 0)?;
-        def_native_method!(ctx, prototype, toUTCString, date_to_utc_string, 0)?;
-        def_native_method!(ctx, prototype, toDateString, date_to_date_string, 0)?;
-        ctx.global_data.date_prototype = Some(prototype);
-
-        let mut global_object = ctx.global_object();
-        def_native_property!(ctx, global_object, Date, constructor)?;
+        let mut global_object = self.global_object();
+        def_native_property!(self, global_object, Date, ctor)?;
         Ok(())
+    }
+    pub(crate) fn init_date_in_global_data(mut self) -> Result<(), JsValue> {
+        let mut ctx = self;
+        let mut init = || -> Result<(), JsValue> {
+            /*let obj_proto = self.global_data().object_prototype.unwrap();
+            let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
+            let mut proto = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
+            *proto.data::<Date>() = ManuallyDrop::new(Date(None));
+
+            let date_map = Structure::new_indexed(ctx, Some(proto), false);
+            self.global_data.date_structure = Some(date_map);
+            let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
+            proto.define_own_property(
+                self,
+                "constructor".intern(),
+                &*DataDescriptor::new(JsValue::new(ctor), C | W),
+                false,
+            )?;
+            let fun = JsNativeFunction::new(ctx, "toString".intern(), date_to_string, 0);
+            proto.put(self, "toString".intern(), JsValue::new(fun), false)?;
+
+            def_native_method!(ctx, ctor, now, date_now, 0)?;
+            def_native_method!(ctx, ctor, parse, date_parse, 1)?;
+            def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
+            ctor.define_own_property(
+                self,
+                "prototype".intern(),
+                &*DataDescriptor::new(JsValue::new(proto), NONE),
+                false,
+            )?;
+            self.global_data.date_prototype = Some(proto);*/
+
+            let obj_proto = self.global_data().object_prototype.unwrap();
+            let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
+            let mut proto = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
+            *proto.data::<Date>() = ManuallyDrop::new(Date(None));
+
+            let date_map = Structure::new_indexed(ctx, Some(proto), false);
+            self.global_data.date_structure = Some(date_map);
+            let mut ctor = JsNativeFunction::new(ctx, "Date".intern(), date_constructor, 0);
+
+            def_native_property!(self, proto, constructor, ctor, W | C)?;
+            def_native_method!(self, proto, toString, date_to_string, 0)?;
+            def_native_property!(self, ctor, prototype, proto, NONE)?;
+            def_native_method!(ctx, ctor, now, date_now, 0)?;
+            def_native_method!(ctx, ctor, parse, date_parse, 1)?;
+            def_native_method!(ctx, ctor, UTC, date_utc, 6)?;
+            def_native_method!(ctx, proto, valueOf, date_value_of, 0)?;
+            def_native_method!(ctx, proto, setDate, date_set_date, 1)?;
+            def_native_method!(ctx, proto, setFullYear, date_set_full_year, 3)?;
+            def_native_method!(ctx, proto, setHours, date_set_hours, 4)?;
+            def_native_method!(ctx, proto, setMilliseconds, date_set_milliseconds, 1)?;
+            def_native_method!(ctx, proto, setMinutes, date_set_minutes, 3)?;
+            def_native_method!(ctx, proto, setMonth, date_set_month, 2)?;
+            def_native_method!(ctx, proto, setSeconds, date_set_seconds, 2)?;
+            def_native_method!(ctx, proto, setYear, date_set_year, 3)?;
+            def_native_method!(ctx, proto, setTime, date_set_time, 1)?;
+            def_native_method!(ctx, proto, setUTCDate, date_set_utc_date, 1)?;
+            def_native_method!(ctx, proto, setUTCFullYear, date_set_utc_full_year, 3)?;
+            def_native_method!(ctx, proto, setUTCHours, date_set_utc_hours, 4)?;
+            def_native_method!(ctx, proto, setUTCMinutes, date_set_utc_minutes, 3)?;
+            def_native_method!(ctx, proto, setUTCMonth, date_set_utc_month, 2)?;
+            def_native_method!(ctx, proto, setUTCSeconds, date_set_utc_seconds, 2)?;
+
+            def_native_method!(ctx, proto, getDate, date_get_date, 0)?;
+            def_native_method!(ctx, proto, getDay, date_get_day, 0)?;
+            def_native_method!(ctx, proto, getFullYear, date_get_full_year, 0)?;
+            def_native_method!(ctx, proto, getHours, date_get_hours, 0)?;
+            def_native_method!(ctx, proto, getMilliseconds, date_get_milliseconds, 0)?;
+            def_native_method!(ctx, proto, getMinutes, date_get_minutes, 0)?;
+            def_native_method!(ctx, proto, getMonth, date_get_month, 0)?;
+            def_native_method!(ctx, proto, getSeconds, date_get_seconds, 0)?;
+            def_native_method!(ctx, proto, getTime, date_get_time, 0)?;
+            def_native_method!(ctx, proto, getYear, date_get_year, 0)?;
+            def_native_method!(ctx, proto, getUTCDate, date_get_utc_date, 0)?;
+            def_native_method!(ctx, proto, getUTCDay, date_get_utc_day, 0)?;
+            def_native_method!(ctx, proto, getUTCFullYear, date_get_utc_full_year, 0)?;
+            def_native_method!(ctx, proto, getUTCHours, date_get_utc_hours, 0)?;
+            def_native_method!(ctx, proto, getUTCMinutes, date_get_utc_minutes, 0)?;
+            def_native_method!(ctx, proto, getUTCMilliseconds, date_get_utc_milliseconds, 0)?;
+            def_native_method!(ctx, proto, getUTCMonth, date_get_utc_month, 0)?;
+            def_native_method!(ctx, proto, getUTCSeconds, date_get_utc_seconds, 0)?;
+            def_native_method!(ctx, proto, toJSON, date_to_json, 0)?;
+            def_native_method!(ctx, proto, toTimeString, date_to_time_string, 0)?;
+            def_native_method!(ctx, proto, toGMTString, date_to_gmt_string, 0)?;
+            def_native_method!(ctx, proto, toISOString, date_to_iso_string, 0)?;
+            def_native_method!(ctx, proto, toUTCString, date_to_utc_string, 0)?;
+            def_native_method!(ctx, proto, toDateString, date_to_date_string, 0)?;
+            self.global_data.date_prototype = Some(proto);
+
+            Ok(())
+        };
+
+        init()
     }
 }
