@@ -8,9 +8,10 @@ use starlight::{
 
 fn load(mut ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let filename = "octane/".to_string() + &args.at(0).to_string(ctx)?;
-    println!("Load {}", filename);
-    let source = read_to_string(filename).unwrap();
+    let source = read_to_string(&filename).unwrap();
+    println!("Load {} ...", filename);
     ctx.eval(&source)?;
+    println!("Load {} Success", filename);
     Ok(JsValue::UNDEFINED)
 }
 
