@@ -164,6 +164,7 @@ pub struct Space {
 impl Drop for Space {
     fn drop(&mut self) {
         unsafe {
+            self.sweep();
             let _ = Box::from_raw(self.block_allocator);
         }
     }

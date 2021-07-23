@@ -21,7 +21,6 @@ use crate::{
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
-    ptr::drop_in_place,
     u32, u8, usize,
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
@@ -162,16 +161,6 @@ pub struct VirtualMachine {
 }
 
 impl VirtualMachine {
-    /// Frees all the memory allocated for the VM instance.     
-    ///
-    /// # Safety
-    /// Unsafe to call if instance of VM is still used somewhere, should be called only when you're sure VM is not used anywhere.
-    ///
-    ///
-    pub unsafe fn dispose(&mut self) {
-        drop_in_place(self);
-    }
-
     /// initialize a VirtualMachine with an async scheduler
     /// the async scheduler is used to asynchronously run jobs with the VirtualMachine
     /// this can be used for things like Promises, setImmediate, async functions
@@ -225,25 +214,21 @@ impl VirtualMachine {
         options: Options,
         external_references: Option<&'static [usize]>,
     ) -> VM {
-        let space = gc.vm_space().cast::<Self>();
-        unsafe {
-            space.write(Self {
-                gc,
-                options,
-                safepoint: GlobalSafepoint::new(),
-                external_references,
-                shadowstack: ShadowStack::new(),
-                #[cfg(feature = "perf")]
-                perf: perf::Perf::new(),
-                eval_history: String::new(),
-                persistent_roots: Default::default(),
-                sched_async_func: None,
-                codegen_plugins: HashMap::new(),
-                contexts: vec![],
-                context_snapshot: Rc::new(Box::new([])),
-            });
-            VirtualMachineRef(space)
-        }
+        VirtualMachineRef(Box::into_raw(Box::new(Self {
+            gc,
+            options,
+            safepoint: GlobalSafepoint::new(),
+            external_references,
+            shadowstack: ShadowStack::new(),
+            #[cfg(feature = "perf")]
+            perf: perf::Perf::new(),
+            eval_history: String::new(),
+            persistent_roots: Default::default(),
+            sched_async_func: None,
+            codegen_plugins: HashMap::new(),
+            contexts: vec![],
+            context_snapshot: Rc::new(Box::new([])),
+        })))
     }
 
     pub fn new(options: Options, external_references: Option<&'static [usize]>) -> VM {
@@ -732,3 +717,15 @@ pub mod tests {
 }
 
 pub type VM = VirtualMachineRef;
+
+impl VirtualMachineRef {
+    /// Frees all the memory allocated for the VM instance.     
+    ///
+    /// # Safety
+    /// Unsafe to call if instance of VM is still used somewhere, should be called only when you're sure VM is not used anywhere.
+    ///
+    ///
+    pub unsafe fn dispose(self) {
+        let _ = Box::from_raw(self.0);
+    }
+}

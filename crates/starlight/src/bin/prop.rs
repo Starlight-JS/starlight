@@ -1,5 +1,3 @@
-use std::fs::read_to_string;
-
 use starlight::{
     prelude::{JsValue, Options},
     Platform,
