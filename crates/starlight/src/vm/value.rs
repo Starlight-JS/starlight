@@ -602,7 +602,15 @@ impl JsValue {
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
         }
-        Ok(number.floor() as u32)
+        Ok(number.abs().floor() as u32)
+    }
+
+    pub fn to_f32(self, ctx: GcPointer<Context>) -> Result<f32, JsValue> {
+        if self.is_int32() {
+            return Ok(self.get_int32() as _)
+        }
+        let number = self.to_number(ctx)?;
+        Ok(number as f32)
     }
 
     pub fn to_number(self, ctx: GcPointer<Context>) -> Result<f64, JsValue> {
