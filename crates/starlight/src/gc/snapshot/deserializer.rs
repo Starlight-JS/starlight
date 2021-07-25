@@ -887,6 +887,7 @@ impl Deserializable for JsObject {
             }
             ObjectTag::Function => {
                 let construct_struct = Option::<GcPointer<Structure>>::deserialize_inplace(deser);
+                let ctx = deser.read_gc();
                 let ty = deser.get_u8();
                 let val = match ty {
                     0x01 => {
@@ -927,6 +928,7 @@ impl Deserializable for JsObject {
                 ((*object).data::<JsFunction>() as *mut ManuallyDrop<_> as *mut JsFunction).write(
                     JsFunction {
                         construct_struct,
+                        ctx,
                         ty: val,
                     },
                 )

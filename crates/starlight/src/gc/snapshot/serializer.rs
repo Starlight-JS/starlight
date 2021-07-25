@@ -517,6 +517,7 @@ impl<T: Deserializable + Serializable> Serializable for Option<T> {
 impl Serializable for JsFunction {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.construct_struct.serialize(serializer);
+        self.ctx.serialize(serializer);
         match &self.ty {
             FuncType::User(vm) => {
                 serializer.write_u8(0x01);

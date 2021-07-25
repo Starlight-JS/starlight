@@ -1,14 +1,19 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{constant::*, gc::cell::{GcPointer, WeakRef, WeakSlot}, jsrt::math::Math, vm::{
+use crate::{
+    constant::*,
+    gc::cell::{GcPointer, WeakRef, WeakSlot},
+    jsrt::math::Math,
+    vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
         array_storage::ArrayStorage, attributes::*, builder::Builtin, class::JsClass,
         code_block::CodeBlock, context::Context, data_view::JsDataView, environment::Environment,
         error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements,
         interpreter::SpreadValue, number::*, object::*, property_descriptor::*, string::*,
         structure::*, structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind,
-    }};
+    },
+};
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
@@ -21,6 +26,7 @@ pub mod ffi;
 pub mod function;
 pub mod generator;
 pub mod global;
+pub mod js262;
 pub mod jsstd;
 pub mod math;
 pub mod number;
@@ -30,7 +36,6 @@ pub mod regexp;
 pub mod string;
 pub mod symbol;
 pub mod weak_ref;
-
 pub(crate) fn print(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     for i in 0..args.size() {
         let value = args.at(i);
@@ -93,7 +98,11 @@ impl Builtin for SelfHost {
     }
 }
 
-impl GcPointer<Context> {}
+impl GcPointer<Context> {
+    pub(crate) fn init_dollar(mut self) {
+        js262::init(self, "$".intern()).unwrap();
+    }
+}
 
 use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
@@ -384,6 +393,8 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         date::date_to_date_string as _,
         date::date_parse as _,
         date::date_utc as _,
+        js262::_262_create_realm as _,
+        js262::_262_eval_script as _,
     ];
 
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]

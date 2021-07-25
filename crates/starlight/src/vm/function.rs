@@ -23,6 +23,8 @@ use std::{intrinsics::unlikely, mem::ManuallyDrop};
 
 pub struct JsFunction {
     pub construct_struct: Option<GcPointer<Structure>>,
+    /// Realm where this function was created.
+    pub ctx: GcPointer<Context>,
     pub ty: FuncType,
 }
 
@@ -159,12 +161,10 @@ impl JsFunction {
                 ctx.new_type_error("function not a constructor"),
             ));
         }
-        let stack = ctx.shadowstack();
-        letroot!(
-            structure = stack,
-            structure.unwrap_or_else(|| Structure::new_unique_indexed(ctx, None, false))
-        );
-        let obj = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
+
+        let structure =
+            structure.unwrap_or_else(|| Structure::new_unique_indexed(self.ctx, None, false));
+        let obj = JsObject::new(self.ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
         args.ctor_call = true;
         args.this = JsValue::encode_object_value(obj);
         self.call(ctx, args, this_fn)
@@ -172,30 +172,29 @@ impl JsFunction {
 
     pub fn call(
         &mut self,
-        ctx: GcPointer<Context>,
+        _: GcPointer<Context>,
         args: &mut Arguments,
         this: JsValue,
     ) -> Result<JsValue, JsValue> {
         match self.ty {
-            FuncType::Native(ref x) => (x.func)(ctx, args),
-            FuncType::Closure(ref x) => (x.func)(ctx, args),
+            FuncType::Native(ref x) => (x.func)(self.ctx, args),
+            FuncType::Closure(ref x) => (x.func)(self.ctx, args),
             FuncType::User(ref x) => {
+                let mut ctx = self.ctx;
                 ctx.perform_vm_call(x, JsValue::encode_object_value(x.scope), args, this)
             }
             FuncType::Bound(ref mut x) => {
-                let stack = ctx.shadowstack();
-                letroot!(
-                    args = stack,
-                    Arguments {
-                        this: x.this,
-                        ctor_call: args.ctor_call,
-                        values: x.args.as_slice_mut(),
-                    }
-                );
+                let mut ctx = self.ctx;
+
+                let mut args = Arguments {
+                    this: x.this,
+                    ctor_call: args.ctor_call,
+                    values: x.args.as_slice_mut(),
+                };
                 let mut target = x.target;
                 target.as_function_mut().call(ctx, &mut args, this)
             }
-            FuncType::Generator(ref mut x) => x.call(ctx, args, this),
+            FuncType::Generator(ref mut x) => x.call(self.ctx, args, this),
         }
     } /*
       pub fn call_with_env<'a>(
@@ -239,6 +238,7 @@ impl JsFunction {
 
         *obj.data::<JsFunction>() = ManuallyDrop::new(JsFunction {
             construct_struct: None,
+            ctx,
             ty,
         });
         obj
@@ -255,6 +255,7 @@ impl JsFunction {
 
         *obj.data::<JsFunction>() = ManuallyDrop::new(JsFunction {
             construct_struct: None,
+            ctx,
             ty,
         });
 
@@ -456,7 +457,7 @@ impl JsNativeFunction {
         let n = "name".intern();
         let name = JsValue::encode_object_value(JsString::new(ctx, &k));
         let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
-        
+
         func
     }
     #[allow(clippy::many_single_char_names)]
@@ -576,6 +577,7 @@ impl JsClosureFunction {
 unsafe impl Trace for JsFunction {
     fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.construct_struct.trace(tracer);
+        self.ctx.trace(tracer);
         match self.ty {
             FuncType::User(ref mut x) => {
                 x.code.trace(tracer);
