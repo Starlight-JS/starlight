@@ -66,6 +66,52 @@ impl JsClass for JsStringObject {
     fn class() -> &'static Class {
         define_jsclass!(JsStringObject, String)
     }
+    fn GetOwnIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        index: u32,
+        slot: &mut Slot,
+    ) -> bool {
+        let value = obj.as_string_object().value;
+        if index < value.len() {
+            let ch = value.as_str().chars().nth(index as usize).unwrap();
+            slot.set(
+                JsValue::encode_object_value(JsString::new(ctx, ch.to_string())),
+                string_indexed(),
+            );
+            return true;
+        }
+        JsObject::GetOwnIndexedPropertySlotMethod(obj, ctx, index, slot)
+    }
+    fn GetOwnPropertyNamesMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        collector: &mut dyn FnMut(Symbol, u32),
+        mode: EnumerationMode,
+    ) {
+        if mode == EnumerationMode::IncludeNotEnumerable {
+            collector("length".intern(), 0);
+        }
+        let value = obj.as_string_object().value;
+        for i in 0..value.len() {
+            collector(Symbol::Index(i), i);
+        }
+        JsObject::GetOwnPropertyNamesMethod(obj, ctx, collector, mode)
+    }
+
+    fn GetOwnNonIndexedPropertySlotMethod(
+        obj: &mut GcPointer<JsObject>,
+        ctx: GcPointer<Context>,
+        name: Symbol,
+        slot: &mut Slot,
+    ) -> bool {
+        let value = obj.as_string_object().value;
+        if name == "length".intern() {
+            slot.set(JsValue::new(value.len() as f64), string_length());
+            return true;
+        }
+        JsObject::GetOwnNonIndexedPropertySlotMethod(obj, ctx, name, slot)
+    }
 }
 
 #[allow(non_snake_case)]
@@ -91,52 +137,6 @@ impl JsStringObject {
             });
         }
         obj
-    }
-    pub fn GetOwnIndexedPropertySlotMethod(
-        obj: &mut GcPointer<JsObject>,
-        ctx: GcPointer<Context>,
-        index: u32,
-        slot: &mut Slot,
-    ) -> bool {
-        let value = obj.as_string_object().value;
-        if index < value.len() {
-            let ch = value.as_str().chars().nth(index as usize).unwrap();
-            slot.set(
-                JsValue::encode_object_value(JsString::new(ctx, ch.to_string())),
-                string_indexed(),
-            );
-            return true;
-        }
-        JsObject::GetOwnIndexedPropertySlotMethod(obj, ctx, index, slot)
-    }
-    pub fn GetOwnPropertyNamesMethod(
-        obj: &mut GcPointer<JsObject>,
-        ctx: GcPointer<Context>,
-        collector: &mut dyn FnMut(Symbol, u32),
-        mode: EnumerationMode,
-    ) {
-        if mode == EnumerationMode::IncludeNotEnumerable {
-            collector("length".intern(), 0);
-        }
-        let value = obj.as_string_object().value;
-        for i in 0..value.len() {
-            collector(Symbol::Index(i), i);
-        }
-        JsObject::GetOwnPropertyNamesMethod(obj, ctx, collector, mode)
-    }
-
-    pub fn GetOwnNonIndexedPropertySlotMethod(
-        obj: &mut GcPointer<JsObject>,
-        ctx: GcPointer<Context>,
-        name: Symbol,
-        slot: &mut Slot,
-    ) -> bool {
-        let value = obj.as_string_object().value;
-        if name == "length".intern() {
-            slot.set(JsValue::new(value.len() as f64), string_length());
-            return true;
-        }
-        JsObject::GetOwnNonIndexedPropertySlotMethod(obj, ctx, name, slot)
     }
 }
 

@@ -587,7 +587,7 @@ Array.prototype.reduce = function (...args) {
     if (typeof callback !== 'function') {
         throw new TypeError(callback + ' is not a function');
     }
-    var t = Object(this), len = t.length >>> 0, k = 0, value;
+    var t = Object(this), len = t.length , k = 0, value;
     if (args.length >= 2) {
         value = args[1];
     } else {
