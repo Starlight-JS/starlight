@@ -11,6 +11,7 @@ use starlight::vm::VirtualMachineRef;
 use starlight::vm::{context::Context, parse};
 use std::panic;
 use std::panic::AssertUnwindSafe;
+use std::time::{Duration, Instant};
 
 impl TestSuite {
     pub(crate) fn run_main(
@@ -168,12 +169,20 @@ impl Test {
         vm: VirtualMachineRef,
     ) -> Vec<TestResult> {
         let mut results = Vec::new();
+        let start = Instant::now();
         if self.flags.contains(TestFlags::STRICT) {
             results.push(self.run_once(harness, true, verbose, vm));
         }
 
         if self.flags.contains(TestFlags::NO_STRICT) || self.flags.contains(TestFlags::RAW) {
             results.push(self.run_once(harness, false, verbose, vm));
+        }
+
+        if verbose>=1 {
+            if start.elapsed() > 300* Duration::MILLISECOND {
+                println!("{} cost {:?}",self.name, start.elapsed());
+                panic!("Too Slow!");
+            }
         }
 
         results
@@ -195,6 +204,7 @@ impl Test {
             );
             eprintln!("Description: {}\nesid: {:?}\n", self.description, self.esid,);
         }
+        let start = Instant::now();
         let (result, result_text) = if !IGNORED.contains_any_flag(self.flags)
             && !IGNORED.contains_test(&self.name)
             && !IGNORED.contains_any_feature(&self.features)
@@ -355,6 +365,7 @@ impl Test {
             strict,
             result,
             result_text: result_text.into_boxed_str(),
+            time: start.elapsed().as_millis() as u32
         }
     }
 

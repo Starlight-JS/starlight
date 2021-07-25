@@ -5,31 +5,31 @@ use crate::prelude::*;
 use std::mem::{size_of, ManuallyDrop};
 
 use super::context::Context;
-pub struct NumberObject {
+pub struct JsNumber {
     value: f64,
 }
 
 extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
-    *obj.data::<NumberObject>() = ManuallyDrop::new(NumberObject {
+    *obj.data::<JsNumber>() = ManuallyDrop::new(JsNumber {
         value: f64::from_bits(deser.get_u64()),
     });
 }
 
 extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
-    obj.data::<NumberObject>()
+    obj.data::<JsNumber>()
         .get()
         .to_bits()
         .serialize(serializer);
 }
 
 extern "C" fn sz() -> usize {
-    size_of::<NumberObject>()
+    size_of::<JsNumber>()
 }
 
-impl JsClass for NumberObject {
+impl JsClass for JsNumber {
     fn class() -> &'static Class {
         define_jsclass!(
-            NumberObject,
+            JsNumber,
             Object,
             None,
             None,
@@ -40,7 +40,7 @@ impl JsClass for NumberObject {
     }
 }
 
-impl NumberObject {
+impl JsNumber {
     pub fn new(ctx: GcPointer<Context>, value: f64) -> GcPointer<JsObject> {
         let mut obj = JsObject::new(
             ctx,

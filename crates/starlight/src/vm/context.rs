@@ -20,31 +20,9 @@ use crate::{
     },
 };
 
-use super::{
-    array::JsArray,
-    array_buffer::JsArrayBuffer,
-    builder::{Builtin, ClassBuilder, ClassConstructor},
-    class::JsClass,
-    data_view::JsDataView,
-    error::JsError,
-    error::{JsRangeError, JsReferenceError, JsTypeError},
-    function::JsNativeFunction,
-    function::{JsFunction, JsGeneratorFunction},
-    global::JsGlobal,
-    interpreter::{frame::CallFrame, stack::Stack},
-    number::NumberObject,
-    object::{JsObject, ObjectTag},
-    promise::JsPromise,
-    string::JsString,
-    string::JsStringObject,
-    structure::Structure,
-    symbol_table::JsSymbolObject,
-    symbol_table::{self, Internable, JsSymbol, Symbol},
-    value::JsValue,
-    GlobalData, ModuleKind, MyEmiter, VirtualMachine, VirtualMachineRef,
-};
+use super::{GlobalData, ModuleKind, MyEmiter, VirtualMachine, VirtualMachineRef, array::JsArray, array_buffer::JsArrayBuffer, builder::{Builtin, ClassBuilder, ClassConstructor}, class::JsClass, data_view::JsDataView, error::JsError, error::{JsRangeError, JsReferenceError, JsTypeError}, function::JsNativeFunction, function::{JsFunction, JsGeneratorFunction}, global::JsGlobal, interpreter::{frame::CallFrame, stack::Stack}, number::JsNumber, object::{JsObject, ObjectTag}, promise::JsPromise, string::JsString, string::JsStringObject, structure::Structure, symbol_table::{self, Internable, JsSymbol, Symbol}, symbol_table::JsSymbolObject, value::JsValue};
 
-use crate::jsrt::boolean::BooleanObject;
+use crate::jsrt::boolean::JsBoolean;
 use crate::jsrt::date::Date;
 use crate::jsrt::math::Math;
 use crate::jsrt::regexp::RegExp;
@@ -133,6 +111,19 @@ impl Context {
     }
 }
 impl GcPointer<Context> {
+    pub fn register_native_reference(reference: usize)  {
+        unsafe {
+            VM_NATIVE_REFERENCES.push(reference);
+        }
+    }
+
+    pub fn remove_reference(reference: usize){
+        unsafe {
+            let index = VM_NATIVE_REFERENCES.iter().position(|r| *r==reference).expect("Reference not found");
+            VM_NATIVE_REFERENCES.remove(index);
+        }
+    }
+
     pub fn register_class<T>(mut self) -> Result<(), JsValue>
     where
         T: ClassConstructor + JsClass,
@@ -190,7 +181,6 @@ impl GcPointer<Context> {
             };
         }
         define_op_builtins!(define_register_builtin);
-
         self.init_module_loader();
         self.init_internal_modules();
         Ok(())

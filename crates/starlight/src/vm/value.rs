@@ -9,7 +9,7 @@ use crate::{
             serializer::{Serializable, SnapshotSerializer},
         },
     },
-    jsrt::boolean::BooleanObject,
+    jsrt::boolean::JsBoolean,
     vm::interpreter::SpreadValue,
 };
 
@@ -403,7 +403,7 @@ impl JsValue {
             return Ok(unsafe { self.get_object().downcast_unchecked() });
         }
         if self.is_number() {
-            return Ok(NumberObject::new(ctx, self.get_number()));
+            return Ok(JsNumber::new(ctx, self.get_number()));
         }
         if self.is_jsstring() {
             return Ok(JsStringObject::new(ctx, self.get_jsstring()));
@@ -414,7 +414,7 @@ impl JsValue {
             }));
         }
         if self.is_bool() {
-            return Ok(BooleanObject::new(ctx, self.get_bool()));
+            return Ok(JsBoolean::new(ctx, self.get_bool()));
         }
         Err(JsValue::new(
             ctx.new_type_error("NYI: JsValue::to_object cases"),
@@ -602,7 +602,36 @@ impl JsValue {
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
         }
-        Ok(number.floor() as u32)
+        Ok(number.abs().floor() as u32)
+    }
+
+    pub fn to_length(self, ctx:GcPointer<Context>) -> Result<u32, JsValue> {
+        let len = self.to_interger(ctx)?;
+        if len < 0.0 {
+            Ok(0)
+        } else {
+            Ok(len.min(JsNumber::MAX_SAFE_INTEGER) as u32)
+        }
+    }
+
+    pub fn to_interger(self, ctx:GcPointer<Context>) -> Result<f64, JsValue> {
+        let number = self.to_number(ctx)?;
+        if !number.is_finite() {
+            // 3. If number is NaN, +0, or -0, return +0.
+            if number.is_nan() {
+                return Ok(0.0);
+            }
+            return Ok(number);
+        }
+        Ok(number.trunc() + 0.0)
+    }
+
+    pub fn to_f32(self, ctx: GcPointer<Context>) -> Result<f32, JsValue> {
+        if self.is_int32() {
+            return Ok(self.get_int32() as _)
+        }
+        let number = self.to_number(ctx)?;
+        Ok(number as f32)
     }
 
     pub fn to_number(self, ctx: GcPointer<Context>) -> Result<f64, JsValue> {

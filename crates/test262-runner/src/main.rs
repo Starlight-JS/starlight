@@ -3,6 +3,7 @@
     clippy::needless_borrow,
     clippy::field_reassign_with_default
 )]
+#![feature(duration_constants)]
 pub mod exec;
 pub mod js262;
 pub mod read;
@@ -230,6 +231,8 @@ struct TestResult {
     result_text: Box<str>,
     #[serde(rename = "r")]
     result: TestOutcomeResult,
+    #[serde(rename = "t")]
+    time: u32
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

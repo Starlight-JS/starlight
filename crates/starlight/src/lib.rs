@@ -12,7 +12,8 @@
     const_type_id,
     pattern,
     specialization,
-    arbitrary_self_types
+    arbitrary_self_types,
+    duration_constants
 )]
 #![allow(
     unused_unsafe,

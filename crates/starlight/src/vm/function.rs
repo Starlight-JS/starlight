@@ -456,6 +456,7 @@ impl JsNativeFunction {
         let n = "name".intern();
         let name = JsValue::encode_object_value(JsString::new(ctx, &k));
         let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
+        
         func
     }
     #[allow(clippy::many_single_char_names)]

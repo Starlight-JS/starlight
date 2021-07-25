@@ -1,18 +1,14 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    constant::*,
-    gc::cell::{GcPointer, WeakRef, WeakSlot},
-    vm::{
+use crate::{constant::*, gc::cell::{GcPointer, WeakRef, WeakSlot}, jsrt::math::Math, vm::{
         arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
         array_storage::ArrayStorage, attributes::*, builder::Builtin, class::JsClass,
         code_block::CodeBlock, context::Context, data_view::JsDataView, environment::Environment,
         error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements,
         interpreter::SpreadValue, number::*, object::*, property_descriptor::*, string::*,
         structure::*, structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind,
-    },
-};
+    }};
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
@@ -248,7 +244,7 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         string::string_includes as _,
         string::string_slice as _,
         JsStringObject::class() as *const _ as usize,
-        NumberObject::class() as *const _ as usize,
+        JsNumber::class() as *const _ as usize,
         Environment::deserialize as _,
         Environment::allocate as _,
         number::number_constructor as _,
@@ -261,17 +257,6 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         number::number_to_fixed as _,
         number::number_to_string as _,
         number::number_value_of as _,
-        math::math_trunc as _,
-        math::math_floor as _,
-        math::math_log as _,
-        math::math_sin as _,
-        math::math_cos as _,
-        math::math_ceil as _,
-        math::math_exp as _,
-        math::math_abs as _,
-        math::math_sqrt as _,
-        math::math_random as _,
-        math::math_pow as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
         HashValueZero::deserialize as _,
@@ -351,7 +336,7 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         boolean::boolean_constructor as _,
         boolean::boolean_to_string as _,
         boolean::boolean_value_of as _,
-        boolean::BooleanObject::class() as *const _ as _,
+        boolean::JsBoolean::class() as *const _ as _,
         date::date_constructor as _,
         date::date_to_string as _,
         date::Date::class() as *const _ as _,
@@ -400,12 +385,18 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         date::date_parse as _,
         date::date_utc as _,
     ];
+
     #[cfg(all(target_pointer_width = "64", feature = "ffi"))]
     {
         refs.push(ffi::ffi_function_attach as _);
         refs.push(ffi::ffi_function_call as _);
         refs.push(ffi::ffi_library_open as _);
     }
+
+    unsafe {
+        refs.append(&mut Math::native_references());
+    }
+
     refs
 });
 
@@ -414,7 +405,7 @@ pub fn get_length(ctx: GcPointer<Context>, val: &mut GcPointer<JsObject>) -> Res
         return Ok(val.indexed.length());
     }
     let len = val.get(ctx, S_LENGTH.intern())?;
-    len.to_uint32(ctx)
+    len.to_length(ctx)
 }
 
 /// Convert JS object to JS property descriptor
@@ -667,12 +658,20 @@ pub fn define_lazy_property(
 }
 
 #[macro_export]
+macro_rules! define_register_native_reference {
+    ($class: ident, $VM_NATIVE_REFERENCES: ident) => {
+        let references = $class::native_references();
+        $VM_NATIVE_REFERENCES.append(&mut references);
+    };
+}
+
+#[macro_export]
 macro_rules! define_op_builtins {
     ($op: ident) => {
         $op!(JsFunction);
         $op!(JsObject);
         $op!(JsArguments);
-        $op!(NumberObject);
+        $op!(JsNumber);
         $op!(JsArray);
         $op!(Math);
         $op!(JsError);
@@ -686,7 +685,7 @@ macro_rules! define_op_builtins {
         $op!(JsDataView);
         $op!(JsWeakRef);
         $op!(Date);
-        $op!(BooleanObject);
+        $op!(JsBoolean);
         $op!(SelfHost);
     };
 }
