@@ -177,9 +177,12 @@ impl Test {
         if self.flags.contains(TestFlags::NO_STRICT) || self.flags.contains(TestFlags::RAW) {
             results.push(self.run_once(harness, false, verbose, vm));
         }
-        if start.elapsed() > 300* Duration::MILLISECOND {
-            println!("{} cost {:?}",self.name, start.elapsed());
-            panic!("Too Slow!");
+
+        if verbose>=1 {
+            if start.elapsed() > 300* Duration::MILLISECOND {
+                println!("{} cost {:?}",self.name, start.elapsed());
+                panic!("Too Slow!");
+            }
         }
 
         results
