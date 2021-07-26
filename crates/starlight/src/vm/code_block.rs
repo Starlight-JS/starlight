@@ -2,8 +2,8 @@ use super::context::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+use super::symbol_table::Symbol;
 use super::value::JsValue;
-use super::{symbol_table::Symbol};
 use crate::bytecode::opcodes::*;
 use crate::gc::{cell::GcPointer, cell::Tracer};
 use crate::{
@@ -19,10 +19,61 @@ pub struct FileLocation {
     pub col: u32,
 }
 
+#[derive(Default)]
+struct StackSizeState {
+    bc_len: u32,
+    stack_len_max: u32,
+    stack_level_tab: Vec<u16>,
+    pc_stack: Vec<u32>,
+}
+
+impl StackSizeState {
+    pub fn check(
+        &mut self,
+        ctx: GcPointer<Context>,
+        pos: u32,
+        op: u8,
+        stack_len: u32,
+    ) -> Result<(), JsValue> {
+        if pos >= self.bc_len {
+            return Err(JsValue::new(ctx.new_range_error(format!(
+                "bytecode buffer overflow (op={:x} pc={:4})",
+                op, pos,
+            ))));
+        }
+        if stack_len > self.stack_len_max {
+            self.stack_len_max = stack_len;
+            if self.stack_len_max > ctx.stack_len_max() {
+                return Err(JsValue::new(ctx.new_range_error("stack overflow")));
+            }
+        }
+        if self.stack_level_tab[pos as usize] != 0xffff {
+            if self.stack_level_tab[pos as usize] != stack_len as u16 {
+                /* return Err(JsValue::new(ctx.new_range_error(format!(
+                    "unconsistent stack size: {} (op={:x} pc={:4})",
+                    self.stack_level_tab[pos as usize], op, pos,
+                ))));*/
+                panic!(
+                    "unconsistent stack size: {}, expected: {} (op={:?} pc={:4})",
+                    self.stack_level_tab[pos as usize],
+                    stack_len,
+                    unsafe { std::mem::transmute::<_, Opcode>(op) },
+                    pos,
+                );
+            } else {
+                return Ok(());
+            }
+        }
+        self.stack_level_tab[pos as usize] = stack_len as u16;
+        self.pc_stack.push(pos);
+        Ok(())
+    }
+}
 /// A type representing single JS function bytecode.
 //#[derive(GcTrace)]
 #[repr(C)]
 pub struct CodeBlock {
+    pub stack_size: u32,
     pub literals_ptr: *const JsValue,
     /// Function name
     pub name: Symbol,
@@ -76,6 +127,7 @@ impl CodeBlock {
     pub fn display_to<T: Write>(&self, output: &mut T) -> std::fmt::Result {
         unsafe {
             writeln!(output, "is strict?={}", self.strict)?;
+            writeln!(output, "stack size={}", self.stack_size)?;
             let start = self.code.as_ptr() as *mut u8;
             let mut pc = self.code.as_ptr() as *mut u8;
             while pc <= self.code.last().unwrap() as *const u8 as *mut u8 {
@@ -457,11 +509,275 @@ impl CodeBlock {
             Ok(())
         }
     }
+    pub fn compute_stack_size(&mut self, mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
+        let mut stack_len;
+        let mut s = StackSizeState::default();
+        let mut pos;
+        let mut op: Opcode;
+        s.stack_level_tab = vec![0xffff; self.code.len()];
+        s.bc_len = self.code.len() as _;
+        // breath first graph exploration
+        s.check(ctx, 0, Opcode::OP_NOP as u8, 0)?;
+        use Opcode::*;
+        while s.pc_stack.len() > 0 {
+            pos = s.pc_stack.pop().unwrap();
+            stack_len = s.stack_level_tab[pos as usize];
+            op = unsafe { std::mem::transmute::<_, Opcode>(self.code[pos as usize]) };
+            let mut skip_check = false;
+            pos += 1;
+            match op {
+                OP_PUSH_NAN | OP_PUSH_NULL | OP_PUSH_THIS | OP_PUSH_TRUE | OP_PUSH_UNDEF
+                | OP_PUSH_FALSE => stack_len += 1,
+                OP_PUSH_INT | OP_GET_FUNCTION | OP_PUSH_LITERAL => {
+                    pos += 4;
+                    stack_len += 1;
+                }
+                OP_CALL | OP_NEW => {
+                    let p = pos as usize;
+                    let argc = u32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len -= argc as u16;
+                    stack_len -= 2;
+
+                    stack_len += 1;
+                }
+                OP_TAILCALL | OP_TAILNEW => {
+                    let p = pos as usize;
+                    let argc = u32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len -= argc as u16;
+                    stack_len -= 2;
+                    skip_check = true;
+                }
+                OP_RET | OP_THROW => {
+                    stack_len -= 1;
+                    skip_check = true;
+                }
+                OP_GET_BY_VAL => {
+                    pos += 4; // SKIP PROFILE
+                    stack_len -= 2;
+                    stack_len += 1;
+                }
+                OP_GET_BY_VAL_PUSH_OBJ => {
+                    pos += 4;
+                    stack_len -= 2;
+                    stack_len += 2;
+                }
+                OP_PUT_BY_VAL => {
+                    pos += 4;
+                    stack_len -= 3;
+                }
+                OP_GREATEREQ | OP_GREATER | OP_INSTANCEOF | OP_IN | OP_NSTRICTEQ | OP_NEQ
+                | OP_LESS | OP_LESSEQ | OP_USHR | OP_SHR | OP_SHL | OP_EQ | OP_STRICTEQ => {
+                    stack_len -= 2;
+                    stack_len += 1;
+                }
+                OP_DUP => {
+                    stack_len += 1;
+                }
+                OP_PUT_BY_ID => {
+                    pos += 8;
+                    stack_len -= 2;
+                }
+                OP_GET_BY_ID | OP_TRY_GET_BY_ID => {
+                    pos += 8;
+                    stack_len -= 1;
+                    stack_len += 1;
+                }
+                OP_REM | OP_MUL | OP_DIV | OP_SUB | OP_ADD => {
+                    pos += 4;
+                    stack_len -= 2;
+                    stack_len += 1;
+                }
+                OP_POP => {
+                    stack_len -= 1;
+                }
+                OP_JMP => {
+                    let p = pos as usize;
+                    let diff = i32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    pos = (pos as i32 + diff) as u32;
+                }
+                OP_JMP_IF_FALSE | OP_JMP_IF_TRUE => {
+                    let p = pos as usize;
+                    let diff = i32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len -= 1;
+                    s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
+                }
+                OP_PUSH_CATCH => {
+                    let p = pos as usize;
+                    let diff = i32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len += 1;
+                    s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
+                }
+                OP_POP_CATCH => {}
+                OP_GET_ENV => {
+                    pos += 4;
+                    stack_len += 1;
+                }
+                OP_SET_LOCAL => {
+                    pos += 4;
+                    stack_len -= 2;
+                }
+                OP_GET_LOCAL => {
+                    pos += 4;
+                }
+                OP_GE0SL => {
+                    pos += 4;
+                    stack_len -= 1;
+                }
+                OP_GE0GL => {
+                    pos += 4;
+                    stack_len += 1;
+                }
+                OP_FORIN_SETUP => {
+                    pos += 4;
+                }
+                OP_FORIN_ENUMERATE => {
+                    let p = pos as usize;
+                    let diff = i32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len -= 1;
+                    stack_len += 2;
+                    s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
+                }
+                OP_FORIN_LEAVE => {
+                    stack_len -= 1;
+                }
+                OP_GLOBALTHIS => {
+                    stack_len += 1;
+                }
+                OP_NEWOBJECT => {
+                    stack_len += 1;
+                }
+                OP_LOGICAL_NOT => {}
+                OP_NOT => {}
+                OP_POS => {}
+                OP_DECL_CONST => {
+                    pos += 4;
+                    stack_len -= 1;
+                }
+                OP_DECL_LET => {
+                    pos += 4;
+                    stack_len -= 1;
+                }
+                OP_DELETE_BY_ID => {
+                    pos += 4;
+                }
+                OP_DELETE_BY_VAL => {
+                    stack_len -= 2;
+                    stack_len += 1;
+                }
+                OP_AND | OP_OR | OP_XOR => {
+                    stack_len -= 2;
+                    stack_len += 1;
+                }
+                OP_NEWARRAY => {
+                    let p = pos as usize;
+                    let diff = u32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len -= diff as u16;
+                    stack_len += 1;
+                }
+                OP_CALL_BUILTIN => {
+                    let p = pos as usize;
+                    let _argc = u32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    let p = pos as usize;
+                    let id = u32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    let p = pos as usize;
+                    let _effect = u32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
+                    pos += 4;
+                    stack_len -= crate::vm::builtins::BUILTIN_ARGS[id as usize] as u16;
+                    stack_len += 1;
+                }
+                OP_SPREAD => {}
+                OP_TYPEOF => {}
+                OP_TO_INTEGER_OR_INFINITY | OP_TO_LENGTH => {}
+                OP_TO_OBJECT => {
+                    stack_len -= 2;
+                    stack_len += 1;
+                }
+                OP_IS_CALLABLE | OP_IS_CTOR => {}
+                OP_INITIAL_YIELD | OP_YIELD | OP_YIELD_STAR => {}
+                OP_AWAIT => {}
+                OP_IS_OBJECT => {}
+                _ => (),
+            }
+            if stack_len > s.stack_len_max as u16 {
+                s.stack_len_max = stack_len as _;
+            }
+            if !skip_check {
+                s.check(ctx, pos, op as _, stack_len as _)?;
+            }
+        }
+        self.stack_size = s.stack_len_max;
+        Ok(())
+    }
     /// Create new empty code block.
-    pub fn new(mut ctx: GcPointer<Context>, name: Symbol, strict: bool, path: Rc<str>) -> GcPointer<Self> {
+    pub fn new(
+        mut ctx: GcPointer<Context>,
+        name: Symbol,
+        strict: bool,
+        path: Rc<str>,
+    ) -> GcPointer<Self> {
         let this = Self {
             path,
             name,
+            stack_size: 0,
             loc: vec![],
             file_name: String::new(),
             strict,

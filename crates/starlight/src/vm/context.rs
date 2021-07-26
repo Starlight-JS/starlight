@@ -62,9 +62,18 @@ pub struct Context {
     pub(crate) stacktrace: String,
     pub(crate) module_loader: Option<GcPointer<JsObject>>,
     pub(crate) modules: HashMap<String, ModuleKind>,
+    pub(crate) stack_len_max: u32,
     pub(crate) symbol_table: HashMap<Symbol, GcPointer<JsSymbol>>,
 }
+
 impl Context {
+    pub const DEFAULT_STACK_LEN_MAX: u32 = 256;
+    pub const fn stack_len_max(&self) -> u32 {
+        self.stack_len_max
+    }
+    pub fn set_stack_len_max(&mut self, len: u32) {
+        self.stack_len_max = len;
+    }
     pub fn global_object(&mut self) -> GcPointer<JsObject> {
         self.global_object.unwrap()
     }
@@ -95,6 +104,7 @@ impl Context {
 
     pub fn new_raw() -> Context {
         Self {
+            stack_len_max: Self::DEFAULT_STACK_LEN_MAX,
             global_data: GlobalData::default(),
             global_object: None,
             vm: VirtualMachineRef(null::<*mut VirtualMachine>() as *mut VirtualMachine),
@@ -109,6 +119,7 @@ impl Context {
     pub fn new_empty(vm: &mut VirtualMachine) -> GcPointer<Context> {
         let mut context = Self {
             global_data: GlobalData::default(),
+            stack_len_max: Self::DEFAULT_STACK_LEN_MAX,
             global_object: None,
             vm: VirtualMachineRef(vm),
             stack: Stack::new(),

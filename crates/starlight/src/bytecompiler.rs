@@ -115,6 +115,7 @@ pub enum Val {
 #[derive(Debug)]
 pub enum CompileError {
     NotYetImpl(String),
+    Val(JsValue),
 }
 
 pub struct ByteCompiler {
@@ -444,15 +445,19 @@ impl ByteCompiler {
             x => Err(CompileError::NotYetImpl(format!("NYI: Access {:?}", x))),
         }
     }
-    pub fn finish(&mut self, ctx: GcPointer<Context>) -> GcPointer<CodeBlock> {
+    pub fn finish(&mut self, ctx: GcPointer<Context>) -> Result<GcPointer<CodeBlock>, JsValue> {
+        self.code.compute_stack_size(ctx)?;
+
         if ctx.vm.options.dump_bytecode {
             let mut buf = String::new();
             let name = ctx.description(self.code.name);
             self.code.display_to(&mut buf).unwrap();
             eprintln!("Code block '{}' at {:p}: \n {}", name, self.code, buf);
         }
+
         self.code.literals_ptr = self.code.literals.as_ptr();
-        self.code
+
+        Ok(self.code)
     }
     pub fn compile_fn(
         &mut self,
@@ -561,12 +566,7 @@ impl ByteCompiler {
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         //compiler.compile(&script.body);
-        let mut code = compiler.finish(ctx);
-
-        //let mut code = ByteCompiler::compile_script(&mut *vmref, &script, path.to_owned());
-
-        //code.display_to(&mut OutBuf).unwrap();
-
+        let code = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
         let env = crate::vm::environment::Environment::new(ctx, 0);
         let fun = JsVMFunction::new(ctx, code, env);
         Ok(JsValue::new(fun))
@@ -654,8 +654,7 @@ impl ByteCompiler {
             compiler.emit(Opcode::OP_INITIAL_YIELD, &[], false);
         }
         compiler.compile_fn(ctx, function)?;
-        compiler.finish(ctx);
-
+        compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
         let ix = if expr {
             ix as u32
         } else {
@@ -897,8 +896,7 @@ impl ByteCompiler {
         }
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let result = compiler.finish(ctx);
-
+        let mut result = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
         Ok(result)
     }
     pub fn compile_script(
@@ -941,8 +939,7 @@ impl ByteCompiler {
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let result = compiler.finish(ctx);
-
+        let mut result = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
         Ok(result)
     }
 
@@ -986,8 +983,7 @@ impl ByteCompiler {
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let result = compiler.finish(ctx);
-
+        let mut result = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
         Ok(result)
     }
 
@@ -1713,11 +1709,17 @@ impl ByteCompiler {
             x if is_builtin_call(x, self.builtins) => {
                 if let Expr::Call(call) = x {
                     self.handle_builtin_call(ctx, call)?;
+                    if !used {
+                        self.emit(Opcode::OP_POP, &[], false);
+                    }
                 }
             }
             x if is_codegen_plugin_call(ctx, x, self.builtins) => {
                 if let Expr::Call(call) = x {
                     self.handle_codegen_plugin_call(ctx, call)?;
+                    if !used {
+                        self.emit(Opcode::OP_POP, &[], false);
+                    }
                 }
             }
             Expr::Call(call) if !is_builtin_call(expr, self.builtins) => {
@@ -2116,7 +2118,8 @@ impl ByteCompiler {
                         compiler.emit(Opcode::OP_RET, &[], false);
                     }
                 }
-                let code = compiler.finish(ctx);
+                let code = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+
                 let ix = self.code.codes.len();
                 self.code.codes.push(code);
                 let _nix = self.get_sym(name);

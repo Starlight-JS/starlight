@@ -1563,6 +1563,7 @@ impl Deserializable for CodeBlock {
             var_count,
             param_count,
             is_constructor,
+            stack_size: u32::deserialize_inplace(deser),
         }
     }
 

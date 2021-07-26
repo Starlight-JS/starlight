@@ -90,3 +90,5 @@ pub type Builtin =
     unsafe fn(GcPointer<Context>, &mut CallFrame, &mut *mut u8, u32, u8) -> Result<(), JsValue>;
 
 pub static BUILTIN_FUNCS: [Builtin; 1] = [reflect_apply];
+
+pub const BUILTIN_ARGS: [usize; 1] = [3];

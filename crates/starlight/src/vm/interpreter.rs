@@ -21,6 +21,7 @@ use crate::{bytecode::*, gc::cell::Tracer};
 use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
+pub mod callframe;
 pub mod frame;
 pub mod stack;
 
@@ -1327,13 +1328,17 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                 let str = JsString::new(ctx, val.type_of());
                 frame.push(JsValue::new(str));
             }
-            Opcode::OP_TO_INTEGER_OR_INFINITY | Opcode::OP_TO_LENGTH => {
+            Opcode::OP_TO_INTEGER_OR_INFINITY => {
                 let number = frame.pop().to_number(ctx)?;
                 if number.is_nan() || number == 0.0 {
                     frame.push(JsValue::encode_int32(0));
                 } else {
                     frame.push(JsValue::new(number.trunc()));
                 }
+            }
+            Opcode::OP_TO_LENGTH => {
+                let n = frame.pop().to_length(ctx)?;
+                frame.push(JsValue::new(n));
             }
             Opcode::OP_TO_OBJECT => {
                 let target = frame.pop();
