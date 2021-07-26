@@ -446,15 +446,13 @@ impl ByteCompiler {
         }
     }
     pub fn finish(&mut self, ctx: GcPointer<Context>) -> Result<GcPointer<CodeBlock>, JsValue> {
-        self.code.compute_stack_size(ctx)?;
-
         if ctx.vm.options.dump_bytecode {
             let mut buf = String::new();
             let name = ctx.description(self.code.name);
             self.code.display_to(&mut buf).unwrap();
             eprintln!("Code block '{}' at {:p}: \n {}", name, self.code, buf);
         }
-
+        // self.code.compute_stack_size(ctx)?;
         self.code.literals_ptr = self.code.literals.as_ptr();
 
         Ok(self.code)
@@ -1244,6 +1242,7 @@ impl ByteCompiler {
 
                 // self.emit(Opcode::OP_POP_ENV, &[], false);
                 self.pop_scope();
+
                 self.emit(Opcode::OP_FORIN_LEAVE, &[], false);
                 self.pop_lci();
             }
@@ -1374,6 +1373,7 @@ impl ByteCompiler {
                 self.emit(Opcode::OP_POP_CATCH, &[], false);
                 let jfinally = self.jmp();
                 try_push(self);
+                self.emit(Opcode::OP_ENTER_CATCH, &[], false);
                 let jcatch_finally = match try_stmt.handler {
                     Some(ref catch) => {
                         self.push_scope();

@@ -408,6 +408,9 @@ impl CodeBlock {
                     Opcode::OP_POP_ENV => {
                         writeln!(output, "pop_scope")?;
                     }
+                    Opcode::OP_ENTER_CATCH => {
+                        writeln!(output, "enter_catch")?;
+                    }
                     Opcode::OP_PUSH_CATCH => {
                         let off = pc.cast::<i32>().read_unaligned();
                         pc = pc.add(4);
@@ -625,6 +628,9 @@ impl CodeBlock {
                     stack_len -= 1;
                     s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
                 }
+                OP_ENTER_CATCH => {
+                    stack_len += 1;
+                }
                 OP_PUSH_CATCH => {
                     let p = pos as usize;
                     let diff = i32::from_ne_bytes([
@@ -634,7 +640,7 @@ impl CodeBlock {
                         self.code[p + 3],
                     ]);
                     pos += 4;
-                    stack_len += 1;
+
                     s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
                 }
                 OP_POP_CATCH => {}
@@ -658,7 +664,15 @@ impl CodeBlock {
                     stack_len += 1;
                 }
                 OP_FORIN_SETUP => {
+                    let p = pos as usize;
+                    let diff = i32::from_ne_bytes([
+                        self.code[p],
+                        self.code[p + 1],
+                        self.code[p + 2],
+                        self.code[p + 3],
+                    ]);
                     pos += 4;
+                    s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
                 }
                 OP_FORIN_ENUMERATE => {
                     let p = pos as usize;
@@ -670,8 +684,9 @@ impl CodeBlock {
                     ]);
                     pos += 4;
                     stack_len -= 1;
-                    stack_len += 2;
+                    stack_len += 1;
                     s.check(ctx, (pos as i32 + diff) as u32, op as _, stack_len as _)?;
+                    stack_len += 1;
                 }
                 OP_FORIN_LEAVE => {
                     stack_len -= 1;

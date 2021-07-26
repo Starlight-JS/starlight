@@ -221,7 +221,7 @@ pub enum Opcode {
     OP_THROW,
     OP_PUSH_CATCH,
     OP_POP_CATCH,
-
+    OP_ENTER_CATCH,
     OP_GET_BY_ID,
     OP_TRY_GET_BY_ID,
     OP_GET_BY_VAL,

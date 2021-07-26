@@ -267,6 +267,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
         print!("]\n");*/
         stack.cursor = frame.sp;
         match opcode {
+            Opcode::OP_ENTER_CATCH => {}
             Opcode::OP_GE0GL => {
                 let index = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
