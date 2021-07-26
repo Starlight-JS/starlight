@@ -32,7 +32,7 @@ use super::{
     function::{JsFunction, JsGeneratorFunction},
     global::JsGlobal,
     interpreter::{frame::CallFrame, stack::Stack},
-    number::NumberObject,
+    number::JsNumber,
     object::{JsObject, ObjectTag},
     promise::JsPromise,
     string::JsString,
@@ -44,7 +44,7 @@ use super::{
     GlobalData, ModuleKind, MyEmiter, VirtualMachine, VirtualMachineRef,
 };
 
-use crate::jsrt::boolean::BooleanObject;
+use crate::jsrt::boolean::JsBoolean;
 use crate::jsrt::date::Date;
 use crate::jsrt::math::Math;
 use crate::jsrt::regexp::RegExp;
@@ -133,6 +133,22 @@ impl Context {
     }
 }
 impl GcPointer<Context> {
+    pub fn register_native_reference(reference: usize) {
+        unsafe {
+            VM_NATIVE_REFERENCES.push(reference);
+        }
+    }
+
+    pub fn remove_reference(reference: usize) {
+        unsafe {
+            let index = VM_NATIVE_REFERENCES
+                .iter()
+                .position(|r| *r == reference)
+                .expect("Reference not found");
+            VM_NATIVE_REFERENCES.remove(index);
+        }
+    }
+
     pub fn register_class<T>(mut self) -> Result<(), JsValue>
     where
         T: ClassConstructor + JsClass,
@@ -190,9 +206,9 @@ impl GcPointer<Context> {
             };
         }
         define_op_builtins!(define_register_builtin);
-
         self.init_module_loader();
         self.init_internal_modules();
+        self.init_dollar();
         Ok(())
     }
 }

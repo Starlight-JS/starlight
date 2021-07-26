@@ -8,7 +8,7 @@ use crate::{
     },
     JsTryFrom,
 };
-pub struct BooleanObject {
+pub struct JsBoolean {
     data: bool,
 }
 
@@ -20,13 +20,13 @@ extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
     todo!()
 }
 extern "C" fn fsz() -> usize {
-    std::mem::size_of::<BooleanObject>()
+    std::mem::size_of::<JsBoolean>()
 }
 
-impl JsClass for BooleanObject {
+impl JsClass for JsBoolean {
     fn class() -> &'static Class {
         define_jsclass!(
-            BooleanObject,
+            JsBoolean,
             Boolean,
             None,
             None,
@@ -37,7 +37,7 @@ impl JsClass for BooleanObject {
     }
 }
 
-impl BooleanObject {
+impl JsBoolean {
     pub fn new(ctx: GcPointer<Context>, val: bool) -> GcPointer<JsObject> {
         let proto = ctx.global_data().boolean_structure.unwrap();
         let mut obj = JsObject::new(ctx, &proto, Self::class(), ObjectTag::Ordinary);
@@ -50,7 +50,7 @@ fn this_boolean_value(val: JsValue, ctx: GcPointer<Context>) -> Result<bool, JsV
     if val.is_bool() {
         return Ok(val.get_bool());
     }
-    let obj = TypedJsObject::<BooleanObject>::try_from(ctx, val)?;
+    let obj = TypedJsObject::<JsBoolean>::try_from(ctx, val)?;
     Ok(obj.data)
 }
 
@@ -59,7 +59,7 @@ pub fn boolean_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<
     if !args.ctor_call {
         return Ok(JsValue::new(data));
     }
-    Ok(JsValue::new(BooleanObject::new(ctx, data)))
+    Ok(JsValue::new(JsBoolean::new(ctx, data)))
 }
 
 pub fn boolean_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -73,7 +73,7 @@ pub fn boolean_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     Ok(JsValue::new(this_boolean_value(args.this, ctx)?))
 }
 
-impl Builtin for BooleanObject {
+impl Builtin for JsBoolean {
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut map = Structure::new_indexed(ctx, None, false);
         ctx.global_data.boolean_structure = Some(map);

@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use std::intrinsics::unlikely;
+use std::{intrinsics::unlikely, u32};
 
 use super::object::object_to_string;
 use crate::{
@@ -438,8 +438,18 @@ pub fn array_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     let length = super::get_length(ctx, &mut array)?;
 
     let target = args.at(0);
+    let from_index = if args.size() == 1 {
+        0.0
+    } else {
+        args.at(1).to_interger(ctx)?
+    };
+    if from_index.is_infinite() {
+        return Ok(JsValue::new(-1));
+    }
+    
+    let from_index = from_index as u32;
 
-    for i in 0..length {
+    for i in from_index..length {
         if !array.has_own_property(ctx, Symbol::Index(i)) {
             continue;
         }

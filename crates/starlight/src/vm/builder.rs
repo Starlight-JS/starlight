@@ -1,4 +1,4 @@
-use std::mem::ManuallyDrop;
+use std::{mem::ManuallyDrop, usize};
 
 use crate::gc::cell::GcPointer;
 
@@ -27,6 +27,9 @@ pub trait Builtin {
     fn init(mut _ctx: GcPointer<Context>) -> Result<(), JsValue> {
         todo!();
     }
+    fn native_references() -> Vec<usize> {
+        vec![]
+    }
 }
 
 pub trait ClassConstructor {
@@ -48,6 +51,88 @@ default impl<T: JsClass> ClassConstructor for T {
         let data = Self::constructor(ctx, args)?;
         *object.data::<Self>() = ManuallyDrop::new(data);
         Ok(object.into())
+    }
+}
+
+pub struct ObjectBuilder {
+    context: GcPointer<Context>,
+    object: GcPointer<JsObject>
+}
+
+impl ObjectBuilder {
+    pub fn new(ctx: GcPointer<Context>, object: GcPointer<JsObject>) -> ObjectBuilder{
+        ObjectBuilder {
+            context: ctx,
+            object
+        }
+    }
+}
+
+impl ObjectBuilder {
+    pub fn method<K: Into<Symbol>>(
+        &mut self,
+        name: K,
+        func: JsAPI,
+        arity: u32,
+    ) -> Result<&mut Self, JsValue> {
+        let attribute = WRITABLE | CONFIGURABLE;
+        def_native_method!(
+            self.context,
+            self.object,
+            name.into(),
+            func,
+            arity,
+            attribute
+        )?;
+        Ok(self)
+    }
+
+    pub fn property<K: Into<Symbol>, V: Into<JsValue>>(
+        &mut self,
+        name: K,
+        value: V,
+        attribute: Raw,
+    ) -> Result<&mut Self, JsValue> {
+        def_native_property!(self.context, self.object, name.into(), value, attribute)?;
+        Ok(self)
+    }
+
+    pub fn accessor<K: Into<Symbol>, V: Into<JsValue>>(
+        &mut self,
+        name: K,
+        getter: V,
+        setter: V,
+        attribute: Raw,
+    ) -> Result<&mut Self, JsValue> {
+        def_native_accessor!(
+            self.context,
+            self.object,
+            name.into(),
+            getter,
+            setter,
+            attribute
+        )?;
+        Ok(self)
+    }
+
+    pub fn getter<K: Into<Symbol>, V: Into<JsValue>>(
+        &mut self,
+        name: K,
+        getter: V,
+        attribute: Raw,
+    ) -> Result<&mut Self, JsValue> {
+        def_native_getter!(self.context, self.object, name.into(), getter, attribute)?;
+        Ok(self)
+    }
+
+    pub fn setter<K: Into<Symbol>, V: Into<JsValue>>(
+        &mut self,
+        name: K,
+        setter: V,
+        attribute: Raw,
+    ) -> Result<&mut Self, JsValue> {
+        def_native_setter!(self.context, self.object, name.into(), setter, attribute)?;
+        Ok(self)
     }
 }
 

@@ -2,14 +2,14 @@ use num::traits::float::FloatCore;
 
 use crate::{
     prelude::*,
-    vm::{builder::Builtin, context::Context, number::NumberObject},
+    vm::{builder::Builtin, context::Context, number::JsNumber},
 };
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
+        if obj.is_jsobject() && obj.get_jsobject().is_class(JsNumber::class()) {
             return Ok(JsValue::new(
-                NumberObject::to_ref(&obj.get_jsobject()).get(),
+                JsNumber::to_ref(&obj.get_jsobject()).get(),
             ));
         } else {
             return Err(JsValue::new(ctx.new_type_error(
@@ -23,8 +23,8 @@ pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
 pub fn number_clz(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     let x = if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
-            NumberObject::to_ref(&obj.get_jsobject()).get() as u32
+        if obj.is_jsobject() && obj.get_jsobject().is_class(JsNumber::class()) {
+            JsNumber::to_ref(&obj.get_jsobject()).get() as u32
         } else {
             return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.valueOf is not generic function",
@@ -42,7 +42,7 @@ pub fn number_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         if args.size() != 0 {
             res = args.at(0).to_number(ctx)?;
         }
-        Ok(JsValue::new(NumberObject::new(ctx, res)))
+        Ok(JsValue::new(JsNumber::new(ctx, res)))
     } else if args.size() == 0 {
         return Ok(JsValue::new(0i32));
     } else {
@@ -68,8 +68,8 @@ pub fn number_is_finite(_ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
 fn this_number_val(ctx: GcPointer<Context>, obj: JsValue) -> Result<f64, JsValue> {
     let num;
     if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
-            num = NumberObject::to_ref(&obj.get_jsobject()).get();
+        if obj.is_jsobject() && obj.get_jsobject().is_class(JsNumber::class()) {
+            num = JsNumber::to_ref(&obj.get_jsobject()).get();
         } else {
             return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.toString is not generic function",
@@ -216,8 +216,8 @@ pub fn number_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
     let obj = args.this;
     let num;
     if !obj.is_number() {
-        if obj.is_jsobject() && obj.get_jsobject().is_class(NumberObject::class()) {
-            num = NumberObject::to_ref(&obj.get_jsobject()).get();
+        if obj.is_jsobject() && obj.get_jsobject().is_class(JsNumber::class()) {
+            num = JsNumber::to_ref(&obj.get_jsobject()).get();
         } else {
             return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.toString is not generic function",
@@ -514,13 +514,17 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-impl Builtin for NumberObject {
+impl JsNumber {
+    pub(crate) const MAX_SAFE_INTEGER:f64 = 9007199254740991.0;
+}
+
+impl Builtin for JsNumber {
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.number_structure = Some(Structure::new_indexed(ctx, None, false));
 
         let structure = Structure::new_unique_indexed(ctx, Some(obj_proto), false);
-        let mut prototype = NumberObject::new_plain(ctx, structure, 0.0);
+        let mut prototype = JsNumber::new_plain(ctx, structure, 0.0);
         ctx.global_data
             .number_structure
             .unwrap()
