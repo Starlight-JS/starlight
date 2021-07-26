@@ -1844,6 +1844,9 @@ impl ByteCompiler {
                     self.expr(ctx, &update.arg, true, false)?;
                     self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.emit(op, &[0], false);
+                    if op == Opcode::OP_SUB {
+                        self.emit(Opcode::OP_NEG, &[], false);
+                    }
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }

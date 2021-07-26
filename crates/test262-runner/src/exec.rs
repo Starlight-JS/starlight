@@ -11,6 +11,7 @@ use starlight::vm::VirtualMachineRef;
 use starlight::vm::{context::Context, parse};
 use std::panic;
 use std::panic::AssertUnwindSafe;
+use std::time::Instant;
 
 impl TestSuite {
     pub(crate) fn run_main(
