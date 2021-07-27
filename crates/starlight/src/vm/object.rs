@@ -867,7 +867,6 @@ impl JsObject {
             try_!("valueOf".intern());
             try_!("toString".intern());
         }
-
         let msg = JsString::new(ctx, "invalid default value");
         Err(JsValue::encode_object_value(JsTypeError::new(
             ctx, msg, None,

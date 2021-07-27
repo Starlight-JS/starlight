@@ -548,10 +548,9 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
             Opcode::OP_SHL => {
                 let lhs = frame.pop();
                 let rhs = frame.pop();
-
                 let left = lhs.to_int32(ctx)?;
                 let right = rhs.to_uint32(ctx)?;
-                frame.push(JsValue::new((left << (right & 0x1f)) as f64));
+                frame.push(JsValue::new((left.wrapping_shl(right))));
             }
             Opcode::OP_SHR => {
                 let lhs = frame.pop();
@@ -559,7 +558,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
 
                 let left = lhs.to_int32(ctx)?;
                 let right = rhs.to_uint32(ctx)?;
-                frame.push(JsValue::new((left >> (right & 0x1f)) as f64));
+                frame.push(JsValue::new((left.wrapping_shr(right))));
             }
 
             Opcode::OP_USHR => {
@@ -568,7 +567,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
 
                 let left = lhs.to_uint32(ctx)?;
                 let right = rhs.to_uint32(ctx)?;
-                frame.push(JsValue::new((left >> (right & 0x1f)) as f64));
+                frame.push(JsValue::new(left.wrapping_shr(right)));
             }
             Opcode::OP_LESS => {
                 let lhs = frame.pop();
