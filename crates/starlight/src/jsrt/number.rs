@@ -2,6 +2,7 @@ use num::traits::float::FloatCore;
 
 use crate::{
     prelude::*,
+    jsrt::global,
     vm::{builder::Builtin, context::Context, number::JsNumber},
 };
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -514,8 +515,25 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
+pub fn number_is_safe_integer(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,JsValue> {
+    let left = args.at(0);
+    if left.is_int32() {
+        Ok(JsValue::new(true))
+    } else if left.is_double() {
+        Ok(JsValue::new(left.get_double() <= MAX_SAFE_INTEGER))
+    } else {
+        Ok(JsValue::new(false))
+    }
+}
+
+pub fn number_to_local_string(ctx:GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+    number_to_string(ctx, args)
+}
+
 impl JsNumber {
     pub(crate) const MAX_SAFE_INTEGER:f64 = 9007199254740991.0;
+    pub(crate) const MIN_SAFE_INTEGER:f64 = -9_007_199_254_740_991_f64;
+
 }
 
 impl Builtin for JsNumber {
@@ -531,24 +549,33 @@ impl Builtin for JsNumber {
             .change_prototype_with_no_transition(prototype);
 
         let mut constructor = JsNativeFunction::new(ctx, "Number".intern(), number_constructor, 1);
-
         def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
+
+        def_native_property!(ctx, constructor, EPSILON, f64::EPSILON)?;
+        def_native_property!(ctx, constructor, MAX_SAFE_INTEGER, JsNumber::MAX_SAFE_INTEGER)?;
         def_native_property!(ctx, constructor, MAX_VALUE, f64::MAX)?;
+        def_native_property!(ctx, constructor, MIN_SAFE_INTEGER, JsNumber::MIN_SAFE_INTEGER)?;
         def_native_property!(ctx, constructor, MIN_VALUE, f64::MIN)?;
         def_native_property!(ctx, constructor, NaN, f64::NAN)?;
         def_native_property!(ctx, constructor, NEGATIVE_INFINITY, f64::NEG_INFINITY)?;
         def_native_property!(ctx, constructor, POSITIVE_INFINITY, f64::INFINITY)?;
-        def_native_property!(ctx, constructor, EPSILON, f64::EPSILON)?;
-        def_native_property!(ctx, constructor, MAX_SAFE_INTEGER, 9007199254740991.0)?;
-        def_native_method!(ctx, constructor, isNaN, number_is_nan, 0)?;
-        def_native_method!(ctx, constructor, isFinite, number_is_finite, 0)?;
-        def_native_method!(ctx, constructor, isInteger, number_is_integer, 0)?;
+        
+        def_native_method!(ctx, constructor, isFinite, number_is_finite, 1)?;
+        def_native_method!(ctx, constructor, isInteger, number_is_integer, 1)?;
+        def_native_method!(ctx, constructor, isNaN, number_is_nan, 1)?;
+        def_native_method!(ctx, constructor, isSafeInteger, number_is_safe_integer,1)?;
+        def_native_method!(ctx, constructor, parseFloat, global::parse_float,1)?;
+        def_native_method!(ctx, constructor, parseInt, global::parse_int,1)?;
+
+
 
         def_native_property!(ctx, prototype, constructor, constructor)?;
-        def_native_method!(ctx, prototype, toString, number_to_string, 1)?;
-        def_native_method!(ctx, prototype, valueOf, number_value_of, 0)?;
-        def_native_method!(ctx, prototype, toPrecision, number_to_precisiion, 1)?;
         def_native_method!(ctx, prototype, toFixed, number_to_fixed, 1)?;
+        def_native_method!(ctx, prototype, toLocaleString, number_to_local_string,0)?;
+        def_native_method!(ctx, prototype, toString, number_to_string, 1)?;
+        def_native_method!(ctx, prototype, toPrecision, number_to_precisiion, 1)?;
+        def_native_method!(ctx, prototype, valueOf, number_value_of, 0)?;
+
         def_native_method!(ctx, prototype, clz, number_clz, 1)?;
 
         ctx.global_data.number_prototype = Some(prototype);
