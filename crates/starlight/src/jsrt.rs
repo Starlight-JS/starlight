@@ -266,6 +266,8 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         number::number_to_fixed as _,
         number::number_to_string as _,
         number::number_value_of as _,
+        number::number_is_safe_integer as _,
+        number::number_to_local_string as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
         HashValueZero::deserialize as _,

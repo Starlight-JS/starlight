@@ -1,9 +1,8 @@
-use std::{fmt::Result, path::MAIN_SEPARATOR};
-
 use num::traits::float::FloatCore;
 
 use crate::{
     prelude::*,
+    jsrt::global,
     vm::{builder::Builtin, context::Context, number::JsNumber},
 };
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -516,12 +515,12 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-pub fn number_is_safe_integer(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,JsValue> {
+pub fn number_is_safe_integer(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,JsValue> {
     let left = args.at(0);
     if left.is_int32() {
         Ok(JsValue::new(true))
-    } else if(left.is_double()){
-        Ok(JsValue::new(left.get_double() <= MAX_SAFE_INTEGER));
+    } else if left.is_double() {
+        Ok(JsValue::new(left.get_double() <= MAX_SAFE_INTEGER))
     } else {
         Ok(JsValue::new(false))
     }
@@ -553,9 +552,9 @@ impl Builtin for JsNumber {
         def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
 
         def_native_property!(ctx, constructor, EPSILON, f64::EPSILON)?;
-        def_native_property!(ctx, constructor, MAX_SAFE_INTEGER, Number::MAX_SAFE_INTEGER)?;
+        def_native_property!(ctx, constructor, MAX_SAFE_INTEGER, JsNumber::MAX_SAFE_INTEGER)?;
         def_native_property!(ctx, constructor, MAX_VALUE, f64::MAX)?;
-        def_native_property!(ctx, constructor, MIN_SAFE_INTEGER, Number::MIN_SAFE_INTEGER)?;
+        def_native_property!(ctx, constructor, MIN_SAFE_INTEGER, JsNumber::MIN_SAFE_INTEGER)?;
         def_native_property!(ctx, constructor, MIN_VALUE, f64::MIN)?;
         def_native_property!(ctx, constructor, NaN, f64::NAN)?;
         def_native_property!(ctx, constructor, NEGATIVE_INFINITY, f64::NEG_INFINITY)?;
@@ -576,7 +575,7 @@ impl Builtin for JsNumber {
         def_native_method!(ctx, prototype, toString, number_to_string, 1)?;
         def_native_method!(ctx, prototype, toPrecision, number_to_precisiion, 1)?;
         def_native_method!(ctx, prototype, valueOf, number_value_of, 0)?;
-        
+
         def_native_method!(ctx, prototype, clz, number_clz, 1)?;
 
         ctx.global_data.number_prototype = Some(prototype);
