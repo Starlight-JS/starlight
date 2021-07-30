@@ -180,6 +180,7 @@ pub mod jsrt;
 pub mod options;
 //pub mod tracingjit;
 mod constant;
+pub mod interpreter;
 pub mod vm;
 pub struct Platform;
 use std::sync::atomic::Ordering;

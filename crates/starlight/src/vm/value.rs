@@ -605,7 +605,7 @@ impl JsValue {
         Ok(number.abs().floor() as u32)
     }
 
-    pub fn to_length(self, ctx:GcPointer<Context>) -> Result<u32, JsValue> {
+    pub fn to_length(self, ctx: GcPointer<Context>) -> Result<u32, JsValue> {
         let len = self.to_interger(ctx)?;
         if len < 0.0 {
             Ok(0)
@@ -614,7 +614,7 @@ impl JsValue {
         }
     }
 
-    pub fn to_interger(self, ctx:GcPointer<Context>) -> Result<f64, JsValue> {
+    pub fn to_interger(self, ctx: GcPointer<Context>) -> Result<f64, JsValue> {
         let number = self.to_number(ctx)?;
         if !number.is_finite() {
             // 3. If number is NaN, +0, or -0, return +0.
@@ -628,7 +628,7 @@ impl JsValue {
 
     pub fn to_f32(self, ctx: GcPointer<Context>) -> Result<f32, JsValue> {
         if self.is_int32() {
-            return Ok(self.get_int32() as _)
+            return Ok(self.get_int32() as _);
         }
         let number = self.to_number(ctx)?;
         Ok(number as f32)
@@ -1122,16 +1122,16 @@ pub mod new_value {
     use super::*;
     use wtf_rs::pure_nan::{pure_nan, purify_nan};
     #[derive(Copy, Clone, Debug)]
-    pub struct JsValue(EncodedValueDescriptor);
+    pub struct JsValue(pub(crate) EncodedValueDescriptor);
     #[derive(Clone, Copy)]
-    union EncodedValueDescriptor {
+    pub(crate) union EncodedValueDescriptor {
         as_int64: i64,
         #[cfg(target_pointer_width = "32")]
         as_double: f64,
 
         ptr: usize,
-        #[cfg(target_pointer_width = "32")]
-        as_bits: AsBits,
+
+        pub as_bits: AsBits,
     }
     impl Debug for EncodedValueDescriptor {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1150,16 +1150,16 @@ pub mod new_value {
     #[derive(Clone, Copy, PartialEq, Eq)]
     #[cfg(target_endian = "little")]
     #[repr(C)]
-    struct AsBits {
-        payload: i32,
-        tag: i32,
+    pub struct AsBits {
+        pub payload: i32,
+        pub tag: i32,
     }
     #[derive(Clone, Copy, PactxialEq, Eq)]
     #[cfg(target_endian = "big")]
     #[repr(C)]
-    struct AsBits {
-        tag: i32,
-        payload: i32,
+    pub struct AsBits {
+        pub tag: i32,
+        pub payload: i32,
     }
 
     #[cfg(target_pointer_width = "32")]

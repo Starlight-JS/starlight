@@ -5,6 +5,7 @@ members = [
     "crates/starlight-derive",
     "crates/test262-runner",
     "crates/fullcodegen",
+    "crates/starlight-bytecode",
 ]
 default-members = ["crates/starlight", "crates/test262-runner"]
 
