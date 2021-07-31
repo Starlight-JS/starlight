@@ -1738,6 +1738,7 @@ dependencies = [
  "rand 0.8.4",
  "regress",
  "ryu-js",
+ "starlight-bytecode",
  "starlight-derive",
  "structopt",
  "swc_atoms",
@@ -1748,6 +1749,10 @@ dependencies = [
  "wtf-rs",
  "yastl",
 ]
+
+[[package]]
+name = "starlight-bytecode"
+version = "0.1.0"
 
 [[package]]
 name = "starlight-derive"
