@@ -15,13 +15,13 @@ pub struct Register {
 pub union RegisterPayload {
     pub value: JsValue,
     pub call_frame: *mut CallFrame,
-    pub code_block: GcPointer<CodeBlock>,
+    pub code_block: Option<GcPointer<CodeBlock>>,
     pub number: f64,
     pub integer: i64,
 }
 
 impl Register {
-    pub fn code_block(self) -> GcPointer<CodeBlock> {
+    pub fn code_block(self) -> Option<GcPointer<CodeBlock>> {
         unsafe { self.u.code_block }
     }
     pub fn new(val: JsValue) -> Self {

@@ -1,3 +1,5 @@
+use starlight_bytecode::virtual_register;
+
 use super::context::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +8,7 @@ use super::symbol_table::Symbol;
 use super::value::JsValue;
 use crate::bytecode::opcodes::*;
 use crate::gc::{cell::GcPointer, cell::Tracer};
+use crate::interpreter::frame_register_count_for;
 use crate::{
     bytecode::TypeFeedBack,
     gc::cell::{GcCell, Trace},
@@ -74,6 +77,7 @@ impl StackSizeState {
 #[repr(C)]
 pub struct CodeBlock {
     pub stack_size: u32,
+    pub num_callee_locals: u32,
     pub literals_ptr: *const JsValue,
     /// Function name
     pub name: Symbol,
@@ -121,7 +125,12 @@ unsafe impl Trace for CodeBlock {
         self.feedback.trace(visitor);
     }
 }
-
+impl GcPointer<CodeBlock> {
+    pub fn stack_pointer_offset(self) -> i32 {
+        virtual_register::VirtualRegister::for_local(frame_register_count_for(self) as i32 - 1)
+            .offset()
+    }
+}
 impl CodeBlock {
     /// Print bytecode to `output`.
     pub fn display_to<T: Write>(&self, output: &mut T) -> std::fmt::Result {
@@ -782,6 +791,9 @@ impl CodeBlock {
         self.stack_size = s.stack_len_max;
         Ok(())
     }
+    pub fn num_callee_locals(&self) -> u32 {
+        self.num_callee_locals
+    }
     /// Create new empty code block.
     pub fn new(
         mut ctx: GcPointer<Context>,
@@ -792,6 +804,7 @@ impl CodeBlock {
         let this = Self {
             path,
             name,
+            num_callee_locals: 0,
             stack_size: 0,
             loc: vec![],
             file_name: String::new(),

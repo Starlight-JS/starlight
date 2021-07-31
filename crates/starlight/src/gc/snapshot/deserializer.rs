@@ -1564,6 +1564,7 @@ impl Deserializable for CodeBlock {
             param_count,
             is_constructor,
             stack_size: u32::deserialize_inplace(deser),
+            num_callee_locals: u32::deserialize_inplace(deser),
         }
     }
 

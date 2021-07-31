@@ -176,11 +176,11 @@ impl CallFrame {
         CallSiteIndex::from_bits(self.call_site_as_raw_bits())
     }
     pub fn current_vpc(&self) -> *mut u8 {
-        &mut self.code_block().code[self.call_site_index().bytecode_index() as usize]
+        &mut self.code_block().unwrap().code[self.call_site_index().bytecode_index() as usize]
     }
 
     pub fn set_current_vpc(&mut self, vpc: *mut u8) {
-        let start = &self.code_block().code[0] as *const u8 as *mut u8;
+        let start = &self.code_block().unwrap().code[0] as *const u8 as *mut u8;
         let index = vpc as usize - start as usize;
         unsafe {
             *(*self.at(CallFrameSlot::ArgumentCountIncludingThis as _)).tag_mut() =
@@ -192,7 +192,21 @@ impl CallFrame {
         self.call_site_index().bytecode_index() as usize
     }
 
-    pub fn code_block(&self) -> GcPointer<CodeBlock> {
+    pub fn code_block(&self) -> Option<GcPointer<CodeBlock>> {
         unsafe { self.at(0).read().code_block() }
+    }
+
+    fn top_of_frame_internal(&self) -> *mut Register {
+        unsafe {
+            let code_block = self.code_block().unwrap();
+            self.registers()
+                .offset(code_block.stack_pointer_offset() as _)
+        }
+    }
+    pub fn top_of_frame(&self) -> *mut Register {
+        if self.code_block().is_none() {
+            return self.registers();
+        }
+        self.top_of_frame_internal()
     }
 }
