@@ -1,7 +1,40 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{constant::*, gc::cell::{GcPointer, WeakRef, WeakSlot}, jsrt::{boolean::JsBoolean, date::JsDate, math::JsMath, regexp::JsRegExp, weak_ref::JsWeakRef}, vm::{ModuleKind, arguments::{Arguments, JsArguments}, array::JsArray, array_buffer::JsArrayBuffer, array_storage::ArrayStorage, attributes::*, builder::Builtin, class::JsClass, code_block::CodeBlock, context::Context, data_view::JsDataView, environment::Environment, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::JsNumber, object::*, promise::JsPromise, property_descriptor::*, string::*, structure::*, structure_chain::StructureChain, symbol_table::*, value::*}};
+use crate::{
+    constant::*,
+    define_op_builtins,
+    gc::cell::{GcPointer, WeakRef, WeakSlot},
+    jsrt::{boolean::JsBoolean, date::JsDate, math::JsMath, regexp::JsRegExp, weak_ref::JsWeakRef},
+    vm::{
+        arguments::{Arguments, JsArguments},
+        array::JsArray,
+        array_buffer::JsArrayBuffer,
+        array_storage::ArrayStorage,
+        attributes::*,
+        builder::Builtin,
+        class::JsClass,
+        code_block::CodeBlock,
+        context::Context,
+        data_view::JsDataView,
+        environment::Environment,
+        error::*,
+        function::*,
+        global::JsGlobal,
+        indexed_elements::IndexedElements,
+        interpreter::SpreadValue,
+        number::JsNumber,
+        object::*,
+        promise::JsPromise,
+        property_descriptor::*,
+        string::*,
+        structure::*,
+        structure_chain::StructureChain,
+        symbol_table::*,
+        value::*,
+        ModuleKind,
+    },
+};
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
@@ -37,6 +70,9 @@ pub(crate) fn print(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
 pub struct SelfHost;
 
 impl Builtin for SelfHost {
+    fn native_references() -> Vec<usize> {
+        vec![]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let spread = include_str!("builtins/Spread.js");
         let func = ctx
@@ -187,26 +223,14 @@ pub static VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         refs.push(ffi::ffi_library_open as _);
     }
 
-    unsafe {
-        refs.append(&mut JsMath::native_references());
-        refs.append(&mut JsArray::native_references());
-        refs.append(&mut JsDate::native_references());
-        refs.append(&mut JsDataView::native_references());
-        refs.append(&mut JsPromise::native_references());
-        refs.append(&mut JsStringObject::native_references());
-        refs.append(&mut JsRegExp::native_references());
-        refs.append(&mut JsGeneratorFunction::native_references());
-        refs.append(&mut JsArrayBuffer::native_references());
-        refs.append(&mut JsWeakRef::native_references());
-        refs.append(&mut JsObject::native_references());
-        refs.append(&mut JsError::native_references());
-        refs.append(&mut JsSymbolObject::native_references());
-        refs.append(&mut JsFunction::native_references());
-        refs.append(&mut JsGlobal::native_references());
-        refs.append(&mut JsBoolean::native_references());
-        refs.append(&mut JsArguments::native_references());
-        refs.append(&mut JsNumber::native_references());
+    macro_rules! define_register_native_reference {
+        ($class: ident) => {
+            refs.append(&mut $class::native_references());
+        };
+    }
 
+    unsafe {
+        define_op_builtins!(define_register_native_reference);
     }
 
     refs
