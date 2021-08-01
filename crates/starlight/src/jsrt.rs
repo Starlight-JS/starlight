@@ -1,20 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    constant::*,
-    gc::cell::{GcPointer, WeakRef, WeakSlot},
-    jsrt::{boolean::JsBoolean, date::JsDate, math::JsMath, regexp::JsRegExp, weak_ref::JsWeakRef},
-    vm::{
-        arguments::Arguments, array::JsArray, array_buffer::JsArrayBuffer,
-        array_storage::ArrayStorage, attributes::*, builder::Builtin, class::JsClass,
-        code_block::CodeBlock, context::Context, data_view::JsDataView, environment::Environment,
-        error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements,
-        interpreter::SpreadValue, object::*, promise::JsPromise, property_descriptor::*,
-        string::*, structure::*, structure_chain::StructureChain, symbol_table::*, value::*,
-        ModuleKind,
-    },
-};
+use crate::{constant::*, gc::cell::{GcPointer, WeakRef, WeakSlot}, jsrt::{boolean::JsBoolean, date::JsDate, math::JsMath, regexp::JsRegExp, weak_ref::JsWeakRef}, vm::{ModuleKind, arguments::{Arguments, JsArguments}, array::JsArray, array_buffer::JsArrayBuffer, array_storage::ArrayStorage, attributes::*, builder::Builtin, class::JsClass, code_block::CodeBlock, context::Context, data_view::JsDataView, environment::Environment, error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements, interpreter::SpreadValue, number::JsNumber, object::*, promise::JsPromise, property_descriptor::*, string::*, structure::*, structure_chain::StructureChain, symbol_table::*, value::*}};
 use std::{collections::HashMap, rc::Rc};
 pub mod array;
 pub mod array_buffer;
@@ -217,6 +204,9 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         refs.append(&mut JsFunction::native_references());
         refs.append(&mut JsGlobal::native_references());
         refs.append(&mut JsBoolean::native_references());
+        refs.append(&mut JsArguments::native_references());
+        refs.append(&mut JsNumber::native_references());
+
     }
 
     println!("{}",refs.len());
