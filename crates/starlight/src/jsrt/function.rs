@@ -66,7 +66,7 @@ pub fn function_prototype(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         format!("{{ {} }}", args.at(args.size() - 1).to_string(ctx)?)
     };
     //let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
-    ByteCompiler::compile_code(ctx, &params, &".", body, false)
+    ByteCompiler::compile_code(ctx, &params, ".", body, false)
         .map_err(|e| JsValue::from(ctx.new_syntax_error(format!("Compile Error {:?}", e))))
 }
 
