@@ -148,16 +148,6 @@ impl GcPointer<Context> {
         self.vm.external_references.push(reference);
     }
 
-    pub fn remove_reference(&mut self, reference: usize) {
-        unsafe {
-            let index = self.vm.external_references
-                .iter()
-                .position(|r| *r == reference)
-                .expect("Reference not found");
-            self.vm.external_references.remove(index);
-        }
-    }
-
     pub fn register_class<T>(mut self) -> Result<(), JsValue>
     where
         T: ClassConstructor + JsClass,
