@@ -3,7 +3,6 @@
 
 use starlight::{
     define_jsclass,
-    jsrt::VM_NATIVE_REFERENCES,
     prelude::*,
     prelude::{JsClass, Options},
     vm::{
@@ -60,9 +59,7 @@ fn main() {
         }
         _ => {}
     }
-    unsafe {
-        VM_NATIVE_REFERENCES.push(Person::say_hello as _);
-    }
+    ctx.register_external_reference(Person::say_hello as _);
     let buf = Snapshot::take_context(false, &mut runtime, ctx, |_, _| {}).buffer;
     let mut ctx = Deserializer::deserialize_context(&mut runtime, false, &buf);
     match ctx.eval("let person = new Person(10);person.sayHello()") {

@@ -104,6 +104,9 @@ impl JsClass for JsArguments {
 }
 
 impl Builtin for JsArguments {
+    fn native_references() -> Vec<usize> {
+        vec![JsArguments::class() as *const _ as usize]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.normal_arguments_structure =

@@ -75,18 +75,17 @@ impl SnapshotSerializer {
                     indexx += 1;
                 });
 
-            if let Some(references) = vm.external_references {
-                for (_index, reference) in references.iter().enumerate() {
-                    /* let result = self.reference_map.insert(*reference, indexx);
-                    indexx += 1;
-                    match result {
-                        Some(_) => {
-                            panic!("Reference 0x{:x}", reference);
-                        }
-                        _ => (),
-                    }*/
-                    self.reference_map.push(*reference);
-                }
+            let references = &vm.external_references;
+            for (_index, reference) in references.iter().enumerate() {
+                /* let result = self.reference_map.insert(*reference, indexx);
+                indexx += 1;
+                match result {
+                    Some(_) => {
+                        panic!("Reference 0x{:x}", reference);
+                    }
+                    _ => (),
+                }*/
+                self.reference_map.push(*reference);
             }
         }
     }

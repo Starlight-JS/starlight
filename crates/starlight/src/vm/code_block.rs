@@ -522,7 +522,7 @@ impl CodeBlock {
         // breath first graph exploration
         s.check(ctx, 0, Opcode::OP_NOP as u8, 0)?;
         use Opcode::*;
-        while s.pc_stack.len() > 0 {
+        while !s.pc_stack.is_empty() {
             pos = s.pc_stack.pop().unwrap();
             stack_len = s.stack_level_tab[pos as usize];
             op = unsafe { std::mem::transmute::<_, Opcode>(self.code[pos as usize]) };

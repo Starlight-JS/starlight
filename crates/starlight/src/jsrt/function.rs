@@ -66,7 +66,7 @@ pub fn function_prototype(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         format!("{{ {} }}", args.at(args.size() - 1).to_string(ctx)?)
     };
     //let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
-    ByteCompiler::compile_code(ctx, &params, &".", body, false)
+    ByteCompiler::compile_code(ctx, &params, ".", body, false)
         .map_err(|e| JsValue::from(ctx.new_syntax_error(format!("Compile Error {:?}", e))))
 }
 
@@ -182,6 +182,16 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
 }
 
 impl Builtin for JsFunction {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsFunction::class() as *const _ as usize,
+            function_bind as usize,
+            function_prototype as usize,
+            function_to_string as usize,
+            function_apply as usize,
+            function_call as usize,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         ctx.global_data.function_struct = Some(Structure::new_indexed(ctx, None, false));
 

@@ -96,6 +96,14 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 }
 
 impl Builtin for JsArrayBuffer {
+    fn native_references() -> Vec<usize> {
+        vec![
+            array_buffer_constructor as _,
+            array_buffer_byte_length as _,
+            array_buffer_slice as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut builder = StructureBuilder::new(None);
         assert_eq!(

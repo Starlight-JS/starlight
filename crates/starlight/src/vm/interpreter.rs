@@ -21,7 +21,6 @@ use crate::{bytecode::*, gc::cell::Tracer};
 use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
-pub mod callframe;
 pub mod frame;
 pub mod stack;
 
@@ -550,7 +549,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                 let rhs = frame.pop();
                 let left = lhs.to_int32(ctx)?;
                 let right = rhs.to_uint32(ctx)?;
-                frame.push(JsValue::new((left.wrapping_shl(right))));
+                frame.push(JsValue::new(left.wrapping_shl(right)));
             }
             Opcode::OP_SHR => {
                 let lhs = frame.pop();
@@ -558,7 +557,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
 
                 let left = lhs.to_int32(ctx)?;
                 let right = rhs.to_uint32(ctx)?;
-                frame.push(JsValue::new((left.wrapping_shr(right))));
+                frame.push(JsValue::new(left.wrapping_shr(right)));
             }
 
             Opcode::OP_USHR => {

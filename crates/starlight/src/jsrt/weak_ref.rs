@@ -76,6 +76,14 @@ pub fn weak_ref_prototype_deref(
 }
 
 impl Builtin for JsWeakRef {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsWeakRef::class() as *const _ as _,
+            weak_ref_constructor as _,
+            weak_ref_prototype_deref as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data().object_prototype.unwrap();
         ctx.global_data.weak_ref_structure = Some(Structure::new_indexed(ctx, None, false));

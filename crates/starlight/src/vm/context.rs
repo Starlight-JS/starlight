@@ -1,4 +1,4 @@
-use crate::{define_op_builtins, gc::cell::GcCell, jsrt::VM_NATIVE_REFERENCES, vm::Lrc};
+use crate::{define_op_builtins, gc::cell::GcCell, vm::Lrc};
 use std::{collections::HashMap, ptr::null};
 use swc_common::{errors::Handler, input::StringInput, FileName, SourceMap};
 use swc_ecmascript::parser::{Parser, Syntax};
@@ -45,9 +45,9 @@ use super::{
 };
 
 use crate::jsrt::boolean::JsBoolean;
-use crate::jsrt::date::Date;
-use crate::jsrt::math::Math;
-use crate::jsrt::regexp::RegExp;
+use crate::jsrt::date::JsDate;
+use crate::jsrt::math::JsMath;
+use crate::jsrt::regexp::JsRegExp;
 use crate::jsrt::weak_ref::JsWeakRef;
 use crate::jsrt::SelfHost;
 
@@ -144,20 +144,8 @@ impl Context {
     }
 }
 impl GcPointer<Context> {
-    pub fn register_native_reference(reference: usize) {
-        unsafe {
-            VM_NATIVE_REFERENCES.push(reference);
-        }
-    }
-
-    pub fn remove_reference(reference: usize) {
-        unsafe {
-            let index = VM_NATIVE_REFERENCES
-                .iter()
-                .position(|r| *r == reference)
-                .expect("Reference not found");
-            VM_NATIVE_REFERENCES.remove(index);
-        }
+    pub fn register_external_reference(&mut self, reference: usize) {
+        self.vm.external_references.push(reference);
     }
 
     pub fn register_class<T>(mut self) -> Result<(), JsValue>
@@ -188,8 +176,8 @@ impl GcPointer<Context> {
         def_native_property!(self, global_object, name.intern(), constructor)?;
 
         unsafe {
-            VM_NATIVE_REFERENCES.push(T::class() as *const _ as _);
-            VM_NATIVE_REFERENCES.push(T::raw_constructor as _);
+            self.vm.external_references.push(T::class() as *const _ as _);
+            self.vm.external_references.push(T::raw_constructor as _);
         }
         Ok(())
     }
