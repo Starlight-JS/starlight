@@ -143,6 +143,26 @@ pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
 }
 
 impl Builtin for JsError {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsError::class() as *const _ as usize,
+            JsTypeError::class() as *const _ as usize,
+            JsSyntaxError::class() as *const _ as usize,
+            JsReferenceError::class() as *const _ as usize,
+            JsRangeError::class() as *const _ as usize,
+            JsEvalError::class() as *const _ as usize,
+            JsURIError::class() as *const _ as usize,
+            error_constructor as usize,
+            error_to_string as usize,
+            eval_error_constructor as usize,
+            range_error_constructor as usize,
+            reference_error_constructor as usize,
+            syntax_error_constructor as usize,
+            type_error_constructor as usize,
+            uri_error_constructor as usize,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.error_structure = Some(Structure::new_indexed(ctx, None, false));

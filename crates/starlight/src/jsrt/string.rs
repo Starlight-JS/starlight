@@ -24,7 +24,7 @@ use std::{
     intrinsics::unlikely,
 };
 
-use super::regexp::RegExp;
+use super::regexp::JsRegExp;
 
 pub fn string_to_string(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     Ok(args.this)
@@ -290,7 +290,7 @@ pub fn string_to_uppercase(ctx: GcPointer<Context>, args: &Arguments) -> Result<
 pub fn string_starts_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
-    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::class())) {
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(JsRegExp::class())) {
         let msg = JsString::new(
             ctx,
             "First argument to String.prototype.endsWith must not be a regular expression",
@@ -324,7 +324,7 @@ pub fn string_starts_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 pub fn string_ends_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
-    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::class())) {
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(JsRegExp::class())) {
         let msg = JsString::new(
             ctx,
             "First argument to String.prototype.startsWith must not be a regular expression",
@@ -358,7 +358,7 @@ pub fn string_ends_with(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 pub fn string_includes(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let primitive_val = args.this.to_string(ctx)?;
     let arg = args.at(0);
-    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(RegExp::class())) {
+    if unlikely(arg.is_jsobject() && arg.get_jsobject().is_class(JsRegExp::class())) {
         let msg = JsString::new(
             ctx,
             "First argument to String.prototype.startsWith must not be a regular expression",
@@ -545,6 +545,36 @@ pub fn string_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 }
 
 impl Builtin for JsStringObject {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsStringObject::class() as *const _ as usize,
+            string_concat as _,
+            string_trim as _,
+            string_trim_start as _,
+            string_trim_end as _,
+            string_pad_start as _,
+            string_pad_end as _,
+            string_split as _,
+            string_constructor as _,
+            string_to_string as _,
+            string_index_of as _,
+            string_last_index_of as _,
+            string_substr as _,
+            string_substring as _,
+            string_replace as _,
+            string_value_of as _,
+            string_char_at as _,
+            string_char_code_at as _,
+            string_code_point_at as _,
+            string_starts_with as _,
+            string_ends_with as _,
+            string_repeat as _,
+            string_to_lowercase as _,
+            string_to_uppercase as _,
+            string_includes as _,
+            string_slice as _,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.string_structure = Some(Structure::new_indexed(ctx, None, true));
@@ -650,10 +680,10 @@ fn get_regex_string(_ctx: GcPointer<Context>, val: JsValue) -> Result<(String, S
     }
     if val.is_jsobject() {
         let obj = val.get_jsobject();
-        if obj.is_class(RegExp::class()) {
+        if obj.is_class(JsRegExp::class()) {
             return Ok((
-                obj.data::<RegExp>().original_source.to_string(),
-                obj.data::<RegExp>().original_flags.to_string(),
+                obj.data::<JsRegExp>().original_source.to_string(),
+                obj.data::<JsRegExp>().original_flags.to_string(),
             ));
         }
     }

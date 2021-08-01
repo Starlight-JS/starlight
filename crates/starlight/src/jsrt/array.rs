@@ -446,7 +446,7 @@ pub fn array_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     if from_index.is_infinite() {
         return Ok(JsValue::new(-1));
     }
-    
+
     let from_index = from_index as u32;
 
     for i in from_index..length {
@@ -567,6 +567,28 @@ pub fn array_shift(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
 }
 
 impl Builtin for JsArray {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsArray::class() as *const _ as usize,
+            array::array_ctor as usize,
+            array::array_from as usize,
+            array::array_is_array as usize,
+            array::array_join as usize,
+            array::array_of as usize,
+            array::array_pop as usize,
+            array::array_push as usize,
+            array::array_reduce as usize,
+            array::array_to_string as usize,
+            array::array_concat as usize,
+            array::array_for_each as _,
+            array::array_filter as _,
+            array::array_map as _,
+            array::array_shift as _,
+            array::array_slice as _,
+            array::array_index_of as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         let structure = Structure::new_indexed(ctx, None, true);

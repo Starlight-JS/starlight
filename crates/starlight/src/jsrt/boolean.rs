@@ -74,6 +74,15 @@ pub fn boolean_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 }
 
 impl Builtin for JsBoolean {
+    fn native_references() -> Vec<usize> {
+        vec![
+            boolean_constructor as _,
+            boolean_to_string as _,
+            boolean_value_of as _,
+            JsBoolean::class() as *const _ as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut map = Structure::new_indexed(ctx, None, false);
         ctx.global_data.boolean_structure = Some(map);

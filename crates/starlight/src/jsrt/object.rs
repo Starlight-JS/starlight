@@ -393,6 +393,27 @@ pub fn object_is_extensible(ctx: GcPointer<Context>, args: &Arguments) -> Result
 }
 
 impl Builtin for JsObject {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsObject::class() as *const _ as usize,
+            object_constructor as usize,
+            object_create as usize,
+            object_to_string as usize,
+            object_define_property as usize,
+            object_has_own_property as usize,
+            object_property_is_enumerable as usize,
+            object_keys as usize,
+            object_get_own_property_descriptor as usize,
+            object_freeze as _,
+            object_seal as _,
+            object_get_prototype_of as _,
+            object_is_extensible as _,
+            object_is_sealed as _,
+            object_is_frozen as _,
+            object_prevent_extensions as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut prototype = ctx.global_data.object_prototype.unwrap();
 

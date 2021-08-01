@@ -1,17 +1,15 @@
 use num::traits::float::FloatCore;
 
 use crate::{
-    prelude::*,
     jsrt::global,
+    prelude::*,
     vm::{builder::Builtin, context::Context, number::JsNumber},
 };
 pub fn number_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
     if !obj.is_number() {
         if obj.is_jsobject() && obj.get_jsobject().is_class(JsNumber::class()) {
-            return Ok(JsValue::new(
-                JsNumber::to_ref(&obj.get_jsobject()).get(),
-            ));
+            return Ok(JsValue::new(JsNumber::to_ref(&obj.get_jsobject()).get()));
         } else {
             return Err(JsValue::new(ctx.new_type_error(
                 "Number.prototype.valueOf is not generic function",
@@ -515,7 +513,10 @@ pub fn round_to_fixed(string: &mut String, fixed: usize) -> String {
     }
 }
 
-pub fn number_is_safe_integer(_ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,JsValue> {
+pub fn number_is_safe_integer(
+    _ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     let left = args.at(0);
     if left.is_int32() {
         Ok(JsValue::new(true))
@@ -526,17 +527,37 @@ pub fn number_is_safe_integer(_ctx: GcPointer<Context>, args: &Arguments) -> Res
     }
 }
 
-pub fn number_to_local_string(ctx:GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
+pub fn number_to_local_string(
+    ctx: GcPointer<Context>,
+    args: &Arguments,
+) -> Result<JsValue, JsValue> {
     number_to_string(ctx, args)
 }
 
 impl JsNumber {
-    pub(crate) const MAX_SAFE_INTEGER:f64 = 9007199254740991.0;
-    pub(crate) const MIN_SAFE_INTEGER:f64 = -9_007_199_254_740_991_f64;
-
+    pub(crate) const MAX_SAFE_INTEGER: f64 = 9007199254740991.0;
+    pub(crate) const MIN_SAFE_INTEGER: f64 = -9_007_199_254_740_991_f64;
 }
 
 impl Builtin for JsNumber {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsNumber::class() as *const _ as usize,
+            number_constructor as _,
+            number_clz as _,
+            number_is_finite as _,
+            number_is_integer as _,
+            number_is_nan as _,
+            number_to_int as _,
+            number_to_precisiion as _,
+            number_to_fixed as _,
+            number_to_string as _,
+            number_value_of as _,
+            number_is_safe_integer as _,
+            number_to_local_string as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.number_structure = Some(Structure::new_indexed(ctx, None, false));
@@ -552,26 +573,34 @@ impl Builtin for JsNumber {
         def_native_property!(ctx, constructor, prototype, prototype, NONE)?;
 
         def_native_property!(ctx, constructor, EPSILON, f64::EPSILON)?;
-        def_native_property!(ctx, constructor, MAX_SAFE_INTEGER, JsNumber::MAX_SAFE_INTEGER)?;
+        def_native_property!(
+            ctx,
+            constructor,
+            MAX_SAFE_INTEGER,
+            JsNumber::MAX_SAFE_INTEGER
+        )?;
         def_native_property!(ctx, constructor, MAX_VALUE, f64::MAX)?;
-        def_native_property!(ctx, constructor, MIN_SAFE_INTEGER, JsNumber::MIN_SAFE_INTEGER)?;
+        def_native_property!(
+            ctx,
+            constructor,
+            MIN_SAFE_INTEGER,
+            JsNumber::MIN_SAFE_INTEGER
+        )?;
         def_native_property!(ctx, constructor, MIN_VALUE, f64::MIN)?;
         def_native_property!(ctx, constructor, NaN, f64::NAN)?;
         def_native_property!(ctx, constructor, NEGATIVE_INFINITY, f64::NEG_INFINITY)?;
         def_native_property!(ctx, constructor, POSITIVE_INFINITY, f64::INFINITY)?;
-        
+
         def_native_method!(ctx, constructor, isFinite, number_is_finite, 1)?;
         def_native_method!(ctx, constructor, isInteger, number_is_integer, 1)?;
         def_native_method!(ctx, constructor, isNaN, number_is_nan, 1)?;
-        def_native_method!(ctx, constructor, isSafeInteger, number_is_safe_integer,1)?;
-        def_native_method!(ctx, constructor, parseFloat, global::parse_float,1)?;
-        def_native_method!(ctx, constructor, parseInt, global::parse_int,1)?;
-
-
+        def_native_method!(ctx, constructor, isSafeInteger, number_is_safe_integer, 1)?;
+        def_native_method!(ctx, constructor, parseFloat, global::parse_float, 1)?;
+        def_native_method!(ctx, constructor, parseInt, global::parse_int, 1)?;
 
         def_native_property!(ctx, prototype, constructor, constructor)?;
         def_native_method!(ctx, prototype, toFixed, number_to_fixed, 1)?;
-        def_native_method!(ctx, prototype, toLocaleString, number_to_local_string,0)?;
+        def_native_method!(ctx, prototype, toLocaleString, number_to_local_string, 0)?;
         def_native_method!(ctx, prototype, toString, number_to_string, 1)?;
         def_native_method!(ctx, prototype, toPrecision, number_to_precisiion, 1)?;
         def_native_method!(ctx, prototype, valueOf, number_value_of, 0)?;

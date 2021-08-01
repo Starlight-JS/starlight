@@ -45,9 +45,9 @@ use super::{
 };
 
 use crate::jsrt::boolean::JsBoolean;
-use crate::jsrt::date::Date;
-use crate::jsrt::math::Math;
-use crate::jsrt::regexp::RegExp;
+use crate::jsrt::date::JsDate;
+use crate::jsrt::math::JsMath;
+use crate::jsrt::regexp::JsRegExp;
 use crate::jsrt::weak_ref::JsWeakRef;
 use crate::jsrt::SelfHost;
 

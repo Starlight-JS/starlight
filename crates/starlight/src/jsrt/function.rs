@@ -182,6 +182,16 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
 }
 
 impl Builtin for JsFunction {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsFunction::class() as *const _ as usize,
+            function_bind as usize,
+            function_prototype as usize,
+            function_to_string as usize,
+            function_apply as usize,
+            function_call as usize,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         ctx.global_data.function_struct = Some(Structure::new_indexed(ctx, None, false));
 

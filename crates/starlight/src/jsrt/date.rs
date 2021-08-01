@@ -43,9 +43,9 @@ fn ignore_ambiguity<T>(result: LocalResult<T>) -> Option<T> {
     }
 }
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Date(Option<NaiveDateTime>);
+pub struct JsDate(Option<NaiveDateTime>);
 
-impl Display for Date {
+impl Display for JsDate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.to_local() {
             Some(v) => write!(f, "{}", v.format("%a %b %d %Y %H:%M:%S GMT%:z")),
@@ -53,18 +53,18 @@ impl Display for Date {
         }
     }
 }
-impl Default for Date {
+impl Default for JsDate {
     fn default() -> Self {
         Self(Some(Utc::now().naive_utc()))
     }
 }
 
 extern "C" fn fsz() -> usize {
-    std::mem::size_of::<Date>()
+    std::mem::size_of::<JsDate>()
 }
 
 extern "C" fn ser(object: &JsObject, ser: &mut SnapshotSerializer) {
-    let date = **object.data::<Date>();
+    let date = **object.data::<JsDate>();
     match date.0 {
         Some(time) => {
             ser.write_u8(0x1);
@@ -82,25 +82,25 @@ extern "C" fn ser(object: &JsObject, ser: &mut SnapshotSerializer) {
 extern "C" fn deser(object: &mut JsObject, deser: &mut Deserializer) {
     let is_valid = deser.get_u8();
     match is_valid {
-        0x0 => *object.data::<Date>() = ManuallyDrop::new(Date(None)),
+        0x0 => *object.data::<JsDate>() = ManuallyDrop::new(JsDate(None)),
         0x1 => unsafe {
             let mut bytes: [u8; size_of::<NaiveDateTime>()] = [0; size_of::<NaiveDateTime>()];
             for i in 0..bytes.len() {
                 bytes[i] = deser.get_u8();
             }
-            *object.data::<Date>() = ManuallyDrop::new(Date(Some(transmute(bytes))));
+            *object.data::<JsDate>() = ManuallyDrop::new(JsDate(Some(transmute(bytes))));
         },
         _ => unreachable!(),
     }
 }
 
-impl JsClass for Date {
+impl JsClass for JsDate {
     fn class() -> &'static Class {
-        define_jsclass!(Date, Date, None, None, Some(deser), Some(ser), Some(fsz))
+        define_jsclass!(JsDate, Date, None, None, Some(deser), Some(ser), Some(fsz))
     }
 }
 
-impl Date {
+impl JsDate {
     /// `Date.prototype.toDateString()`
     ///
     /// The `toDateString()` method returns the date portion of a Date object in English.
@@ -668,7 +668,7 @@ impl Date {
     /// [spec]: https://tc39.es/ecma262/#sec-date-constructor
     /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/Date
     fn make_date_now(_ctx: GcPointer<Context>, object: GcPointer<JsObject>) -> JsValue {
-        *object.data::<Date>() = ManuallyDrop::new(Date::default());
+        *object.data::<JsDate>() = ManuallyDrop::new(JsDate::default());
         JsValue::new(object)
     }
 
@@ -705,8 +705,8 @@ impl Date {
             }
         };
         let tv = tv.filter(|time| Self::time_clip(time.timestamp_millis() as f64).is_some());
-        let date = Date(tv);
-        *object.data::<Date>() = ManuallyDrop::new(date);
+        let date = JsDate(tv);
+        *object.data::<JsDate>() = ManuallyDrop::new(date);
         Ok(JsValue::new(object))
     }
 
@@ -734,7 +734,7 @@ impl Date {
             .map_or(Ok(0f64), |value| value.to_number(ctx))?;
         // If any of the args are infinity or NaN, return an invalid date.
         if !check_normal_opt!(year, month, day, hour, min, sec, milli) {
-            let date = Date(None);
+            let date = JsDate(None);
             *object.data::<Self>() = ManuallyDrop::new(date);
 
             return Ok(JsValue::new(object));
@@ -760,7 +760,7 @@ impl Date {
             .map(|local| local.naive_utc())
             .filter(|time| Self::time_clip(time.timestamp_millis() as f64).is_some());
 
-        let date = Date(final_date);
+        let date = JsDate(final_date);
         *object.data::<Self>() = ManuallyDrop::new(date);
         Ok(JsValue::new(object))
     }
@@ -1146,16 +1146,16 @@ impl Date {
 }
 pub fn date_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     if !args.ctor_call {
-        return Ok(Date::make_date_string(ctx));
+        return Ok(JsDate::make_date_string(ctx));
     } else {
         let structure = ctx.global_data().date_structure.unwrap();
-        let mut object = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
+        let mut object = JsObject::new(ctx, &structure, JsDate::class(), ObjectTag::Ordinary);
         if args.size() == 0 {
-            return Ok(Date::make_date_now(ctx, object));
+            return Ok(JsDate::make_date_now(ctx, object));
         } else if args.size() == 1 {
-            return Date::make_date_single(ctx, object, args.at(1));
+            return JsDate::make_date_single(ctx, object, args.at(1));
         } else {
-            return Date::make_date_multiple(ctx, object, args);
+            return JsDate::make_date_multiple(ctx, object, args);
         }
     }
 }
@@ -1212,7 +1212,7 @@ pub fn date_utc(context: GcPointer<Context>, args: &Arguments) -> Result<JsValue
     };
     NaiveDate::from_ymd_opt(year, month + 1, day)
         .and_then(|f| f.and_hms_milli_opt(hour, min, sec, milli))
-        .and_then(|f| Date::time_clip(f.timestamp_millis() as f64))
+        .and_then(|f| JsDate::time_clip(f.timestamp_millis() as f64))
         .map_or(Ok(JsValue::new(f64::NAN)), |time| Ok(JsValue::new(time)))
 }
 
@@ -1230,17 +1230,17 @@ pub fn date_utc(context: GcPointer<Context>, args: &Arguments) -> Result<JsValue
 /// [spec]: https://tc39.es/ecma262/#sec-thistimevalue
 #[inline]
 
-fn this_time_value(value: JsValue, ctx: GcPointer<Context>) -> Result<Date, JsValue> {
+fn this_time_value(value: JsValue, ctx: GcPointer<Context>) -> Result<JsDate, JsValue> {
     if value.is_jsobject() {
         let object = value.get_jsobject();
-        if object.is_class(Date::class()) {
-            return Ok(**object.data::<Date>());
+        if object.is_class(JsDate::class()) {
+            return Ok(**object.data::<JsDate>());
         }
     }
     Err(JsValue::new(ctx.new_type_error("'this' is not a Date")))
 }
 pub fn date_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let date = TypedJsObject::<Date>::try_from(ctx, args.this)?;
+    let date = TypedJsObject::<JsDate>::try_from(ctx, args.this)?;
     Ok(JsValue::new(JsString::new(ctx, (*date).to_string())))
 }
 
@@ -1283,7 +1283,7 @@ macro_rules! setter_method {
                 ),*
             );
 
-            *TypedJsObject::<Date>::try_from(ctx,args.this)? = result;
+            *TypedJsObject::<JsDate>::try_from(ctx,args.this)? = result;
             //this.set_data(ObjectData::Date(result));
             Ok(JsValue::from(result.get_time()))
         }
@@ -1336,12 +1336,64 @@ pub fn date_now(_ctx: GcPointer<Context>, _args: &Arguments) -> Result<JsValue, 
     Ok(JsValue::new(Utc::now().timestamp_millis() as f64))
 }
 
-impl Builtin for Date {
+impl Builtin for JsDate {
+    fn native_references() -> Vec<usize> {
+        vec![
+            date_constructor as _,
+            date_to_string as _,
+            JsDate::class() as *const _ as _,
+            date_now as _,
+            date_set_date as _,
+            date_set_full_year as _,
+            date_set_hours as _,
+            date_set_milliseconds as _,
+            date_set_minutes as _,
+            date_set_month as _,
+            date_set_seconds as _,
+            date_set_year as _,
+            date_set_time as _,
+            date_set_utc_date as _,
+            date_set_utc_full_year as _,
+            date_set_utc_hours as _,
+            date_set_utc_minutes as _,
+            date_set_utc_month as _,
+            date_set_utc_seconds as _,
+            date_get_date as _,
+            date_get_day as _,
+            date_get_full_year as _,
+            date_get_hours as _,
+            date_get_milliseconds as _,
+            date_get_minutes as _,
+            date_get_month as _,
+            date_get_seconds as _,
+            date_get_seconds as _,
+            date_get_time as _,
+            date_get_year as _,
+            date_get_utc_date as _,
+            date_get_utc_day as _,
+            date_get_utc_full_year as _,
+            date_get_utc_hours as _,
+            date_get_utc_minutes as _,
+            date_get_utc_milliseconds as _,
+            date_get_utc_month as _,
+            date_get_utc_seconds as _,
+            date_to_json as _,
+            date_to_time_string as _,
+            date_value_of as _,
+            date_to_gmt_string as _,
+            date_to_iso_string as _,
+            date_to_utc_string as _,
+            date_to_date_string as _,
+            date_parse as _,
+            date_utc as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data().object_prototype.unwrap();
         let structure = Structure::new_unique_with_proto(ctx, Some(obj_proto), false);
-        let mut prototype = JsObject::new(ctx, &structure, Date::class(), ObjectTag::Ordinary);
-        *prototype.data::<Date>() = ManuallyDrop::new(Date(None));
+        let mut prototype = JsObject::new(ctx, &structure, JsDate::class(), ObjectTag::Ordinary);
+        *prototype.data::<JsDate>() = ManuallyDrop::new(JsDate(None));
 
         let date_map = Structure::new_indexed(ctx, Some(prototype), false);
         ctx.global_data.date_structure = Some(date_map);

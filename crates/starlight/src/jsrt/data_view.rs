@@ -181,6 +181,32 @@ pub fn data_view_constructor(
 }
 
 impl Builtin for JsDataView {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsDataView::class() as *const _ as usize,
+            data_view_constructor as _,
+            data_view_prototype_buffer as _,
+            data_view_prototype_byte_length as _,
+            data_view_prototype_byte_offset as _,
+            data_view_prototype_get::<u8> as _,
+            data_view_prototype_get::<u16> as _,
+            data_view_prototype_get::<u32> as _,
+            data_view_prototype_get::<i8> as _,
+            data_view_prototype_get::<i16> as _,
+            data_view_prototype_get::<i32> as _,
+            data_view_prototype_get::<f32> as _,
+            data_view_prototype_get::<f64> as _,
+            data_view_prototype_set::<u8> as _,
+            data_view_prototype_set::<u16> as _,
+            data_view_prototype_set::<u32> as _,
+            data_view_prototype_set::<i8> as _,
+            data_view_prototype_set::<i16> as _,
+            data_view_prototype_set::<i32> as _,
+            data_view_prototype_set::<f32> as _,
+            data_view_prototype_set::<f64> as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.data_view_structure = Some(Structure::new_indexed(ctx, None, false));

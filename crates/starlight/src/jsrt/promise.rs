@@ -254,6 +254,22 @@ pub fn promise_static_any(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 }
 
 impl Builtin for JsPromise {
+    fn native_references() -> Vec<usize> {
+        vec![
+            promise_constructor as _,
+            promise_then as _,
+            promise_catch as _,
+            promise_finally as _,
+            promise_resolve as _,
+            promise_reject as _,
+            promise_static_resolve as _,
+            promise_static_reject as _,
+            promise_static_race as _,
+            promise_static_all as _,
+            promise_static_all_settled as _,
+            promise_static_any as _,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         // copied from file
         let mut constructor =
