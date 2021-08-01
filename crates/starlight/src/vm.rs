@@ -133,7 +133,7 @@ impl Deserializable for ModuleKind {
 /// JavaScript runtime instance.
 pub struct VirtualMachine {
     pub(crate) gc: Heap,
-    pub(crate) external_references: Option<&'static [usize]>,
+    pub(crate) external_references: Vec<usize>,
     pub(crate) options: Options,
     pub(crate) shadowstack: ShadowStack,
     pub(crate) codegen_plugins: HashMap<
@@ -212,13 +212,13 @@ impl VirtualMachine {
     pub fn new_raw(
         gc: Heap,
         options: Options,
-        external_references: Option<&'static [usize]>,
+        external_references: Option<Vec<usize>>,
     ) -> VM {
         VirtualMachineRef(Box::into_raw(Box::new(Self {
             gc,
             options,
             safepoint: GlobalSafepoint::new(),
-            external_references,
+            external_references: external_references.unwrap_or(vec![]),
             shadowstack: ShadowStack::new(),
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
@@ -231,7 +231,7 @@ impl VirtualMachine {
         })))
     }
 
-    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> VM {
+    pub fn new(options: Options, external_references:Option<Vec<usize>>) -> VM {
         Self::with_heap(default_heap(&options), options, external_references)
     }
 
@@ -244,7 +244,7 @@ impl VirtualMachine {
     pub fn with_heap(
         gc: Heap,
         options: Options,
-        external_references: Option<&'static [usize]>,
+        external_references: Option<Vec<usize>>,
     ) -> VM {
         let mut this = VirtualMachine::new_raw(gc, options, external_references);
         this.register_gc_constraints();
@@ -285,7 +285,7 @@ impl VirtualMachine {
     pub(crate) fn new_empty(
         gc: Heap,
         options: Options,
-        external_references: Option<&'static [usize]>,
+        external_references: Option<Vec<usize>>,
     ) -> VM {
         let mut this = VirtualMachine::new_raw(gc, options, external_references);
         this.register_gc_constraints();

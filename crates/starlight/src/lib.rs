@@ -194,7 +194,7 @@ impl Platform {
 
     pub fn new_runtime(
         options: Options,
-        external_references: Option<&'static [usize]>,
+        external_references: Option<Vec<usize>>,
     ) -> VirtualMachineRef {
         Self::initialize();
         vm::VirtualMachine::new(options, external_references)
