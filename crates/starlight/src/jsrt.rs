@@ -95,7 +95,7 @@ impl GcPointer<Context> {
 use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
 
-pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
+pub static VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
     let mut refs = vec![
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
@@ -208,8 +208,6 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         refs.append(&mut JsNumber::native_references());
 
     }
-
-    println!("{}",refs.len());
 
     refs
 });
