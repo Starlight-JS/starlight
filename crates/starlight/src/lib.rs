@@ -175,6 +175,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
+pub mod comet;
 pub mod heap;
 pub mod jsrt;
 pub mod options;

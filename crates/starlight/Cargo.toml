@@ -35,6 +35,7 @@ num = "0.4"
 parking_lot = "0.11.1"
 mimalloc = "0.1.25"
 chrono = "0.4"
+comet = { git = "https://github.com/Starlight-JS/comet" }
 const-random = "0.1.13"
 [features]
 val-as-f64 = []
@@ -72,7 +73,6 @@ harness = false
 [[bench]]
 name = "bench_snapshot"
 harness = false
-
 
 
 [[bin]]
