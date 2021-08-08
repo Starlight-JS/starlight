@@ -13,12 +13,16 @@ use crate::{
         cell::{GcCell, GcPointerBase},
         SimpleMarkingConstraint,
     },
+    gc::{safepoint::GlobalSafepoint, snapshot::Snapshot},
+    interpreter::callframe::CallFrame,
+
     options::Options,
 };
 use comet::{internal::finalize_trait::FinalizeTrait, visitor::Visitor};
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
+    ptr::null_mut,
     u32, u8, usize,
 };
 use std::{fmt::Display, io::Write, sync::RwLock};
@@ -61,6 +65,7 @@ pub mod operations;
 pub mod perf;
 pub mod property_descriptor;
 pub mod slot;
+pub mod stack_alignment;
 pub mod string;
 pub mod structure;
 pub mod structure_builder;
@@ -129,7 +134,7 @@ pub struct VirtualMachine {
     pub(crate) gc: Heap,
     pub(crate) external_references: Vec<usize>,
     pub(crate) options: Options,
-
+    pub(crate) top_call_frame: *mut CallFrame,
     pub(crate) codegen_plugins: HashMap<
         String,
         Box<
@@ -211,6 +216,7 @@ impl VirtualMachine {
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
             eval_history: String::new(),
+            top_call_frame: null_mut(),
             persistent_roots: Default::default(),
             sched_async_func: None,
             codegen_plugins: HashMap::new(),

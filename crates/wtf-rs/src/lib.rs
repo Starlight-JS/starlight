@@ -326,7 +326,9 @@ macro_rules! offset_of_tuple {
 pub const fn round_up(x: usize, y: usize) -> usize {
     ((x) + (y - 1)) & !(y - 1)
 }
-
+pub const fn round_up_to_multiple_of(divisor: usize, x: usize) -> usize {
+    ((x) + (divisor - 1)) & !(divisor - 1)
+}
 #[inline(never)]
 pub fn approximate_stack_pointer() -> *const u8 {
     let mut sp = 0;
