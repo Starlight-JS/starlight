@@ -80,7 +80,7 @@ pub fn std_file_write(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     }
     let mut buffer: Vec<u8>;
     if args.at(0).is_jsobject() {
-        let stack = ctx.shadowstack();
+        
         letroot!(buffer_object = stack, args.at(0).get_jsobject());
         let length = crate::jsrt::get_length(ctx, &mut buffer_object)?;
         buffer = Vec::with_capacity(length as _);
@@ -121,7 +121,7 @@ pub fn std_file_write_all(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
     }
     let mut buffer: Vec<u8>;
     if args.at(0).is_jsobject() {
-        let stack = ctx.shadowstack();
+        
         letroot!(buffer_object = stack, args.at(0).get_jsobject());
         let length = crate::jsrt::get_length(ctx, &mut buffer_object)?;
         buffer = Vec::with_capacity(length as _);

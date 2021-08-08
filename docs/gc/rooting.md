@@ -34,7 +34,7 @@ All GC pointers stored on the heap must be traced. For regular runtime `Trace`ab
 
 ### General structures
 
-For a regular `struct`, tracing must be triggered manually. The usual way is to add tracing code into `fn trace(&self,tracr: &mut dyn Tracer)` in `Trace` impl for your struct. (`GcTrace` derive macro from `starlight_derive` does this automatically )
+For a regular `struct`, tracing must be triggered manually. The usual way is to add tracing code into `fn trace(&self,tracr: &mut Visitor)` in `Trace` impl for your struct. (`GcTrace` derive macro from `starlight_derive` does this automatically )
 
 ## Summary
 

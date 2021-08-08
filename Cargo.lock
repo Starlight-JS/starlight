@@ -229,9 +229,10 @@ dependencies = [
 [[package]]
 name = "comet"
 version = "0.1.0"
-source = "git+https://github.com/Starlight-JS/comet#ec6f9c4bc06e3dee8335c55c801711ca91f91976"
+source = "git+https://github.com/Starlight-JS/comet?branch=immix#de8f06c8c7ee9c9efe879ee9fb998ff17ea5f09c"
 dependencies = [
  "atomic",
+ "backtrace",
  "crossbeam-utils",
  "generic_static",
  "libc",
@@ -409,20 +410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ae5588f6b3c3cb05239e90bd110f257254aecd01e4635400391aeae07497845"
-dependencies = [
- "cfg-if 1.0.0",
- "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-queue",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -454,16 +441,6 @@ dependencies = [
  "lazy_static",
  "memoffset 0.6.4",
  "scopeguard",
-]
-
-[[package]]
-name = "crossbeam-queue"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b10ddc024425c88c2ad148c1b0fd53f4c6d38db9697c9f1588381212fa657c9"
-dependencies = [
- "cfg-if 1.0.0",
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -608,15 +585,6 @@ checksum = "14ca354e36190500e1e1fb267c647932382b54053c50b14970856c0b00a35067"
 dependencies = [
  "gcc",
  "libc",
-]
-
-[[package]]
-name = "flume"
-version = "0.10.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddad16e8529759736a9ce4cdf078ed702e45d3c5b0474a1c65f5149e9fa7f1eb"
-dependencies = [
- "spinning_top",
 ]
 
 [[package]]
@@ -1711,15 +1679,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
-name = "spinning_top"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75adad84ee84b521fb2cca2d4fd0f1dab1d8d026bda3c5bea4ca63b5f9f9293c"
-dependencies = [
- "lock_api",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1729,14 +1688,12 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "starlight"
 version = "0.1.0"
 dependencies = [
- "atomic",
  "backtrace",
  "cfg-if 1.0.0",
  "chrono",
  "comet",
  "const-random",
  "criterion",
- "crossbeam",
  "ctor",
  "dashmap",
  "intrusive-collections",
@@ -1749,7 +1706,6 @@ dependencies = [
  "mopa",
  "num",
  "once_cell",
- "parking_lot",
  "paste",
  "rand 0.8.4",
  "regress",
@@ -1759,10 +1715,8 @@ dependencies = [
  "swc_atoms",
  "swc_common",
  "swc_ecmascript",
- "vec_map",
  "winapi",
  "wtf-rs",
- "yastl",
 ]
 
 [[package]]
@@ -1867,9 +1821,9 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "0.10.23"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c93df65683ec1a001e15ce1de438c7c2c226c0c2462d1cb93fa1bd2a7664170b"
+checksum = "f303985ebd578a033371a87be28cb54189d3ae5d492622523200f4de08db5275"
 dependencies = [
  "ast_node",
  "cfg-if 0.1.10",
@@ -1890,9 +1844,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_ast"
-version = "0.48.1"
+version = "0.49.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8060c27a8932c57e5a878acc1c64b44371cce1c88eb3af1f3d12a2628d606a6"
+checksum = "228ab89e5a11289d43f14da2b65b9e37c8fb31091c33f4fad66791ef65c04a1b"
 dependencies = [
  "is-macro",
  "num-bigint 0.2.6",
@@ -1904,9 +1858,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "0.62.1"
+version = "0.66.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70e9ae66d3e29d21fc1715cb435ce741d40d86c466f9371d4c1cf56932824393"
+checksum = "33c24e402576e3f011331ff26892b0748366461a9fdff0ad7e3b3f9959728c27"
 dependencies = [
  "either",
  "enum_kind",
@@ -1925,9 +1879,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_utils"
-version = "0.39.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e9f5416db68768751b6ed4e5b1c3a0f1e43b66331cbfc51b89a268fbaecd628"
+checksum = "725fb37b8f7ac49b9edd7001dba006f0aa9b9a85623337994ab89b0f2b12032b"
 dependencies = [
  "once_cell",
  "scoped-tls",
@@ -1940,9 +1894,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_visit"
-version = "0.34.0"
+version = "0.35.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d5b93c94bd4fca51ad5c2588e34b46dc5a9b1f079c9b1ec595a968eb4ca8acf"
+checksum = "754afc3c64e5f39fc17874170548e4f94612bcfb52fd7882437c149f713b3473"
 dependencies = [
  "num-bigint 0.2.6",
  "swc_atoms",
@@ -1953,9 +1907,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecmascript"
-version = "0.45.0"
+version = "0.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22fa9b5c685f5694911f36e3b7408803e7e6a0a7fcc0736c972fdf0662e27a6b"
+checksum = "12c0f3969671267e85a7a387e2db40d01c0e7e6e979d7fd27bdeef501a2f6d14"
 dependencies = [
  "swc_ecma_ast",
  "swc_ecma_parser",
@@ -2316,14 +2270,4 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
-]
-
-[[package]]
-name = "yastl"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ca6c5a4d66c1a9ea261811cf4773c27343de7e5033e1b75ea3f297dc7db3c1a"
-dependencies = [
- "flume",
- "scopeguard",
 ]

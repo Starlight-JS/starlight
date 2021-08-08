@@ -29,7 +29,7 @@ impl JsError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().error_structure.unwrap())
@@ -68,7 +68,7 @@ impl JsEvalError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().eval_error_structure.unwrap())
@@ -107,7 +107,7 @@ impl JsRangeError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().range_error_structure.unwrap())
@@ -146,7 +146,7 @@ impl JsReferenceError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().reference_error_structure.unwrap())
@@ -185,7 +185,7 @@ impl JsSyntaxError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().syntax_error_structure.unwrap())
@@ -223,7 +223,7 @@ impl JsTypeError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().type_error_structure.unwrap())
@@ -262,7 +262,7 @@ impl JsURIError {
         s: GcPointer<JsString>,
         structure: Option<GcPointer<Structure>>,
     ) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
+        
         letroot!(
             shape = stack,
             structure.unwrap_or_else(|| ctx.global_data().uri_error_structure.unwrap())

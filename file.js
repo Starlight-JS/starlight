@@ -1,13 +1,8 @@
-function Node(left, right) {
-    this.left = left;
-    this.right = right;
+let arr = []
+
+for (let i = 0; i < 10000; i++) {
+    arr[i] = [];
 }
 
-function makeTree(depth) {
-    if (depth <= 0) {
-        return new Node();
-    }
-    return new Node(makeTree(depth - 1), makeTree(depth - 1));
-}
-
-print(makeTree(17));
+arr = null;
+gc();

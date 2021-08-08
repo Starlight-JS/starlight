@@ -100,7 +100,7 @@ pub fn uri_error_constructor(
 /// section 15.11.4.4 Error.prototype.toString()
 pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let obj = args.this;
-    let stack = ctx.shadowstack();
+    
     if obj.is_jsobject() {
         letroot!(obj = stack, unsafe {
             obj.get_object().downcast_unchecked::<JsObject>()

@@ -223,7 +223,7 @@ impl<T: TypedArrayType> TypedArrayStorage<T> {
         self.size == 0
     }
     pub fn with_size(ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
-        let stack = vm.shadowstack();
+        
         crate::letroot!(this = stack, Self::new(vm.heap(), capacity));
         this.resize_within_capacity(vm.heap(), size);
         *this

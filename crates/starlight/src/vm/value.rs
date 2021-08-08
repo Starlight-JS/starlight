@@ -643,7 +643,7 @@ impl JsValue {
         } else if self.is_undefined() {
             Ok(f64::from_bits(0x7ff8000000000000))
         } else if self.is_object() && self.get_object().is::<JsObject>() {
-            let stack = ctx.shadowstack();
+            
             letroot!(obj = stack, unsafe {
                 self.get_object().downcast_unchecked::<JsObject>()
             });
@@ -691,7 +691,7 @@ impl JsValue {
             if let Some(jsstr) = object.downcast::<JsString>() {
                 return Ok(jsstr.as_str().to_owned());
             } else if let Some(object) = object.downcast::<JsObject>() {
-                let stack = ctx.shadowstack();
+                
                 letroot!(object = stack, object);
                 return match object.to_primitive(ctx, JsHint::String) {
                     Ok(val) => val.to_string(ctx),
@@ -797,7 +797,7 @@ impl JsValue {
         name: Symbol,
         slot: &mut Slot,
     ) -> Result<JsValue, JsValue> {
-        let stack = ctx.shadowstack();
+        
         if !self.is_jsobject() {
             if self.is_null() {
                 let msg = JsString::new(ctx, "null does not have properties");

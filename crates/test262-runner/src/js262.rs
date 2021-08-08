@@ -5,7 +5,7 @@ pub fn _262_create_realm(ctx: GcPointer<Context>, _: &Arguments) -> Result<JsVal
     init(new_ctx).map(JsValue::new)
 }
 
-pub fn init(mut ctx: GcPointer<Context>) -> Result<GcPointer<JsObject>, JsValue> {
+pub fn init(ctx: GcPointer<Context>) -> Result<GcPointer<JsObject>, JsValue> {
     let mut global_object = ctx.global_object();
 
     let mut object = JsObject::new_empty(ctx);

@@ -75,7 +75,7 @@ pub fn array_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, Js
 }
 
 pub fn array_from(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(arg1 = stack, args.at(0).to_object(ctx)?);
     let len = arg1.get(ctx, "length".intern())?;
     let len = if len.is_number() {
@@ -99,7 +99,7 @@ pub fn array_from(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, 
     Ok(JsValue::encode_object_value(target))
 }
 pub fn array_join(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(obj = stack, args.this.to_object(ctx)?);
     let len = obj.get(ctx, "length".intern())?.to_number(ctx)?;
     let len = if len as u32 as f64 == len {
@@ -135,7 +135,7 @@ pub fn array_join(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, 
     Ok(JsValue::encode_object_value(JsString::new(ctx, fmt)))
 }
 pub fn array_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(this = stack, args.this.to_object(ctx)?);
     let m = this.get_property(ctx, "join".intern());
     if m.value().is_callable() {
@@ -208,7 +208,7 @@ pub fn array_pop(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
 }
 
 pub fn array_reduce(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(obj = stack, args.this.to_object(ctx)?);
     let len = get_length(ctx, &mut obj)?;
     let arg_count = args.size();
@@ -291,7 +291,7 @@ pub fn array_concat(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
             ctx, msg, None,
         )));
     }
-    let stack = ctx.shadowstack();
+    
     letroot!(this = stack, args.this.get_jsobject());
     let this_length = super::get_length(ctx, &mut this)?;
 
@@ -328,7 +328,7 @@ pub fn array_concat(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
 }
 
 pub fn array_for_each(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(array = stack, args.this.to_object(ctx)?);
     let length = super::get_length(ctx, &mut array)?;
 
@@ -360,7 +360,7 @@ pub fn array_for_each(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
 }
 
 pub fn array_filter(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(array = stack, args.this.to_object(ctx)?);
     let length = super::get_length(ctx, &mut array)?;
 
@@ -399,7 +399,7 @@ pub fn array_filter(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
 }
 
 pub fn array_map(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(array = stack, args.this.to_object(ctx)?);
     let length = super::get_length(ctx, &mut array)?;
 
@@ -433,7 +433,7 @@ pub fn array_map(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
 }
 
 pub fn array_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(array = stack, args.this.to_object(ctx)?);
     let length = super::get_length(ctx, &mut array)?;
 
@@ -463,7 +463,7 @@ pub fn array_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
 }
 
 pub fn array_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(obj = stack, args.this.to_object(ctx)?);
 
     let len = super::get_length(ctx, &mut obj)?;

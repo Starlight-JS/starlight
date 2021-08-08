@@ -496,7 +496,7 @@ impl Accessor {
         this_binding: JsValue,
     ) -> Result<JsValue, JsValue> {
         if self.getter().is_callable() {
-            let stack = ctx.shadowstack();
+            
             crate::letroot!(args = stack, Arguments::new(this_binding, &mut []));
 
             self.getter()

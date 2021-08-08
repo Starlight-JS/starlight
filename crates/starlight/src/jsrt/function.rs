@@ -26,7 +26,7 @@ use crate::{
 };
 
 pub fn function_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     let obj = &args.this;
     if obj.is_callable() {
         letroot!(func = stack, obj.to_object(ctx)?);
@@ -71,7 +71,7 @@ pub fn function_prototype(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
 }
 
 pub fn function_bind(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(obj = stack, args.this);
 
     if obj.is_callable() {
@@ -113,7 +113,7 @@ pub fn function_bind(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
 }
 
 pub fn function_apply(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(this = stack, args.this);
     if this.is_callable() {
         letroot!(obj = stack, this.get_jsobject());
@@ -156,7 +156,7 @@ pub fn function_apply(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
 
 pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let this = args.this;
-    let stack = ctx.shadowstack();
+    
     if this.is_callable() {
         letroot!(obj = stack, this.get_jsobject());
         letroot!(objc = stack, obj);

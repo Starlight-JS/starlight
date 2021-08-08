@@ -14,7 +14,7 @@ pub fn array_buffer_constructor(
             "ArrayBuffer() called in function context instead of constructor",
         )));
     }
-    let stack = ctx.shadowstack();
+    
     letroot!(this = stack, JsArrayBuffer::new(ctx));
 
     let mut buf = TypedJsObject::<JsArrayBuffer>::new(this);
@@ -31,7 +31,7 @@ pub fn array_buffer_byte_length(
     ctx: GcPointer<Context>,
     args: &Arguments,
 ) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(this = stack, args.this.to_object(ctx)?);
     if !this.is_class(JsArrayBuffer::class()) {
         return Err(JsValue::new(
@@ -44,7 +44,7 @@ pub fn array_buffer_byte_length(
 }
 
 pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = ctx.shadowstack();
+    
     letroot!(this = stack, args.this.to_object(ctx)?);
     if !this.is_class(JsArrayBuffer::class()) {
         return Err(JsValue::new(

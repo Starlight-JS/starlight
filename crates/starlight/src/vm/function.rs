@@ -209,7 +209,7 @@ impl JsFunction {
                   ctx.perform_ctx_call(x, JsValue::encode_object_value(x.scope.clone()), args)
               }
               FuncType::Bound(ref mut x) => {
-                  let stack = ctx.shadowstack();
+                  
                   root!(
                       args = stack,
                       Arguments {

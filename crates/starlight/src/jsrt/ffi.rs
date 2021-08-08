@@ -811,7 +811,7 @@ pub fn ffi_library_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
         );
         return Err(JsValue::new(JsTypeError::new(vm, msg, None)));
     }
-    let stack = vm.shadowstack();
+    
 
     letroot!(rnames = stack, vec![]);
     letroot!(names = stack, names.get_jsobject());
@@ -832,7 +832,7 @@ pub fn ffi_library_open(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 }
 
 pub fn ffi_function_attach(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = vm.shadowstack();
+    
     let func = unsafe {
         let lib = {
             let val = args.at(0);
@@ -876,7 +876,7 @@ pub fn ffi_function_attach(ctx: GcPointer<Context>, args: &Arguments) -> Result<
 }
 
 pub fn ffi_function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
-    let stack = vm.shadowstack();
+    
     vm.heap().defer();
     let func = unsafe {
         let val = args.this;
