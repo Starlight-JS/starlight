@@ -18,7 +18,6 @@ use crate::{
         error::*,
         function::JsNativeFunction,
         object::{JsObject, ObjectTag},
-        slot::*,
         string::JsString,
         structure::Structure,
         symbol_table::*,
@@ -108,8 +107,7 @@ pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
         });
         let name;
         {
-            let mut slot = Slot::new();
-            let target = obj.get_slot(ctx, "name".intern(), &mut slot)?;
+            let target = obj.get(ctx, "name")?;
             if target.is_undefined() {
                 name = "UnknownError".to_owned();
             } else {
@@ -118,7 +116,7 @@ pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
         }
         let msg;
         {
-            let target = obj.get(ctx, "message".intern())?;
+            let target = obj.get(ctx, "message")?;
             if target.is_undefined() {
                 msg = String::new();
             } else {
@@ -132,7 +130,6 @@ pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
         if msg.is_empty() {
             return Ok(JsValue::encode_object_value(JsString::new(ctx, name)));
         }
-
         Ok(JsValue::encode_object_value(JsString::new(
             ctx,
             format!("{}: {}", name, msg),
@@ -146,6 +143,26 @@ pub fn error_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
 }
 
 impl Builtin for JsError {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsError::class() as *const _ as usize,
+            JsTypeError::class() as *const _ as usize,
+            JsSyntaxError::class() as *const _ as usize,
+            JsReferenceError::class() as *const _ as usize,
+            JsRangeError::class() as *const _ as usize,
+            JsEvalError::class() as *const _ as usize,
+            JsURIError::class() as *const _ as usize,
+            error_constructor as usize,
+            error_to_string as usize,
+            eval_error_constructor as usize,
+            range_error_constructor as usize,
+            reference_error_constructor as usize,
+            syntax_error_constructor as usize,
+            type_error_constructor as usize,
+            uri_error_constructor as usize,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.error_structure = Some(Structure::new_indexed(ctx, None, false));

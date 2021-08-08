@@ -17,7 +17,7 @@ use crate::{
         snapshot::deserializer::Deserializable,
     },
 };
-use crate::{bytecode::*, gc::cell::Tracer};
+use crate::{bytecode::*, gc::cell::Visitor};
 use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;

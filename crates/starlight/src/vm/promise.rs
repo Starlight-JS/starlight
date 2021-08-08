@@ -6,9 +6,7 @@ use super::string::*;
 use super::symbol_table::Internable;
 use super::value::*;
 use crate::gc::cell::GcPointer;
-use crate::gc::cell::{Trace, Tracer};
-use crate::gc::snapshot::deserializer::Deserializer;
-use crate::gc::snapshot::serializer::SnapshotSerializer;
+use crate::gc::cell::{Trace, Visitor};
 use crate::jsrt::get_length;
 use crate::prelude::Symbol;
 use crate::prelude::*;
@@ -41,8 +39,6 @@ impl JsClass for JsPromise {
             Promise,
             Some(drop_promise_fn),
             Some(prom_trace),
-            Some(deser),
-            Some(ser),
             Some(prom_size)
         )
     }
@@ -446,31 +442,24 @@ extern "C" fn drop_promise_fn(obj: GcPointer<JsObject>) {
 }
 
 #[allow(improper_ctypes_definitions)]
-extern "C" fn prom_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+extern "C" fn prom_trace(tracer: &mut Visitor, obj: &JsObject) {
     obj.data::<JsPromise>().trace(tracer);
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    unreachable!("Cannot deserialize a Promise");
-}
-
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    unreachable!("Cannot serialize a Promise");
-}
 extern "C" fn prom_size() -> usize {
     std::mem::size_of::<JsPromise>()
 }
 
-unsafe impl Trace for JsPromise {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Trace for JsPromise {
+    fn trace(&self, tracer: &mut Visitor) {
         self.resolution.trace(tracer);
-        self.subs.iter_mut().for_each(|sub| {
+        self.subs.iter().for_each(|sub| {
             sub.0.trace(tracer);
             sub.1.trace(tracer);
             sub.2.trace(tracer);
             sub.3.trace(tracer);
         });
-        if let Some(tracking_results) = &mut self.tracking_results {
+        if let Some(tracking_results) = &self.tracking_results {
             tracking_results.trace(tracer);
         }
     }

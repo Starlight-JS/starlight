@@ -23,10 +23,7 @@ use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::prelude::*;
 use crate::{gc::cell::GcPointerBase, vm::promise::JsPromise};
 use crate::{
-    gc::{
-        cell::{GcCell, GcPointer, Trace, Tracer},
-        snapshot::{deserializer::Deserializable, serializer::Serializable},
-    },
+    gc::cell::{GcCell, GcPointer, Trace, Visitor},
     JsTryFrom,
 };
 use std::{
@@ -37,6 +34,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use cometgc::header::HeapObjectHeader;
 use wtf_rs::object_offsetof;
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EnumerationMode {
@@ -182,18 +180,19 @@ impl JsObject {
         &mut *self.data::<JsArguments>()
     }
 }
-unsafe impl Trace for JsObject {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for JsObject {
+    fn trace(&self, visitor: &mut Visitor) {
         self.structure.trace(visitor);
+
         self.slots.trace(visitor);
         self.indexed.trace(visitor);
         match self.tag {
             ObjectTag::Global => {
-                self.as_global_mut().trace(visitor);
+                self.as_global().trace(visitor);
             }
-            ObjectTag::NormalArguments => self.as_arguments_mut().trace(visitor),
-            ObjectTag::Function => self.as_function_mut().trace(visitor),
-            ObjectTag::String => self.as_string_object_mut().value.trace(visitor),
+            ObjectTag::NormalArguments => self.as_arguments().trace(visitor),
+            ObjectTag::Function => self.as_function().trace(visitor),
+            ObjectTag::String => self.as_string_object().value.trace(visitor),
             _ => (),
         }
         if let Some(trace) = self.class.trace {
@@ -202,9 +201,6 @@ unsafe impl Trace for JsObject {
     }
 }
 impl GcCell for JsObject {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
     fn compute_size(&self) -> usize {
         object_size_with_additional(self.class)
     }
@@ -275,14 +271,13 @@ impl JsObject {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
-        let stack = ctx.shadowstack();
         letroot!(obj = stack, *obj);
         loop {
             if obj.get_own_non_indexed_property_slot(ctx, name, slot) {
                 break true;
             }
             match obj.prototype() {
-                Some(proto) => *obj = *proto,
+                Some(proto) => obj = *proto,
                 _ => break false,
             }
         }
@@ -294,6 +289,7 @@ impl JsObject {
         name: Symbol,
         slot: &mut Slot,
     ) -> bool {
+        //("obj {:p}", *obj);
         let entry = obj.structure.get(ctx, name);
 
         if !entry.is_not_found() {
@@ -317,7 +313,6 @@ impl JsObject {
         slot: &mut Slot,
         throwable: bool,
     ) -> Result<(), JsValue> {
-        let stack = ctx.shadowstack();
         if !obj.can_put(ctx, name, slot) {
             if throwable {
                 let msg = JsString::new(ctx, "put failed");
@@ -422,7 +417,7 @@ impl JsObject {
 
             return Ok(());
         }
-        let stack = ctx.shadowstack();
+
         if !obj.can_put_indexed(ctx, index, slot) {
             if throwable {
                 let msg = JsString::new(ctx, "put failed");
@@ -485,7 +480,6 @@ impl JsObject {
         index: u32,
         slot: &mut Slot,
     ) -> bool {
-        let stack = ctx.shadowstack();
         letroot!(obj = stack, *obj);
         loop {
             if obj.get_own_indexed_property_slot(ctx, index, slot) {
@@ -493,7 +487,7 @@ impl JsObject {
             }
 
             match obj.prototype() {
-                Some(proto) => *obj = *proto,
+                Some(proto) => obj = *proto,
                 None => break false,
             }
         }
@@ -528,8 +522,8 @@ impl JsObject {
             obj.get_own_property_slot(ctx, name, slot);
         }
 
-        let stack = ctx.shadowstack();
         if !slot.is_not_found() {
+            //("WRITESLOT {:x}", slot.value().raw());
             if let Some(base) = slot.base() {
                 if GcPointer::ptr_eq(base, obj) {
                     let mut returned = false;
@@ -560,10 +554,9 @@ impl JsObject {
                             obj.structure = new_struct;
                             let s = &obj.structure;
                             let sz = s.storage_capacity();
-                            letroot!(slots = stack, obj.slots);
 
-                            slots.mut_handle().resize(ctx.heap(), sz as _);
-                            obj.slots = *slots;
+                            obj.slots.resize(ctx.heap(), sz as _);
+
                             *obj.direct_mut(offset as _) = slot.value();
                             slot.mark_put_result(PutResultType::New, offset);
                         }
@@ -593,10 +586,15 @@ impl JsObject {
 
         let s = &obj.structure;
         let sz = s.storage_capacity();
-        letroot!(slots = stack, obj.slots);
-        slots.mut_handle().resize(ctx.heap(), sz as _);
-        obj.slots = *slots;
+        //letroot!(slots = stack, obj.slots);
+        //slots.mut_handle().resize(ctx.heap(), sz as _);
+        //obj.slots = *slots;
+        obj.slots.resize(ctx.heap(), sz as _);
         *obj.direct_mut(offset as _) = stored.value();
+        if stored.value().raw() == 0x7fff77c52c78 {
+            //panic!("WOOOOOOH");
+        }
+
         slot.mark_put_result(PutResultType::New, offset);
         slot.base = Some(obj.as_dyn());
 
@@ -834,7 +832,6 @@ impl JsObject {
         ctx: GcPointer<Context>,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        let stack = ctx.shadowstack();
         letroot!(
             args = stack,
             Arguments::new(JsValue::encode_object_value(*obj), &mut [])
@@ -867,7 +864,6 @@ impl JsObject {
             try_!("valueOf".intern());
             try_!("toString".intern());
         }
-
         let msg = JsString::new(ctx, "invalid default value");
         Err(JsValue::encode_object_value(JsTypeError::new(
             ctx, msg, None,
@@ -879,11 +875,11 @@ impl JsObject {
 
     /// create new empty JS object instance.
     pub fn new_empty(ctx: GcPointer<Context>) -> GcPointer<Self> {
-        let stack = ctx.shadowstack();
         letroot!(
             structure = stack,
             ctx.global_data().empty_object_struct.unwrap()
         );
+        //("EMPTY STRUCT {:p}", structure);
         Self::new(ctx, &structure, Self::class(), ObjectTag::Ordinary)
     }
     /// Create new JS object instance with provided class, structure and tag.
@@ -893,7 +889,6 @@ impl JsObject {
         class: &'static Class,
         tag: ObjectTag,
     ) -> GcPointer<Self> {
-        let stack = ctx.shadowstack();
         let init = IndexedElements::new(ctx);
         //root!(indexed = stack, ctx.heap().allocate(init));
         letroot!(
@@ -904,11 +899,12 @@ impl JsObject {
                 structure.storage_capacity() as _,
             )
         );
+        //("CREATE WITH {:p}", *structure);
         let this = Self {
             structure: *structure,
             class,
 
-            slots: *storage,
+            slots: storage,
             object_data_start: 0,
             indexed: init,
             flags: OBJ_FLAG_EXTENSIBLE,
@@ -920,7 +916,6 @@ impl JsObject {
     // only for internal use
     // copy constructor and prototype
     pub fn copy(mut ctx: GcPointer<Context>, source: &mut GcPointer<JsObject>) -> GcPointer<Self> {
-        let stack = ctx.shadowstack();
         let init = IndexedElements::new(ctx);
         let structure = source.structure;
         let class = source.class;
@@ -937,7 +932,7 @@ impl JsObject {
             structure,
             class,
 
-            slots: *storage,
+            slots: storage,
             object_data_start: 0,
             indexed: init,
             flags: OBJ_FLAG_EXTENSIBLE,
@@ -1002,7 +997,6 @@ impl GcPointer<JsObject> {
         ctx: GcPointer<Context>,
         hint: JsHint,
     ) -> Result<JsValue, JsValue> {
-        let stack = ctx.shadowstack();
         let exotic_to_prim = self.get_method(ctx, "toPrimitive".intern());
 
         letroot!(obj = stack, *self);
@@ -1016,7 +1010,7 @@ impl GcPointer<JsObject> {
                 let mut tmp = [JsValue::encode_undefined_value()];
                 letroot!(
                     args = stack,
-                    Arguments::new(JsValue::encode_object_value(*obj), &mut tmp,)
+                    Arguments::new(JsValue::encode_object_value(obj), &mut tmp,)
                 );
 
                 *args.at_mut(0) = match hint {
@@ -1304,6 +1298,7 @@ impl GcPointer<JsObject> {
         val: JsValue,
         absent: bool,
     ) {
+        //("WRITE2 {:x}", val.raw());
         if index < self.indexed.vector.size() {
             if !absent {
                 self.indexed.non_gc &= !val.is_object();
@@ -1314,13 +1309,11 @@ impl GcPointer<JsObject> {
         } else {
             if !self.structure.is_indexed() {
                 let s = self.structure.change_indexed_transition(ctx);
-
+                //("SET S {:p}", s);
                 self.structure = s;
             }
-            let stack = ctx.shadowstack();
-            letroot!(vector = stack, self.indexed.vector);
-            vector.mut_handle().resize(ctx.heap(), index + 1);
-            self.indexed.vector = *vector;
+
+            self.indexed.vector.resize(ctx.heap(), index + 1);
         }
         if !absent {
             self.indexed.non_gc &= !val.is_object();
@@ -1370,6 +1363,7 @@ impl GcPointer<JsObject> {
                 {
                     if !desc.is_value_absent() {
                         self.indexed.non_gc &= !desc.value().is_object();
+                        //("WRITE333 {:x}", desc.value().raw());
                         *self.indexed.vector.at_mut(index) = desc.value();
                     }
                     return Ok(true);
@@ -1403,6 +1397,7 @@ impl GcPointer<JsObject> {
             None => {
                 if !self.structure.is_indexed() {
                     let s = self.structure.change_indexed_transition(ctx);
+                    //("SET S2 {:p}", s);
                     self.structure = s;
                 }
                 if index >= self.indexed.length() {
@@ -1472,6 +1467,7 @@ impl GcPointer<JsObject> {
         }
 
         self.structure = self.structure.change_extensible_transition(ctx);
+        //("SET S2 {:p}", self.structure);
         self.indexed.make_sparse(ctx);
     }
     pub fn freeze(&mut self, ctx: GcPointer<Context>) -> Result<bool, JsValue> {
@@ -1532,7 +1528,6 @@ mod tests {
         let options = Options::default();
         let mut vm = VirtualMachine::new(options, None);
         let mut ctx = Context::new(&mut vm);
-        let stack = vm.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(ctx));
 
@@ -1556,7 +1551,6 @@ mod tests {
         let options = Options::default();
         let mut vm = VirtualMachine::new(options, None);
         let mut ctx = Context::new(&mut vm);
-        let stack = vm.shadowstack();
 
         letroot!(object = stack, JsObject::new_empty(ctx));
         for i in 0..10000u32 {
@@ -1831,38 +1825,9 @@ impl<T: JsClass> DerefMut for TypedJsObject<T> {
         &mut **self.object.data::<T>()
     }
 }
-unsafe impl<T: JsClass> Trace for TypedJsObject<T> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl<T: JsClass> Trace for TypedJsObject<T> {
+    fn trace(&self, visitor: &mut Visitor) {
         self.object.trace(visitor)
-    }
-}
-impl<T: JsClass> Serializable for TypedJsObject<T> {
-    fn serialize(&self, serializer: &mut crate::gc::snapshot::serializer::SnapshotSerializer) {
-        self.object.serialize(serializer);
-    }
-}
-
-impl<T: JsClass> Deserializable for TypedJsObject<T> {
-    unsafe fn deserialize_inplace(
-        deser: &mut crate::gc::snapshot::deserializer::Deserializer,
-    ) -> Self {
-        Self {
-            object: unsafe { transmute(deser.get_reference()) },
-            marker: PhantomData,
-        }
-    }
-    unsafe fn deserialize(
-        _at: *mut u8,
-        _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
-    ) {
-        unreachable!()
-    }
-
-    unsafe fn allocate(
-        _ctx: &mut VirtualMachine,
-        _deser: &mut crate::gc::snapshot::deserializer::Deserializer,
-    ) -> *mut crate::gc::cell::GcPointerBase {
-        unreachable!()
     }
 }
 
@@ -1873,3 +1838,5 @@ impl<T: JsClass> Clone for TypedJsObject<T> {
 }
 
 impl<T: JsClass> Copy for TypedJsObject<T> {}
+
+impl Finalize<JsObject> for JsObject {}

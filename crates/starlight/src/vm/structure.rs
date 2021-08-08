@@ -3,8 +3,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::{attributes::*, object::JsObject, structure_chain::StructureChain};
 use super::{symbol_table::*, Context};
+use crate::gc::cell::Visitor;
 use crate::gc::cell::{GcCell, GcPointer, Trace, WeakRef};
-use crate::gc::{cell::Tracer, snapshot::deserializer::Deserializable};
 use crate::prelude::*;
 use std::{collections::HashMap, intrinsics::likely};
 use wtf_rs::unwrap_unchecked;
@@ -71,12 +71,8 @@ impl MapEntry {
     }
 }
 
-impl GcCell for MapEntry {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-unsafe impl Trace for MapEntry {}
+impl GcCell for MapEntry {}
+impl Trace for MapEntry {}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransitionKey {
@@ -84,18 +80,14 @@ pub struct TransitionKey {
     pub attrs: u32,
 }
 
-impl GcCell for TransitionKey {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-unsafe impl Trace for TransitionKey {}
+impl GcCell for TransitionKey {}
+impl Trace for TransitionKey {}
 
 #[derive(Clone)]
 pub enum Transition {
     None,
     Table(Option<GcPointer<Table>>),
-    Pair(TransitionKey, WeakRef<Structure>),
+    Pair(TransitionKey, GcPointer<Structure>),
 }
 
 pub struct TransitionsTable {
@@ -147,9 +139,9 @@ impl TransitionsTable {
             self.var = Transition::Table(Some(table));
         }
         if let Transition::Table(Some(ref mut table)) = self.var {
-            table.insert(key, ctx.heap().make_weak(map));
+            table.insert(key, map);
         } else {
-            self.var = Transition::Pair(key, ctx.heap().make_weak(map));
+            self.var = Transition::Pair(key, map);
         }
     }
 
@@ -159,10 +151,10 @@ impl TransitionsTable {
             attrs: attrs.raw(),
         };
         if let Transition::Table(ref table) = &self.var {
-            return table.as_ref().unwrap().get(&key).and_then(|x| x.upgrade());
+            return table.as_ref().unwrap().get(&key).copied();
         } else if let Transition::Pair(key_, map) = &self.var {
             if key == *key_ {
-                return map.upgrade();
+                return Some(*map);
             }
         }
         None
@@ -176,31 +168,27 @@ impl TransitionsTable {
     }
 }
 
-pub type Table = HashMap<TransitionKey, WeakRef<Structure>>;
+pub type Table = HashMap<TransitionKey, GcPointer<Structure>>;
 
-unsafe impl Trace for TransitionsTable {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Trace for TransitionsTable {
+    fn trace(&self, tracer: &mut Visitor) {
         match self.var {
-            Transition::Pair(_, ref mut x) => x.trace(tracer),
-            Transition::Table(ref mut table) => {
+            Transition::Pair(_, ref x) => x.trace(tracer),
+            Transition::Table(ref table) => {
                 table.trace(tracer);
             }
             _ => (),
         }
     }
 }
-impl GcCell for Structure {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-unsafe impl Trace for Structure {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl GcCell for Structure {}
+impl Trace for Structure {
+    fn trace(&self, tracer: &mut Visitor) {
         self.transitions.trace(tracer);
         self.table.trace(tracer);
         self.prototype.trace(tracer);
         self.deleted.entry.trace(tracer);
-        match self.previous.as_mut() {
+        match self.previous.as_ref() {
             Some(x) => {
                 x.trace(tracer);
             }
@@ -242,7 +230,7 @@ impl DeletedEntryHolder {
             prev: self.entry,
             offset,
         });
-        self.size +=1;
+        self.size += 1;
         self.entry = Some(entry);
     }
     pub fn pop(&mut self) -> u32 {
@@ -268,27 +256,22 @@ pub struct DeletedEntry {
     pub offset: u32,
 }
 
-unsafe impl Trace for DeletedEntry {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Finalize<DeletedEntry> for DeletedEntry {}
+impl Finalize<DeletedEntryHolder> for DeletedEntryHolder {}
+
+impl Trace for DeletedEntry {
+    fn trace(&self, tracer: &mut Visitor) {
         self.prev.trace(tracer)
     }
 }
-unsafe impl Trace for DeletedEntryHolder {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for DeletedEntryHolder {
+    fn trace(&self, visitor: &mut Visitor) {
         self.entry.trace(visitor);
     }
 }
-impl GcCell for DeletedEntryHolder {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-impl GcCell for DeletedEntry {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-
+impl GcCell for DeletedEntryHolder {}
+impl GcCell for DeletedEntry {}
+impl Finalize<Structure> for Structure {}
 impl Structure {
     fn ctor(
         mut ctx: GcPointer<Context>,
@@ -319,6 +302,7 @@ impl Structure {
             cached_prototype_chain: None,
         });
         this.calculated_size = this.get_slots_size() as _;
+
         assert!(this.previous.is_some());
         this
     }
@@ -329,7 +313,7 @@ impl Structure {
         unique: bool,
         indexed: bool,
     ) -> GcPointer<Self> {
-        ctx.heap().allocate(Structure {
+        let this = ctx.heap().allocate(Structure {
             prototype,
             cached_prototype_chain: None,
             previous: None,
@@ -350,7 +334,9 @@ impl Structure {
             id: 0,
             calculated_size: 0,
             transit_count: 0,
-        })
+        });
+
+        this
     }
     #[allow(dead_code)]
     fn ctor2(
@@ -391,6 +377,7 @@ impl Structure {
             calculated_size: 0,
             transit_count: 0,
         });
+
         this.calculated_size = this.get_slots_size() as _;
         this
     }
@@ -543,7 +530,7 @@ impl GcPointer<Structure> {
         self.table.is_some()
     }
     pub fn allocate_table(&mut self, mut ctx: GcPointer<Context>) {
-        let mut stack = ctx.heap().allocate(Vec::with_capacity(8));
+        let mut stack = Vec::with_capacity(8);
 
         if self.is_adding_map() {
             stack.push(*self);

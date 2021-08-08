@@ -12,28 +12,13 @@ pub struct JsBoolean {
     data: bool,
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    todo!()
-}
-
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    todo!()
-}
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<JsBoolean>()
 }
 
 impl JsClass for JsBoolean {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsBoolean,
-            Boolean,
-            None,
-            None,
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsBoolean, Boolean, None, None, Some(fsz))
     }
 }
 
@@ -74,6 +59,15 @@ pub fn boolean_value_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 }
 
 impl Builtin for JsBoolean {
+    fn native_references() -> Vec<usize> {
+        vec![
+            boolean_constructor as _,
+            boolean_to_string as _,
+            boolean_value_of as _,
+            JsBoolean::class() as *const _ as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut map = Structure::new_indexed(ctx, None, false);
         ctx.global_data.boolean_structure = Some(map);

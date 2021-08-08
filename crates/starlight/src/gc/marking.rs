@@ -61,7 +61,7 @@ impl MarkingThread {
     }
 }
 
-impl Tracer for MarkingThread {
+impl Visitor for MarkingThread {
     fn visit_weak(&mut self, slot: *const WeakSlot) {
         unsafe {
             let inner = &mut *(slot as *mut WeakSlot);

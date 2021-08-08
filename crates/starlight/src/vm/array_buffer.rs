@@ -18,7 +18,7 @@ extern "C" fn drop_array_buffer(x: GcPointer<JsObject>) {
         ManuallyDrop::drop(x.data::<JsArrayBuffer>());
     }
 }
-
+/*
 extern "C" fn array_buffer_serialize(x: &JsObject, serializer: &mut SnapshotSerializer) {
     let data = x.data::<JsArrayBuffer>();
     data.attached.serialize(serializer);
@@ -50,7 +50,7 @@ extern "C" fn array_buffer_deserialize(x: &mut JsObject, deser: &mut Deserialize
             data: buf,
         })
     }
-}
+}*/
 extern "C" fn array_buffer_size() -> usize {
     size_of::<JsArrayBuffer>()
 }
@@ -62,8 +62,6 @@ impl JsClass for JsArrayBuffer {
             ArrayBuffer,
             Some(drop_array_buffer),
             None,
-            Some(array_buffer_deserialize),
-            Some(array_buffer_serialize),
             Some(array_buffer_size)
         )
     }

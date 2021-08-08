@@ -1,24 +1,13 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    gc::{
-        cell::*,
-        snapshot::{
-            deserializer::Deserializer,
-            serializer::{Serializable, SnapshotSerializer},
-        },
-    },
-    jsrt::boolean::JsBoolean,
-    vm::interpreter::SpreadValue,
-};
+use crate::{gc::cell::*, jsrt::boolean::JsBoolean, vm::interpreter::SpreadValue};
 
 use std::{
-    any::TypeId,
     convert::TryFrom,
     hash::{Hash, Hasher},
     hint::unreachable_unchecked,
-    intrinsics::{likely, size_of, unlikely},
+    intrinsics::{likely, unlikely},
 };
 
 use super::{
@@ -30,7 +19,7 @@ use super::{
     slot::*,
     string::*,
     symbol_table::*,
-    Context, VirtualMachine,
+    Context,
 };
 pub const CMP_FALSE: i32 = 0;
 pub const CMP_TRUE: i32 = 1;
@@ -289,10 +278,10 @@ pub mod old_value {
     }
 }
 
-unsafe impl Trace for JsValue {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for JsValue {
+    fn trace(&self, visitor: &mut Visitor) {
         if self.is_object() {
-            visitor.visit(self.get_object());
+            visitor.trace_untyped(self.get_object().untyped());
         }
     }
 }
@@ -591,7 +580,7 @@ impl JsValue {
         if unlikely(number.is_nan() || number.is_infinite()) {
             return Ok(0);
         }
-        Ok(number.floor() as i32)
+        Ok(((number as i64) & 0xffffffff) as i32)
     }
 
     pub fn to_uint32(self, ctx: GcPointer<Context>) -> Result<u32, JsValue> {
@@ -901,12 +890,7 @@ impl From<f64> for JsValue {
     }
 }
 
-use crate::gc::snapshot::deserializer::Deserializable;
-impl GcCell for JsValue {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for JsValue {}
 
 pub fn print_value(x: JsValue) {
     if x.is_number() {
@@ -1081,39 +1065,13 @@ impl PartialEq for HashValueZero {
 
 impl Eq for HashValueZero {}
 
-unsafe impl Trace for HashValueZero {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for HashValueZero {
+    fn trace(&self, visitor: &mut Visitor) {
         self.0.trace(visitor);
     }
 }
 
-impl GcCell for HashValueZero {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-
-impl Deserializable for HashValueZero {
-    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
-        Self(JsValue::deserialize_inplace(deser))
-    }
-    unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
-        at.cast::<Self>().write(Self::deserialize_inplace(deser));
-    }
-    unsafe fn allocate(ctx: &mut VirtualMachine, _deser: &mut Deserializer) -> *mut GcPointerBase {
-        ctx.heap().allocate_raw(
-            vtable_of_type::<Self>() as _,
-            size_of::<Self>(),
-            TypeId::of::<Self>(),
-        )
-    }
-}
-
-impl Serializable for HashValueZero {
-    fn serialize(&self, serializer: &mut SnapshotSerializer) {
-        self.0.serialize(serializer);
-    }
-}
+impl GcCell for HashValueZero {}
 
 pub mod new_value {
     //! TODO: This JS values results in nearly ~0.3% reduction in currently passing tests, we need to figure out why
@@ -1140,7 +1098,11 @@ pub mod new_value {
             }))
         }
     }
-
+    impl JsValue {
+        pub fn raw(self) -> u64 {
+            unsafe { std::mem::transmute(self) }
+        }
+    }
     impl PartialEq for JsValue {
         fn eq(&self, other: &Self) -> bool {
             unsafe { self.0.as_int64 == other.0.as_int64 }
@@ -1356,7 +1318,7 @@ pub mod new_value {
         #[inline]
         pub fn encode_object_value<T: GcCell + ?Sized>(gc: GcPointer<T>) -> Self {
             Self(EncodedValueDescriptor {
-                ptr: gc.base.as_ptr() as usize,
+                ptr: unsafe { std::mem::transmute(gc) },
             })
         }
 

@@ -1,18 +1,18 @@
-use starlight_bytecode::virtual_register;
 
-use super::context::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::symbol_table::Symbol;
 use super::value::JsValue;
 use crate::bytecode::opcodes::*;
-use crate::gc::{cell::GcPointer, cell::Tracer};
+use starlight_bytecode::virtual_register;
+use comet::internal::finalize_trait::FinalizeTrait;
+use super::context::Context;
 use crate::interpreter::frame_register_count_for;
+use crate::gc::{cell::GcPointer, cell::Visitor};
 use crate::{
     bytecode::TypeFeedBack,
     gc::cell::{GcCell, Trace},
-    gc::snapshot::deserializer::Deserializable,
 };
 use std::rc::Rc;
 use std::{fmt::Write, ops::Range};
@@ -118,8 +118,8 @@ pub struct CodeBlock {
     pub is_async: bool,
 }
 
-unsafe impl Trace for CodeBlock {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for CodeBlock {
+    fn trace(&self, visitor: &mut Visitor) {
         self.codes.trace(visitor);
         self.literals.trace(visitor);
         self.feedback.trace(visitor);
@@ -531,7 +531,7 @@ impl CodeBlock {
         // breath first graph exploration
         s.check(ctx, 0, Opcode::OP_NOP as u8, 0)?;
         use Opcode::*;
-        while s.pc_stack.len() > 0 {
+        while !s.pc_stack.is_empty() {
             pos = s.pc_stack.pop().unwrap();
             stack_len = s.stack_level_tab[pos as usize];
             op = unsafe { std::mem::transmute::<_, Opcode>(self.code[pos as usize]) };
@@ -830,8 +830,5 @@ impl CodeBlock {
     }
 }
 
-impl GcCell for CodeBlock {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for CodeBlock {}
+impl FinalizeTrait<CodeBlock> for CodeBlock {}

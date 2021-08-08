@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
-    gc::cell::{GcPointer, Trace, Tracer},
+    gc::cell::{GcPointer, Trace, Visitor},
     vm::{object::JsObject, structure::Structure, structure_chain::StructureChain},
 };
 
@@ -32,8 +32,8 @@ pub enum TypeFeedBack {
     None,
 }
 
-unsafe impl Trace for TypeFeedBack {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for TypeFeedBack {
+    fn trace(&self, visitor: &mut Visitor) {
         match self {
             Self::PropertyCache {
                 structure, mode, ..

@@ -1,10 +1,21 @@
 use std::intrinsics::unlikely;
 
+use cometgc::gc_size;
+
 use crate::prelude::*;
 use crate::vm::builder::Builtin;
 use crate::vm::{context::Context, function::*};
 
 impl Builtin for JsGeneratorFunction {
+    fn native_references() -> Vec<usize> {
+        vec![
+            generator_next as _,
+            generator_iterator as _,
+            generator_return as _,
+            generator_throw as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let f = Some(ctx.global_data.func_prototype.unwrap());
         let generator_structure = Structure::new_indexed(ctx, f, false);
@@ -33,8 +44,10 @@ impl Builtin for JsGeneratorFunction {
             false,
         )?;
         ctx.global_data.generator_prototype = Some(generator);
+
         ctx.global_data.generator_structure =
             Some(Structure::new_indexed(ctx, Some(generator), false));
+
         Ok(())
     }
 }

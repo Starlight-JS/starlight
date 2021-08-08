@@ -66,7 +66,7 @@ pub fn function_prototype(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         format!("{{ {} }}", args.at(args.size() - 1).to_string(ctx)?)
     };
     //let rel_path = unsafe { (*ctx.stack.current).code_block.unwrap().path.clone() };
-    ByteCompiler::compile_code(ctx, &params, &".", body, false)
+    ByteCompiler::compile_code(ctx, &params, ".", body, false)
         .map_err(|e| JsValue::from(ctx.new_syntax_error(format!("Compile Error {:?}", e))))
 }
 
@@ -97,7 +97,7 @@ pub fn function_bind(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
         let f = JsFunction::new(
             ctx,
             FuncType::Bound(JsBoundFunction {
-                args: *vals,
+                args: vals,
                 this: args.at(0),
                 target: unsafe { obj.get_object().downcast_unchecked() },
             }),
@@ -117,14 +117,14 @@ pub fn function_apply(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     letroot!(this = stack, args.this);
     if this.is_callable() {
         letroot!(obj = stack, this.get_jsobject());
-        letroot!(objc = stack, *obj);
+        letroot!(objc = stack, obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
         let arg_array = args.at(1);
         if args_size == 1 || arg_array.is_null() || arg_array.is_undefined() {
             letroot!(args = stack, Arguments::new(args.at(0), &mut []));
-            return func.call(ctx, &mut args, JsValue::new(*objc));
+            return func.call(ctx, &mut args, JsValue::new(objc));
         }
 
         if !arg_array.is_jsobject() {
@@ -145,7 +145,7 @@ pub fn function_apply(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
             argsv.push(arg_array.get(ctx, Symbol::Index(i))?);
         }
         crate::letroot!(args_ = stack, Arguments::new(args.at(0), &mut argsv));
-        return func.call(ctx, &mut args_, JsValue::new(*objc));
+        return func.call(ctx, &mut args_, JsValue::new(objc));
     }
 
     let msg = JsString::new(ctx, "Function.prototype.apply is not a generic function");
@@ -159,7 +159,7 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
     let stack = ctx.shadowstack();
     if this.is_callable() {
         letroot!(obj = stack, this.get_jsobject());
-        letroot!(objc = stack, *obj);
+        letroot!(objc = stack, obj);
         let func = obj.as_function_mut();
 
         let args_size = args.size();
@@ -172,7 +172,7 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
         }
         letroot!(args_ = stack, Arguments::new(args.at(0), &mut argsv,));
 
-        return func.call(ctx, &mut args_, JsValue::new(*objc));
+        return func.call(ctx, &mut args_, JsValue::new(objc));
     }
 
     let msg = JsString::new(ctx, "Function.prototype.call is not a generic function");
@@ -182,6 +182,16 @@ pub fn function_call(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
 }
 
 impl Builtin for JsFunction {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsFunction::class() as *const _ as usize,
+            function_bind as usize,
+            function_prototype as usize,
+            function_to_string as usize,
+            function_apply as usize,
+            function_call as usize,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         ctx.global_data.function_struct = Some(Structure::new_indexed(ctx, None, false));
 

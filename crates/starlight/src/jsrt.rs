@@ -3,15 +3,36 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
     constant::*,
-    gc::cell::{GcPointer, WeakRef, WeakSlot},
-    jsrt::math::Math,
+    define_op_builtins,
+    gc::cell::{GcPointer, WeakRef},
+    jsrt::{boolean::JsBoolean, date::JsDate, math::JsMath, regexp::JsRegExp, weak_ref::JsWeakRef},
     vm::{
-        arguments::Arguments, arguments::JsArguments, array::JsArray, array_buffer::JsArrayBuffer,
-        array_storage::ArrayStorage, attributes::*, builder::Builtin, class::JsClass,
-        code_block::CodeBlock, context::Context, data_view::JsDataView, environment::Environment,
-        error::*, function::*, global::JsGlobal, indexed_elements::IndexedElements,
-        interpreter::SpreadValue, number::*, object::*, property_descriptor::*, string::*,
-        structure::*, structure_chain::StructureChain, symbol_table::*, value::*, ModuleKind,
+        arguments::{Arguments, JsArguments},
+        array::JsArray,
+        array_buffer::JsArrayBuffer,
+        array_storage::ArrayStorage,
+        attributes::*,
+        builder::Builtin,
+        class::JsClass,
+        code_block::CodeBlock,
+        context::Context,
+        data_view::JsDataView,
+        environment::Environment,
+        error::*,
+        function::*,
+        global::JsGlobal,
+        indexed_elements::IndexedElements,
+        interpreter::SpreadValue,
+        number::JsNumber,
+        object::*,
+        promise::JsPromise,
+        property_descriptor::*,
+        string::*,
+        structure::*,
+        structure_chain::StructureChain,
+        symbol_table::*,
+        value::*,
+        ModuleKind,
     },
 };
 use std::{collections::HashMap, rc::Rc};
@@ -49,6 +70,9 @@ pub(crate) fn print(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
 pub struct SelfHost;
 
 impl Builtin for SelfHost {
+    fn native_references() -> Vec<usize> {
+        vec![]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let spread = include_str!("builtins/Spread.js");
         let func = ctx
@@ -104,10 +128,10 @@ impl GcPointer<Context> {
     }
 }
 
-use crate::gc::snapshot::deserializer::*;
+//use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
-
-pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
+/*
+pub static VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
     let mut refs = vec![
         /* deserializer functions */
         // following GcPointer and WeakRef method references is obtained from `T = u8`
@@ -160,133 +184,23 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         IndexedElements::allocate as _,
         CodeBlock::deserialize as _,
         CodeBlock::allocate as _,
-        JsArguments::class() as *const _ as usize,
-        JsObject::class() as *const _ as usize,
-        JsArray::class() as *const _ as usize,
-        JsFunction::class() as *const _ as usize,
-        JsError::class() as *const _ as usize,
-        JsTypeError::class() as *const _ as usize,
-        JsSyntaxError::class() as *const _ as usize,
-        JsReferenceError::class() as *const _ as usize,
-        JsRangeError::class() as *const _ as usize,
-        JsEvalError::class() as *const _ as usize,
-        JsURIError::class() as *const _ as usize,
-        JsGlobal::class() as *const _ as usize,
-        function::function_bind as usize,
-        function::function_prototype as usize,
-        function::function_to_string as usize,
-        function::function_apply as usize,
-        function::function_call as usize,
-        object::object_constructor as usize,
-        object::object_create as usize,
-        object::object_to_string as usize,
-        object::object_define_property as usize,
-        object::object_has_own_property as usize,
-        object::object_property_is_enumerable as usize,
-        object::object_keys as usize,
-        object::object_get_own_property_descriptor as usize,
-        object::object_freeze as _,
-        object::object_seal as _,
-        object::object_get_prototype_of as _,
-        object::object_is_extensible as _,
-        object::object_is_sealed as _,
-        object::object_is_frozen as _,
-        object::object_prevent_extensions as _,
-        array::array_ctor as usize,
-        array::array_from as usize,
-        array::array_is_array as usize,
-        array::array_join as usize,
-        array::array_of as usize,
-        array::array_pop as usize,
-        array::array_push as usize,
-        array::array_reduce as usize,
-        array::array_to_string as usize,
-        array::array_concat as usize,
-        array::array_for_each as _,
-        array::array_filter as _,
-        array::array_map as _,
-        array::array_shift as _,
-        array::array_slice as _,
-        array::array_index_of as _,
-        error::error_constructor as usize,
-        error::error_to_string as usize,
-        error::eval_error_constructor as usize,
-        error::range_error_constructor as usize,
-        error::reference_error_constructor as usize,
-        error::syntax_error_constructor as usize,
-        error::type_error_constructor as usize,
-        error::uri_error_constructor as usize,
-        print as usize,
-        global::is_finite as _,
-        global::is_nan as _,
-        global::parse_float as _,
-        global::parse_int as _,
-        global::read_line as _,
-        global::gc as _,
-        global::___is_constructor as _,
-        global::___is_callable as _,
-        global::___trunc as _,
-        global::to_string as _,
-        string::string_concat as _,
-        string::string_trim as _,
-        string::string_trim_start as _,
-        string::string_trim_end as _,
-        string::string_pad_start as _,
-        string::string_pad_end as _,
-        string::string_split as _,
-        string::string_constructor as _,
-        string::string_to_string as _,
-        string::string_index_of as _,
-        string::string_last_index_of as _,
-        string::string_substr as _,
-        string::string_substring as _,
-        string::string_replace as _,
-        string::string_value_of as _,
-        string::string_char_at as _,
-        string::string_char_code_at as _,
-        string::string_code_point_at as _,
-        string::string_starts_with as _,
-        string::string_ends_with as _,
-        string::string_repeat as _,
-        string::string_to_lowercase as _,
-        string::string_to_uppercase as _,
-        string::string_includes as _,
-        string::string_slice as _,
-        JsStringObject::class() as *const _ as usize,
-        JsNumber::class() as *const _ as usize,
         Environment::deserialize as _,
         Environment::allocate as _,
-        number::number_constructor as _,
-        number::number_clz as _,
-        number::number_is_finite as _,
-        number::number_is_integer as _,
-        number::number_is_nan as _,
-        number::number_to_int as _,
-        number::number_to_precisiion as _,
-        number::number_to_fixed as _,
-        number::number_to_string as _,
-        number::number_value_of as _,
         StructureChain::deserialize as _,
         StructureChain::allocate as _,
         HashValueZero::deserialize as _,
         HashValueZero::allocate as _,
-        regexp::regexp_constructor as _,
-        regexp::regexp_exec as _,
-        regexp::regexp_test as _,
-        regexp::regexp_to_string as _,
-        regexp::regexp_match as _,
-        regexp::regexp_split_fast as _,
-        symbol::symbol_ctor as _,
-        symbol::symbol_for as _,
-        symbol::symbol_key_for as _,
-        symbol::symbol_to_string as _,
-        symbol::symbol_value_of as _,
         JsSymbol::deserialize as _,
         JsSymbol::allocate as _,
         Accessor::deserialize as _,
         Accessor::allocate as _,
+        WeakSlot::deserialize as _,
+        WeakSlot::allocate as _,
+        // module loader
         module_load as _,
+        // std loader
         jsstd::init_js_std as _,
+        // file relavant
         jsstd::file::std_file_open as _,
         jsstd::file::std_file_read as _,
         jsstd::file::std_file_write as _,
@@ -296,103 +210,8 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         jsstd::file::std_file_read_bytes_to_end as _,
         jsstd::file::std_file_close as _,
         jsstd::std_args as _,
-        promise::promise_constructor as _,
-        promise::promise_then as _,
-        promise::promise_catch as _,
-        promise::promise_finally as _,
-        promise::promise_resolve as _,
-        promise::promise_reject as _,
-        promise::promise_static_resolve as _,
-        promise::promise_static_reject as _,
-        promise::promise_static_race as _,
-        promise::promise_static_all as _,
-        promise::promise_static_all_settled as _,
-        promise::promise_static_any as _,
-        generator::generator_next as _,
-        generator::generator_iterator as _,
-        generator::generator_return as _,
-        generator::generator_throw as _,
-        array_buffer::array_buffer_constructor as _,
-        array_buffer::array_buffer_byte_length as _,
-        array_buffer::array_buffer_slice as _,
+        // Misc
         JsArrayBuffer::class() as *const _ as usize,
-        JsDataView::class() as *const _ as usize,
-        data_view::data_view_constructor as _,
-        data_view::data_view_prototype_buffer as _,
-        data_view::data_view_prototype_byte_length as _,
-        data_view::data_view_prototype_byte_offset as _,
-        data_view::data_view_prototype_get::<u8> as _,
-        data_view::data_view_prototype_get::<u16> as _,
-        data_view::data_view_prototype_get::<u32> as _,
-        data_view::data_view_prototype_get::<i8> as _,
-        data_view::data_view_prototype_get::<i16> as _,
-        data_view::data_view_prototype_get::<i32> as _,
-        data_view::data_view_prototype_get::<f32> as _,
-        data_view::data_view_prototype_get::<f64> as _,
-        data_view::data_view_prototype_set::<u8> as _,
-        data_view::data_view_prototype_set::<u16> as _,
-        data_view::data_view_prototype_set::<u32> as _,
-        data_view::data_view_prototype_set::<i8> as _,
-        data_view::data_view_prototype_set::<i16> as _,
-        data_view::data_view_prototype_set::<i32> as _,
-        data_view::data_view_prototype_set::<f32> as _,
-        data_view::data_view_prototype_set::<f64> as _,
-        weak_ref::JsWeakRef::class() as *const _ as _,
-        weak_ref::weak_ref_constructor as _,
-        weak_ref::weak_ref_prototype_deref as _,
-        WeakSlot::deserialize as _,
-        WeakSlot::allocate as _,
-        boolean::boolean_constructor as _,
-        boolean::boolean_to_string as _,
-        boolean::boolean_value_of as _,
-        boolean::JsBoolean::class() as *const _ as _,
-        date::date_constructor as _,
-        date::date_to_string as _,
-        date::Date::class() as *const _ as _,
-        date::date_now as _,
-        date::date_set_date as _,
-        date::date_set_full_year as _,
-        date::date_set_hours as _,
-        date::date_set_milliseconds as _,
-        date::date_set_minutes as _,
-        date::date_set_month as _,
-        date::date_set_seconds as _,
-        date::date_set_year as _,
-        date::date_set_time as _,
-        date::date_set_utc_date as _,
-        date::date_set_utc_full_year as _,
-        date::date_set_utc_hours as _,
-        date::date_set_utc_minutes as _,
-        date::date_set_utc_month as _,
-        date::date_set_utc_seconds as _,
-        date::date_get_date as _,
-        date::date_get_day as _,
-        date::date_get_full_year as _,
-        date::date_get_hours as _,
-        date::date_get_milliseconds as _,
-        date::date_get_minutes as _,
-        date::date_get_month as _,
-        date::date_get_seconds as _,
-        date::date_get_seconds as _,
-        date::date_get_time as _,
-        date::date_get_year as _,
-        date::date_get_utc_date as _,
-        date::date_get_utc_day as _,
-        date::date_get_utc_full_year as _,
-        date::date_get_utc_hours as _,
-        date::date_get_utc_minutes as _,
-        date::date_get_utc_milliseconds as _,
-        date::date_get_utc_month as _,
-        date::date_get_utc_seconds as _,
-        date::date_to_json as _,
-        date::date_to_time_string as _,
-        date::date_value_of as _,
-        date::date_to_gmt_string as _,
-        date::date_to_iso_string as _,
-        date::date_to_utc_string as _,
-        date::date_to_date_string as _,
-        date::date_parse as _,
-        date::date_utc as _,
         js262::_262_create_realm as _,
         js262::_262_eval_script as _,
     ];
@@ -404,12 +223,18 @@ pub static mut VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
         refs.push(ffi::ffi_library_open as _);
     }
 
+    macro_rules! define_register_native_reference {
+        ($class: ident) => {
+            refs.append(&mut $class::native_references());
+        };
+    }
+
     unsafe {
-        refs.append(&mut Math::native_references());
+        define_op_builtins!(define_register_native_reference);
     }
 
     refs
-});
+});*/
 
 pub fn get_length(ctx: GcPointer<Context>, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
     if std::ptr::eq(val.class, JsArray::class()) {
@@ -431,8 +256,8 @@ pub fn to_property_descriptor(
     }
 
     let mut attr: u32 = DEFAULT;
-    let stack = ctx.shadowstack();
-    letroot!(obj = stack, target.get_jsobject());
+
+    let mut obj = target.get_jsobject();
     let mut value = JsValue::encode_undefined_value();
     let mut getter = JsValue::encode_undefined_value();
     let mut setter = JsValue::encode_undefined_value();
@@ -564,22 +389,20 @@ pub(crate) fn module_load(
         }
         Ok(path) => path,
     };
-    let stack = ctx.shadowstack();
-    letroot!(module_object = stack, JsObject::new_empty(ctx));
+
+    let mut module_object = JsObject::new_empty(ctx);
     let mut exports = JsObject::new_empty(ctx);
     module_object.put(ctx, S_EXPORTS.intern(), JsValue::new(exports), false)?;
-    let mut args = [JsValue::new(*module_object)];
-    letroot!(
-        args = stack,
-        Arguments::new(JsValue::encode_undefined_value(), &mut args)
-    );
+    let mut args = [JsValue::new(module_object)];
+    let mut args = Arguments::new(JsValue::encode_undefined_value(), &mut args);
+
     if let Some(module) = ctx.modules().get(&spath).copied() {
         match module {
             ModuleKind::Initialized(x) => {
                 return Ok(JsValue::new(x));
             }
             ModuleKind::NativeUninit(init) => {
-                let mut module = *module_object;
+                let mut module = module_object;
                 init(ctx, module)?;
                 ctx.modules()
                     .insert(spath.clone(), ModuleKind::Initialized(module));
@@ -610,8 +433,8 @@ pub(crate) fn module_load(
         .as_function_mut()
         .call(ctx, &mut args, JsValue::encode_undefined_value())?;
     ctx.modules()
-        .insert(spath.clone(), ModuleKind::Initialized(*module_object));
-    Ok(JsValue::new(*module_object))
+        .insert(spath.clone(), ModuleKind::Initialized(module_object));
+    Ok(JsValue::new(module_object))
 }
 
 pub fn to_index(ctx: GcPointer<Context>, val: JsValue) -> Result<usize, JsValue> {
@@ -684,18 +507,18 @@ macro_rules! define_op_builtins {
         $op!(JsArguments);
         $op!(JsNumber);
         $op!(JsArray);
-        $op!(Math);
+        $op!(JsMath);
         $op!(JsError);
         $op!(JsStringObject);
         $op!(JsGlobal);
         $op!(JsSymbolObject);
-        $op!(RegExp);
+        $op!(JsRegExp);
         $op!(JsGeneratorFunction);
         $op!(JsPromise);
         $op!(JsArrayBuffer);
         $op!(JsDataView);
         $op!(JsWeakRef);
-        $op!(Date);
+        $op!(JsDate);
         $op!(JsBoolean);
         $op!(SelfHost);
     };

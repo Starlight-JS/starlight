@@ -1,10 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-use crate::{
-    gc::{cell::GcCell, snapshot::serializer::Serializable},
-    prelude::*,
-};
+use crate::{gc::cell::GcCell, prelude::*};
 
 use super::context::Context;
 pub struct NativeIterator {
@@ -47,12 +44,8 @@ impl GcCell for NativeIterator {
         unreachable!()
     }
 }
-impl Serializable for NativeIterator {
-    fn serialize(&self, _serializer: &mut SnapshotSerializer) {
-        unreachable!()
-    }
-}
 
-unsafe impl Trace for NativeIterator {
-    fn trace(&mut self, _visitor: &mut dyn Tracer) {}
+impl Trace for NativeIterator {
+    fn trace(&self, _visitor: &mut Visitor) {}
 }
+impl Finalize<NativeIterator> for NativeIterator {}

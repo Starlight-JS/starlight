@@ -33,9 +33,12 @@
     clippy::needless_range_loop
 )]
 
-use gc::{cell::GcPointer, snapshot::deserializer::Deserializer};
+use gc::cell::GcPointer;
+use options::Options;
 use std::sync::atomic::AtomicBool;
-use vm::{arguments::Arguments, object::JsObject, value::JsValue, VirtualMachineRef};
+use vm::{
+    arguments::Arguments, context::Context, object::JsObject, value::JsValue, VirtualMachineRef,
+};
 #[macro_export]
 macro_rules! def_native_method {
     ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr) => {{
@@ -168,6 +171,26 @@ macro_rules! as_atomic {
     };
 }
 
+#[no_mangle]
+#[used]
+#[doc(hidden)]
+pub static mut LETROOT_SINK: usize = 0;
+
+#[doc(hidden)]
+pub fn letroot_sink(ref_: *const u8) {
+    unsafe {
+        core::ptr::write_volatile(&mut LETROOT_SINK, ref_ as usize);
+    }
+}
+
+#[macro_export]
+macro_rules! letroot {
+    ($var : ident = $stack : expr,$val: expr) => {
+        let mut $var = $val;
+        $crate::letroot_sink(&$var as *const _ as *const u8);
+    };
+}
+
 #[macro_use]
 pub mod utils;
 #[macro_use]
@@ -175,6 +198,7 @@ pub mod gc;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
+pub mod comet;
 pub mod heap;
 pub mod jsrt;
 pub mod options;
@@ -189,13 +213,14 @@ static INIT: AtomicBool = AtomicBool::new(false);
 impl Platform {
     pub fn initialize() {
         if INIT.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed) == Ok(false) {
+            comet::cometgc::GCPlatform::initialize();
             vm::symbol_table::initialize_symbol_table();
         }
     }
 
     pub fn new_runtime(
         options: Options,
-        external_references: Option<&'static [usize]>,
+        external_references: Option<Vec<usize>>,
     ) -> VirtualMachineRef {
         Self::initialize();
         vm::VirtualMachine::new(options, external_references)
@@ -206,66 +231,10 @@ impl Platform {
 pub extern "C" fn platform_initialize() {
     Platform::initialize();
 }
-use gc::snapshot::deserializer::Deserializable;
-
-use crate::{options::Options, vm::context::Context};
-#[no_mangle]
-#[doc(hidden)]
-pub unsafe extern "C" fn __execute_bundle(array: *const u8, size: usize) {
-    let mut function = None;
-
-    let options = Options::default();
-    let gc = gc::default_heap(&options);
-    let mut vm = Deserializer::deserialize(
-        false,
-        std::slice::from_raw_parts(array, size),
-        options,
-        gc,
-        None,
-        |deser, _rt| {
-            function = Some(GcPointer::<JsObject>::deserialize_inplace(deser));
-        },
-    );
-    let mut ctx = Context::new(&mut vm);
-    let stack = vm.shadowstack();
-
-    letroot!(function = stack, function.expect("No function"));
-    letroot!(funcc = stack, *function);
-    assert!(function.is_callable(), "Not a callable function");
-
-    let global = ctx.global_object();
-    letroot!(
-        args = stack,
-        Arguments::new(JsValue::encode_object_value(global), &mut [])
-    );
-    match function
-        .as_function_mut()
-        .call(ctx, &mut args, JsValue::new(*funcc))
-    {
-        Ok(x) => {
-            if x.is_number() {
-                drop(vm);
-                std::process::exit(x.get_number().floor() as i32);
-            }
-        }
-        Err(e) => {
-            let str = e.to_string(ctx);
-            match str {
-                Err(_) => panic!("Failed to get error"),
-                Ok(str) => {
-                    eprintln!("Uncaught exception: {}", str);
-                }
-            }
-        }
-    }
-}
 
 pub mod prelude {
-    pub use super::gc::{
-        cell::*, snapshot::deserializer::*, snapshot::serializer::*, snapshot::Snapshot, Heap,
-        MarkingConstraint, SimpleMarkingConstraint,
-    };
-    pub use super::letroot;
+    pub use super::gc::*;
+
     pub use super::options::Options;
     pub use super::vm::VirtualMachine;
     pub use super::vm::{

@@ -564,7 +564,7 @@ impl ByteCompiler {
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
         //compiler.compile(&script.body);
-        let code = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+        let code = compiler.finish(ctx).map_err(CompileError::Val)?;
         let env = crate::vm::environment::Environment::new(ctx, 0);
         let fun = JsVMFunction::new(ctx, code, env);
         Ok(JsValue::new(fun))
@@ -652,7 +652,7 @@ impl ByteCompiler {
             compiler.emit(Opcode::OP_INITIAL_YIELD, &[], false);
         }
         compiler.compile_fn(ctx, function)?;
-        compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+        compiler.finish(ctx).map_err(CompileError::Val)?;
         let ix = if expr {
             ix as u32
         } else {
@@ -894,7 +894,7 @@ impl ByteCompiler {
         }
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let mut result = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+        let mut result = compiler.finish(ctx).map_err(CompileError::Val)?;
         Ok(result)
     }
     pub fn compile_script(
@@ -937,7 +937,7 @@ impl ByteCompiler {
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let mut result = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+        let mut result = compiler.finish(ctx).map_err(CompileError::Val)?;
         Ok(result)
     }
 
@@ -981,7 +981,7 @@ impl ByteCompiler {
         compiler.pop_scope();
         compiler.emit(Opcode::OP_PUSH_UNDEF, &[], false);
         compiler.emit(Opcode::OP_RET, &[], false);
-        let mut result = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+        let mut result = compiler.finish(ctx).map_err(CompileError::Val)?;
         Ok(result)
     }
 
@@ -1846,6 +1846,9 @@ impl ByteCompiler {
                     self.expr(ctx, &update.arg, true, false)?;
                     self.emit(Opcode::OP_PUSH_INT, &[1i32 as u32], false);
                     self.emit(op, &[0], false);
+                    if op == Opcode::OP_SUB {
+                        self.emit(Opcode::OP_NEG, &[], false);
+                    }
                     if used {
                         self.emit(Opcode::OP_DUP, &[], false);
                     }
@@ -2118,7 +2121,7 @@ impl ByteCompiler {
                         compiler.emit(Opcode::OP_RET, &[], false);
                     }
                 }
-                let code = compiler.finish(ctx).map_err(|x| CompileError::Val(x))?;
+                let code = compiler.finish(ctx).map_err(CompileError::Val)?;
 
                 let ix = self.code.codes.len();
                 self.code.codes.push(code);

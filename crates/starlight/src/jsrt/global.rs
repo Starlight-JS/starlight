@@ -1,3 +1,4 @@
+use crate::vm::class::JsClass;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
@@ -215,6 +216,23 @@ pub fn read_line(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
 }
 
 impl Builtin for JsGlobal {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsGlobal::class() as *const _ as usize,
+            jsrt::print as usize,
+            is_finite as _,
+            is_nan as _,
+            parse_float as _,
+            parse_int as _,
+            read_line as _,
+            gc as _,
+            ___is_constructor as _,
+            ___is_callable as _,
+            ___trunc as _,
+            to_string as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let mut global_object = ctx.global_object();
 

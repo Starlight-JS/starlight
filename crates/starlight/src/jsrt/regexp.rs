@@ -10,7 +10,7 @@ use std::{
 
 /// The internal representation on a `RegExp` object.
 #[derive(Debug, Clone)]
-pub struct RegExp {
+pub struct JsRegExp {
     /// Regex matcher.
     matcher: Regex,
 
@@ -42,9 +42,9 @@ pub struct RegExp {
     pub(crate) original_flags: Box<str>,
 }
 extern "C" fn drop_regexp_fn(obj: GcPointer<JsObject>) {
-    unsafe { ManuallyDrop::drop(obj.data::<RegExp>()) }
+    unsafe { ManuallyDrop::drop(obj.data::<JsRegExp>()) }
 }
-
+/*
 extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
     unsafe {
         let use_last_index = bool::deserialize_inplace(deser);
@@ -78,7 +78,7 @@ extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
             soctxed_flags.push('y');
         }
         let matcher = Regex::with_flags(&original_source, soctxed_flags.as_str()).unwrap();
-        *obj.data::<RegExp>() = ManuallyDrop::new(RegExp {
+        *obj.data::<JsRegExp>() = ManuallyDrop::new(JsRegExp {
             use_last_index,
             flags: flags.into_boxed_str(),
             dot_all,
@@ -94,7 +94,7 @@ extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
     }
 }
 extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
-    let data = obj.data::<RegExp>();
+    let data = obj.data::<JsRegExp>();
     data.use_last_index.serialize(serializer);
     data.flags.to_string().serialize(serializer);
     data.dot_all.serialize(serializer);
@@ -105,26 +105,28 @@ extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
     data.unicode.serialize(serializer);
     data.original_source.to_string().serialize(serializer);
     data.original_flags.to_string().serialize(serializer);
-}
+}*/
 extern "C" fn fsz() -> usize {
-    size_of::<RegExp>()
+    size_of::<JsRegExp>()
 }
 
-impl JsClass for RegExp {
+impl JsClass for JsRegExp {
     fn class() -> &'static Class {
-        define_jsclass!(
-            RegExp,
-            RegExp,
-            Some(drop_regexp_fn),
-            None,
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsRegExp, RegExp, Some(drop_regexp_fn), None, Some(fsz))
     }
 }
 
-impl Builtin for RegExp {
+impl Builtin for JsRegExp {
+    fn native_references() -> Vec<usize> {
+        vec![
+            regexp_constructor as _,
+            regexp_exec as _,
+            regexp_test as _,
+            regexp_to_string as _,
+            regexp_match as _,
+            regexp_split_fast as _,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
 
@@ -176,8 +178,8 @@ pub fn regexp_split_fast(ctx: GcPointer<Context>, args: &Arguments) -> Result<Js
         )));
     }
     let re = args.at(0).get_jsobject();
-    let regexp = re.data::<RegExp>();
-    if unlikely(!re.is_class(RegExp::class())) {
+    let regexp = re.data::<JsRegExp>();
+    if unlikely(!re.is_class(JsRegExp::class())) {
         return Err(JsValue::new(ctx.new_type_error(
             "Regex.@@splitFast requires regexp object as first argument",
         )));
@@ -229,10 +231,10 @@ pub fn regexp_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         ),
         arg if arg.is_jsobject() => {
             let obj = arg.get_jsobject();
-            if obj.is_class(RegExp::class()) {
+            if obj.is_class(JsRegExp::class()) {
                 (
-                    obj.data::<RegExp>().original_source.clone(),
-                    obj.data::<RegExp>().original_flags.clone(),
+                    obj.data::<JsRegExp>().original_source.clone(),
+                    obj.data::<JsRegExp>().original_flags.clone(),
                 )
             } else {
                 (
@@ -296,7 +298,7 @@ pub fn regexp_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         Ok(val) => val,
     };
 
-    let regexp = RegExp {
+    let regexp = JsRegExp {
         matcher,
         use_last_index: global || sticky,
         flags: soctxed_flags.clone().into_boxed_str(),
@@ -309,8 +311,8 @@ pub fn regexp_constructor(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
         original_source: regex_body,
         original_flags: regex_flags,
     };
-    let mut this = JsObject::new(ctx, &structure, RegExp::class(), ObjectTag::Regex);
-    *this.data::<RegExp>() = ManuallyDrop::new(regexp);
+    let mut this = JsObject::new(ctx, &structure, JsRegExp::class(), ObjectTag::Regex);
+    *this.data::<JsRegExp>() = ManuallyDrop::new(regexp);
     let f = JsString::new(ctx, soctxed_flags);
     this.put(ctx, "flags".intern(), JsValue::new(f), false)?;
     this.put(ctx, "global".intern(), JsValue::new(global), false)?;
@@ -329,19 +331,19 @@ pub fn regexp_test(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
     let mut last_index = this.get(ctx, "lastIndex".intern())?.to_int32(ctx)? as usize;
 
     let arg_str = args.at(0).to_string(ctx)?;
-    if this.is_class(RegExp::class()) {
+    if this.is_class(JsRegExp::class()) {
         let result = if let Some(m) = this
-            .data::<RegExp>()
+            .data::<JsRegExp>()
             .matcher
             .find_from(arg_str.as_str(), last_index)
             .next()
         {
-            if this.data::<RegExp>().use_last_index {
+            if this.data::<JsRegExp>().use_last_index {
                 last_index = m.end();
             }
             true
         } else {
-            if this.data::<RegExp>().use_last_index {
+            if this.data::<JsRegExp>().use_last_index {
                 last_index = 0;
             }
             false
@@ -369,12 +371,12 @@ pub fn regexp_exec(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
     let mut this = args.this.get_jsobject();
     let mut last_index = this.get(ctx, "lastIndex".intern())?.to_int32(ctx)? as usize;
     let mut obj = this;
-    if unlikely(!this.is_class(RegExp::class())) {
+    if unlikely(!this.is_class(JsRegExp::class())) {
         return Err(JsValue::new(ctx.new_type_error(
             "RegExp.prototype.exec method called on incompatible value",
         )));
     }
-    let regex = obj.data::<RegExp>();
+    let regex = obj.data::<JsRegExp>();
     let arg_str = args.at(0).to_string(ctx)?;
     let result = if let Some(m) = regex.matcher.find_from(arg_str.as_str(), last_index).next() {
         if regex.use_last_index {
@@ -424,7 +426,7 @@ pub fn regexp_exec(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
 }
 
 fn to_regexp(val: JsValue) -> Option<GcPointer<JsObject>> {
-    if val.is_jsobject() && val.get_jsobject().is_class(RegExp::class()) {
+    if val.is_jsobject() && val.get_jsobject().is_class(JsRegExp::class()) {
         return Some(val.get_jsobject());
     }
     None
@@ -433,7 +435,7 @@ fn to_regexp(val: JsValue) -> Option<GcPointer<JsObject>> {
 pub fn regexp_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     match to_regexp(args.this) {
         Some(object) => {
-            let regex = object.data::<RegExp>();
+            let regex = object.data::<JsRegExp>();
 
             Ok(JsValue::new(JsString::new(
                 ctx,
@@ -450,7 +452,7 @@ pub fn regexp_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsV
 pub fn regexp_match(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
     let arg_str = args.at(0).to_string(ctx)?;
     let matches = if let Some(object) = to_regexp(args.this) {
-        let regex = object.data::<RegExp>();
+        let regex = object.data::<JsRegExp>();
         let mut matches = vec![];
         for mat in regex.matcher.find_iter(&arg_str) {
             let match_vec: Vec<JsValue> = mat

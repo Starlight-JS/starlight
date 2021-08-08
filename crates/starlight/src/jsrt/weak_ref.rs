@@ -19,29 +19,14 @@ extern "C" fn fsz() -> usize {
     std::mem::size_of::<JsWeakRef>()
 }
 
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    todo!()
-}
-
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    todo!()
-}
 #[allow(improper_ctypes_definitions)]
-extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+extern "C" fn trace(tracer: &mut Visitor, obj: &JsObject) {
     obj.data::<JsWeakRef>().value.trace(tracer);
 }
 
 impl JsClass for JsWeakRef {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsWeakRef,
-            WeakRef,
-            None,
-            Some(trace),
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsWeakRef, WeakRef, None, Some(trace), Some(fsz))
     }
 }
 
@@ -76,6 +61,14 @@ pub fn weak_ref_prototype_deref(
 }
 
 impl Builtin for JsWeakRef {
+    fn native_references() -> Vec<usize> {
+        vec![
+            JsWeakRef::class() as *const _ as _,
+            weak_ref_constructor as _,
+            weak_ref_prototype_deref as _,
+        ]
+    }
+
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data().object_prototype.unwrap();
         ctx.global_data.weak_ref_structure = Some(Structure::new_indexed(ctx, None, false));

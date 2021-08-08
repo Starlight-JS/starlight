@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use super::{arguments::Arguments, attributes::*, error::*, string::*, value::JsValue, *};
+use crate::gc::cell::Visitor;
 use crate::gc::cell::{GcCell, GcPointer, Trace};
-use crate::gc::{cell::Tracer, snapshot::deserializer::Deserializable};
 use std::ops::{Deref, DerefMut};
 #[derive(Clone, Copy)]
 pub union PropertyLayout {
@@ -118,17 +118,13 @@ pub struct StoredSlot {
     pub(crate) value: JsValue,
     pub(crate) attributes: AttrSafe,
 }
-unsafe impl Trace for StoredSlot {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for StoredSlot {
+    fn trace(&self, visitor: &mut Visitor) {
         self.value.trace(visitor);
     }
 }
 
-impl GcCell for StoredSlot {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for StoredSlot {}
 impl StoredSlot {
     pub fn value(&self) -> JsValue {
         self.value
@@ -472,7 +468,7 @@ pub struct Accessor {
     pub(crate) getter: JsValue,
     pub(crate) setter: JsValue,
 }
-
+impl FinalizeTrait<Accessor> for Accessor {}
 impl Accessor {
     pub fn getter(&self) -> JsValue {
         self.getter
@@ -515,14 +511,10 @@ impl Accessor {
     }
 }
 
-impl GcCell for Accessor {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for Accessor {}
 
-unsafe impl Trace for Accessor {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Trace for Accessor {
+    fn trace(&self, tracer: &mut Visitor) {
         self.setter.trace(tracer);
         self.getter.trace(tracer);
     }

@@ -347,7 +347,7 @@ pub(crate) fn analyze_results(base: &Path,num: u32) {
     let mut failed_num = num;
     println!("Failed: ");
     for test in &tests {
-        if failed_num <=0 {
+        if failed_num ==0 {
             break;
         }
         if matches!(test.result, TestOutcomeResult::Failed) {

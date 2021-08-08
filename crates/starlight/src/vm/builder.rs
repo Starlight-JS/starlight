@@ -28,7 +28,7 @@ pub trait Builtin {
         todo!();
     }
     fn native_references() -> Vec<usize> {
-        vec![]
+        todo!();
     }
 }
 

@@ -129,7 +129,7 @@ impl Block {
     }
 
     pub fn walk(&self, mut cb: impl FnMut(*mut u8)) {
-        for i in 0..self.cell_count() {
+        for i in 0..self.cell_count() - 1 {
             cb(self.cell(i));
         }
     }

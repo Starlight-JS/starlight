@@ -5,7 +5,7 @@ use starlight::prelude::Options;
 
 use starlight::{
     gc::{
-        cell::{GcCell, GcPointer, Trace, Tracer},
+        cell::{GcCell, GcPointer, Trace, Visitor},
         snapshot::serializer::{Serializable, SnapshotSerializer},
     },
     vm::{array_storage::ArrayStorage, value::JsValue, VirtualMachine},
@@ -159,8 +159,8 @@ impl GcCell for Node {
 impl Serializable for Node {
     fn serialize(&self, _serializer: &mut SnapshotSerializer) {}
 }
-unsafe impl Trace for Node {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for Node {
+    fn trace(&self, visitor: &mut Visitor) {
         self.left.trace(visitor);
         self.right.trace(visitor);
     }

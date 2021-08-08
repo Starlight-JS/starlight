@@ -222,9 +222,9 @@ pub fn math_tanh(ctx:GcPointer<Context>, args: &Arguments) -> Result<JsValue,JsV
     Ok(JsValue::new(number.tanh()))
 }
 
-pub struct Math;
+pub struct JsMath;
 
-impl Builtin for Math {
+impl Builtin for JsMath {
     fn native_references() -> Vec<usize> {
         vec![
             math_abs as _,

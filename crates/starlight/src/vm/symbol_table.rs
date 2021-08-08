@@ -1,13 +1,11 @@
-use super::class::{Class, JsClass};
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+use super::class::{Class, JsClass};
 use super::method_table::*;
 use super::object::ObjectTag;
 use super::Context;
-use crate::gc::cell::{GcCell, GcPointer, Trace, Tracer};
-use crate::gc::snapshot::deserializer::{Deserializable, Deserializer};
-use crate::gc::snapshot::serializer::SnapshotSerializer;
+use crate::gc::cell::{GcCell, GcPointer, Trace, Visitor};
 use crate::prelude::*;
 use crate::vm::object::JsObject;
 use dashmap::DashMap;
@@ -156,12 +154,8 @@ impl Symbol {
         !self.is_index()
     }
 }
-impl GcCell for Symbol {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-unsafe impl Trace for Symbol {}
+impl GcCell for Symbol {}
+impl Trace for Symbol {}
 
 pub const DUMMY_SYMBOL: Symbol = Symbol::Key(SymbolID(0));
 
@@ -254,12 +248,9 @@ impl JsSymbol {
     }
 }
 
-unsafe impl Trace for JsSymbol {}
-impl GcCell for JsSymbol {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl Trace for JsSymbol {}
+impl GcCell for JsSymbol {}
+impl Finalize<JsSymbol> for JsSymbol {}
 
 impl std::fmt::Display for SymbolID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -277,29 +268,14 @@ extern "C" fn fsz() -> usize {
     std::mem::size_of::<JsSymbolObject>()
 }
 
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    todo!()
-}
-
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    todo!()
-}
 #[allow(improper_ctypes_definitions)]
-extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+extern "C" fn trace(tracer: &mut Visitor, obj: &JsObject) {
     obj.data::<JsSymbolObject>().sym.trace(tracer);
 }
 
 impl JsClass for JsSymbolObject {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsSymbolObject,
-            Symbol,
-            None,
-            Some(trace),
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsSymbolObject, Symbol, None, Some(trace), Some(fsz))
     }
 }
 impl JsSymbolObject {

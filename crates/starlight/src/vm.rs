@@ -6,19 +6,19 @@ use self::{
 };
 use crate::{
     bytecompiler::{ByteCompiler, CompileError},
-    gc::default_heap,
-    gc::shadowstack::ShadowStack,
     gc::Heap,
     gc::{
         cell::GcPointer,
         cell::Trace,
-        cell::{GcCell, GcPointerBase, Tracer},
+        cell::{GcCell, GcPointerBase},
         SimpleMarkingConstraint,
     },
     gc::{safepoint::GlobalSafepoint, snapshot::Snapshot},
     interpreter::callframe::CallFrame,
+
     options::Options,
 };
+use comet::{internal::finalize_trait::FinalizeTrait, visitor::Visitor};
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -74,7 +74,6 @@ pub mod symbol_table;
 pub mod thread;
 pub mod typedarray;
 pub mod value;
-use crate::gc::snapshot::{deserializer::*, serializer::*};
 
 use value::*;
 pub mod promise;
@@ -84,19 +83,16 @@ pub enum ModuleKind {
     Initialized(GcPointer<JsObject>),
     NativeUninit(fn(GcPointer<Context>, GcPointer<JsObject>) -> Result<(), JsValue>),
 }
-impl GcCell for ModuleKind {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-unsafe impl Trace for ModuleKind {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl GcCell for ModuleKind {}
+impl Trace for ModuleKind {
+    fn trace(&self, visitor: &mut Visitor) {
         if let Self::Initialized(x) = self {
             x.trace(visitor)
         }
     }
 }
-
+impl FinalizeTrait<ModuleKind> for ModuleKind {}
+/*
 impl Serializable for ModuleKind {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         match self {
@@ -131,14 +127,13 @@ impl Deserializable for ModuleKind {
     unsafe fn dummy_read(_deser: &mut Deserializer) {
         unreachable!()
     }
-}
+}*/
 
 /// JavaScript runtime instance.
 pub struct VirtualMachine {
     pub(crate) gc: Heap,
-    pub(crate) external_references: Option<&'static [usize]>,
+    pub(crate) external_references: Vec<usize>,
     pub(crate) options: Options,
-    pub(crate) shadowstack: ShadowStack,
     pub(crate) top_call_frame: *mut CallFrame,
     pub(crate) codegen_plugins: HashMap<
         String,
@@ -157,7 +152,6 @@ pub struct VirtualMachine {
     pub(crate) eval_history: String,
     pub(crate) persistent_roots: Rc<RefCell<HashMap<usize, JsValue>>>,
     pub(crate) sched_async_func: Option<Box<dyn Fn(Box<dyn FnOnce(GcPointer<Context>)>)>>,
-    pub(crate) safepoint: GlobalSafepoint,
 
     pub(crate) contexts: Vec<GcPointer<Context>>,
 
@@ -213,17 +207,12 @@ impl VirtualMachine {
         &self.options
     }
 
-    pub fn new_raw(
-        gc: Heap,
-        options: Options,
-        external_references: Option<&'static [usize]>,
-    ) -> VM {
+    pub fn new_raw(gc: Heap, options: Options, external_references: Option<Vec<usize>>) -> VM {
         VirtualMachineRef(Box::into_raw(Box::new(Self {
             gc,
             options,
-            safepoint: GlobalSafepoint::new(),
-            external_references,
-            shadowstack: ShadowStack::new(),
+
+            external_references: external_references.unwrap_or(vec![]),
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
             eval_history: String::new(),
@@ -236,8 +225,8 @@ impl VirtualMachine {
         })))
     }
 
-    pub fn new(options: Options, external_references: Option<&'static [usize]>) -> VM {
-        Self::with_heap(default_heap(&options), options, external_references)
+    pub fn new(options: Options, external_references: Option<Vec<usize>>) -> VM {
+        Self::with_heap(Heap::new(&options), options, external_references)
     }
 
     /// Get mutable heap reference.
@@ -246,11 +235,7 @@ impl VirtualMachine {
     }
 
     /// Construct runtime instance with specific GC heap.
-    pub fn with_heap(
-        gc: Heap,
-        options: Options,
-        external_references: Option<&'static [usize]>,
-    ) -> VM {
+    pub fn with_heap(gc: Heap, options: Options, external_references: Option<Vec<usize>>) -> VM {
         let mut this = VirtualMachine::new_raw(gc, options, external_references);
         this.register_gc_constraints();
         /*let vm = this;
@@ -278,7 +263,11 @@ impl VirtualMachine {
             move |visitor| {
                 let vm = unsafe { &mut *vm };
                 // vm.shadowstack.trace(visitor);
-                vm.contexts.iter_mut().for_each(|ctx| ctx.trace(visitor));
+                vm.contexts.iter_mut().enumerate().for_each(|(i, ctx)| {
+                    assert!(ctx.global_object.is_some());
+
+                    ctx.trace(visitor)
+                });
                 let pr = &mut *vm.persistent_roots.borrow_mut();
                 pr.iter_mut().for_each(|entry| {
                     entry.1.trace(visitor);
@@ -290,16 +279,13 @@ impl VirtualMachine {
     pub(crate) fn new_empty(
         gc: Heap,
         options: Options,
-        external_references: Option<&'static [usize]>,
+        external_references: Option<Vec<usize>>,
     ) -> VM {
         let mut this = VirtualMachine::new_raw(gc, options, external_references);
         this.register_gc_constraints();
         this
     }
 
-    pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
-        unsafe { std::mem::transmute(&self.shadowstack) }
-    }
     /// Enable FFI builtin object.
     ///
     ///
@@ -343,15 +329,15 @@ impl VirtualMachine {
     }
 
     pub fn new_context(&mut self) -> GcPointer<Context> {
-        if self.context_snapshot.len() == 0 {
-            let ctx = Context::new(self);
-            self.context_snapshot =
-                Rc::new(Snapshot::take_context(false, self, ctx, |_, _| {}).buffer);
-            ctx
-        } else {
+        // if self.context_snapshot.len() == 0 {
+        let ctx = Context::new(self);
+        /* self.context_snapshot =
+        Rc::new(Snapshot::take_context(false, self, ctx, |_, _| {}).buffer);*/
+        ctx
+        /* } else {
             let snapshot = self.context_snapshot.clone();
             Deserializer::deserialize_context(self, false, &snapshot)
-        }
+        }*/
     }
 }
 
@@ -380,7 +366,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 /// Global JS data that is used internally in Starlight.
-#[derive(Default, GcTrace)]
+#[derive(Default)]
 pub struct GlobalData {
     pub(crate) generator_prototype: Option<GcPointer<JsObject>>,
     pub(crate) generator_structure: Option<GcPointer<Structure>>,
@@ -432,7 +418,59 @@ pub struct GlobalData {
     pub(crate) boolean_structure: Option<GcPointer<Structure>>,
     pub(crate) custom_structures: HashMap<Symbol, GcPointer<Structure>>,
 }
-
+impl Trace for GlobalData {
+    fn trace(&self, vis: &mut Visitor) {
+        self.generator_prototype.trace(vis);
+        self.generator_structure.trace(vis);
+        self.normal_arguments_structure.trace(vis);
+        self.empty_object_struct.trace(vis);
+        self.function_struct.trace(vis);
+        self.object_prototype.trace(vis);
+        self.object_constructor.trace(vis);
+        self.number_prototype.trace(vis);
+        self.string_prototype.trace(vis);
+        self.boolean_prototype.trace(vis);
+        self.symbol_prototype.trace(vis);
+        self.error.trace(vis);
+        self.type_error.trace(vis);
+        self.uri_error.trace(vis);
+        self.reference_error.trace(vis);
+        self.range_error.trace(vis);
+        self.syntax_error.trace(vis);
+        self.internal_error.trace(vis);
+        self.eval_error.trace(vis);
+        self.array_prototype.trace(vis);
+        self.func_prototype.trace(vis);
+        self.string_structure.trace(vis);
+        self.number_structure.trace(vis);
+        self.array_structure.trace(vis);
+        self.error_structure.trace(vis);
+        self.range_error_structure.trace(vis);
+        self.reference_error_structure.trace(vis);
+        self.syntax_error_structure.trace(vis);
+        self.type_error_structure.trace(vis);
+        self.uri_error_structure.trace(vis);
+        self.eval_error_structure.trace(vis);
+        self.map_structure.trace(vis);
+        self.set_structure.trace(vis);
+        self.map_prototype.trace(vis);
+        self.set_prototype.trace(vis);
+        self.regexp_structure.trace(vis);
+        self.regexp_prototype.trace(vis);
+        self.array_buffer_prototype.trace(vis);
+        self.array_buffer_structure.trace(vis);
+        self.data_view_prototype.trace(vis);
+        self.data_view_structure.trace(vis);
+        self.spread_builtin.trace(vis);
+        self.symbol_structure.trace(vis);
+        self.weak_ref_prototype.trace(vis);
+        self.weak_ref_structure.trace(vis);
+        self.date_structure.trace(vis);
+        self.date_prototype.trace(vis);
+        self.boolean_structure.trace(vis);
+        self.custom_structures.trace(vis);
+    }
+}
 impl GlobalData {
     pub fn get_function_struct(&self) -> GcPointer<Structure> {
         unwrap_unchecked(self.function_struct)
@@ -554,6 +592,7 @@ pub(crate) fn init_es_config() -> EsConfig {
 #[cfg(test)]
 pub mod tests {
     use crate::gc::cell::GcPointer;
+    use crate::gc::Heap;
     use crate::options::Options;
     use crate::vm::symbol_table::Internable;
     use crate::vm::value::JsValue;
@@ -665,13 +704,13 @@ pub mod tests {
 
     use swc_ecmascript::ast::ExprOrSpread;
 
-    use crate::{bytecode::opcodes::Opcode, bytecompiler::ByteCompiler, gc::default_heap};
+    use crate::{bytecode::opcodes::Opcode, bytecompiler::ByteCompiler};
 
     #[test]
     fn test_register_codegen_plugin() {
         Platform::initialize();
         let options: Options = Options::default().with_codegen_plugins(true);
-        let heap = default_heap(&options);
+        let heap = Heap::new(&options);
         let mut vm = VirtualMachine::with_heap(heap, options, None);
         let mut ctx = Context::new(&mut vm);
 
@@ -697,7 +736,7 @@ pub mod tests {
 
         Platform::initialize();
         let options: Options = Options::default();
-        let heap = default_heap(&options);
+        let heap = Heap::new(&options);
         let mut vm = VirtualMachine::with_heap(heap, options, None);
         let mut ctx = Context::new(&mut vm);
 

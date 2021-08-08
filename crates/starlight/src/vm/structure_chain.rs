@@ -4,11 +4,11 @@
 use super::{structure::Structure, Context};
 use crate::gc::cell::GcPointer;
 use crate::prelude::*;
-use std::{any::TypeId, mem::size_of};
+
 pub struct StructureChain {
     pub(crate) vector: Box<[GcPointer<Structure>]>,
 }
-
+impl Finalize<StructureChain> for StructureChain {}
 impl StructureChain {
     pub fn head(&self) -> GcPointer<Structure> {
         self.vector[0]
@@ -49,51 +49,11 @@ impl StructureChain {
     }
 }
 
-impl Serializable for StructureChain {
-    fn serialize(&self, serializer: &mut SnapshotSerializer) {
-        (self.vector.len() as u32).serialize(serializer);
-        for p in self.vector.iter() {
-            p.serialize(serializer);
-        }
-    }
-}
+impl GcCell for StructureChain {}
 
-impl Deserializable for StructureChain {
-    unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {
-        let len = u32::deserialize_inplace(deser);
-        let mut vec = Vec::with_capacity(len as _);
-        for _ in 0..len {
-            let val = GcPointer::<Structure>::deserialize_inplace(deser);
-            vec.push(val);
-        }
-
-        Self {
-            vector: vec.into_boxed_slice(),
-        }
-    }
-
-    unsafe fn deserialize(at: *mut u8, deser: &mut Deserializer) {
-        at.cast::<Self>().write(Self::deserialize_inplace(deser));
-    }
-
-    unsafe fn allocate(ctx: &mut VirtualMachine, _deser: &mut Deserializer) -> *mut GcPointerBase {
-        ctx.heap().allocate_raw(
-            vtable_of_type::<Self>() as _,
-            size_of::<Self>(),
-            TypeId::of::<Self>(),
-        )
-    }
-}
-
-impl GcCell for StructureChain {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-
-unsafe impl Trace for StructureChain {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
-        for structure in self.vector.iter_mut() {
+impl Trace for StructureChain {
+    fn trace(&self, visitor: &mut Visitor) {
+        for structure in self.vector.iter() {
             structure.trace(visitor);
         }
     }

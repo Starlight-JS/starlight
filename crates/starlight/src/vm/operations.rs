@@ -5,10 +5,13 @@ use crate::prelude::*;
 
 use super::context::Context;
 
-pub fn normalize_prototype_chain(ctx: GcPointer<Context>, base: &GcPointer<JsObject>) -> (usize, bool) {
+pub fn normalize_prototype_chain(
+    ctx: GcPointer<Context>,
+    base: &GcPointer<JsObject>,
+) -> (usize, bool) {
     let mut saw_poly_proto = false;
     let mut count = 0;
-    let stack = ctx.shadowstack();
+
     letroot!(current = stack, *base);
 
     loop {
@@ -19,7 +22,7 @@ pub fn normalize_prototype_chain(ctx: GcPointer<Context>, base: &GcPointer<JsObj
             return (count, saw_poly_proto);
         }
 
-        *current = prototype.get_jsobject();
+        current = prototype.get_jsobject();
         structure = current.structure;
         if structure.is_unique() {
             if structure.has_been_flattened_before {

@@ -12,7 +12,7 @@ use starlight::{
 };
 use wtf_rs::keep_on_stack;
 struct Large([u8; 8192]);
-unsafe impl Trace for Large {}
+impl Trace for Large {}
 impl GcCell for Large {
     fn deser_pair(&self) -> (usize, usize) {
         (0, 0)

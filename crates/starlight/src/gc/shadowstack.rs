@@ -13,7 +13,7 @@
 //!
 //!
 //!
-use crate::gc::cell::{Trace, Tracer};
+use crate::gc::cell::{Trace, Visitor};
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::{cell::Cell, ptr::null_mut};
@@ -51,8 +51,8 @@ impl ShadowStack {
     }
 }
 
-unsafe impl Trace for ShadowStack {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for ShadowStack {
+    fn trace(&self, visitor: &mut Visitor) {
         unsafe {
             let mut head = *self.head.as_ptr();
             while !head.is_null() {

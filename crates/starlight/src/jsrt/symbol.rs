@@ -37,6 +37,15 @@ macro_rules! def_symbols {
 }
 
 impl Builtin for JsSymbolObject {
+    fn native_references() -> Vec<usize> {
+        vec![
+            symbol_ctor as _,
+            symbol_for as _,
+            symbol_key_for as _,
+            symbol_to_string as _,
+            symbol_value_of as _,
+        ]
+    }
     fn init(mut ctx: GcPointer<Context>) -> Result<(), JsValue> {
         let obj_proto = ctx.global_data.object_prototype.unwrap();
         ctx.global_data.symbol_structure = Some(Structure::new_indexed(ctx, None, false));

@@ -118,12 +118,11 @@ impl<'a> Deserializer<'a> {
                 ix += 1;
             });
 
-        if let Some(references) = vm.external_references {
-            for reference in references.iter() {
-                *self.reference_map.get_mut(ix as usize).unwrap() = *reference;
-                ix += 1;
-                //self.reference_map.insert(ix as u32, *reference);
-            }
+        let references = &vm.external_references;
+        for reference in references.iter() {
+            *self.reference_map.get_mut(ix as usize).unwrap() = *reference;
+            ix += 1;
+            //self.reference_map.insert(ix as u32, *reference);
         }
     }
 
@@ -357,7 +356,7 @@ impl<'a> Deserializer<'a> {
         snapshot: &'a [u8],
         options: Options,
         gc: Heap,
-        external_refs: Option<&'static [usize]>,
+        external_refs: Option<Vec<usize>>,
         callback: impl FnOnce(&mut Self, &mut VirtualMachine),
     ) -> VirtualMachineRef {
         let mut runtime = VirtualMachine::new_empty(gc, options, external_refs);
@@ -1594,11 +1593,7 @@ impl Deserializable for CodeBlock {
     }
 }
 
-impl GcCell for TypeFeedBack {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for TypeFeedBack {}
 
 impl Deserializable for TypeFeedBack {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {

@@ -9,7 +9,7 @@ use super::{
     Context,
 };
 use super::{method_table::*, symbol_table::Internable};
-use crate::gc::cell::{GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcPointer, Trace, Visitor};
 use wtf_rs::segmented_vec::SegmentedVec;
 
 use super::{
@@ -25,9 +25,9 @@ pub struct JsGlobal {
     pub(crate) ctx: GcPointer<Context>,
 }
 
-unsafe impl Trace for JsGlobal {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
-        self.variables.iter_mut().for_each(|var| var.trace(visitor));
+impl Trace for JsGlobal {
+    fn trace(&self, visitor: &mut Visitor) {
+        self.variables.iter().for_each(|var| var.trace(visitor));
     }
 }
 
@@ -40,7 +40,6 @@ impl JsClass for JsGlobal {
 #[allow(non_snake_case)]
 impl JsGlobal {
     pub fn new(mut ctx: GcPointer<Context>) -> GcPointer<JsObject> {
-        let stack = ctx.shadowstack();
         letroot!(
             shape = stack,
             Structure::new_unique_with_proto(ctx, None, false)
