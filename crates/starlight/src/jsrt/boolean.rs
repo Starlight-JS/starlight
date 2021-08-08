@@ -12,28 +12,13 @@ pub struct JsBoolean {
     data: bool,
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    todo!()
-}
-
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    todo!()
-}
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<JsBoolean>()
 }
 
 impl JsClass for JsBoolean {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsBoolean,
-            Boolean,
-            None,
-            None,
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsBoolean, Boolean, None, None, Some(fsz))
     }
 }
 

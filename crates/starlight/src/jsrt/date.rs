@@ -63,40 +63,9 @@ extern "C" fn fsz() -> usize {
     std::mem::size_of::<JsDate>()
 }
 
-extern "C" fn ser(object: &JsObject, ser: &mut SnapshotSerializer) {
-    let date = **object.data::<JsDate>();
-    match date.0 {
-        Some(time) => {
-            ser.write_u8(0x1);
-            let bytes: [u8; size_of::<NaiveDateTime>()] = unsafe { transmute(time) };
-            for byte in bytes {
-                ser.write_u8(byte);
-            }
-        }
-        None => {
-            ser.write_u8(0x0);
-        }
-    }
-}
-
-extern "C" fn deser(object: &mut JsObject, deser: &mut Deserializer) {
-    let is_valid = deser.get_u8();
-    match is_valid {
-        0x0 => *object.data::<JsDate>() = ManuallyDrop::new(JsDate(None)),
-        0x1 => unsafe {
-            let mut bytes: [u8; size_of::<NaiveDateTime>()] = [0; size_of::<NaiveDateTime>()];
-            for i in 0..bytes.len() {
-                bytes[i] = deser.get_u8();
-            }
-            *object.data::<JsDate>() = ManuallyDrop::new(JsDate(Some(transmute(bytes))));
-        },
-        _ => unreachable!(),
-    }
-}
-
 impl JsClass for JsDate {
     fn class() -> &'static Class {
-        define_jsclass!(JsDate, Date, None, None, Some(deser), Some(ser), Some(fsz))
+        define_jsclass!(JsDate, Date, None, None, Some(fsz))
     }
 }
 
@@ -1451,7 +1420,7 @@ impl Builtin for JsDate {
         def_native_method!(ctx, prototype, toGMTString, date_to_gmt_string, 0)?;
         def_native_method!(ctx, prototype, toISOString, date_to_iso_string, 0)?;
         def_native_method!(ctx, prototype, toUTCString, date_to_utc_string, 0)?;
-        def_native_method!(ctx, prototype, toDateString, date_to_date_string, 0)?;
+        //def_native_method!(ctx, prototype, toDateString, date_to_date_string, 0)?;
         ctx.global_data.date_prototype = Some(prototype);
 
         let mut global_object = ctx.global_object();

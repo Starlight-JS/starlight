@@ -14,10 +14,7 @@ use super::{error::JsRangeError, string::*};
 use super::{error::JsTypeError, method_table::*};
 use super::{interpreter::frame::CallFrame, slot::*};
 use crate::constant::S_CONSTURCTOR;
-use crate::gc::{
-    cell::{GcPointer, Trace, Tracer},
-    snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
-};
+use crate::gc::cell::{GcPointer, Trace, Visitor};
 use crate::prelude::*;
 use std::{intrinsics::unlikely, mem::ManuallyDrop};
 
@@ -469,7 +466,7 @@ impl JsNativeFunction {
         n: u32,
     ) -> GcPointer<JsObject> {
         let ctx = ctx;
-        let stack = ctx.shadowstack();
+
         letroot!(
             func = stack,
             JsFunction::new_with_struct(
@@ -492,7 +489,7 @@ impl JsNativeFunction {
         let name = JsValue::encode_object_value(JsString::new(ctx, &k));
         let _ = func.define_own_property(ctx, n, &*DataDescriptor::new(name, NONE), false);
 
-        *func
+        func
     }
 }
 
@@ -574,21 +571,21 @@ impl JsClosureFunction {
     }
 }
 
-unsafe impl Trace for JsFunction {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Trace for JsFunction {
+    fn trace(&self, tracer: &mut Visitor) {
         self.construct_struct.trace(tracer);
         self.ctx.trace(tracer);
         match self.ty {
-            FuncType::User(ref mut x) => {
+            FuncType::User(ref x) => {
                 x.code.trace(tracer);
                 x.scope.trace(tracer);
             }
-            FuncType::Bound(ref mut x) => {
+            FuncType::Bound(ref x) => {
                 x.this.trace(tracer);
                 x.args.trace(tracer);
                 x.target.trace(tracer);
             }
-            FuncType::Generator(ref mut x) => {
+            FuncType::Generator(ref x) => {
                 x.function.trace(tracer);
             }
             _ => (),
@@ -596,8 +593,8 @@ unsafe impl Trace for JsFunction {
     }
 }
 
-unsafe impl Trace for JsVMFunction {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for JsVMFunction {
+    fn trace(&self, visitor: &mut Visitor) {
         self.code.trace(visitor);
         self.scope.trace(visitor);
     }
@@ -614,36 +611,34 @@ impl JsVMFunction {
         code: GcPointer<CodeBlock>,
         env: GcPointer<Environment>,
     ) -> GcPointer<JsObject> {
-        // let ctx = ctx.space().new_local_context();
-        let stack = ctx.shadowstack();
         //root!(envs = stack, Structure::new_indexed(ctx, Some(env), false));
         //root!(scope = stack, Environment::new(ctx, 0));
         let f = JsVMFunction { code, scope: env };
-        ctx.heap().defer();
+        let defer = ctx.heap().defer();
         letroot!(this = stack, JsFunction::new(ctx, FuncType::User(f), false));
         letroot!(proto = stack, JsObject::new_empty(ctx));
         let desc = ctx.description(code.name);
         letroot!(s = stack, JsString::new(ctx, desc));
-        ctx.heap().undefer();
+        drop(defer);
         let _ = proto.define_own_property(
             ctx,
             S_CONSTURCTOR.intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(this), W | C),
             false,
         );
         let _ = this.define_own_property(
             ctx,
             "prototype".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(*proto), W),
+            &*DataDescriptor::new(JsValue::encode_object_value(proto), W),
             false,
         );
         let _ = this.define_own_property(
             ctx,
             "name".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(*s), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(s), W | C),
             false,
         );
-        *this
+        this
     }
 }
 impl GcPointer<JsObject> {
@@ -651,7 +646,6 @@ impl GcPointer<JsObject> {
         &mut self,
         ctx: GcPointer<Context>,
     ) -> Result<GcPointer<Structure>, JsValue> {
-        let stack = ctx.shadowstack();
         letroot!(obj = stack, *self);
         assert_eq!(self.tag(), ObjectTag::Function);
         let func = self.as_function_mut();
@@ -768,18 +762,11 @@ extern "C" fn drop_generator(obj: GcPointer<JsObject>) {
     }
 }
 
-extern "C" fn generator_deser(_: &mut JsObject, _: &mut Deserializer) {
-    unreachable!("cannot deserialize generator");
-}
-extern "C" fn generator_ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    unreachable!("cannot serialize generator");
-}
-
 extern "C" fn generator_size() -> usize {
     std::mem::size_of::<GeneratorData>()
 }
 #[allow(improper_ctypes_definitions)]
-extern "C" fn generator_trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+extern "C" fn generator_trace(tracer: &mut Visitor, obj: &JsObject) {
     obj.data::<GeneratorData>().func_state.trace(tracer);
 }
 
@@ -790,8 +777,6 @@ impl JsClass for JsGeneratorFunction {
             Generator,
             Some(drop_generator),
             Some(generator_trace),
-            Some(generator_deser),
-            Some(generator_ser),
             Some(generator_size)
         )
     }
@@ -799,23 +784,19 @@ impl JsClass for JsGeneratorFunction {
 
 impl JsGeneratorFunction {
     pub fn new(mut ctx: GcPointer<Context>, func: GcPointer<JsObject>) -> GcPointer<JsObject> {
-        // let ctx = ctx.space().new_local_context();
-        let stack = ctx.shadowstack();
-        //root!(envs = stack, Structure::new_indexed(ctx, Some(env), false));
-        //root!(scope = stack, Environment::new(ctx, 0));
         let code = func.as_function().as_vm().code;
         let f = JsGeneratorFunction { function: func };
-        ctx.heap().defer();
+        let defer = ctx.heap().defer();
         letroot!(
             this = stack,
             JsFunction::new(ctx, FuncType::Generator(f), false)
         );
         letroot!(proto = stack, JsObject::new_empty(ctx));
-        ctx.heap().undefer();
+        drop(defer);
         let _ = proto.define_own_property(
             ctx,
             S_CONSTURCTOR.intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(*this), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(this), W | C),
             false,
         );
         let desc = ctx.description(code.name);
@@ -823,16 +804,16 @@ impl JsGeneratorFunction {
         let _ = this.define_own_property(
             ctx,
             "prototype".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(*proto), W),
+            &*DataDescriptor::new(JsValue::encode_object_value(proto), W),
             false,
         );
         let _ = this.define_own_property(
             ctx,
             "name".intern(),
-            &*DataDescriptor::new(JsValue::encode_object_value(*s), W | C),
+            &*DataDescriptor::new(JsValue::encode_object_value(s), W | C),
             false,
         );
-        *this
+        this
     }
 
     /// Call generator function creating new generator object instance.
@@ -1050,15 +1031,15 @@ pub struct AsyncFunctionState {
     pub frame: Box<HeapCallFrame>,
 }
 
-unsafe impl Trace for AsyncFunctionState {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for AsyncFunctionState {
+    fn trace(&self, visitor: &mut Visitor) {
         self.frame.stack.trace(visitor);
         self.frame.env.trace(visitor);
         self.frame.code_block.trace(visitor);
         self.frame.this.trace(visitor);
         self.frame
             .try_stack
-            .iter_mut()
+            .iter()
             .for_each(|(env, _, _)| env.trace(visitor));
     }
 }

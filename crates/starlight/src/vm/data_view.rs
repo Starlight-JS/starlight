@@ -6,7 +6,7 @@ use super::context::Context;
 use super::method_table::MethodTable;
 use super::object::TypedJsObject;
 use super::{array_buffer::JsArrayBuffer, object::JsObject};
-use crate::gc::cell::{GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcPointer, Trace, Visitor};
 use crate::vm::object::ObjectTag;
 use std::mem::ManuallyDrop;
 use std::{
@@ -32,8 +32,6 @@ impl JsClass for JsDataView {
             DataView,
             None,
             Some(trace_data_view),
-            None,
-            None,
             Some(data_view_size)
         )
     }
@@ -127,7 +125,7 @@ impl JsDataView {
 }
 // TODO: Deserialize and serialize data view.
 #[allow(improper_ctypes_definitions)]
-extern "C" fn trace_data_view(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+extern "C" fn trace_data_view(tracer: &mut Visitor, obj: &JsObject) {
     obj.data::<JsDataView>().buffer.trace(tracer);
 }
 

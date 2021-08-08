@@ -17,7 +17,7 @@ use std::{
 };
 use wtf_rs::tagged_ptr::TaggedPointer;
 
-pub trait Tracer {
+pub trait Visitor {
     fn visit(&mut self, cell: GcPointer<dyn GcCell>);
     fn visit_raw(&mut self, cell: *mut GcPointerBase);
     /// Add memory range to search for conservative roots. Note that some collectors might scan this range multiple
@@ -60,7 +60,7 @@ pub unsafe trait Trace {
     ///       and it'll always be completely sufficient for safe code (aside from destructors).
     ///     - With an automatically derived implementation you will never miss a field
     /// - Invoking this function directly.
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         let _ = visitor;
     }
 }
@@ -230,12 +230,8 @@ pub struct WeakSlot {
     pub(crate) value: Option<GcPointer<dyn GcCell>>,
 }
 
-unsafe impl Trace for WeakSlot {}
-impl GcCell for WeakSlot {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl Trace for WeakSlot {}
+impl GcCell for WeakSlot {}
 impl Serializable for WeakSlot {
     fn serialize(&self, serializer: &mut SnapshotSerializer) {
         self.value.serialize(serializer);
@@ -277,7 +273,7 @@ impl<T: GcCell> WeakRef<T> {
 macro_rules! impl_prim {
     ($($t: ty)*) => {
         $(
-            unsafe impl Trace for $t {}
+            impl Trace for $t {}
             impl GcCell for $t {
                 fn deser_pair(&self) -> (usize,usize) {
                     (Self::deserialize as usize,Self::allocate as usize)
@@ -290,7 +286,7 @@ macro_rules! impl_prim {
 
 impl_prim!(String bool f32 f64 u8 i8 u16 i16 u32 i32 u64 i64 );
 unsafe impl<T: Trace> Trace for Vec<T> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         for val in self.iter_mut() {
             val.trace(visitor);
         }
@@ -298,7 +294,7 @@ unsafe impl<T: Trace> Trace for Vec<T> {
 }
 
 unsafe impl<T: GcCell + ?Sized> Trace for GcPointer<T> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         visitor.visit(self.as_dyn());
     }
 }
@@ -339,20 +335,16 @@ impl<T: GcCell + std::fmt::Display> std::fmt::Display for GcPointer<T> {
     }
 }
 
-impl<T: GcCell> GcCell for WeakRef<T> {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl<T: GcCell> GcCell for WeakRef<T> {}
 unsafe impl<T: GcCell> Trace for WeakRef<T> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         self.slot.trace(visitor);
     }
 }
 
 #[allow(mutable_transmutes)]
 unsafe impl<K: Trace, V: Trace> Trace for HashMap<K, V> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         for (key, value) in self.iter_mut() {
             unsafe {
                 // TODO: This is really  unsafe. We transmute reference to mutable reference for tracing which is
@@ -371,13 +363,10 @@ impl<
         V: GcCell + Trace + 'static + Serializable + Deserializable,
     > GcCell for HashMap<K, V>
 {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         match self {
             Some(val) => val.trace(visitor),
             _ => (),
@@ -390,17 +379,9 @@ impl<T: GcCell + Serializable + 'static + Deserializable> GcCell for Vec<T> {
         (Self::deserialize as usize, Self::allocate as usize)
     }
 }
-impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl<T: GcCell + ?Sized> GcCell for GcPointer<T> {}
 
-impl<T: GcCell + Serializable + Deserializable + 'static> GcCell for Option<T> {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl<T: GcCell + Serializable + Deserializable + 'static> GcCell for Option<T> {}
 
 impl<T: GcCell> Copy for WeakRef<T> {}
 impl<T: GcCell> Clone for WeakRef<T> {
@@ -410,7 +391,7 @@ impl<T: GcCell> Clone for WeakRef<T> {
 }
 
 unsafe impl<T: Trace, E: Trace> Trace for Result<T, E> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         match self {
             Ok(x) => x.trace(visitor),
             Err(e) => e.trace(visitor),
@@ -422,10 +403,6 @@ impl<A: GcCell + Deserializable, B: GcCell + Deserializable> GcCell for (A, B) {
     fn compute_size(&self) -> usize {
         self.0.compute_size() + self.1.compute_size()
     }
-
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
 }
 
 impl<A: GcCell, B: GcCell> Serializable for (A, B) {
@@ -435,7 +412,7 @@ impl<A: GcCell, B: GcCell> Serializable for (A, B) {
     }
 }
 unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         self.0.trace(visitor);
         self.1.trace(visitor);
     }

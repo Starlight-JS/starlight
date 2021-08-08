@@ -1,4 +1,5 @@
 use crate::{define_op_builtins, gc::cell::GcCell, vm::Lrc};
+use comet::internal::finalize_trait::FinalizeTrait;
 use std::{collections::HashMap, ptr::null};
 use swc_common::{errors::Handler, input::StringInput, FileName, SourceMap};
 use swc_ecmascript::parser::{Parser, Syntax};
@@ -6,8 +7,7 @@ use swc_ecmascript::parser::{Parser, Syntax};
 use crate::{
     bytecompiler::{ByteCompiler, CompileError},
     gc::{
-        cell::{GcPointer, Trace, Tracer},
-        shadowstack::ShadowStack,
+        cell::{GcPointer, Trace, Visitor},
         Heap,
     },
     jsrt,
@@ -51,8 +51,6 @@ use crate::jsrt::regexp::JsRegExp;
 use crate::jsrt::weak_ref::JsWeakRef;
 use crate::jsrt::SelfHost;
 
-use crate::gc::snapshot::deserializer::Deserializable;
-
 // evalute context
 pub struct Context {
     pub(crate) global_data: GlobalData,
@@ -67,6 +65,9 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn shadowstack(&self) -> () {
+        ()
+    }
     pub const DEFAULT_STACK_LEN_MAX: u32 = 256;
     pub const fn stack_len_max(&self) -> u32 {
         self.stack_len_max
@@ -74,14 +75,16 @@ impl Context {
     pub fn set_stack_len_max(&mut self, len: u32) {
         self.stack_len_max = len;
     }
-    pub fn global_object(&mut self) -> GcPointer<JsObject> {
+    pub fn global_object(&self) -> GcPointer<JsObject> {
         self.global_object.unwrap()
     }
 
     pub fn modules(&mut self) -> &mut HashMap<String, ModuleKind> {
         &mut self.modules
     }
-
+    pub fn modules_ref(&self) -> &HashMap<String, ModuleKind> {
+        &self.modules
+    }
     pub fn global_data(&self) -> &GlobalData {
         &self.global_data
     }
@@ -91,11 +94,6 @@ impl Context {
     // proxy heap
     pub fn heap(&mut self) -> &mut Heap {
         self.vm.heap()
-    }
-
-    // proxy shadowstack
-    pub fn shadowstack<'a>(&self) -> &'a ShadowStack {
-        self.vm.shadowstack()
     }
 
     pub fn module_loader(&mut self) -> Option<GcPointer<JsObject>> {
@@ -133,13 +131,13 @@ impl Context {
     }
 
     pub fn new(vm: &mut VirtualMachine) -> GcPointer<Context> {
-        vm.gc.defer();
+        let defer_ = vm.gc.defer();
         let mut ctx = Context::new_empty(vm);
         ctx.global_object = Some(JsGlobal::new(ctx));
         ctx.init().expect("Context init failed");
         vm.contexts.push(ctx);
-        vm.gc.undefer();
-        vm.gc.collect_if_necessary();
+        drop(defer_);
+
         ctx
     }
 }
@@ -176,7 +174,9 @@ impl GcPointer<Context> {
         def_native_property!(self, global_object, name.intern(), constructor)?;
 
         unsafe {
-            self.vm.external_references.push(T::class() as *const _ as _);
+            self.vm
+                .external_references
+                .push(T::class() as *const _ as _);
             self.vm.external_references.push(T::raw_constructor as _);
         }
         Ok(())
@@ -406,18 +406,17 @@ impl GcPointer<Context> {
             code.strict = code.strict || force_strict;
             // code.file_name = path.map(|x| x.to_owned()).unwrap_or_else(|| String::new());
             //code.display_to(&mut OutBuf).unwrap();
-            let stack = self.shadowstack();
 
             letroot!(env = stack, Environment::new(self, 0));
-            letroot!(fun = stack, JsVMFunction::new(self, code, *env));
-            letroot!(func = stack, *fun);
+            letroot!(fun = stack, JsVMFunction::new(self, code, env));
+            letroot!(func = stack, fun);
             letroot!(
                 args = stack,
                 Arguments::new(JsValue::encode_undefined_value(), &mut [])
             );
 
             fun.as_function_mut()
-                .call(self, &mut args, JsValue::new(*func))
+                .call(self, &mut args, JsValue::new(func))
         };
         res
     }
@@ -470,17 +469,15 @@ impl GcPointer<Context> {
             .map_err(|e| self.new_syntax_error(format!("Compile Error {:?}", &e)))?;
             code.strict = code.strict || force_strict;
 
-            let stack = self.shadowstack();
-
             letroot!(env = stack, Environment::new(self, 0));
-            letroot!(fun = stack, JsVMFunction::new(self, code, *env));
-            letroot!(func = stack, *fun);
+            letroot!(fun = stack, JsVMFunction::new(self, code, env));
+            letroot!(func = stack, fun);
             letroot!(module_object = stack, JsObject::new_empty(self));
             let exports = JsObject::new_empty(self);
             module_object
                 .put(self, "@exports".intern(), JsValue::new(exports), false)
                 .unwrap_or_else(|_| unreachable!());
-            let mut args = [JsValue::new(*module_object)];
+            let mut args = [JsValue::new(module_object)];
             letroot!(
                 args = stack,
                 Arguments::new(
@@ -490,7 +487,7 @@ impl GcPointer<Context> {
             );
 
             fun.as_function_mut()
-                .call(self, &mut args, JsValue::new(*func))
+                .call(self, &mut args, JsValue::new(func))
         };
         res
     }
@@ -586,14 +583,10 @@ impl GcPointer<Context> {
     }
 }
 
-impl GcCell for Context {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for Context {}
 
-unsafe impl Trace for Context {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for Context {
+    fn trace(&self, visitor: &mut Visitor) {
         self.global_object().trace(visitor);
         self.global_data.trace(visitor);
         self.stack.trace(visitor);
@@ -602,3 +595,5 @@ unsafe impl Trace for Context {
         // self.symbol_table.trace(visitor);
     }
 }
+
+impl FinalizeTrait<Context> for Context {}

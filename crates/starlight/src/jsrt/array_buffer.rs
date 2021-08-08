@@ -17,14 +17,14 @@ pub fn array_buffer_constructor(
     let stack = ctx.shadowstack();
     letroot!(this = stack, JsArrayBuffer::new(ctx));
 
-    let mut buf = TypedJsObject::<JsArrayBuffer>::new(*this);
+    let mut buf = TypedJsObject::<JsArrayBuffer>::new(this);
     let length = args.at(0).to_int32(ctx)?;
     assert!(
         !buf.attached(),
         "A new array buffer should not have an existing buffer"
     );
     buf.create_data_block(ctx, length as _, true)?;
-    Ok(JsValue::new(*this))
+    Ok(JsValue::new(this))
 }
 
 pub fn array_buffer_byte_length(
@@ -39,7 +39,7 @@ pub fn array_buffer_byte_length(
         ));
     }
 
-    let buf = TypedJsObject::<JsArrayBuffer>::new(*this);
+    let buf = TypedJsObject::<JsArrayBuffer>::new(this);
     Ok(JsValue::new(buf.size() as u32))
 }
 
@@ -51,7 +51,7 @@ pub fn array_buffer_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<J
             ctx.new_type_error("ArrayBuffer.prototype.slice is not generic"),
         ));
     }
-    let buf = TypedJsObject::<JsArrayBuffer>::new(*this);
+    let buf = TypedJsObject::<JsArrayBuffer>::new(this);
     let start = args.at(0).to_int32(ctx)?;
     let end = args.at(1).to_int32(ctx)?;
     let len = buf.size();

@@ -261,7 +261,7 @@ impl<T: TypedArrayType> TypedArrayStorage<T> {
 }
 
 unsafe impl<T: TypedArrayType> Trace for TypedArrayStorage<T> {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+    fn trace(&self, visitor: &mut Visitor) {
         self.as_slice_mut().iter_mut().for_each(|value| {
             value.trace(visitor);
         });
@@ -269,9 +269,7 @@ unsafe impl<T: TypedArrayType> Trace for TypedArrayStorage<T> {
 }
 
 impl<T: TypedArrayType> GcCell for TypedArrayStorage<T> {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
+
     fn compute_size(&self) -> usize {
         (self.capacity as usize * size_of::<T>()) + size_of::<Self>()
     }

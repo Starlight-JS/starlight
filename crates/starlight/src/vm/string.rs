@@ -12,11 +12,7 @@ use super::{
     Context,
 };
 
-use crate::gc::snapshot::deserializer::Deserializable;
-use crate::gc::{
-    cell::{GcCell, GcPointer, Trace},
-    snapshot::serializer::{Serializable, SnapshotSerializer},
-};
+use crate::gc::cell::{GcCell, GcPointer, Trace};
 use crate::prelude::*;
 use std::mem::size_of;
 
@@ -48,16 +44,13 @@ impl JsString {
     }
 }
 
-unsafe impl Trace for JsString {}
+impl Trace for JsString {}
 impl GcCell for JsString {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
     fn compute_size(&self) -> usize {
         size_of::<Self>()
     }
 }
-
+impl Finalize<JsString> for JsString {}
 pub struct JsStringObject {
     pub value: GcPointer<JsString>,
 }
@@ -137,11 +130,5 @@ impl JsStringObject {
             });
         }
         obj
-    }
-}
-
-impl Serializable for JsStringObject {
-    fn serialize(&self, serializer: &mut SnapshotSerializer) {
-        self.value.serialize(serializer);
     }
 }

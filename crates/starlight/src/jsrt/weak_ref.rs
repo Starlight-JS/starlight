@@ -19,29 +19,14 @@ extern "C" fn fsz() -> usize {
     std::mem::size_of::<JsWeakRef>()
 }
 
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    todo!()
-}
-
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    todo!()
-}
 #[allow(improper_ctypes_definitions)]
-extern "C" fn trace(tracer: &mut dyn Tracer, obj: &mut JsObject) {
+extern "C" fn trace(tracer: &mut Visitor, obj: &JsObject) {
     obj.data::<JsWeakRef>().value.trace(tracer);
 }
 
 impl JsClass for JsWeakRef {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsWeakRef,
-            WeakRef,
-            None,
-            Some(trace),
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsWeakRef, WeakRef, None, Some(trace), Some(fsz))
     }
 }
 

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::{
-    gc::cell::{GcPointer, Trace, Tracer},
+    gc::cell::{GcPointer, Trace, Visitor},
     vm::{code_block::CodeBlock, environment::Environment, value::JsValue},
 };
 use std::mem::size_of;
@@ -42,13 +42,13 @@ impl CallFrame {
         self.sp = self.sp.add(1);
     }
 }
-unsafe impl Trace for CallFrame {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for CallFrame {
+    fn trace(&self, visitor: &mut Visitor) {
         self.callee.trace(visitor);
         self.code_block.trace(visitor);
         self.this.trace(visitor);
         self.env.trace(visitor);
-        for (env, _, _) in self.try_stack.iter_mut() {
+        for (env, _, _) in self.try_stack.iter() {
             env.trace(visitor);
         }
     }

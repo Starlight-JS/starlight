@@ -19,7 +19,7 @@ use super::{
     value::*,
     Context,
 };
-use crate::gc::cell::{GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcPointer, Trace, Visitor};
 /// Arguments to JS function.
 pub struct Arguments<'a> {
     /// 'this' value. In non-strict mode when this is undefined then global object is passed.
@@ -82,10 +82,10 @@ impl<'a> Arguments<'a> {
     }
 }
 
-unsafe impl Trace for Arguments<'_> {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Trace for Arguments<'_> {
+    fn trace(&self, tracer: &mut Visitor) {
         self.this.trace(tracer);
-        for value in self.values.iter_mut() {
+        for value in self.values.iter() {
             value.trace(tracer);
         }
     }
@@ -217,10 +217,8 @@ impl JsArguments {
         len: u32,
         init: &[JsValue],
     ) -> GcPointer<JsObject> {
-        letroot!(
-            struct_ = ctx.shadowstack(),
-            ctx.global_data().normal_arguments_structure.unwrap()
-        );
+        let mut struct_ = ctx.global_data().normal_arguments_structure.unwrap();
+
         let mut obj = JsObject::new(
             ctx,
             &struct_,
@@ -258,8 +256,8 @@ impl JsArguments {
     }
 }
 
-unsafe impl Trace for JsArguments {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
+impl Trace for JsArguments {
+    fn trace(&self, tracer: &mut Visitor) {
         self.env.trace(tracer);
     }
 }

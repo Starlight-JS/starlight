@@ -3,12 +3,12 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::collections::HashMap;
 
-use crate::gc::{
-    cell::{GcCell, GcPointer, Trace, Tracer},
-    snapshot::deserializer::Deserializable,
-};
+use crate::gc::cell::{GcCell, GcPointer, Trace, Visitor};
 
-use super::{Context, array_storage::ArrayStorage, attributes::object_data, property_descriptor::StoredSlot, value::JsValue};
+use super::{
+    array_storage::ArrayStorage, attributes::object_data, property_descriptor::StoredSlot,
+    value::JsValue, Context,
+};
 
 const FLAG_DENSE: u8 = 1;
 const FLAG_WRITABLE: u8 = 2;
@@ -97,14 +97,10 @@ impl IndexedElements {
     }
 }
 
-unsafe impl Trace for IndexedElements {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for IndexedElements {
+    fn trace(&self, visitor: &mut Visitor) {
         self.vector.trace(visitor);
         self.map.trace(visitor);
     }
 }
-impl GcCell for IndexedElements {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for IndexedElements {}

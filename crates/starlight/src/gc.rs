@@ -13,26 +13,6 @@
 //! This GC does not require you to manually root any object since it is able to identify GC pointers on the stack. Thus
 //! `letroot!` is not required to use anymore.
 //!
-#![allow(dead_code, unused_variables)]
-use crate::options::Options;
-use crate::vm::context::Context;
-use crate::vm::VirtualMachine;
-use crate::{
-    gc::cell::*,
-    gc::snapshot::{
-        deserializer::Deserializable,
-        deserializer::Deserializer,
-        serializer::{Serializable, SnapshotSerializer},
-    },
-};
-use std::intrinsics::{copy_nonoverlapping, unlikely};
-use std::ops::Deref;
-use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
-use std::{
-    mem::size_of,
-    ptr::{null_mut, NonNull},
-};
-use std::{u8, usize};
 
 /// Like C's offsetof but you can use it with GC-able objects to get offset from GC header to field.
 ///
@@ -65,6 +45,30 @@ macro_rules! offsetof {
         }
     }
 }
+pub use crate::comet::*;
+/*
+#![allow(dead_code, unused_variables)]
+use crate::options::Options;
+use crate::vm::context::Context;
+use crate::vm::VirtualMachine;
+use crate::{
+    gc::cell::*,
+    gc::snapshot::{
+        deserializer::Deserializable,
+        deserializer::Deserializer,
+        serializer::{Serializable, SnapshotSerializer},
+    },
+};
+use std::intrinsics::{copy_nonoverlapping, unlikely};
+use std::ops::Deref;
+use std::{any::TypeId, cmp::Ordering, fmt, marker::PhantomData};
+use std::{
+    mem::size_of,
+    ptr::{null_mut, NonNull},
+};
+use std::{u8, usize};
+
+
 
 #[macro_use]
 pub mod cell;
@@ -82,15 +86,15 @@ pub trait MarkingConstraint {
     fn name(&self) -> &str {
         "<anonymous name>"
     }
-    fn execute(&mut self, marking: &mut dyn Tracer);
+    fn execute(&mut self, marking: &mut Visitor);
 }
 
 pub struct SimpleMarkingConstraint {
     name: String,
-    exec: Box<dyn FnMut(&mut dyn Tracer)>,
+    exec: Box<dyn FnMut(&mut Visitor)>,
 }
 impl SimpleMarkingConstraint {
-    pub fn new(name: &str, exec: impl FnMut(&mut dyn Tracer) + 'static) -> Self {
+    pub fn new(name: &str, exec: impl FnMut(&mut Visitor) + 'static) -> Self {
         Self {
             name: name.to_owned(),
             exec: Box::new(exec),
@@ -102,7 +106,7 @@ impl MarkingConstraint for SimpleMarkingConstraint {
         &self.name
     }
 
-    fn execute(&mut self, marking: &mut dyn Tracer) {
+    fn execute(&mut self, marking: &mut Visitor) {
         (self.exec)(marking);
     }
 }
@@ -168,8 +172,8 @@ impl GcCell for FreeObject {
     }
 }
 
-unsafe impl Trace for FreeObject {
-    fn trace(&mut self, _visitor: &mut dyn Tracer) {
+impl Trace for FreeObject {
+    fn trace(&self, _visitor: &mut Visitor) {
         unreachable!();
     }
 }
@@ -462,7 +466,7 @@ pub struct SlotVisitor {
 unsafe impl Send for SlotVisitor {}
 unsafe impl Send for Space {}
 unsafe impl Sync for Space {}
-impl Tracer for SlotVisitor {
+impl Visitor for SlotVisitor {
     fn visit_weak(&mut self, _slot: *const WeakSlot) {
         /* no-op */
     }
@@ -585,7 +589,7 @@ impl Heap {
     ///             weak_slot.object = NULL;
     ///         }
     ///     }
-    ///     
+    ///
     /// }
     ///
     /// ```
@@ -871,3 +875,4 @@ impl Heap {
 impl Drop for Heap {
     fn drop(&mut self) {}
 }
+ */

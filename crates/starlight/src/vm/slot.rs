@@ -6,7 +6,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::gc::cell::{GcCell, GcPointer, Trace, Tracer};
+use crate::gc::cell::{GcCell, GcPointer, Trace, Visitor};
 
 use super::{attributes::*, object::JsObject, property_descriptor::StoredSlot, value::*};
 pub struct Slot {
@@ -154,10 +154,11 @@ impl GcCell for Slot {
         unreachable!()
     }
 }
-unsafe impl Trace for Slot {
-    fn trace(&mut self, tracer: &mut dyn Tracer) {
-        if let Some(ref mut obj) = self.base {
-            obj.trace(tracer);
+impl Trace for Slot {
+    fn trace(&self, tracer: &mut Visitor) {
+        if let Some(ref obj) = self.base {
+            tracer.trace_untyped(obj.untyped())
+            //obj.trace(tracer);
         }
         self.value.trace(tracer);
     }

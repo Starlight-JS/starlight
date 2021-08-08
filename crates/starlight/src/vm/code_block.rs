@@ -1,3 +1,5 @@
+use comet::internal::finalize_trait::FinalizeTrait;
+
 use super::context::Context;
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -5,11 +7,10 @@ use super::context::Context;
 use super::symbol_table::Symbol;
 use super::value::JsValue;
 use crate::bytecode::opcodes::*;
-use crate::gc::{cell::GcPointer, cell::Tracer};
+use crate::gc::{cell::GcPointer, cell::Visitor};
 use crate::{
     bytecode::TypeFeedBack,
     gc::cell::{GcCell, Trace},
-    gc::snapshot::deserializer::Deserializable,
 };
 use std::rc::Rc;
 use std::{fmt::Write, ops::Range};
@@ -114,8 +115,8 @@ pub struct CodeBlock {
     pub is_async: bool,
 }
 
-unsafe impl Trace for CodeBlock {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for CodeBlock {
+    fn trace(&self, visitor: &mut Visitor) {
         self.codes.trace(visitor);
         self.literals.trace(visitor);
         self.feedback.trace(visitor);
@@ -817,8 +818,5 @@ impl CodeBlock {
     }
 }
 
-impl GcCell for CodeBlock {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for CodeBlock {}
+impl FinalizeTrait<CodeBlock> for CodeBlock {}

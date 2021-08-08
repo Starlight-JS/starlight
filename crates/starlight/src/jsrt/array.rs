@@ -142,10 +142,10 @@ pub fn array_to_string(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVa
         letroot!(func = stack, unsafe {
             m.value().get_object().downcast_unchecked::<JsObject>()
         });
-        letroot!(f2 = stack, *func);
+        letroot!(f2 = stack, func);
         let f = func.as_function_mut();
         letroot!(args = stack, Arguments::new(args.this, &mut []));
-        return f.call(ctx, &mut args, JsValue::new(*f2));
+        return f.call(ctx, &mut args, JsValue::new(f2));
     }
     letroot!(args = stack, Arguments::new(args.this, &mut []));
     object_to_string(ctx, &args)
@@ -223,7 +223,7 @@ pub fn array_reduce(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
     }
 
     letroot!(callbackf = stack, args.at(0).get_jsobject());
-    letroot!(cb = stack, *callbackf);
+    letroot!(cb = stack, callbackf);
     let callback = callbackf.as_function_mut();
     if len == 0 && arg_count <= 1 {
         let msg = JsString::new(
@@ -237,13 +237,13 @@ pub fn array_reduce(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
     let mut k = 0;
     letroot!(acc = stack, JsValue::encode_undefined_value());
     if arg_count > 1 {
-        *acc = args.at(1);
+        acc = args.at(1);
     } else {
         let mut k_present = false;
         while k < len {
             if obj.has_property(ctx, Symbol::Index(k)) {
                 k_present = true;
-                *acc = obj.get(ctx, Symbol::Index(k))?;
+                acc = obj.get(ctx, Symbol::Index(k))?;
                 k += 1;
                 break;
             }
@@ -268,15 +268,15 @@ pub fn array_reduce(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
                 args = stack,
                 Arguments::new(JsValue::encode_undefined_value(), &mut tmp)
             );
-            *args.at_mut(0) = *acc;
+            *args.at_mut(0) = acc;
             *args.at_mut(1) = obj.get(ctx, Symbol::Index(k))?;
             *args.at_mut(2) = JsValue::new(k as i32);
-            *args.at_mut(3) = JsValue::encode_object_value(*obj);
-            *acc = callback.call(ctx, &mut args, JsValue::new(*cb))?;
+            *args.at_mut(3) = JsValue::encode_object_value(obj);
+            acc = callback.call(ctx, &mut args, JsValue::new(cb))?;
         }
         k += 1;
     }
-    Ok(*acc)
+    Ok(acc)
 }
 
 pub fn array_concat(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -340,7 +340,7 @@ pub fn array_for_each(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
     }
 
     letroot!(callback = stack, callback.to_object(ctx)?);
-    letroot!(cb2 = stack, *callback);
+    letroot!(cb2 = stack, callback);
     let this_arg = args.at(1);
     let mut buf: [JsValue; 3] = [JsValue::encode_undefined_value(); 3];
     for i in 0..length {
@@ -348,12 +348,12 @@ pub fn array_for_each(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsVal
             let element = array.get(ctx, Symbol::Index(i))?;
             buf[0] = element;
             buf[1] = JsValue::new(i);
-            buf[2] = JsValue::new(*array);
+            buf[2] = JsValue::new(array);
             letroot!(args = stack, Arguments::new(this_arg, &mut buf));
 
             callback
                 .as_function_mut()
-                .call(ctx, &mut args, JsValue::new(*cb2))?;
+                .call(ctx, &mut args, JsValue::new(cb2))?;
         }
     }
     Ok(JsValue::encode_undefined_value())
@@ -372,7 +372,7 @@ pub fn array_filter(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
     }
 
     letroot!(callback = stack, callback.to_object(ctx)?);
-    letroot!(cb2 = stack, *callback);
+    letroot!(cb2 = stack, callback);
     letroot!(result = stack, JsArray::new(ctx, 0));
     letroot!(this_arg = stack, args.at(1));
 
@@ -385,17 +385,17 @@ pub fn array_filter(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue
         let current = array.get(ctx, Symbol::Index(i))?;
         buf[0] = current;
         buf[1] = JsValue::new(i);
-        buf[2] = JsValue::new(*array);
-        let mut args = Arguments::new(*this_arg, &mut buf);
+        buf[2] = JsValue::new(array);
+        let mut args = Arguments::new(this_arg, &mut buf);
         let val = callback
             .as_function_mut()
-            .call(ctx, &mut args, JsValue::new(*cb2))?;
+            .call(ctx, &mut args, JsValue::new(cb2))?;
         if val.to_boolean() {
             result.put(ctx, Symbol::Index(next_index), current, true)?;
             next_index += 1;
         }
     }
-    Ok(JsValue::new(*result))
+    Ok(JsValue::new(result))
 }
 
 pub fn array_map(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -411,7 +411,7 @@ pub fn array_map(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
     }
 
     letroot!(callback = stack, callback.to_object(ctx)?);
-    letroot!(cb2 = stack, *callback);
+    letroot!(cb2 = stack, callback);
     letroot!(result = stack, JsArray::new(ctx, 0));
     letroot!(this_arg = stack, args.at(1));
     let mut buf = [JsValue::encode_undefined_value(); 3];
@@ -422,14 +422,14 @@ pub fn array_map(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, J
 
         buf[0] = array.get(ctx, Symbol::Index(i))?;
         buf[1] = JsValue::new(i);
-        buf[2] = JsValue::new(*array);
-        let mut args = Arguments::new(*this_arg, &mut buf);
+        buf[2] = JsValue::new(array);
+        let mut args = Arguments::new(this_arg, &mut buf);
         let mapped_value = callback
             .as_function_mut()
-            .call(ctx, &mut args, JsValue::new(*cb2))?;
+            .call(ctx, &mut args, JsValue::new(cb2))?;
         result.put(ctx, Symbol::Index(i), mapped_value, true)?;
     }
-    Ok(JsValue::new(*result))
+    Ok(JsValue::new(result))
 }
 
 pub fn array_index_of(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {
@@ -519,7 +519,7 @@ pub fn array_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
             k += 1;
             n += 1;
         }
-        return Ok(JsValue::new(*ary));
+        return Ok(JsValue::new(ary));
     }
     letroot!(ary = stack, JsArray::new(ctx, result_len));
     let mut n = 0;
@@ -531,7 +531,7 @@ pub fn array_slice(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
         k += 1;
         n += 1;
     }
-    return Ok(JsValue::new(*ary));
+    return Ok(JsValue::new(ary));
 }
 
 pub fn array_shift(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue, JsValue> {

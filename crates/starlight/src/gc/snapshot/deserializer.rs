@@ -1592,11 +1592,7 @@ impl Deserializable for CodeBlock {
     }
 }
 
-impl GcCell for TypeFeedBack {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
+impl GcCell for TypeFeedBack {}
 
 impl Deserializable for TypeFeedBack {
     unsafe fn deserialize_inplace(deser: &mut Deserializer) -> Self {

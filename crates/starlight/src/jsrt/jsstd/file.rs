@@ -307,27 +307,12 @@ extern "C" fn drop_file_fn(obj: GcPointer<JsObject>) {
     unsafe { ManuallyDrop::drop(obj.data::<FileObject>()) }
 }
 
-extern "C" fn deser(_: &mut JsObject, _: &mut Deserializer) {
-    unreachable!("Cannot deserialize file");
-}
-
-extern "C" fn ser(_: &JsObject, _: &mut SnapshotSerializer) {
-    unreachable!("Cannot serialize file");
-}
 extern "C" fn fsz() -> usize {
     std::mem::size_of::<FileObject>()
 }
 
 impl JsClass for FileObject {
     fn class() -> &'static Class {
-        define_jsclass!(
-            FileObject,
-            File,
-            Some(drop_file_fn),
-            None,
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(FileObject, File, Some(drop_file_fn), None, Some(fsz))
     }
 }

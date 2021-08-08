@@ -4,7 +4,7 @@
 use crate::{
     constant::*,
     define_op_builtins,
-    gc::cell::{GcPointer, WeakRef, WeakSlot},
+    gc::cell::{GcPointer, WeakRef},
     jsrt::{boolean::JsBoolean, date::JsDate, math::JsMath, regexp::JsRegExp, weak_ref::JsWeakRef},
     vm::{
         arguments::{Arguments, JsArguments},
@@ -128,9 +128,9 @@ impl GcPointer<Context> {
     }
 }
 
-use crate::gc::snapshot::deserializer::*;
+//use crate::gc::snapshot::deserializer::*;
 use once_cell::sync::Lazy;
-
+/*
 pub static VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
     let mut refs = vec![
         /* deserializer functions */
@@ -234,7 +234,7 @@ pub static VM_NATIVE_REFERENCES: Lazy<Vec<usize>> = Lazy::new(|| {
     }
 
     refs
-});
+});*/
 
 pub fn get_length(ctx: GcPointer<Context>, val: &mut GcPointer<JsObject>) -> Result<u32, JsValue> {
     if std::ptr::eq(val.class, JsArray::class()) {
@@ -256,8 +256,8 @@ pub fn to_property_descriptor(
     }
 
     let mut attr: u32 = DEFAULT;
-    let stack = ctx.shadowstack();
-    letroot!(obj = stack, target.get_jsobject());
+
+    let mut obj = target.get_jsobject();
     let mut value = JsValue::encode_undefined_value();
     let mut getter = JsValue::encode_undefined_value();
     let mut setter = JsValue::encode_undefined_value();
@@ -389,22 +389,20 @@ pub(crate) fn module_load(
         }
         Ok(path) => path,
     };
-    let stack = ctx.shadowstack();
-    letroot!(module_object = stack, JsObject::new_empty(ctx));
+
+    let mut module_object = JsObject::new_empty(ctx);
     let mut exports = JsObject::new_empty(ctx);
     module_object.put(ctx, S_EXPORTS.intern(), JsValue::new(exports), false)?;
-    let mut args = [JsValue::new(*module_object)];
-    letroot!(
-        args = stack,
-        Arguments::new(JsValue::encode_undefined_value(), &mut args)
-    );
+    let mut args = [JsValue::new(module_object)];
+    let mut args = Arguments::new(JsValue::encode_undefined_value(), &mut args);
+
     if let Some(module) = ctx.modules().get(&spath).copied() {
         match module {
             ModuleKind::Initialized(x) => {
                 return Ok(JsValue::new(x));
             }
             ModuleKind::NativeUninit(init) => {
-                let mut module = *module_object;
+                let mut module = module_object;
                 init(ctx, module)?;
                 ctx.modules()
                     .insert(spath.clone(), ModuleKind::Initialized(module));
@@ -435,8 +433,8 @@ pub(crate) fn module_load(
         .as_function_mut()
         .call(ctx, &mut args, JsValue::encode_undefined_value())?;
     ctx.modules()
-        .insert(spath.clone(), ModuleKind::Initialized(*module_object));
-    Ok(JsValue::new(*module_object))
+        .insert(spath.clone(), ModuleKind::Initialized(module_object));
+    Ok(JsValue::new(module_object))
 }
 
 pub fn to_index(ctx: GcPointer<Context>, val: JsValue) -> Result<usize, JsValue> {

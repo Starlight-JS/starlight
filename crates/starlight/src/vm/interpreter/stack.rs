@@ -107,8 +107,8 @@ impl Stack {
     }
 }
 
-unsafe impl Trace for Stack {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl Trace for Stack {
+    fn trace(&self, visitor: &mut Visitor) {
         if !self.current.is_null() {
             unsafe {
                 let end = (*self.current).sp;

@@ -9,34 +9,13 @@ pub struct JsNumber {
     value: f64,
 }
 
-extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
-    *obj.data::<JsNumber>() = ManuallyDrop::new(JsNumber {
-        value: f64::from_bits(deser.get_u64()),
-    });
-}
-
-extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
-    obj.data::<JsNumber>()
-        .get()
-        .to_bits()
-        .serialize(serializer);
-}
-
 extern "C" fn sz() -> usize {
     size_of::<JsNumber>()
 }
 
 impl JsClass for JsNumber {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsNumber,
-            Object,
-            None,
-            None,
-            Some(deser),
-            Some(ser),
-            Some(sz)
-        )
+        define_jsclass!(JsNumber, Object, None, None, Some(sz))
     }
 }
 

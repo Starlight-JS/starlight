@@ -44,7 +44,7 @@ pub struct JsRegExp {
 extern "C" fn drop_regexp_fn(obj: GcPointer<JsObject>) {
     unsafe { ManuallyDrop::drop(obj.data::<JsRegExp>()) }
 }
-
+/*
 extern "C" fn deser(obj: &mut JsObject, deser: &mut Deserializer) {
     unsafe {
         let use_last_index = bool::deserialize_inplace(deser);
@@ -105,22 +105,14 @@ extern "C" fn ser(obj: &JsObject, serializer: &mut SnapshotSerializer) {
     data.unicode.serialize(serializer);
     data.original_source.to_string().serialize(serializer);
     data.original_flags.to_string().serialize(serializer);
-}
+}*/
 extern "C" fn fsz() -> usize {
     size_of::<JsRegExp>()
 }
 
 impl JsClass for JsRegExp {
     fn class() -> &'static Class {
-        define_jsclass!(
-            JsRegExp,
-            RegExp,
-            Some(drop_regexp_fn),
-            None,
-            Some(deser),
-            Some(ser),
-            Some(fsz)
-        )
+        define_jsclass!(JsRegExp, RegExp, Some(drop_regexp_fn), None, Some(fsz))
     }
 }
 

@@ -12,12 +12,10 @@ use crate::vm::class::JsClass;
 use crate::vm::context::Context;
 use crate::{
     bytecode::opcodes::Opcode,
-    gc::{
-        cell::{GcCell, GcPointer, Trace},
-        snapshot::deserializer::Deserializable,
-    },
+    gc::cell::{GcCell, GcPointer, Trace},
 };
-use crate::{bytecode::*, gc::cell::Tracer};
+use crate::{bytecode::*, gc::cell::Visitor};
+use comet::internal::finalize_trait::FinalizeTrait;
 use profile::{ArithProfile, ByValProfile};
 use std::intrinsics::{likely, unlikely};
 use wtf_rs::unwrap_unchecked;
@@ -122,7 +120,7 @@ impl GcPointer<Context> {
                     + if func.code.use_arguments { 1 } else { 0 }
             )
         );
-        nscope.parent = Some(*scope);
+        nscope.parent = Some(scope);
         let mut i = 0;
         for _ in 0..func.code.param_count {
             /*let _ = nscope
@@ -163,7 +161,7 @@ impl GcPointer<Context> {
                 }
                 p
             };
-            let mut args = JsArguments::new(self, *nscope, &p, args_.size() as _, args_.values);
+            let mut args = JsArguments::new(self, nscope, &p, args_.size() as _, args_.values);
 
             for k in i..args_.size() {
                 args.put(self, Symbol::Index(k as _), args_.at(k), false)?;
@@ -179,7 +177,7 @@ impl GcPointer<Context> {
             args_.this
         };
 
-        Ok((_this, *nscope))
+        Ok((_this, nscope))
     }
 }
 
@@ -775,6 +773,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                                     }
                                     if new_structure.is_none() {
                                         *obj.direct_mut(*offset as usize) = value;
+
                                         break 'exit;
                                     }
 
@@ -826,7 +825,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                     )));
                 }
                 letroot!(func_object = gcstack, func.get_jsobject());
-                letroot!(funcc = gcstack, *func_object);
+                letroot!(funcc = gcstack, func_object);
                 let func = func_object.as_function_mut();
                 letroot!(args_ = gcstack, Arguments::new(this, &mut args));
 
@@ -846,7 +845,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                         // ctx.stack.pop_frame().unwrap();
                         exit = ctx.stack.pop_frame().unwrap().exit_on_return;
                     }
-                    let cframe = ctx.stack.new_frame(0, JsValue::new(*funcc), scope);
+                    let cframe = ctx.stack.new_frame(0, JsValue::new(funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(ctx, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -865,7 +864,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
 
                     ip = (*cframe).ip;
                 } else {
-                    let result = func.call(ctx, &mut args_, JsValue::new(*funcc))?;
+                    let result = func.call(ctx, &mut args_, JsValue::new(funcc))?;
                     frame.push(result);
                 }
             }
@@ -909,7 +908,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                         // stack.pop_frame().unwrap();
                         exit = stack.pop_frame().unwrap().exit_on_return;
                     }
-                    let cframe = ctx.stack.new_frame(0, JsValue::new(*funcc), scope);
+                    let cframe = ctx.stack.new_frame(0, JsValue::new(funcc), scope);
                     if unlikely(cframe.is_none()) {
                         let msg = JsString::new(ctx, "stack overflow");
                         return Err(JsValue::encode_object_value(JsRangeError::new(
@@ -926,7 +925,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                     frame = &mut *cframe;
                     ip = (*cframe).ip;
                 } else {
-                    let result = func.call(ctx, &mut args_, JsValue::new(*funcc))?;
+                    let result = func.call(ctx, &mut args_, JsValue::new(funcc))?;
 
                     frame.push(result);
                 }
@@ -1070,7 +1069,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                 }
 
                 letroot!(robj = gcstack, rhs.get_jsobject());
-                letroot!(robj2 = gcstack, *robj);
+                let mut robj2 = robj;
                 if unlikely(!robj.is_callable()) {
                     let msg = JsString::new(ctx, "'instanceof' requires constructor");
                     return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -1252,6 +1251,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                 //vm.space().defer_gc();
                 let ix = ip.cast::<u32>().read_unaligned();
                 ip = ip.add(4);
+
                 let code = unwrap_unchecked(frame.code_block).codes[ix as usize];
                 let func = if likely(!(code.is_async || code.is_generator)) {
                     JsVMFunction::new(ctx, code, frame.env)
@@ -1293,7 +1293,7 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
                     }
                     did_put += 1;
                 }
-                frame.push(JsValue::encode_object_value(*arr));
+                frame.push(JsValue::encode_object_value(arr));
             }
 
             Opcode::OP_CALL_BUILTIN => {
@@ -1412,16 +1412,14 @@ impl SpreadValue {
     }
 }
 
-impl GcCell for SpreadValue {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
-}
-unsafe impl Trace for SpreadValue {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
+impl GcCell for SpreadValue {}
+impl Trace for SpreadValue {
+    fn trace(&self, visitor: &mut Visitor) {
         self.array.trace(visitor);
     }
 }
+
+impl FinalizeTrait<SpreadValue> for SpreadValue {}
 
 pub fn get_by_id_slow(
     ctx: GcPointer<Context>,

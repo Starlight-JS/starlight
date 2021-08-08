@@ -22,8 +22,6 @@ pub unsafe fn reflect_apply(
     _argc: u32,
     effect: u8,
 ) -> Result<(), JsValue> {
-    let gcstack = ctx.shadowstack();
-
     let mut args = frame.pop();
     let mut func = frame.pop();
     let mut this = frame.pop();
@@ -33,7 +31,7 @@ pub unsafe fn reflect_apply(
             ctx, msg, None,
         )));
     }
-    letroot!(args = gcstack, args.get_jsobject());
+    let mut args = args.get_jsobject();
     if args.class as *const _ != JsArray::class() as *const _ {
         let msg = JsString::new(ctx, "not a callable object");
         return Err(JsValue::encode_object_value(JsTypeError::new(
@@ -57,10 +55,10 @@ pub unsafe fn reflect_apply(
 
     letroot!(args_ = gcstack, Arguments::new(this, &mut argsv));
     let result = if effect == 0 {
-        func.call(ctx, &mut args_, JsValue::new(*funcc))?
+        func.call(ctx, &mut args_, JsValue::new(funcc))?
     } else {
         args_.ctor_call = true;
-        func.construct(ctx, &mut args_, None, JsValue::new(*funcc))?
+        func.construct(ctx, &mut args_, None, JsValue::new(funcc))?
     };
     frame.push(result);
     Ok(())

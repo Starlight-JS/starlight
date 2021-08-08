@@ -13,20 +13,20 @@ fn derive_trace(mut s: Structure<'_>) -> proc_macro2::TokenStream {
             .iter()
             .any(|attr| attr.path.is_ident("unsafe_ignore_trace"))
     });
-    s.bind_with(|_bi| BindStyle::RefMut);
+    s.bind_with(|_bi| BindStyle::Ref);
     let trace_body = s.each(|bi| quote!(mark(#bi,tracer)));
 
     let trace_impl = s.gen_impl(quote! {
 
-        gen unsafe impl Trace for @Self {
-        #[inline] fn trace(&mut self,tracer: &mut dyn Tracer) {
+        gen impl Trace for @Self {
+        #[inline] fn trace(&self,tracer: &mut Visitor) {
             #[allow(dead_code)]
             #[inline]
-            fn mark<T: Trace + ?Sized>(it: &mut T,tracer: &mut dyn Tracer) {
+            fn mark<T: Trace + ?Sized>(it: & T,tracer: &mut Visitor) {
               it.trace(tracer);
                 // Trace::trace(it,tracer);
             }
-            match &mut*self { #trace_body }
+            match &*self { #trace_body }
         }
     }
 

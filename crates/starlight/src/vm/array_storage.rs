@@ -3,13 +3,12 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use std::mem::size_of;
 
+use comet::internal::finalize_trait::{FinalizationCallback, FinalizeTrait};
+
 use super::context::Context;
 use super::value::JsValue;
+use crate::gc::cell::{GcCell, GcPointer, Trace, Visitor};
 use crate::gc::Heap;
-use crate::gc::{
-    cell::{GcCell, GcPointer, Trace, Tracer},
-    snapshot::deserializer::Deserializable,
-};
 ///
 /// A GC-managed resizable vector of values. It is used for storage of property
 /// values in objects and also indexed property values in arrays. It suppoctxs
@@ -68,6 +67,7 @@ impl GcPointer<ArrayStorage> {
 
     pub fn push_back(&mut self, ctx: &mut Heap, value: JsValue) {
         let currsz = self.size();
+
         if currsz < self.capacity() {
             unsafe {
                 self.data_mut().add(currsz as _).write(value);
@@ -75,6 +75,7 @@ impl GcPointer<ArrayStorage> {
             }
             return;
         }
+
         self.push_back_slowpath(ctx, value)
     }
 
@@ -185,10 +186,9 @@ impl ArrayStorage {
         self.size == 0
     }
     pub fn with_size(mut ctx: GcPointer<Context>, size: u32, capacity: u32) -> GcPointer<Self> {
-        let stack = ctx.shadowstack();
         crate::letroot!(this = stack, Self::new(ctx.heap(), capacity));
         this.resize_within_capacity(ctx.heap(), size);
-        *this
+        this
     }
     pub fn new(ctx: &mut Heap, capacity: u32) -> GcPointer<Self> {
         ctx.allocate(Self {
@@ -220,19 +220,22 @@ impl ArrayStorage {
     }
 }
 
-unsafe impl Trace for ArrayStorage {
-    fn trace(&mut self, visitor: &mut dyn Tracer) {
-        self.as_slice_mut().iter_mut().for_each(|value| {
-            value.trace(visitor);
+impl Trace for ArrayStorage {
+    fn trace(&self, visitor: &mut Visitor) {
+        self.as_slice().iter().for_each(|value| {
+            if value.is_object() {
+                value.trace(visitor);
+            }
         });
     }
 }
 
 impl GcCell for ArrayStorage {
-    fn deser_pair(&self) -> (usize, usize) {
-        (Self::deserialize as _, Self::allocate as _)
-    }
     fn compute_size(&self) -> usize {
         (self.capacity as usize * size_of::<JsValue>()) + size_of::<Self>()
     }
+}
+
+impl FinalizeTrait<ArrayStorage> for ArrayStorage {
+    const CALLBACK: Option<FinalizationCallback> = None;
 }

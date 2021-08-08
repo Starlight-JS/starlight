@@ -75,7 +75,7 @@ pub fn object_create(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
             );
             letroot!(
                 structure = stack,
-                Structure::new_unique_indexed(ctx, *prototype, false)
+                Structure::new_unique_indexed(ctx, prototype, false)
             );
             let res = JsObject::new(ctx, &structure, JsObject::class(), ObjectTag::Ordinary);
             if !args.at(1).is_undefined() {
@@ -132,7 +132,7 @@ pub fn object_define_property(
             let desc = super::to_property_descriptor(ctx, attr)?;
 
             obj.define_own_property(ctx, name, &desc, true)?;
-            return Ok(JsValue::new(*obj));
+            return Ok(JsValue::new(obj));
         }
     }
 
@@ -218,7 +218,7 @@ pub fn object_get_own_property_descriptor(
                         false,
                     )?;
                 }
-                Ok(JsValue::encode_object_value(*res))
+                Ok(JsValue::encode_object_value(res))
             }
             None => Ok(JsValue::new(Undefined)),
         }
@@ -266,7 +266,7 @@ pub fn object_keys(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
                 let name = JsString::new(ctx, desc);
                 arr.put(ctx, Symbol::Index(i as _), JsValue::new(name), false)?;
             }
-            return Ok(JsValue::new(*arr));
+            return Ok(JsValue::new(arr));
         }
     }
 
@@ -282,7 +282,7 @@ pub fn object_freeze(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValu
         if first.is_jsobject() {
             letroot!(obj = stack, first.get_jsobject());
             obj.freeze(ctx)?;
-            return Ok(JsValue::new(*obj));
+            return Ok(JsValue::new(obj));
         }
     }
     Err(JsValue::new(
@@ -297,7 +297,7 @@ pub fn object_seal(ctx: GcPointer<Context>, args: &Arguments) -> Result<JsValue,
         if first.is_jsobject() {
             letroot!(obj = stack, first.get_jsobject());
             obj.seal(ctx)?;
-            return Ok(JsValue::new(*obj));
+            return Ok(JsValue::new(obj));
         }
     }
     Err(JsValue::new(
@@ -314,7 +314,7 @@ pub fn object_prevent_extensions(
         if first.is_jsobject() {
             letroot!(obj = stack, first.get_jsobject());
             obj.change_extensible(ctx, false);
-            return Ok(JsValue::new(*obj));
+            return Ok(JsValue::new(obj));
         }
     }
     Err(JsValue::new(ctx.new_type_error(

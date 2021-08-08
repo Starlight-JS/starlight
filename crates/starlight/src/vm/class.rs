@@ -11,10 +11,7 @@ use super::{
     symbol_table::Symbol,
     value::JsValue,
 };
-use crate::gc::{
-    cell::{GcPointer, Tracer},
-    snapshot::{deserializer::Deserializer, serializer::SnapshotSerializer},
-};
+use crate::gc::cell::{GcPointer, Visitor};
 
 /// Simple tpe that is used to implement custom JS objects.
 pub struct Class {
@@ -23,10 +20,9 @@ pub struct Class {
     /// Class method table.
     pub method_table: MethodTable,
     /// `trace` method that is used by GC to mark object.
-    pub trace: Option<extern "C" fn(&mut dyn Tracer, &mut JsObject)>,
+    pub trace: Option<extern "C" fn(&mut Visitor, &JsObject)>,
     pub drop: Option<extern "C" fn(GcPointer<JsObject>)>,
-    pub deserialize: Option<extern "C" fn(&mut JsObject, &mut Deserializer)>,
-    pub serialize: Option<extern "C" fn(&JsObject, &mut SnapshotSerializer)>,
+
     pub additional_size: Option<extern "C" fn() -> usize>,
 }
 
@@ -41,20 +37,18 @@ macro_rules! define_jsclass {
             method_table: js_method_table!($class),
             drop: None,
             trace: None,
-            serialize: None,
-            deserialize: None,
+
             additional_size: Some(additional_size),
         };
         &CLASS
     }};
-    ($class: ident,$name : ident ,$fin: expr,$trace: expr,$deser: expr,$ser: expr,$size: expr) => {{
+    ($class: ident,$name : ident ,$fin: expr,$trace: expr,$size: expr) => {{
         static CLASS: $crate::vm::class::Class = $crate::vm::class::Class {
             name: stringify!($name),
             method_table: js_method_table!($class),
             drop: $fin,
             trace: $trace,
-            deserialize: $deser,
-            serialize: $ser,
+
             additional_size: $size,
         };
         &CLASS
