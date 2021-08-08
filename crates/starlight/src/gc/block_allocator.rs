@@ -56,6 +56,9 @@ pub mod _win {
                 VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE);
             }
         }
+        pub fn size(&self) -> usize {
+            self.size
+        }
     }
 
     impl Drop for Mmap {
@@ -80,6 +83,9 @@ pub mod _unix {
     }
 
     impl Mmap {
+        pub fn size(&self) -> usize {
+            self.size
+        }
         pub fn new(size: usize) -> Self {
             unsafe {
                 let map = libc::mmap(

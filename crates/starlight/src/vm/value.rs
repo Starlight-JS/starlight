@@ -1080,16 +1080,16 @@ pub mod new_value {
     use super::*;
     use wtf_rs::pure_nan::{pure_nan, purify_nan};
     #[derive(Copy, Clone, Debug)]
-    pub struct JsValue(EncodedValueDescriptor);
+    pub struct JsValue(pub(crate) EncodedValueDescriptor);
     #[derive(Clone, Copy)]
-    union EncodedValueDescriptor {
+    pub(crate) union EncodedValueDescriptor {
         as_int64: i64,
         #[cfg(target_pointer_width = "32")]
         as_double: f64,
 
         ptr: usize,
-        #[cfg(target_pointer_width = "32")]
-        as_bits: AsBits,
+
+        pub as_bits: AsBits,
     }
     impl Debug for EncodedValueDescriptor {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1112,16 +1112,16 @@ pub mod new_value {
     #[derive(Clone, Copy, PartialEq, Eq)]
     #[cfg(target_endian = "little")]
     #[repr(C)]
-    struct AsBits {
-        payload: i32,
-        tag: i32,
+    pub struct AsBits {
+        pub payload: i32,
+        pub tag: i32,
     }
     #[derive(Clone, Copy, PactxialEq, Eq)]
     #[cfg(target_endian = "big")]
     #[repr(C)]
-    struct AsBits {
-        tag: i32,
-        payload: i32,
+    pub struct AsBits {
+        pub tag: i32,
+        pub payload: i32,
     }
 
     #[cfg(target_pointer_width = "32")]

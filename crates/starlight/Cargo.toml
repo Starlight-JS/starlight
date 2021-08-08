@@ -28,6 +28,7 @@ intrusive-collections = "*"
 ryu-js = "0.2.1"
 memmap2 = "0.3"
 num = "0.4"
+starlight-bytecode = { path = "../starlight-bytecode" }
 mimalloc = "0.1.25"
 chrono = "0.4"
 #comet = { path = "../../comet" }

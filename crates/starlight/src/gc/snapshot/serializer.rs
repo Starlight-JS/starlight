@@ -640,6 +640,7 @@ impl Serializable for CodeBlock {
         self.is_generator.serialize(serializer);
         self.is_async.serialize(serializer);
         self.stack_size.serialize(serializer);
+        self.num_callee_locals.serialize(serializer);
     }
 }
 
