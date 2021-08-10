@@ -36,9 +36,7 @@
 use gc::cell::GcPointer;
 use options::Options;
 use std::sync::atomic::AtomicBool;
-use vm::{
-    arguments::Arguments, context::Context, object::JsObject, value::JsValue, VirtualMachineRef,
-};
+use vm::{context::Context, value::JsValue, VirtualMachineRef};
 #[macro_export]
 macro_rules! def_native_method {
     ($vm: expr,$obj: expr,$name: ident,$func: expr,$argc: expr) => {{
@@ -199,12 +197,11 @@ pub mod bytecode;
 pub mod bytecompiler;
 pub mod codegen;
 pub mod comet;
-pub mod heap;
+mod constant;
+pub mod generator;
+pub mod interpreter;
 pub mod jsrt;
 pub mod options;
-//pub mod tracingjit;
-mod constant;
-pub mod interpreter;
 pub mod vm;
 pub struct Platform;
 use std::sync::atomic::Ordering;

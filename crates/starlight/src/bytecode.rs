@@ -6,8 +6,10 @@ use crate::{
     vm::{object::JsObject, structure::Structure, structure_chain::StructureChain},
 };
 
+pub mod block;
 pub mod opcodes;
 pub mod profile;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GetByIdMode {
     Default,

@@ -105,7 +105,6 @@ impl GcPointer<Context> {
         env: JsValue,
         args_: &Arguments,
     ) -> Result<(JsValue, GcPointer<Environment>), JsValue> {
-        let stack = self.shadowstack();
         letroot!(scope = stack, unsafe {
             env.get_object().downcast::<Environment>().unwrap()
         });
@@ -235,7 +234,6 @@ pub unsafe fn eval(mut ctx: GcPointer<Context>, frame: *mut CallFrame) -> Result
     let mut frame: &'static mut CallFrame = &mut *frame;
     let stack = &mut ctx.stack as *mut Stack;
     let stack = &mut *stack;
-    let gcstack = ctx.shadowstack();
     loop {
         let opcode = ip.cast::<Opcode>().read_unaligned();
         ip = ip.add(1);

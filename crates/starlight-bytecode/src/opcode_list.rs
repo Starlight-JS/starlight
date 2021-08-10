@@ -1,101 +1,96 @@
-macro_rules! opcode_list {
+/*macro_rules! opcode_list {
     ($f: ident) => {
         $f! {
-            enter {},
-            create_direct_arguments {
-                args: {
-                    dst: VirtualRegister
-                }
-            },
-            create_scoped_arguments {
-                args: {
-                    dst: VirtualRegister
-                }
-            },
-            create_cloned_arguments {
-                args: {
-                    dst: VirtualRegister
-                }
-            },
-            create_this {
-                args: {
-                    dst: VirtualRegister,
-                    callee: VirtualRegister,
-                    inline_capacity: u16,
-                },
-                metadata: {
-                    cached_callee: GcPointer<dyn GcCell>
-                }
-            },
-            create_promise {
-                args: {
-                    dst: VirtualRegister,
-                    callee: VirtualRegister,
-                    is_internal: bool
-                },
-                metadata: {
-                    cached_callee: GcPointer<dyn GcCell>
-                }
-            },
-            new_promise {
-                args: {
-                    dst: VirtualRegister,
-                    is_internal: bool
-                }
-            },
-            new_generator {
-                args: {
-                    dst: VirtualRegister
-                }
-            },
-            create_generator {
-                args: {
-                    dst: VirtualRegister,
-                    callee: VirtualRegister,
-                },
-                metadata: {
-                    cached_callee: GcPointer<dyn GcCell>
-                }
-            },
-            get_argument {
-                args: {
-                    dst: VirtualRegister,
-                    index: i16
-                },
-                metadata: {
-                    profile: ValueProfile
-                }
-            },
-            argument_count {
-                args: {
-                    dst: VirtualRegister
-                }
-            },
-            to_this {
-                args: {
-                    src_dst: VirtualRegister,
-                    ecma_mode: bool
-                }
-            },
-            check_tdz {
-                args: {
-                    target: VirtualRegister
-                }
-            },
-            new_object {
-                args: {
-                    dst: VirtualRegister,
-                    inline_capacity: u16
-                }
-            },
-            new_array {
-                args: {
-                    dst: VirtualRegister,
-                    argv: VirtualRegister,
-                    argc: u32
-                }
-            },
+            push_i32, 5, 0, 1, i32,
+            push_const, 5, 0, 1, u32,
+            fclosure, 5, 0, 1, u32,
+            push_atom_value, 5, 0, 1, u32,
+            private_symbol, 5,0,1,u32,
+            undefined, 1,0,1, none,
+            null, 1,0,1, none,
+            push_this, 1,0,1,none,
+            push_false,1,0,1,none,
+            push_true,1,0,1,none,
+            object, 1, 0, 1, none,
+            special_object, 2,0,1, u8,
+            rest, 3,0,1,u16,
 
-        }
+            drop, 1,1,0, none,
+            nip, 1,2,1,none,
+            nip1,1,3,2, none,
+            dup, 1,1,2,none,
+            dup1, 1,2,3,none,
+            dup2,1,2,4,none,
+            dup3,1,3,6,none,
+            insert2, 1,2,3,none,
+            insert3, 1,2,4, none,
+            insert4, 1,4,5,none,
+            perm3,1,3,3,none,
+            perm4,1,4,4,none,
+            perm5,1,5,5,none,
+            swap,1,2,2,none,
+            swap2,1,4,4,none,
+            rot3l,1,3,3,none,
+            rot3r,1,3,3,none,
+            rot4l,1,4,4,none,
+            rot5l,1,5,5,none,
+
+
+            call_ctor,3,2,1,npop,
+            call,3,1,1, npop,
+            tail_call, 3,1,0 npop,
+            call_method, 3,2,1, npop,
+            tail_call_method, 3, 2, 0, npop,
+            array_from, 3, 0, 1,npop,
+            apply, 3,3,1,u16,
+            return,1,1,0,none,
+            return_undef,1,0,0, none,
+            check_ctor_return, 1,1,2,none,
+            check_ctor, 1,0,0,none,
+            check_brand,1,2,2,none,
+            add_brand,1,2,0,none,
+            return_async,1,1,0,none,
+            throw,1,1,0,none,
+            throw_error,6,0,0,atom_u8,
+            eval, 5,1,1,npop_u16,
+            apply_eval, 3,2,1,u16,
+            regexp,1,2,1,none,
+
+            get_super, 1, 1, 1,none,
+            import, 1,1,1,none,
+            check_var, 5,0,1, atom,
+            get_var_undef, 5,0,1, atom,
+            get_var, 5, 0, 1, atom,
+            put_var, 5, 0, 1, atom,
+            put_var_init, 5,1,0, atom,
+            put_var_strict, 5,2,0, atom,
+
+            get_ref_value, 1,2,3,none,
+            put_ref_value, 1,3,0,none,
+
+            define_var,6,0,0,atom_u8,
+            check_define_var,6,0,0,atom_u8,
+            define_func,6,1,0,atom_u8,
+            get_field, 9, 1, 1, atom_fdbk,
+            get_field2, 9, 1, 2, atom_fdbk,
+            put_field, 9,2,0, atom_fdbk,
+            get_private_field,1,2,1, none,
+            put_private_field,1,3,0, none,
+            define_private_field,1,3,1,none,
+            get_array_el,1,2,1,none,
+            get_array_el2,1,2,2,none,
+            put_array_el,1,3,0,none,
+            get_super_value,1,3,1,none,
+            put_super_value,1,4,0,none,
+            define_field, 9,2,1, atom_fdbk,
+            set_name, 9,1,1,atom_fdbk,
+            set_name_computed,1,2,2,none,
+            set_proto,1,2,1,none,
+            set_home_object,1,2,2,none,
+            define_array_el,1,3,2,none,
+            append,1,3,2,none,
+            copy_data_properties,2,3,3,u8
+
     };
 }
+*/

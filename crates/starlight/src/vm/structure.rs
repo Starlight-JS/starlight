@@ -4,7 +4,7 @@
 use super::{attributes::*, object::JsObject, structure_chain::StructureChain};
 use super::{symbol_table::*, Context};
 use crate::gc::cell::Visitor;
-use crate::gc::cell::{GcCell, GcPointer, Trace, WeakRef};
+use crate::gc::cell::{GcCell, GcPointer, Trace};
 use crate::prelude::*;
 use std::{collections::HashMap, intrinsics::likely};
 use wtf_rs::unwrap_unchecked;

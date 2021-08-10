@@ -6,7 +6,6 @@ pub use comet::internal::finalize_trait::FinalizeTrait as Finalize;
 use comet::internal::gc_info::{GCInfoIndex, GCInfoTrait};
 pub use comet::internal::trace_trait::TraceTrait as Trace;
 pub use comet::visitor::Visitor;
-use comet::visitor::VisitorTrait;
 use cometgc::gcref::GcRef;
 use mopa::mopafy;
 use std::collections::HashMap;
@@ -19,6 +18,7 @@ use crate::options::Options;
 pub struct Heap {
     heap: Box<CometHeap>,
 }
+#[allow(dead_code)]
 pub struct SimpleMarkingConstraint {
     name: String,
     exec: Box<dyn FnMut(&mut Visitor)>,

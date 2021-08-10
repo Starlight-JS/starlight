@@ -282,3 +282,333 @@ pub enum Opcode {
     OP_NEWGENERATOR,
     OP_IS_OBJECT,
 }
+
+pub type RegisterId = u16;
+
+pub enum OpCode {
+    Move(RegisterId, RegisterId),
+    GetLocal(RegisterId, u16),
+    SetLocal(RegisterId, u16),
+    GetConstant(RegisterId, u16),
+    GetFunction(RegisterId, u16),
+    Swap(RegisterId, RegisterId),
+    LoadInt(RegisterId, i32),
+    LoadDouble(RegisterId, f64),
+    LoadFalse(RegisterId),
+    LoadTrue(RegisterId),
+    LoadNull(RegisterId),
+    LoadUndefined(RegisterId),
+    LoadNaN(RegisterId),
+    /// Call
+    ///
+    /// argv[0] - function
+    /// argv[1] - this
+    /// argv[..argc] - arguments
+    ///
+    Call {
+        receiver: RegisterId,
+        argv: RegisterId,
+        argc: u16,
+    },
+    /// Tail call
+    ///
+    /// argv[0] - function
+    /// argv[1] - this
+    /// argv[..argc] - arguments
+    TailCall {
+        argv: RegisterId,
+        argc: u16,
+    },
+    /// Call constructor
+    ///
+    /// argv[0] - object
+    /// argv[..argc] - arguments
+    CallConstructor {
+        argv: RegisterId,
+        argc: u16,
+    },
+
+    CreateArray {
+        dest: RegisterId,
+        size: u32,
+    },
+    CreateArrayUnknownSize {
+        dest: RegisterId,
+    },
+    CreateObject {
+        dest: RegisterId,
+    },
+    CreateObjectWithStructure {
+        dest: RegisterId,
+        /// Index to structures vector.
+        structure: u16,
+    },
+
+    Return {
+        source: RegisterId,
+    },
+
+    Jump {
+        offset: i32,
+    },
+    JumpIfTrue {
+        source: RegisterId,
+        offset: i32,
+    },
+    JumpIfFalse {
+        source: RegisterId,
+        offset: i32,
+    },
+
+    Add {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Sub {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Div {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Mul {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Rem {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Shr {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Shl {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    UShr {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Or {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    And {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Xor {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    In {
+        src_dest: RegisterId,
+        rhs: RegisterId,
+    },
+    Equal {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    NotEqual {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    StrictEq {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    StrictNEq {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Greater {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    GreaterOrEqual {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    Less {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    LessOrEqual {
+        dest: RegisterId,
+        lhs: RegisterId,
+        rhs: RegisterId,
+    },
+    InstanceOf {
+        src_dest: RegisterId,
+        rhs: RegisterId,
+    },
+    TypeOf {
+        src_dest: RegisterId,
+    },
+    Not {
+        dest: RegisterId,
+        src: RegisterId,
+    },
+    LogicalNot {
+        dest: RegisterId,
+        src: RegisterId,
+    },
+    UnaryPlus {
+        dest: RegisterId,
+        src: RegisterId,
+    },
+    Negate {
+        dest: RegisterId,
+        src: RegisterId,
+    },
+    Throw {
+        value: RegisterId,
+    },
+    EnterTry {
+        catch_offset: i32,
+    },
+    LeaveTry,
+    TryGetById {
+        dst: RegisterId,
+        object: RegisterId,
+        prop: u32,
+        fdbk: u32,
+    },
+    GetById {
+        dst: RegisterId,
+        object: RegisterId,
+        prop: u32,
+        fdbk: u32,
+    },
+    PutById {
+        dst: RegisterId,
+        object: RegisterId,
+        value: RegisterId,
+        prop: u32,
+        fdbk: u32,
+    },
+
+    PutByVal {
+        dst: RegisterId,
+        object: RegisterId,
+        key: RegisterId,
+        value: RegisterId,
+    },
+    GetByVal {
+        dst: RegisterId,
+        object: RegisterId,
+        key: RegisterId,
+    },
+
+    GetEnvironment {
+        dst: RegisterId,
+        depth: i16,
+    },
+    SetEnvironment {
+        src: RegisterId,
+        depth: i16,
+    },
+
+    GetVar {
+        dst: RegisterId,
+        env: RegisterId,
+        at: u16,
+    },
+    SetVar {
+        src: RegisterId,
+        env: RegisterId,
+        at: u16,
+    },
+    GetGlobal {
+        dst: RegisterId,
+    },
+
+    DeclLet {
+        env: RegisterId,
+        at: u16,
+    },
+    DeclConst {
+        env: RegisterId,
+        at: u16,
+    },
+    DeclVar {
+        env: RegisterId,
+        at: u16,
+    },
+
+    LoadThis {
+        dst: RegisterId,
+    },
+
+    DeleteVar {
+        dst: RegisterId,
+        env: RegisterId,
+        at: u16,
+    },
+    DeleteById {
+        dst: RegisterId,
+        object: RegisterId,
+        prop: u32,
+    },
+    DeleteByVal {
+        dst: RegisterId,
+        object: RegisterId,
+        key: RegisterId,
+    },
+
+    ToObject {
+        dst: RegisterId,
+        src: RegisterId,
+    },
+    ToLength {
+        dst: RegisterId,
+        src: RegisterId,
+    },
+    ToIntOrInf {
+        dst: RegisterId,
+        src: RegisterId,
+    },
+    IsCallable {
+        dst: RegisterId,
+        src: RegisterId,
+    },
+    IsCtor {
+        dst: RegisterId,
+        src: RegisterId,
+    },
+    InitialYield,
+    Yield {
+        src_dest: RegisterId,
+    },
+    YieldStar {
+        src_dest: RegisterId,
+    },
+    Await {
+        src_dest: RegisterId,
+    },
+    IsObject {
+        dst: RegisterId,
+        src: RegisterId,
+    },
+}

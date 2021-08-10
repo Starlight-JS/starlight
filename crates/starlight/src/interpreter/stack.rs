@@ -1,4 +1,4 @@
-use crate::gc::block_allocator::Mmap;
+use comet::mmap::Mmap;
 use std::ptr::null_mut;
 
 use crate::vm::VirtualMachineRef;

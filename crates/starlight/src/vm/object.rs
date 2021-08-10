@@ -17,7 +17,7 @@ use super::{
     structure::Structure,
     symbol_table::{Internable, Symbol},
     value::JsValue,
-    Context, VirtualMachine,
+    Context,
 };
 use super::{indexed_elements::MAX_VECTOR_SIZE, method_table::*};
 use crate::prelude::*;
@@ -33,8 +33,6 @@ use std::{
     mem::{size_of, ManuallyDrop},
     ops::{Deref, DerefMut},
 };
-
-use cometgc::header::HeapObjectHeader;
 use wtf_rs::object_offsetof;
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EnumerationMode {

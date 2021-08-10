@@ -7,15 +7,8 @@ use self::{
 use crate::{
     bytecompiler::{ByteCompiler, CompileError},
     gc::Heap,
-    gc::{
-        cell::GcPointer,
-        cell::Trace,
-        cell::{GcCell, GcPointerBase},
-        SimpleMarkingConstraint,
-    },
-    gc::{safepoint::GlobalSafepoint, snapshot::Snapshot},
+    gc::{cell::GcCell, cell::GcPointer, cell::Trace, SimpleMarkingConstraint},
     interpreter::callframe::CallFrame,
-
     options::Options,
 };
 use comet::{internal::finalize_trait::FinalizeTrait, visitor::Visitor};
@@ -263,7 +256,7 @@ impl VirtualMachine {
             move |visitor| {
                 let vm = unsafe { &mut *vm };
                 // vm.shadowstack.trace(visitor);
-                vm.contexts.iter_mut().enumerate().for_each(|(i, ctx)| {
+                vm.contexts.iter_mut().for_each(|ctx| {
                     assert!(ctx.global_object.is_some());
 
                     ctx.trace(visitor)
