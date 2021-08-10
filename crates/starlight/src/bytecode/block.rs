@@ -3,7 +3,7 @@ use comet::internal::{finalize_trait::FinalizeTrait, trace_trait::TraceTrait};
 use super::{opcodes::OpCode, TypeFeedBack};
 use crate::{
     gc::{GcCell, GcPointer},
-    vm::array_storage::ArrayStorage,
+    vm::{array_storage::ArrayStorage, symbol_table::Symbol},
 };
 
 pub enum BytecodeBlock {
@@ -41,6 +41,7 @@ pub struct BytecodeBlockInternal {
     pub(crate) literals: GcPointer<ArrayStorage>,
     pub(crate) parent_blocks: Vec<GcPointer<BytecodeBlock>>,
     pub(crate) feedback: Vec<TypeFeedBack>,
+    pub(crate) names: Vec<Symbol>,
 }
 
 impl TraceTrait for BytecodeBlockInternal {

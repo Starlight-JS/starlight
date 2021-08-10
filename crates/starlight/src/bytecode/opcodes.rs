@@ -502,7 +502,6 @@ pub enum OpCode {
         fdbk: u32,
     },
     PutById {
-        dst: RegisterId,
         object: RegisterId,
         value: RegisterId,
         prop: u32,
@@ -510,7 +509,6 @@ pub enum OpCode {
     },
 
     PutByVal {
-        dst: RegisterId,
         object: RegisterId,
         key: RegisterId,
         value: RegisterId,
@@ -560,7 +558,9 @@ pub enum OpCode {
     LoadThis {
         dst: RegisterId,
     },
-
+    StoreThis {
+        src: RegisterId,
+    },
     DeleteVar {
         dst: RegisterId,
         env: RegisterId,
