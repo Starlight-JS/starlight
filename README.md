@@ -1,6 +1,10 @@
 
 # Starlight
 
+**NOTE**: At the moment Starlight is actively developed on my localhost and `dev` branch will not build and work but if you want to play with it you can try these commits:
+- `2086a3f2446fe4563097918640d67bc6c7b31695`: working starlight with new Immix GC, works just fine but does not build on Windows
+- `5c4205542e280dfcece3569cc31316279c603436`: the last commit known to work on Windows just fine, I recommend using it.
+
 Starlight is a JS engine in Rust which focuses on performance rather than ensuring 100% safety of JS runtime.
 
 [Discord](https://discord.gg/uKcQqG99) <- Starlight channel in Programming language dev community
