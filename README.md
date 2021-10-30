@@ -7,7 +7,7 @@
 
 Starlight is a JS engine in Rust which focuses on performance rather than ensuring 100% safety of JS runtime.
 
-[Discord](https://discord.gg/uKcQqG99) <- Starlight channel in Programming language dev community
+[Discord](https://discord.gg/4Kjt3ZE) <- PLDev community discord, there's #starlight channel.
 
 # Features
 - Bytecode interpreter
